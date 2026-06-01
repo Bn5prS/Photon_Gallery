@@ -9,11 +9,13 @@ import com.inferno.gallery.data.LocalMediaRepository
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
 import com.inferno.gallery.data.FavoritesManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -24,6 +26,7 @@ import java.util.Locale
 
 data class GalleryItem(
     val id: String,
+    val mediaStoreId: Long,
     val uri: Uri,
     val bucketName: String,
     val dateAdded: Long,
@@ -196,7 +199,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 fullFormat.format(Date(timeMs))
             }
         }
-    }.stateIn(
+    }.flowOn(Dispatchers.Default)
+     .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyMap()
@@ -336,11 +340,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                kotlinx.coroutines.delay(800)
                 val mediaData = repository.getImages(null)
-                allMedia.value = mediaData.mapIndexed { index, data ->
+                allMedia.value = mediaData.map { data ->
                     GalleryItem(
-                        id = index.toString(),
+                        id = data.mediaStoreId.toString(),
+                        mediaStoreId = data.mediaStoreId,
                         uri = data.uri,
                         bucketName = data.bucketName,
                         dateAdded = data.dateAdded,
@@ -361,9 +365,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun loadImages() {
         viewModelScope.launch {
             val mediaData = repository.getImages(null)
-            allMedia.value = mediaData.mapIndexed { index, data ->
+            allMedia.value = mediaData.map { data ->
                 GalleryItem(
-                    id = index.toString(),
+                    id = data.mediaStoreId.toString(),
+                    mediaStoreId = data.mediaStoreId,
                     uri = data.uri,
                     bucketName = data.bucketName,
                     dateAdded = data.dateAdded,

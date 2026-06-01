@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class MediaData(
+    val mediaStoreId: Long,
     val uri: Uri,
     val bucketName: String,
     val dateAdded: Long,
@@ -98,7 +99,7 @@ class LocalMediaRepository(
                 }
                 
                 val uri = ContentUris.withAppendedId(baseUri, id)
-                images.add(MediaData(uri, bucketName, dateAdded, size, name, dateModified, path, isVideo, durationMs))
+                images.add(MediaData(mediaStoreId = id, uri = uri, bucketName = bucketName, dateAdded = dateAdded, size = size, name = name, dateModified = dateModified, path = path, isVideo = isVideo, durationMs = durationMs))
             }
         }
 
@@ -132,6 +133,7 @@ class LocalMediaRepository(
                         val dateAdded = file.lastModified() / 1000
                         statuses.add(
                             MediaData(
+                                mediaStoreId = (file.absolutePath + file.lastModified()).hashCode().toLong(),
                                 uri = uri,
                                 bucketName = "WhatsApp Statuses",
                                 dateAdded = dateAdded,

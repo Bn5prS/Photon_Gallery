@@ -396,7 +396,7 @@ fun DetailScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
+                                    sharedContentState = rememberSharedContentState(key = "photo_${item.mediaStoreId}"),
                                     animatedVisibilityScope = animatedVisibilityScope,
                                     boundsTransform = { _, _ ->
                                         spring(
@@ -692,14 +692,6 @@ fun DetailScreen(
                         onDismissRequest = { expandedActionMenu = false }
                     ) {
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Info") },
-                            leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-                            onClick = { 
-                                expandedActionMenu = false
-                                showInfoCard = !showInfoCard
-                            }
-                        )
-                        androidx.compose.material3.DropdownMenuItem(
                             text = { Text("Share") },
                             leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
                             onClick = { 
@@ -910,7 +902,7 @@ fun ExifInfoCard(galleryItem: GalleryItem?, exifData: ExifData?, modifier: Modif
 private fun InfoRow(label: String, value: String) {
     Row { 
         Text(text = label, color = Color.Gray, fontSize = 11.sp, modifier = Modifier.width(80.dp))
-        Text(text = value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)) 
+        Text(text = value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) 
     }
 }
 
@@ -919,9 +911,9 @@ private fun InfoColumn(label: String, deviceName: String, params: String) {
     Row { 
         Text(text = label, color = Color.Gray, fontSize = 11.sp, modifier = Modifier.width(80.dp))
         Column(modifier = Modifier.weight(1f)) { 
-            Text(text = deviceName, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(text = deviceName, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
-            Text(text = params, color = Color.LightGray, fontSize = 11.sp) 
+            Text(text = params, color = Color.LightGray, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) 
         } 
     }
 }

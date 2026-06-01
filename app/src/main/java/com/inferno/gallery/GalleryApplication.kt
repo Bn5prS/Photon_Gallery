@@ -26,7 +26,7 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory {
                 // Support Video Frame extraction
                 add(VideoFrameDecoder.Factory())
             }
-            .crossfade(true) // Premium smooth loading transition
+            .crossfade(false) // Premium smooth loading transition
             .build()
     }
 }

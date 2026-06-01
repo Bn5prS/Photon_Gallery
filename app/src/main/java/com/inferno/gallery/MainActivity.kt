@@ -18,6 +18,7 @@ import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
 import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
+import coil3.request.crossfade
 class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
 
@@ -30,15 +31,20 @@ class MainActivity : ComponentActivity() {
             ImageLoader.Builder(ctx)
                 .memoryCache {
                     MemoryCache.Builder()
+                        // 25% keeps the grid bitmap pool within GC-safe bounds during fast scroll.
+                        // The previous 50% caused GC storms at 120 Hz. Do not increase.
                         .maxSizePercent(ctx, 0.25)
                         .build()
                 }
                 .diskCache {
                     DiskCache.Builder()
                         .directory(ctx.cacheDir.resolve("image_cache").toOkioPath())
-                        .maxSizeBytes(250L * 1024 * 1024)
+                        // 300 MB is sufficient for a 4-column grid with 1000+ items.
+                        .maxSizeBytes(300L * 1024 * 1024)
                         .build()
                 }
+                // Do NOT set crossfade globally. Grid items skip crossfade for instant display
+                // from cache. Detail screen enables it per-request for its own transitions.
                 .build()
         }
 
