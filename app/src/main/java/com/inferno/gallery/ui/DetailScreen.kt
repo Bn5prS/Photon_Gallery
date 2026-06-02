@@ -12,6 +12,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -168,7 +170,7 @@ suspend fun PointerInputScope.detectZoomPanGesture(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DetailScreen(
     mediaId: String,
@@ -344,9 +346,10 @@ fun DetailScreen(
             
 
             
-            val scale = remember { Animatable(1f) }
-            val offsetX = remember { Animatable(0f) }
-            val offsetY = remember { Animatable(0f) }
+            val scale = remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+            val offsetX = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            val offsetY = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            val animJob = remember { androidx.compose.runtime.mutableStateOf<kotlinx.coroutines.Job?>(null) }
             
             // Removed LaunchedEffect for isUserScrollEnabled to prevent race condition
             
@@ -381,60 +384,54 @@ fun DetailScreen(
                                     }
                                 )
                                 .graphicsLayer {
-                                    scaleX = scale.value * pagerScale
-                                    scaleY = scale.value * pagerScale
+                                    scaleX = scale.floatValue * pagerScale
+                                    scaleY = scale.floatValue * pagerScale
                                     alpha = pagerAlpha
-                                    translationX = offsetX.value
-                                    translationY = offsetY.value
-                                    
-
+                                    translationX = offsetX.floatValue
+                                    translationY = offsetY.floatValue
                                 }
                                 .pointerInput(Unit) {
                                     detectZoomPanGesture { centroid, pan, zoom, consume ->
-                                        coroutineScope.launch {
-                                            val newScale = (scale.value * zoom).coerceIn(1f, 20f)
-                                            val scaleChange = newScale / scale.value
-                                            
-                                            if (newScale > 1.02f) { showUi = false }
-                                            
-                                            if (newScale > 1.05f && isUserScrollEnabled) {
-                                                isUserScrollEnabled = false
-                                            } else if (newScale <= 1.05f && !isUserScrollEnabled) {
-                                                isUserScrollEnabled = true
-                                            }
-                                            
-                                            val maxX = (screenWidth * (newScale - 1)) / 2
-                                            val maxY = (screenHeight * (newScale - 1)) / 2
-                                            
-                                            val panSensitivity = when {
-                                                scale.value < 2f -> 1.5f
-                                                scale.value < 5f -> 2f
-                                                else -> 2.5f
-                                            }
-                                            
-                                            val effectivePanX = pan.x * panSensitivity
-                                            val effectivePanY = pan.y * panSensitivity
-
-                                            var newOffsetX = offsetX.value + effectivePanX
-                                            var newOffsetY = offsetY.value + effectivePanY
-                                            
-                                            if (zoom != 1f) {
-                                                val focalX = (centroid.x - screenWidth / 2)
-                                                val focalY = (centroid.y - screenHeight / 2)
-                                                newOffsetX += focalX * (1 - scaleChange)
-                                                newOffsetY += focalY * (1 - scaleChange)
-                                            }
-                                            
-                                            newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
-                                            newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
-                                            
-                                            scale.snapTo(newScale)
-                                            offsetX.snapTo(newOffsetX)
-                                            offsetY.snapTo(newOffsetY)
+                                        animJob.value?.cancel()
+                                        
+                                        val currentScale = scale.floatValue
+                                        val newScale = (currentScale * zoom).coerceIn(1f, 20f)
+                                        
+                                        if (newScale > 1.02f) { showUi = false }
+                                        
+                                        if (newScale > 1.05f && isUserScrollEnabled) {
+                                            isUserScrollEnabled = false
+                                        } else if (newScale <= 1.05f && !isUserScrollEnabled) {
+                                            isUserScrollEnabled = true
                                         }
-                                        // Crucial Gesture Priority: Only consume if zoomed in!
-                                        if (scale.value > 1f) {
-                                            consume()
+                                        
+                                        val maxX = (screenWidth * (newScale - 1)) / 2
+                                        val maxY = (screenHeight * (newScale - 1)) / 2
+                                        
+                                        var newOffsetX = offsetX.floatValue + pan.x
+                                        var newOffsetY = offsetY.floatValue + pan.y
+                                        
+                                        if (zoom != 1f) {
+                                            val focalX = (centroid.x - screenWidth / 2)
+                                            val focalY = (centroid.y - screenHeight / 2)
+                                            newOffsetX = (newOffsetX - focalX) * zoom + focalX
+                                            newOffsetY = (newOffsetY - focalY) * zoom + focalY
+                                        }
+                                        
+                                        newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
+                                        newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
+                                        
+                                        scale.floatValue = newScale
+                                        offsetX.floatValue = newOffsetX
+                                        offsetY.floatValue = newOffsetY
+                                        
+                                        if (newScale > 1f) {
+                                            val hittingLeft = newOffsetX >= maxX && pan.x > 0
+                                            val hittingRight = newOffsetX <= -maxX && pan.x < 0
+                                            
+                                            if (!hittingLeft && !hittingRight) {
+                                                consume()
+                                            }
                                         }
                                     }
                                 }
@@ -449,12 +446,13 @@ fun DetailScreen(
                                             }
                                         },
                                         onDoubleTap = { tapOffset ->
-                                            coroutineScope.launch {
-                                                if (scale.value > 1f) {
+                                            animJob.value?.cancel()
+                                            animJob.value = coroutineScope.launch {
+                                                if (scale.floatValue > 1f) {
                                                     isUserScrollEnabled = true
-                                                    launch { scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) }
-                                                    launch { offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) }
-                                                    launch { offsetY.animateTo(0f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) }
+                                                    launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> scale.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetX.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetY.floatValue = v } }
                                                 } else {
                                                     isUserScrollEnabled = false
                                                     val targetScale = 3.5f
@@ -462,9 +460,9 @@ fun DetailScreen(
                                                     val targetY = -(tapOffset.y - screenHeight / 2) * (targetScale - 1)
                                                     val maxX = (screenWidth * (targetScale - 1)) / 2
                                                     val maxY = (screenHeight * (targetScale - 1)) / 2
-                                                    launch { scale.animateTo(targetScale, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) }
-                                                    launch { offsetX.animateTo(targetX.coerceIn(-maxX, maxX), spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) }
-                                                    launch { offsetY.animateTo(targetY.coerceIn(-maxY, maxY), spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) }
+                                                    launch { androidx.compose.animation.core.animate(scale.floatValue, targetScale, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> scale.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, targetX.coerceIn(-maxX, maxX), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetX.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, targetY.coerceIn(-maxY, maxY), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetY.floatValue = v } }
                                                 }
                                             }
                                         }
@@ -476,48 +474,46 @@ fun DetailScreen(
 
             // Minimap Overlay
             AnimatedVisibility(
-                visible = scale.value >= 5f,
+                visible = scale.floatValue >= 5f,
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 100.dp, end = 16.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(24.dp)
+                    .padding(bottom = 90.dp) // Clear the scroller
             ) {
                 Box(
                     modifier = Modifier
-                        .width(84.dp)
-                        .wrapContentHeight()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .border(1.dp, Color.Black.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                        .size(100.dp, 150.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                 ) {
-                    // Draw the base image (Coil will pull this from memory instantly)
                     AsyncImage(
-                        model = request,
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight()
+                        model = ImageRequest.Builder(context)
+                            .data(item.uri)
+                            .size(300, 450)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .build(),
+                        contentDescription = "Minimap map",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                     // Draw the Viewport Indicator Map
                     Canvas(modifier = Modifier.matchParentSize()) {
-                        val viewportWidth = size.width / scale.value
-                        val viewportHeight = size.height / scale.value
-                        val maxOffsetX = (screenWidth * (scale.value - 1)) / 2
-                        val maxOffsetY = (screenHeight * (scale.value - 1)) / 2
-                        val pctX = if (maxOffsetX > 0) -offsetX.value / maxOffsetX else 0f
-                        val pctY = if (maxOffsetY > 0) -offsetY.value / maxOffsetY else 0f
+                        val viewportWidth = size.width / scale.floatValue
+                        val viewportHeight = size.height / scale.floatValue
+                        val maxOffsetX = (screenWidth * (scale.floatValue - 1)) / 2
+                        val maxOffsetY = (screenHeight * (scale.floatValue - 1)) / 2
+                        val pctX = if (maxOffsetX > 0) -offsetX.floatValue / maxOffsetX else 0f
+                        val pctY = if (maxOffsetY > 0) -offsetY.floatValue / maxOffsetY else 0f
                         val rectX = (size.width - viewportWidth) / 2 + (pctX * (size.width - viewportWidth) / 2)
                         val rectY = (size.height - viewportHeight) / 2 + (pctY * (size.height - viewportHeight) / 2)
                         drawRect(
-                            color = Color.White,
+                            color = androidx.compose.ui.graphics.Color.White,
                             topLeft = Offset(rectX, rectY),
                             size = androidx.compose.ui.geometry.Size(viewportWidth, viewportHeight),
                             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-                        )
-                        drawRect(
-                            color = Color.White.copy(alpha = 0.2f),
-                            topLeft = Offset(rectX, rectY),
-                            size = androidx.compose.ui.geometry.Size(viewportWidth, viewportHeight)
                         )
                     }
                 }
@@ -543,7 +539,7 @@ fun DetailScreen(
                 FilledIconButton(
                     onClick = onBack,
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     )
                 ) {
@@ -560,21 +556,21 @@ fun DetailScreen(
                     FilledIconButton(
                         onClick = { currentItem?.let { viewModel.toggleFavorite(it.id) } },
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f),
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
                             contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         if (isFavorite) {
                             Icon(Icons.Filled.Favorite, contentDescription = "Favorite", tint = MaterialTheme.colorScheme.error)
                         } else {
-                            Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorite", tint = Color.White)
+                            Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorite")
                         }
                     }
 
                     FilledIconButton(
                         onClick = { showInfoCard = !showInfoCard },
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f),
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
                             contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
@@ -647,63 +643,65 @@ fun DetailScreen(
                     }
                 }
                 
-                var expandedActionMenu by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                    CustomSplitButton(
-                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
-                        leadingText = "Edit",
-                        onLeadingClick = { /* TODO: Edit */ },
-                        onTrailingClick = { expandedActionMenu = true },
-                        containerColor = Color.Black.copy(alpha = 0.6f),
-                        contentColor = Color.White
-                    )
-                    androidx.compose.material3.DropdownMenu(
-                        expanded = expandedActionMenu,
-                        onDismissRequest = { expandedActionMenu = false }
+                var showMoreMenu by remember { mutableStateOf(false) }
+                val currentItem = galleryItems.getOrNull(pagerState.currentPage)
+                
+                HorizontalFloatingToolbar(
+                    expanded = true,
+                    modifier = Modifier.padding(bottom = 16.dp).height(48.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Share") },
-                            leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                            onClick = { 
-                                expandedActionMenu = false
-                                showShareSheet = true 
-                            }
-                        )
-
-                        val currentItem = galleryItems.getOrNull(pagerState.currentPage)
-                        
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Move to Trash") },
-                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                        IconButton(onClick = { showShareSheet = true }) { 
+                            Icon(Icons.Outlined.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.onSurface) 
+                        }
+                        IconButton(onClick = { /* TODO: Edit */ }) { 
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurface) 
+                        }
+                        IconButton(
                             onClick = {
-                                expandedActionMenu = false
                                 if (currentItem != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                     val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
                                     if (!isMediaStoreUri) {
                                         android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
-                                        return@DropdownMenuItem
+                                        return@IconButton
                                     }
                                     pendingDeleteItem = currentItem
                                     pendingDeletePage = pagerState.currentPage
                                     showDeleteConfirmDialog = true
                                 }
                             }
-                        )
-
-                        if (currentItem != null && !currentItem.isVideo) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Set as Wallpaper") },
-                                leadingIcon = { Icon(Icons.Filled.Wallpaper, contentDescription = null) },
-                                onClick = {
-                                    expandedActionMenu = false
-                                    val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
-                                        setDataAndType(currentItem.uri, "image/*")
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        putExtra("mimeType", "image/*")
-                                    }
-                                    context.startActivity(Intent.createChooser(intent, "Set as..."))
+                        ) { 
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurface) 
+                        }
+                        
+                        Box {
+                            IconButton(onClick = { showMoreMenu = true }) {
+                                Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                            androidx.compose.material3.DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false }
+                            ) {
+                                if (currentItem != null && !currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Set as Wallpaper") },
+                                        leadingIcon = { Icon(Icons.Filled.Wallpaper, contentDescription = null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
+                                                setDataAndType(currentItem.uri, "image/*")
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                putExtra("mimeType", "image/*")
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "Set as..."))
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -745,10 +743,21 @@ fun CustomShareSheet(items: List<GalleryItem>, initialIndex: Int, onDismiss: () 
                     Box(modifier = Modifier.size(140.dp, 180.dp).clickable { if (isSelected) selectedUris.remove(item.uri) else item.uri?.let { selectedUris.add(it) } }) {
                         AsyncImage(model = item.uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         if (isSelected) {
-                            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
-                            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).size(28.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .border(4.dp, MaterialTheme.colorScheme.primary)
+                            )
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.padding(4.dp).size(20.dp))
+                            }
                         } else {
-                            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).size(28.dp).border(2.dp, Color.White, CircleShape))
+                            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).size(28.dp).border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
                         }
                     }
                 }
@@ -847,8 +856,8 @@ fun ExifInfoCard(galleryItem: GalleryItem?, exifData: ExifData?, modifier: Modif
     Surface(
         modifier = modifier.width(280.dp),
         shape = RoundedCornerShape(16.dp),
-        color = Color.Black.copy(alpha = 0.7f),
-        contentColor = Color.White
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

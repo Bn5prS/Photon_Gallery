@@ -118,7 +118,6 @@ fun MainAppLayout(
     val navBackStackEntry by nestedNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val albumNameArg = navBackStackEntry?.arguments?.getString("bucketName")
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     var hasPermission by remember { mutableStateOf(Environment.isExternalStorageManager()) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -167,114 +166,120 @@ fun MainAppLayout(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column(
                 modifier = Modifier.background(MaterialTheme.colorScheme.background)
             ) {
                 if (isSelectionMode) {
-                    TopAppBar(
-                        title = { Text("${selectedUris.size} Selected", style = MaterialTheme.typography.titleLarge) },
-                        navigationIcon = {
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             IconButton(onClick = { viewModel.clearSelection() }) {
                                 Icon(Icons.Outlined.Close, contentDescription = "Clear selection")
                             }
-                        },
-                        actions = {
-                            // SplitButton handles actions now
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    )
+                            Text(
+                                "${selectedUris.size} Selected",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(start = 16.dp).weight(1f)
+                            )
+                        }
+                    }
                 } else if (currentRoute == "album/{bucketName}") {
-                    TopAppBar(
-                        title = { Text(albumNameArg ?: "Album", style = MaterialTheme.typography.titleLarge) },
-                        navigationIcon = {
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             IconButton(onClick = { nestedNavController.popBackStack() }) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-                    )
-                } else {
-                    LargeTopAppBar(
-                        title = {
-                            val titleText = when (currentRoute) {
-                                "photos" -> "Photos"
-                                "albums" -> "Albums"
-                                "search" -> "Search"
-                                else -> "Photon Gallery"
-                            }
                             Text(
-                                titleText,
-                                style = MaterialTheme.typography.displayMedium
+                                albumNameArg ?: "Album",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(start = 16.dp).weight(1f)
                             )
-                        },
-                        actions = {
-                            Box {
-                                IconButton(onClick = { showMenu = true }) {
-                                    Icon(Icons.Outlined.MoreVert, contentDescription = "Menu")
+                        }
+                    }
+                } else {
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                val titleText = when (currentRoute) {
+                                    "photos" -> "Photos"
+                                    "albums" -> "Albums"
+                                    "search" -> "Search"
+                                    else -> "Photon Gallery"
                                 }
-                                DropdownMenu(
-                                    expanded = showMenu,
-                                    onDismissRequest = { showMenu = false },
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Immersive View") },
-                                        trailingIcon = {
-                                            androidx.compose.material3.RadioButton(
-                                                selected = viewMode == ViewMode.Immersive,
-                                                onClick = null
-                                            )
-                                        },
-                                        onClick = {
-                                            viewModel.setViewMode(ViewMode.Immersive)
-                                            showMenu = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Grouped View") },
-                                        trailingIcon = {
-                                            androidx.compose.material3.RadioButton(
-                                                selected = viewMode == ViewMode.Grouped,
-                                                onClick = null
-                                            )
-                                        },
-                                        onClick = {
-                                            viewModel.setViewMode(ViewMode.Grouped)
-                                            showMenu = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Settings") },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Settings,
-                                                contentDescription = "Settings"
-                                            )
-                                        },
-                                        onClick = {
-                                            nestedNavController.navigate("settings") {
-                                                popUpTo("photos") { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
+                                Text(
+                                    titleText,
+                                    style = MaterialTheme.typography.displayMedium
+                                )
+                                Box {
+                                    IconButton(onClick = { showMenu = true }) {
+                                        Icon(Icons.Outlined.MoreVert, contentDescription = "Menu")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false },
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Immersive View") },
+                                            trailingIcon = {
+                                                androidx.compose.material3.RadioButton(
+                                                    selected = viewMode == ViewMode.Immersive,
+                                                    onClick = null
+                                                )
+                                            },
+                                            onClick = {
+                                                viewModel.setViewMode(ViewMode.Immersive)
+                                                showMenu = false
                                             }
-                                            showMenu = false
-                                        }
-                                    )
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Grouped View") },
+                                            trailingIcon = {
+                                                androidx.compose.material3.RadioButton(
+                                                    selected = viewMode == ViewMode.Grouped,
+                                                    onClick = null
+                                                )
+                                            },
+                                            onClick = {
+                                                viewModel.setViewMode(ViewMode.Grouped)
+                                                showMenu = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Settings") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Settings,
+                                                    contentDescription = "Settings"
+                                                )
+                                            },
+                                            onClick = {
+                                                nestedNavController.navigate("settings") {
+                                                    popUpTo("photos") { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                                showMenu = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.background,
-                            scrolledContainerColor = MaterialTheme.colorScheme.background
-                        ),
-                        scrollBehavior = scrollBehavior
-                    )
+                        }
+                    }
                     if (currentRoute == "photos") {
                         QuickFilterRow(
                             selectedFilter = selectedFilter,
@@ -477,7 +482,7 @@ fun CustomSplitButton(
                 modifier = Modifier
                     .width(1.dp)
                     .height(32.dp)
-                    .background(contentColor.copy(alpha = 0.2f))
+                    .background(MaterialTheme.colorScheme.outlineVariant)
             )
             
             // Trailing

@@ -407,57 +407,51 @@ fun GalleryGridItem(
             )
         }
         if (item.isVideo) {
-            Box(
+            Surface(
                 modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
-                            startY = 100f
-                        )
-                    )
-            )
-            
-            Row(
-                modifier = Modifier
-                    .matchParentSize()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface
             ) {
-                Text(
-                    text = formatDuration(item.durationMs),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = "Video",
-                        modifier = Modifier.padding(6.dp).size(16.dp)
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = formatDuration(item.durationMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
         if (isSelected) {
+            // Apply a thick primary border inside the bounds
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.3f))
+                    .border(4.dp, MaterialTheme.colorScheme.primary)
+            )
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
                     imageVector = Icons.Outlined.CheckCircle,
                     contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(4.dp)
+                    modifier = Modifier.padding(4.dp).size(20.dp)
                 )
             }
         }
@@ -472,7 +466,7 @@ fun GalleryGridItem(
 
         if (badgeText != null && !item.isVideo) {
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
                 modifier = Modifier

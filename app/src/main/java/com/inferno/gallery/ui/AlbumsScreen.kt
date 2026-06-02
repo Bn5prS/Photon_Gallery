@@ -111,19 +111,18 @@ fun AlbumsScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                             // Text Overlay
-                            Box(
+                            Surface(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .align(Alignment.BottomCenter)
-                                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(
-                                        colors = listOf(androidx.compose.ui.graphics.Color.Transparent, androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f))
-                                    ))
-                                    .padding(8.dp)
+                                    .align(Alignment.BottomStart)
+                                    .padding(8.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
                             ) {
                                 Text(
                                     text = item.name ?: "Unknown",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = androidx.compose.ui.graphics.Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
@@ -148,7 +147,7 @@ fun AlbumsScreen(
                     .fillMaxWidth()
                     .expressiveClick { onAlbumClick("Trash") },
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer
             ) {
                 Row(

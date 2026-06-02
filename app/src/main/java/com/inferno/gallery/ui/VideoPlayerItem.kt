@@ -111,7 +111,7 @@ fun VideoPlayerItem(uri: Uri, isCurrentPage: Boolean, modifier: Modifier = Modif
         // Custom Control Overlay
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
             shadowElevation = 4.dp,
             modifier = Modifier.align(Alignment.Center)
         ) {
@@ -137,58 +137,51 @@ fun VideoPlayerItem(uri: Uri, isCurrentPage: Boolean, modifier: Modifier = Modif
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 140.dp)
+                .padding(bottom = 120.dp, start = 16.dp, end = 16.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
-            )
-    
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .align(Alignment.BottomCenter),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shadowElevation = 8.dp
             ) {
-            // Time Text
-            Text(
-                text = "${formatDuration(dragPosition ?: currentPosition)} / ${formatDuration(videoDuration)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White
-            )
-            
-            // M3 Slider
-            Slider(
-                value = (dragPosition ?: currentPosition).toFloat(),
-                onValueChange = { dragPosition = it.toLong() },
-                onValueChangeFinished = { 
-                    dragPosition?.let { exoPlayer.seekTo(it) }
-                    dragPosition = null 
-                },
-                valueRange = 0f..videoDuration.coerceAtLeast(1L).toFloat(),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                )
-            )
-            
-            // Mute Toggle
-            IconButton(onClick = { isMuted = !isMuted }, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = "Mute",
-                    tint = Color.White
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Time Text
+                    Text(
+                        text = "${formatDuration(dragPosition ?: currentPosition)} / ${formatDuration(videoDuration)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    // M3 Slider
+                    Slider(
+                        value = (dragPosition ?: currentPosition).toFloat(),
+                        onValueChange = { dragPosition = it.toLong() },
+                        onValueChangeFinished = { 
+                            dragPosition?.let { exoPlayer.seekTo(it) }
+                            dragPosition = null 
+                        },
+                        valueRange = 0f..videoDuration.coerceAtLeast(1L).toFloat(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp)
+                    )
+                    
+                    // Mute Toggle
+                    IconButton(onClick = { isMuted = !isMuted }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Mute",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
-    }
     }
 }
