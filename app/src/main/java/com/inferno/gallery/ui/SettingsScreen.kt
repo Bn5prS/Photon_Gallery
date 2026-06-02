@@ -206,10 +206,11 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = "Thumbnail Corner Radius", style = MaterialTheme.typography.bodyLarge)
-                    // Live preview tile
+                    // Live preview tile (Scaled for accurate visual representation relative to grid size)
+                    val previewScale = 48f / 120f // 48dp preview size / ~120dp average grid item size
                     Surface(
                         modifier = Modifier.size(48.dp),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(thumbnailCornerRadius.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape((thumbnailCornerRadius * previewScale).dp),
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {}
                 }
@@ -217,7 +218,7 @@ fun SettingsScreen(
                 androidx.compose.material3.Slider(
                     value = thumbnailCornerRadius,
                     onValueChange = { viewModel.setThumbnailCornerRadius(it) },
-                    valueRange = 0f..32f
+                    valueRange = 0f..24f
                 )
             }
 
