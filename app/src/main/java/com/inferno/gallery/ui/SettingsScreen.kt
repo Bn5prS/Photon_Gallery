@@ -21,6 +21,9 @@ import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -170,7 +173,17 @@ fun SettingsScreen(
                     headlineContent = { Text("Material You") },
                     supportingContent = { Text("Use dynamic system colors") },
                     trailingContent = {
-                        Switch(checked = useMaterialYou, onCheckedChange = { viewModel.setUseMaterialYou(it) })
+                        Switch(
+                            checked = useMaterialYou,
+                            onCheckedChange = { viewModel.setUseMaterialYou(it) },
+                            thumbContent = {
+                                Icon(
+                                    imageVector = if (useMaterialYou) Icons.Outlined.Check else Icons.Outlined.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -180,7 +193,18 @@ fun SettingsScreen(
                     headlineContent = { Text("AMOLED Black") },
                     supportingContent = { Text("Use pitch black background in dark mode") },
                     trailingContent = {
-                        Switch(checked = useAmoledBlack, onCheckedChange = { viewModel.setUseAmoledBlack(it) }, enabled = isCurrentlyDark)
+                        Switch(
+                            checked = useAmoledBlack,
+                            onCheckedChange = { viewModel.setUseAmoledBlack(it) },
+                            enabled = isCurrentlyDark,
+                            thumbContent = {
+                                Icon(
+                                    imageVector = if (useAmoledBlack) Icons.Outlined.Check else Icons.Outlined.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -192,10 +216,18 @@ fun SettingsScreen(
                     headlineContent = { Text("Full-Width Dock") },
                     supportingContent = { Text("Use standard edge-to-edge dock instead of floating pill") },
                     trailingContent = {
+                        val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
                         Switch(
-                            checked = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH, 
+                            checked = isDockFullWidth, 
                             onCheckedChange = { isChecked ->
                                 viewModel.setDockStyle(if (isChecked) com.inferno.gallery.data.DockStyle.FULL_WIDTH else com.inferno.gallery.data.DockStyle.PILL)
+                            },
+                            thumbContent = {
+                                Icon(
+                                    imageVector = if (isDockFullWidth) Icons.Outlined.Check else Icons.Outlined.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
                             }
                         )
                     },
@@ -242,7 +274,17 @@ fun SettingsScreen(
                     headlineContent = { Text("Auto-Play Media") },
                     supportingContent = { Text("Play GIFs and videos in grid") },
                     trailingContent = {
-                        Switch(checked = gridAutoPlay, onCheckedChange = { galleryViewModel.toggleGridAutoPlay() })
+                        Switch(
+                            checked = gridAutoPlay,
+                            onCheckedChange = { galleryViewModel.toggleGridAutoPlay() },
+                            thumbContent = {
+                                Icon(
+                                    imageVector = if (gridAutoPlay) Icons.Outlined.Check else Icons.Outlined.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -264,14 +306,32 @@ fun SettingsScreen(
                     leadingContent = { Icon(Icons.Outlined.SmartToy, contentDescription = null) },
                     headlineContent = { Text("Smart Search") },
                     supportingContent = { Text("Index photos for semantic search") },
-                    trailingContent = { Switch(checked = false, onCheckedChange = null, enabled = false) },
+                    trailingContent = {
+                        Switch(
+                            checked = false,
+                            onCheckedChange = null,
+                            enabled = false,
+                            thumbContent = {
+                                Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(SwitchDefaults.IconSize))
+                            }
+                        )
+                    },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
                 ListItem(
                     leadingContent = { Icon(Icons.Outlined.Face, contentDescription = null) },
                     headlineContent = { Text("Face Clustering") },
                     supportingContent = { Text("Group photos by people locally") },
-                    trailingContent = { Switch(checked = false, onCheckedChange = null, enabled = false) },
+                    trailingContent = {
+                        Switch(
+                            checked = false,
+                            onCheckedChange = null,
+                            enabled = false,
+                            thumbContent = {
+                                Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(SwitchDefaults.IconSize))
+                            }
+                        )
+                    },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
             }
