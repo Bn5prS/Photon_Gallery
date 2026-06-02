@@ -92,6 +92,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Button
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -347,6 +349,48 @@ fun MainAppLayout(
                                 )
                             }
                         }
+                    }
+                } else {
+                    val systemNavBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    androidx.compose.foundation.layout.Column(
+                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        NavigationBar(
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp
+                        ) {
+                            NavigationBarItem(
+                                icon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Photos") },
+                                label = { Text("Photos") },
+                                selected = currentRoute == "photos",
+                                onClick = { nestedNavController.navigate("photos") {
+                                    popUpTo("photos") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                } }
+                            )
+                            NavigationBarItem(
+                                icon = { Icon(Icons.Outlined.PhotoAlbum, contentDescription = "Albums") },
+                                label = { Text("Albums") },
+                                selected = currentRoute?.startsWith("album") == true,
+                                onClick = { nestedNavController.navigate("albums") {
+                                    popUpTo("photos") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                } }
+                            )
+                            NavigationBarItem(
+                                icon = { MagicSearchIcon(modifier = Modifier.size(24.dp)) },
+                                label = { Text("Search") },
+                                selected = currentRoute == "search",
+                                onClick = { nestedNavController.navigate("search") {
+                                    popUpTo("photos") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                } }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(systemNavBarInset))
                     }
                 }
             }
