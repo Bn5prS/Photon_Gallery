@@ -230,7 +230,7 @@ fun GalleryScreen(
                     modifier = Modifier.animateItem(
                         placementSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessLow
+                            stiffness = Spring.StiffnessMediumLow
                         )
                     ),
                     isSelected = selectedUris.contains(item.uri.toString()),
@@ -265,7 +265,7 @@ fun GalleryScreen(
                     modifier = Modifier.animateItem(
                         placementSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessLow
+                            stiffness = Spring.StiffnessMediumLow
                         )
                     ),
                     isSelected = selectedUris.contains(item.uri.toString()),
@@ -339,13 +339,13 @@ fun GalleryGridItem(
 ) {
     val context = LocalContext.current
     val screenWidth = context.resources.displayMetrics.widthPixels
-    val thumbnailSize = screenWidth / gridCellsCount
+    val maxThumbnailSize = screenWidth / 2
 
-    val request = remember(item.uri, thumbnailSize) {
+    val request = remember(item.uri) {
         ImageRequest.Builder(context)
             .data(item.uri)
-            .size(thumbnailSize, thumbnailSize)
-            .memoryCacheKey("photo_${item.uri}_$thumbnailSize")
+            .size(maxThumbnailSize, maxThumbnailSize)
+            .memoryCacheKey("photo_${item.uri}_$maxThumbnailSize")
             .precision(Precision.INEXACT) 
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
@@ -359,7 +359,7 @@ fun GalleryGridItem(
 
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 0.85f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "scale"
     )
     
@@ -371,7 +371,7 @@ fun GalleryGridItem(
                 runCatching {
                     context.contentResolver.loadThumbnail(
                         item.uri,
-                        android.util.Size(thumbnailSize, thumbnailSize),
+                        android.util.Size(maxThumbnailSize, maxThumbnailSize),
                         null
                     )
                 }.getOrNull()
@@ -410,7 +410,7 @@ fun GalleryGridItem(
                         boundsTransform = { _, _ ->
                             spring(
                                 dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessLow
+                                stiffness = Spring.StiffnessMediumLow
                             )
                         }
                     )
