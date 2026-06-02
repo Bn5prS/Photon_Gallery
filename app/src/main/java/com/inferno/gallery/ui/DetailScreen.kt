@@ -648,6 +648,7 @@ fun DetailScreen(
                 
                 HorizontalFloatingToolbar(
                     expanded = true,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     modifier = Modifier.padding(bottom = 16.dp).height(48.dp)
                 ) {
                     Row(
@@ -656,10 +657,10 @@ fun DetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { showShareSheet = true }) { 
-                            Icon(Icons.Outlined.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.onSurface) 
+                            Icon(Icons.Outlined.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.onSecondaryContainer) 
                         }
                         IconButton(onClick = { /* TODO: Edit */ }) { 
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurface) 
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSecondaryContainer) 
                         }
                         IconButton(
                             onClick = {
@@ -675,12 +676,12 @@ fun DetailScreen(
                                 }
                             }
                         ) { 
-                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurface) 
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSecondaryContainer) 
                         }
                         
                         Box {
                             IconButton(onClick = { showMoreMenu = true }) {
-                                Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(Icons.Outlined.MoreVert, contentDescription = "More", tint = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                             androidx.compose.material3.DropdownMenu(
                                 expanded = showMoreMenu,
