@@ -73,14 +73,9 @@ fun AlbumsScreen(
         allMedia.filter { favoriteIds.contains(it.id) }
     }
     
-    val isLoading by viewModel.isLoading.collectAsState()
 
-    if (isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            WavyProgressIndicator()
-        }
-        return
-    }
+
+
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
@@ -104,7 +99,7 @@ fun AlbumsScreen(
                         modifier = Modifier.fillMaxWidth().height(160.dp)
                     ) { i ->
                         val item = favoriteItems[i]
-                        Box(modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.extraLarge).clickable { onAlbumClick("All") }) {
+                        Box(modifier = Modifier.fillMaxSize().clickable { onAlbumClick("All") }) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
                                     .data(item.uri)
@@ -231,7 +226,6 @@ fun AlbumCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(

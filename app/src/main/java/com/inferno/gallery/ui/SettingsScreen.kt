@@ -178,8 +178,8 @@ fun SettingsScreen(
                 androidx.compose.material3.Slider(
                     value = gridCellsCount.toFloat(),
                     onValueChange = { galleryViewModel.setGridCellsCount(it.toInt()) },
-                    valueRange = 2f..8f,
-                    steps = 5
+                    valueRange = 2f..6f,
+                    steps = 3
                 )
             }
 
@@ -206,22 +206,7 @@ fun SettingsScreen(
                     .padding(horizontal = 16.dp)
             )
 
-            val hdrDisplayEnabled by galleryViewModel.hdrDisplayEnabled.collectAsState()
-            ListItem(
-                headlineContent = { Text("HDR Display Support") },
-                supportingContent = { Text("Utilize maximum brightness for HDR photos on supported devices") },
-                trailingContent = { 
-                    Switch(
-                        checked = hdrDisplayEnabled, 
-                        onCheckedChange = { galleryViewModel.toggleHdrDisplay() }
-                    ) 
-                },
-                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { galleryViewModel.toggleHdrDisplay() }
-                    .padding(horizontal = 16.dp)
-            )
+
 
             Text(
                 text = "Storage & Cache",

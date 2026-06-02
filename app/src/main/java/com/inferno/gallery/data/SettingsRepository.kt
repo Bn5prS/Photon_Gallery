@@ -21,7 +21,6 @@ class SettingsRepository(private val context: Context) {
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
         val USE_AMOLED_BLACK = booleanPreferencesKey("use_amoled_black")
         val GRID_AUTO_PLAY = booleanPreferencesKey("grid_auto_play")
-        val HDR_DISPLAY = booleanPreferencesKey("hdr_display_enabled")
         val SELECTED_FILTER_INDEX = androidx.datastore.preferences.core.intPreferencesKey("selected_filter_index")
         val GRID_CELLS_COUNT = androidx.datastore.preferences.core.intPreferencesKey("grid_cells_count")
     }
@@ -103,16 +102,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val hdrDisplayFlow: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[HDR_DISPLAY] ?: true
-        }
 
-    suspend fun toggleHdrDisplay(current: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[HDR_DISPLAY] = !current
-        }
-    }
 
     val selectedFilterIndexFlow: Flow<Int> = context.dataStore.data
         .map { preferences ->

@@ -9,13 +9,11 @@ import com.inferno.gallery.data.LocalMediaRepository
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
 import com.inferno.gallery.data.FavoritesManager
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -26,7 +24,6 @@ import java.util.Locale
 
 data class GalleryItem(
     val id: String,
-    val mediaStoreId: Long,
     val uri: Uri,
     val bucketName: String,
     val dateAdded: Long,
@@ -81,17 +78,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val hdrDisplayEnabled: StateFlow<Boolean> = settingsRepository.hdrDisplayFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
 
-    fun toggleHdrDisplay() {
-        viewModelScope.launch {
-            settingsRepository.toggleHdrDisplay(hdrDisplayEnabled.value)
-        }
-    }
 
     fun toggleFavorite(id: String) {
         viewModelScope.launch {
@@ -99,10 +86,26 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private val allMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
-    
-    private val _isLoading = MutableStateFlow(true)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    val allMedia: StateFlow<List<GalleryItem>> = repository.observeImages(null).map { mediaData ->
+        mediaData.mapIndexed { index, data ->
+            GalleryItem(
+                id = index.toString(),
+                uri = data.uri,
+                bucketName = data.bucketName,
+                dateAdded = data.dateAdded,
+                size = data.size,
+                name = data.name,
+                dateModified = data.dateModified,
+                path = data.path,
+                isVideo = data.isVideo,
+                durationMs = data.durationMs
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val sortOrder: StateFlow<SortOrder> = settingsRepository.sortOrderFlow.map {
         try {
@@ -199,8 +202,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 fullFormat.format(Date(timeMs))
             }
         }
-    }.flowOn(Dispatchers.Default)
-     .stateIn(
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyMap()
@@ -302,9 +304,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    init {
-        loadImages()
-    }
+
 
     fun setFilter(index: Int) {
         viewModelScope.launch {
@@ -322,8 +322,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val uiEvents = _uiEvents.receiveAsFlow()
 
     fun removeMediaOptimistically(uriString: String) {
-        val currentList = allMedia.value
-        allMedia.value = currentList.filter { it.uri.toString() != uriString }
         viewModelScope.launch {
             _uiEvents.send(UiEvent.DeleteSuccess)
         }
@@ -331,57 +329,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     sealed class UiEvent {
         object DeleteSuccess : UiEvent()
-    }
-
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-
-    fun refreshMedia() {
-        viewModelScope.launch {
-            _isRefreshing.value = true
-            try {
-                val mediaData = repository.getImages(null)
-                allMedia.value = mediaData.map { data ->
-                    GalleryItem(
-                        id = data.mediaStoreId.toString(),
-                        mediaStoreId = data.mediaStoreId,
-                        uri = data.uri,
-                        bucketName = data.bucketName,
-                        dateAdded = data.dateAdded,
-                        size = data.size,
-                        name = data.name,
-                        dateModified = data.dateModified,
-                        path = data.path,
-                        isVideo = data.isVideo,
-                        durationMs = data.durationMs
-                    )
-                }
-            } finally {
-                _isRefreshing.value = false
-            }
-        }
-    }
-
-    fun loadImages() {
-        viewModelScope.launch {
-            val mediaData = repository.getImages(null)
-            allMedia.value = mediaData.map { data ->
-                GalleryItem(
-                    id = data.mediaStoreId.toString(),
-                    mediaStoreId = data.mediaStoreId,
-                    uri = data.uri,
-                    bucketName = data.bucketName,
-                    dateAdded = data.dateAdded,
-                    size = data.size,
-                    name = data.name,
-                    dateModified = data.dateModified,
-                    path = data.path,
-                    isVideo = data.isVideo,
-                    durationMs = data.durationMs
-                )
-            }
-            _isLoading.value = false
-        }
     }
 
 }

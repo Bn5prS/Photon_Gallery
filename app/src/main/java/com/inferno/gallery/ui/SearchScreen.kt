@@ -32,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -110,11 +109,6 @@ fun SearchScreen(
                 }
             }
         } else {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val thumbnailPx = remember {
-                context.resources.displayMetrics.widthPixels / 4
-            }
-            
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -131,7 +125,6 @@ fun SearchScreen(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        thumbnailPx = thumbnailPx,
                         onClick = {
                             onPhotoClick(item.id, null)
                         }

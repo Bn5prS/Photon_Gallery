@@ -287,7 +287,7 @@ fun MainAppLayout(
             }
         },
         bottomBar = {
-            val isDockVisible = !isSelectionMode && scrollBehavior.state.collapsedFraction < 0.7f
+            val isDockVisible = !isSelectionMode
             AnimatedVisibility(
                 visible = isDockVisible,
                 enter = slideInVertically(initialOffsetY = { it }),
@@ -302,18 +302,18 @@ fun MainAppLayout(
                         contentAlignment = Alignment.BottomCenter
                     ) {
                         HorizontalFloatingToolbar(
-                            expanded = scrollBehavior.state.collapsedFraction < 0.3f,
+                            expanded = true,
                             modifier = Modifier.fillMaxWidth(0.85f)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    .padding(horizontal = 13.dp, vertical = 3.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 DockItem(
-                                    icon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Photos") },
+                                    icon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Photos", modifier = Modifier.size(19.dp)) },
                                     label = "Photos",
                                     isSelected = currentRoute == "photos",
                                     onClick = { nestedNavController.navigate("photos") {
@@ -323,7 +323,7 @@ fun MainAppLayout(
                                     } }
                                 )
                                 DockItem(
-                                    icon = { Icon(Icons.Outlined.PhotoAlbum, contentDescription = "Albums") },
+                                    icon = { Icon(Icons.Outlined.PhotoAlbum, contentDescription = "Albums", modifier = Modifier.size(19.dp)) },
                                     label = "Albums",
                                     isSelected = currentRoute?.startsWith("album") == true,
                                     onClick = { nestedNavController.navigate("albums") {
@@ -333,7 +333,7 @@ fun MainAppLayout(
                                     } }
                                 )
                                 DockItem(
-                                    icon = { MagicSearchIcon(modifier = Modifier.size(24.dp)) },
+                                    icon = { MagicSearchIcon(modifier = Modifier.size(19.dp)) },
                                     label = "Search",
                                     isSelected = currentRoute == "search",
                                     onClick = { nestedNavController.navigate("search") {
@@ -650,7 +650,7 @@ private fun DockItem(
     onClick: () -> Unit
 ) {
     val pillWidth by animateDpAsState(
-        targetValue = if (isSelected) 64.dp else 48.dp,
+        targetValue = if (isSelected) 51.dp else 38.dp,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessLow
@@ -672,11 +672,11 @@ private fun DockItem(
         modifier = Modifier
             .clip(CircleShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Box(
             modifier = Modifier
-                .height(28.dp)
+                .height(22.dp)
                 .width(pillWidth)
                 .clip(CircleShape)
                 .background(pillColor),
@@ -686,10 +686,12 @@ private fun DockItem(
                 icon()
             }
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(1.dp))
         Text(
             text = label, 
             style = MaterialTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            lineHeight = 12.sp,
             color = iconTint,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )

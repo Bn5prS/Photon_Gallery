@@ -5,12 +5,18 @@ import android.content.ContentUris
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class MediaData(
-    val mediaStoreId: Long,
     val uri: Uri,
     val bucketName: String,
     val dateAdded: Long,
@@ -34,7 +40,18 @@ class LocalMediaRepository(
     private val contentResolver: ContentResolver
 ) {
 
-    suspend fun getImages(folderName: String? = null): List<MediaData> = withContext(Dispatchers.IO) {
+    fun observeImages(folderName: String? = null): Flow<List<MediaData>> = callbackFlow {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                launch { trySend(getImagesList(folderName)) }
+            }
+        }
+        contentResolver.registerContentObserver(MediaStore.Files.getContentUri("external"), true, observer)
+        trySend(getImagesList(folderName))
+        awaitClose { contentResolver.unregisterContentObserver(observer) }
+    }
+
+    private suspend fun getImagesList(folderName: String? = null): List<MediaData> = withContext(Dispatchers.IO) {
         val images = mutableListOf<MediaData>()
 
         val projection = arrayOf(
@@ -99,7 +116,7 @@ class LocalMediaRepository(
                 }
                 
                 val uri = ContentUris.withAppendedId(baseUri, id)
-                images.add(MediaData(mediaStoreId = id, uri = uri, bucketName = bucketName, dateAdded = dateAdded, size = size, name = name, dateModified = dateModified, path = path, isVideo = isVideo, durationMs = durationMs))
+                images.add(MediaData(uri, bucketName, dateAdded, size, name, dateModified, path, isVideo, durationMs))
             }
         }
 
@@ -133,7 +150,6 @@ class LocalMediaRepository(
                         val dateAdded = file.lastModified() / 1000
                         statuses.add(
                             MediaData(
-                                mediaStoreId = (file.absolutePath + file.lastModified()).hashCode().toLong(),
                                 uri = uri,
                                 bucketName = "WhatsApp Statuses",
                                 dateAdded = dateAdded,

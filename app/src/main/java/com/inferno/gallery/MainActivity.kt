@@ -31,20 +31,16 @@ class MainActivity : ComponentActivity() {
             ImageLoader.Builder(ctx)
                 .memoryCache {
                     MemoryCache.Builder()
-                        // 25% keeps the grid bitmap pool within GC-safe bounds during fast scroll.
-                        // The previous 50% caused GC storms at 120 Hz. Do not increase.
-                        .maxSizePercent(ctx, 0.25)
+                        .maxSizePercent(ctx, 0.50)
                         .build()
                 }
                 .diskCache {
                     DiskCache.Builder()
                         .directory(ctx.cacheDir.resolve("image_cache").toOkioPath())
-                        // 300 MB is sufficient for a 4-column grid with 1000+ items.
-                        .maxSizeBytes(300L * 1024 * 1024)
+                        .maxSizeBytes(500L * 1024 * 1024)
                         .build()
                 }
-                // Do NOT set crossfade globally. Grid items skip crossfade for instant display
-                // from cache. Detail screen enables it per-request for its own transitions.
+                .crossfade(false)
                 .build()
         }
 

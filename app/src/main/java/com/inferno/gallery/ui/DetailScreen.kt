@@ -187,29 +187,8 @@ fun DetailScreen(
     val window = activity?.window
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
     
-    // Check if display supports HDR
-    val displayManager = context.getSystemService(android.content.Context.DISPLAY_SERVICE) as? android.hardware.display.DisplayManager
-    val isHdrSupported = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        val display = displayManager?.getDisplay(android.view.Display.DEFAULT_DISPLAY)
-        display?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true || context.resources.configuration.isScreenHdr == true
-    } else {
-        false
-    }
-    
     val galleryItems by viewModel.images.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
-    val hdrDisplayEnabled by viewModel.hdrDisplayEnabled.collectAsState()
-
-    androidx.compose.runtime.DisposableEffect(hdrDisplayEnabled, window, isHdrSupported) {
-        if (isHdrSupported && hdrDisplayEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            window?.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_HDR
-        } else {
-            window?.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
-        }
-        onDispose {
-            window?.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
-        }
-    }
 
 
     // Ensure we don't crash if items is empty
@@ -363,11 +342,7 @@ fun DetailScreen(
                     .build()
             }
             
-            // HDR metadata hints for proper color rendering
-            val isHdrImage: Boolean = remember(item.uri) {
-                item.uri.toString().contains("hdr", ignoreCase = true) || 
-                item.name.contains("hdr", ignoreCase = true)
-            }
+
             
             val scale = remember { Animatable(1f) }
             val offsetX = remember { Animatable(0f) }
@@ -396,7 +371,7 @@ fun DetailScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = "photo_${item.mediaStoreId}"),
+                                    sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
                                     animatedVisibilityScope = animatedVisibilityScope,
                                     boundsTransform = { _, _ ->
                                         spring(
@@ -412,11 +387,7 @@ fun DetailScreen(
                                     translationX = offsetX.value
                                     translationY = offsetY.value
                                     
-                                    // HDR color space aware rendering
-                                    if (hdrDisplayEnabled && isHdrSupported && isHdrImage) {
-                                        // Enable wide color gamut rendering
-                                        this.renderEffect = null // Let system handle HDR color mapping
-                                    }
+
                                 }
                                 .pointerInput(Unit) {
                                     detectZoomPanGesture { centroid, pan, zoom, consume ->
@@ -669,8 +640,7 @@ fun DetailScreen(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .border(2.dp, if (isSelected) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
+                                    .border(2.dp, if (isSelected) Color.White else Color.Transparent)
                                     .alpha(if (isSelected) 1f else 0.7f)
                             )
                         }
@@ -772,7 +742,7 @@ fun CustomShareSheet(items: List<GalleryItem>, initialIndex: Int, onDismiss: () 
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(items) { item ->
                     val isSelected = selectedUris.contains(item.uri)
-                    Box(modifier = Modifier.size(140.dp, 180.dp).clip(RoundedCornerShape(16.dp)).clickable { if (isSelected) selectedUris.remove(item.uri) else item.uri?.let { selectedUris.add(it) } }) {
+                    Box(modifier = Modifier.size(140.dp, 180.dp).clickable { if (isSelected) selectedUris.remove(item.uri) else item.uri?.let { selectedUris.add(it) } }) {
                         AsyncImage(model = item.uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         if (isSelected) {
                             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
