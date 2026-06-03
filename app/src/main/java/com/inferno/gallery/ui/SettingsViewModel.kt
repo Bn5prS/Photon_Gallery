@@ -68,6 +68,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val useFullScreen: StateFlow<Boolean> = repository.useFullScreenFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setUseFullScreen(use: Boolean) {
+        viewModelScope.launch {
+            repository.updateUseFullScreen(use)
+        }
+    }
+
     val dockStyle: StateFlow<DockStyle> = repository.dockStyleFlow.map { modeString ->
         try {
             DockStyle.valueOf(modeString)

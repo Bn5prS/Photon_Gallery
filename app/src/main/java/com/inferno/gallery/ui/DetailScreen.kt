@@ -175,6 +175,7 @@ suspend fun PointerInputScope.detectZoomPanGesture(
 fun DetailScreen(
     mediaId: String,
     bucketName: String?,
+    useFullScreenGlobal: Boolean = false,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: GalleryViewModel = viewModel(),
@@ -251,16 +252,29 @@ fun DetailScreen(
         pendingDeletePage = null
     }
 
-    androidx.compose.runtime.LaunchedEffect(showUi) {
-        if (window != null) {
+    androidx.compose.runtime.DisposableEffect(showUi, useFullScreenGlobal) {
+        if (window != null && insetsController != null) {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        }
-        if (insetsController != null) {
-            if (showUi) {
+            
+            if (showUi && !useFullScreenGlobal) {
+                // UI is visible AND we are not in global full screen mode -> Show bars
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             } else {
+                // UI is hidden OR we are in global full screen mode -> Hide bars
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        
+        onDispose {
+            // Restore to the global state when leaving DetailScreen
+            if (window != null && insetsController != null) {
+                if (!useFullScreenGlobal) {
+                    insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                } else {
+                    insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
             }
         }
     }

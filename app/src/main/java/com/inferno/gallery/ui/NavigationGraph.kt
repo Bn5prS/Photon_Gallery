@@ -68,9 +68,11 @@ fun NavigationGraph(
             ) { backStackEntry ->
                 val mediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
+                val useFullScreen by settingsViewModel.useFullScreen.collectAsState()
                 DetailScreen(
                     mediaId = mediaId,
                     bucketName = bucketName,
+                    useFullScreenGlobal = useFullScreen,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
                     onBack = { navController.popBackStack() }

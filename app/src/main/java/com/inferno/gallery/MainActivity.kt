@@ -19,6 +19,11 @@ import coil3.memory.MemoryCache
 import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
 import coil3.request.crossfade
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.runtime.LaunchedEffect
+
 class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
 
@@ -48,6 +53,17 @@ class MainActivity : ComponentActivity() {
             val isLoading by settingsViewModel.isLoading.collectAsState()
             splashScreen.setKeepOnScreenCondition { isLoading }
             
+            val useFullScreen by settingsViewModel.useFullScreen.collectAsState()
+
+            LaunchedEffect(useFullScreen) {
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                if (useFullScreen) {
+                    insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                    insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    insetsController.show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
 
             val themeMode by settingsViewModel.themeMode.collectAsState()
             val useMaterialYou by settingsViewModel.useMaterialYou.collectAsState()

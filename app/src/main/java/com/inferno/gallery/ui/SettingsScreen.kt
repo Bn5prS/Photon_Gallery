@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Menu
@@ -100,6 +101,7 @@ fun SettingsScreen(
             val themeMode by viewModel.themeMode.collectAsState()
             val useMaterialYou by viewModel.useMaterialYou.collectAsState()
             val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
+            val useFullScreen by viewModel.useFullScreen.collectAsState()
             val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
             val dockStyle by viewModel.dockStyle.collectAsState()
             val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
@@ -205,6 +207,26 @@ fun SettingsScreen(
                             thumbContent = {
                                 Icon(
                                     imageVector = if (useAmoledBlack) Icons.Outlined.Check else Icons.Outlined.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Fullscreen, contentDescription = null) },
+                    headlineContent = { Text("Full Screen Mode") },
+                    supportingContent = { Text("Hide status bar and navigation bar to maximize content area") },
+                    trailingContent = {
+                        Switch(
+                            checked = useFullScreen,
+                            onCheckedChange = { viewModel.setUseFullScreen(it) },
+                            thumbContent = {
+                                Icon(
+                                    imageVector = if (useFullScreen) Icons.Outlined.Check else Icons.Outlined.Close,
                                     contentDescription = null,
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )

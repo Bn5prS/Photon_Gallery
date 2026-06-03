@@ -26,6 +26,7 @@ class SettingsRepository(private val context: Context) {
         val SELECTED_FILTER_INDEX = androidx.datastore.preferences.core.intPreferencesKey("selected_filter_index")
         val GRID_CELLS_COUNT = androidx.datastore.preferences.core.intPreferencesKey("grid_cells_count")
         val THUMBNAIL_CORNER_RADIUS = floatPreferencesKey("thumbnail_corner_radius")
+        val USE_FULL_SCREEN = booleanPreferencesKey("use_full_screen")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data
@@ -148,6 +149,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateThumbnailCornerRadius(radius: Float) {
         context.dataStore.edit { preferences ->
             preferences[THUMBNAIL_CORNER_RADIUS] = radius
+        }
+    }
+
+    val useFullScreenFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[USE_FULL_SCREEN] ?: false
+        }
+
+    suspend fun updateUseFullScreen(use: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[USE_FULL_SCREEN] = use
         }
     }
 }
