@@ -4,11 +4,13 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.LocalMediaRepository
-
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
 import com.inferno.gallery.data.FavoritesManager
+import com.inferno.gallery.data.ai.ONNXTextEncoder
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,9 +20,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.work.WorkManager
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import com.inferno.gallery.workers.AIIndexWorker
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.sqrt
 
 data class GalleryItem(
     val id: String,
@@ -56,11 +66,15 @@ data class AlbumBucket(
     val maxDate: Long = 0L
 )
 
+enum class SearchMode { SMART, FTS }
+
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = LocalMediaRepository(application.contentResolver)
     private val settingsRepository = SettingsRepository(application)
     private val favoritesManager = FavoritesManager(application)
+    private val database = DatabaseProvider.getDatabase(application)
+    private val textEncoder = ONNXTextEncoder(application)
 
     val favoriteIds: StateFlow<Set<String>> = favoritesManager.favoritesFlow.stateIn(
         scope = viewModelScope,
@@ -88,19 +102,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val allMedia: StateFlow<List<GalleryItem>> = repository.observeImages(null).map { mediaData ->
-        mediaData.mapIndexed { index, data ->
+    val allMedia: StateFlow<List<GalleryItem>> = database.mediaDao().observeAllMedia().map { entities ->
+        entities.map { entity ->
             GalleryItem(
-                id = index.toString(),
-                uri = data.uri,
-                bucketName = data.bucketName,
-                dateAdded = data.dateAdded,
-                size = data.size,
-                name = data.name,
-                dateModified = data.dateModified,
-                path = data.path,
-                isVideo = data.isVideo,
-                durationMs = data.durationMs
+                id = entity.id.toString(),
+                uri = Uri.parse(entity.uriString),
+                bucketName = entity.bucketName,
+                dateAdded = entity.dateAdded,
+                size = entity.size,
+                name = entity.name,
+                dateModified = entity.dateModified,
+                path = entity.filePath,
+                isVideo = entity.isVideo,
+                durationMs = entity.durationMs
             )
         }
     }.stateIn(
@@ -367,6 +381,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    // Old FTS results (filename/bucket matching) kept for backward compat
     val searchResults: StateFlow<List<GalleryItem>> = combine(
         images, _searchQuery
     ) { items, query ->
@@ -384,8 +399,180 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = emptyList()
     )
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+        if (query.isBlank()) {
+            _semanticSearchResults.value = emptyList()
+            _ftsSearchResults.value = emptyList()
+            _isSearching.value = false
+            searchJob?.cancel()
+            return
+        }
+        // Debounce: wait 500ms after user stops typing, then fire both searches
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(500)
+            performUnifiedSearch(query)
+        }
+    }
+
+    private val _semanticSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val semanticSearchResults: StateFlow<List<GalleryItem>> = _semanticSearchResults.asStateFlow()
+
+    private val _ftsSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val ftsSearchResults: StateFlow<List<GalleryItem>> = _ftsSearchResults.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
+    /**
+     * Runs both FTS (text-in-image) and Semantic (AI visual) searches
+     * concurrently. Called automatically after a 500ms debounce.
+     */
+    private fun performUnifiedSearch(query: String) {
+        viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                // Run semantic search
+                val semanticResults = withContext(Dispatchers.Default) {
+                    try {
+                        val queryEmbedding = textEncoder.encodeText(query)
+                        val vectors = withContext(Dispatchers.IO) {
+                            database.searchDao().getAllVectors()
+                        }
+                        val allEntities = withContext(Dispatchers.IO) {
+                            database.mediaDao().getAllMedia()
+                        }
+                        val mediaMap = allEntities.associateBy { it.id }
+                        vectors.mapNotNull { vec ->
+                            val entity = mediaMap[vec.mediaId] ?: return@mapNotNull null
+                            val item = GalleryItem(
+                                id = entity.id.toString(),
+                                uri = Uri.parse(entity.uriString),
+                                bucketName = entity.bucketName,
+                                dateAdded = entity.dateAdded,
+                                size = entity.size,
+                                name = entity.name,
+                                dateModified = entity.dateModified,
+                                path = entity.filePath,
+                                isVideo = entity.isVideo,
+                                durationMs = entity.durationMs
+                            )
+                            val imgEmb = vec.clipVector.toFloatArray()
+                            val score = cosineSimilarity(queryEmbedding, imgEmb)
+                            Pair(item, score)
+                        }.sortedByDescending { it.second }
+                            .take(50)
+                            .map { it.first }
+                    } catch (e: Exception) {
+                        android.util.Log.e("GalleryViewModel", "Semantic search failed: ${e.message}")
+                        emptyList()
+                    }
+                }
+
+                // Run FTS text-in-image search
+                val ftsResults = withContext(Dispatchers.IO) {
+                    try {
+                        val ftsEntities = DatabaseProvider.searchFts(database, query)
+                        ftsEntities.map { entity ->
+                            GalleryItem(
+                                id = entity.id.toString(),
+                                uri = Uri.parse(entity.uriString),
+                                bucketName = entity.bucketName,
+                                dateAdded = entity.dateAdded,
+                                size = entity.size,
+                                name = entity.name,
+                                dateModified = entity.dateModified,
+                                path = entity.filePath,
+                                isVideo = entity.isVideo,
+                                durationMs = entity.durationMs
+                            )
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("GalleryViewModel", "FTS search failed: ${e.message}")
+                        emptyList()
+                    }
+                }
+
+                _semanticSearchResults.value = semanticResults
+                _ftsSearchResults.value = ftsResults
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    // Keep legacy function for backward compat (e.g. Settings)
+    fun performSemanticSearch(query: String) {
+        if (query.isBlank()) {
+            _semanticSearchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val queryEmbedding = withContext(Dispatchers.Default) {
+                    textEncoder.encodeText(query)
+                }
+                val vectors = withContext(Dispatchers.IO) {
+                    database.searchDao().getAllVectors()
+                }
+                val allEntities = withContext(Dispatchers.IO) {
+                    database.mediaDao().getAllMedia()
+                }
+                val mediaMap = allEntities.associateBy { it.id }
+
+                val scored = withContext(Dispatchers.Default) {
+                    vectors.mapNotNull { vec ->
+                        val entity = mediaMap[vec.mediaId] ?: return@mapNotNull null
+                        val item = GalleryItem(
+                            id = entity.id.toString(),
+                            uri = Uri.parse(entity.uriString),
+                            bucketName = entity.bucketName,
+                            dateAdded = entity.dateAdded,
+                            size = entity.size,
+                            name = entity.name,
+                            dateModified = entity.dateModified,
+                            path = entity.filePath,
+                            isVideo = entity.isVideo,
+                            durationMs = entity.durationMs
+                        )
+                        val imgEmb = vec.clipVector.toFloatArray()
+                        val score = cosineSimilarity(queryEmbedding, imgEmb)
+                        Pair(item, score)
+                    }.sortedByDescending { it.second }
+                        .take(50)
+                        .map { it.first }
+                }
+                _semanticSearchResults.value = scored
+            } catch (e: Exception) {
+                android.util.Log.e("GalleryViewModel", "Semantic search failed: ${e.message}")
+                _semanticSearchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    private fun ByteArray.toFloatArray(): FloatArray {
+        val buf = ByteBuffer.wrap(this).order(ByteOrder.LITTLE_ENDIAN)
+        return FloatArray(this.size / 4) { buf.getFloat() }
+    }
+
+    private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+        if (a.size != b.size) return 0f
+        var dot = 0f
+        var normA = 0f
+        var normB = 0f
+        for (i in a.indices) {
+            dot += a[i] * b[i]
+            normA += a[i] * a[i]
+            normB += b[i] * b[i]
+        }
+        val denom = sqrt(normA) * sqrt(normB)
+        return if (denom == 0f) 0f else dot / denom
     }
 
     fun setSortOrder(order: SortOrder) {
@@ -427,6 +614,24 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _uiEvents.send(UiEvent.DeleteSuccess)
         }
+    }
+
+    val aiIndexWorkInfo = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("AIIndexWorker")
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun startAiIndexing() {
+        val request = OneTimeWorkRequestBuilder<AIIndexWorker>().build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "AIIndexWorker",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    fun stopAiIndexing() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("AIIndexWorker")
     }
 
     sealed class UiEvent {
