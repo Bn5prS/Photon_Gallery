@@ -216,28 +216,28 @@ fun AlbumCard(
             .build()
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(0.85f)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .expressiveClick(onClick),
-        contentAlignment = Alignment.BottomCenter
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AsyncImage(
-            model = request,
-            contentDescription = bucket.bucketName,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(bottom = 24.dp).padding(horizontal = 8.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.85f)
+                .clip(MaterialTheme.shapes.extraLarge)
+                .expressiveClick(onClick),
+            contentAlignment = Alignment.BottomCenter
         ) {
+            AsyncImage(
+                model = request,
+                contentDescription = bucket.bucketName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            
             Text(
                 text = bucket.bucketName,
-                style = MaterialTheme.typography.titleLarge.copy(
+                style = MaterialTheme.typography.titleMedium.copy(
                     shadow = Shadow(
                         color = Color.Black.copy(alpha = 0.6f),
                         offset = Offset(0f, 4f),
@@ -247,20 +247,19 @@ fun AlbumCard(
                 ),
                 color = Color.White,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Text(
-                text = "${bucket.itemCount} items",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.6f),
-                        offset = Offset(0f, 2f),
-                        blurRadius = 8f
-                    )
-                ),
-                color = Color.White
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 5.dp).padding(horizontal = 8.dp)
             )
         }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        val formattedSize = android.text.format.Formatter.formatShortFileSize(context, bucket.totalSizeBytes)
+        Text(
+            text = "${bucket.itemCount} items • $formattedSize",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
