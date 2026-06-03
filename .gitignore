@@ -10,6 +10,7 @@ local.properties
 
 # Log Files
 *.log
+*.txt
 
 # Sensitive Info & Release Keys (CRITICAL)
 *.jks
