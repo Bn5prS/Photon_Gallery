@@ -10,8 +10,23 @@ import coil3.gif.GifDecoder
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import coil3.video.VideoFrameDecoder
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.inferno.gallery.workers.MediaSyncWorker
+import com.inferno.gallery.workers.AIIndexWorker
 
 class GalleryApplication : Application(), SingletonImageLoader.Factory {
+    override fun onCreate() {
+        super.onCreate()
+        // Chain: MediaStore sync → AI embedding indexing
+        val syncWorkRequest = OneTimeWorkRequestBuilder<MediaSyncWorker>().build()
+        val aiIndexRequest = OneTimeWorkRequestBuilder<AIIndexWorker>().build()
+        WorkManager.getInstance(this)
+            .beginWith(syncWorkRequest)
+            .then(aiIndexRequest)
+            .enqueue()
+    }
+
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {

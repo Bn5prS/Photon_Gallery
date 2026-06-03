@@ -61,6 +61,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
+import coil3.gif.repeatCount
+import coil3.video.videoFrameMillis
 @Composable
 fun AlbumsScreen(
     modifier: Modifier = Modifier,
@@ -74,6 +76,7 @@ fun AlbumsScreen(
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
     val allMedia by viewModel.images.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
+    val gridAutoPlay by viewModel.gridAutoPlay.collectAsState()
     
     var showSortMenu by remember { mutableStateOf(false) }
     
@@ -112,6 +115,12 @@ fun AlbumsScreen(
                                     .data(item.uri)
                                     .size(300, 300)
                                     .crossfade(true)
+                                    .apply {
+                                        if (!gridAutoPlay) {
+                                            repeatCount(0)
+                                            videoFrameMillis(0)
+                                        }
+                                    }
                                     .build(),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
@@ -144,7 +153,11 @@ fun AlbumsScreen(
                 items = pinnedAlbums,
                 key = { "pinned_${it.bucketName}" }
             ) { bucket ->
-                AlbumCard(bucket = bucket, onClick = { onAlbumClick(bucket.bucketName) })
+                AlbumCard(
+                    bucket = bucket, 
+                    gridAutoPlay = gridAutoPlay,
+                    onClick = { onAlbumClick(bucket.bucketName) }
+                )
             }
         }
         
@@ -235,7 +248,11 @@ fun AlbumsScreen(
                 items = albums,
                 key = { "folder_${it.bucketName}" }
             ) { bucket ->
-                AlbumCard(bucket = bucket, onClick = { onAlbumClick(bucket.bucketName) })
+                AlbumCard(
+                    bucket = bucket, 
+                    gridAutoPlay = gridAutoPlay,
+                    onClick = { onAlbumClick(bucket.bucketName) }
+                )
             }
         }
 
@@ -297,11 +314,12 @@ fun Modifier.expressiveClick(onClick: () -> Unit): Modifier {
 fun AlbumCard(
     bucket: AlbumBucket,
     modifier: Modifier = Modifier,
+    gridAutoPlay: Boolean = true,
     onClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
-    val request = remember<ImageRequest>(bucket.coverUri) {
+    val request = remember<ImageRequest>(bucket.coverUri, gridAutoPlay) {
         ImageRequest.Builder(context)
             .data(bucket.coverUri)
             .size(Size(300, 300))
@@ -309,20 +327,30 @@ fun AlbumCard(
             .crossfade(150)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
+            .apply {
+                if (!gridAutoPlay) {
+                    repeatCount(0)
+                    videoFrameMillis(0)
+                }
+            }
             .build()
     }
 
-    Column(
+    Box(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center
     ) {
-        Box(
+        Column(
+            modifier = Modifier.fillMaxWidth(0.85f),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.85f)
+                .aspectRatio(1f)
                 .clip(MaterialTheme.shapes.extraLarge)
                 .expressiveClick(onClick),
-            contentAlignment = Alignment.BottomCenter
+            contentAlignment = Alignment.Center
         ) {
             AsyncImage(
                 model = request,
@@ -330,35 +358,32 @@ fun AlbumCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            
-            Surface(
-                modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .padding(horizontal = 8.dp),
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
-                Text(
-                    text = bucket.bucketName,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Text(
+            text = bucket.bucketName,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+        
+        Spacer(modifier = Modifier.height(4.dp))
         
         val formattedSize = android.text.format.Formatter.formatShortFileSize(context, bucket.totalSizeBytes)
         Text(
             text = "${bucket.itemCount} items • $formattedSize",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
+    }
     }
 }
 

@@ -45,6 +45,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.work.WorkInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,15 +101,17 @@ fun SettingsScreen(
             val useMaterialYou by viewModel.useMaterialYou.collectAsState()
             val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
             val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val dockStyle by viewModel.dockStyle.collectAsState()
+            val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
+            val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
+            val gridAutoPlay by galleryViewModel.gridAutoPlay.collectAsState()
+            val aiIndexWorkInfo by viewModel.aiIndexWorkInfo.collectAsState(initial = null)
             val isCurrentlyDark = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemDark
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            val dockStyle by viewModel.dockStyle.collectAsState()
-            val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
-            val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
-            val gridAutoPlay by galleryViewModel.gridAutoPlay.collectAsState()
+
             val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
             // 1. App Info Card
@@ -294,17 +299,46 @@ fun SettingsScreen(
             SettingsGroup(title = "Local AI Engine") {
                 ListItem(
                     leadingContent = { Icon(Icons.Outlined.SmartToy, contentDescription = null) },
-                    headlineContent = { Text("Smart Search") },
-                    supportingContent = { Text("Index photos for semantic search") },
-                    trailingContent = {
-                        Switch(
-                            checked = false,
-                            onCheckedChange = null,
-                            enabled = false,
-                            thumbContent = {
-                                Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(SwitchDefaults.IconSize))
+                    headlineContent = { Text("Smart Search Indexing") },
+                    supportingContent = { 
+                        Column {
+                            Text("Index photos locally for semantic search")
+                            
+                            val state = aiIndexWorkInfo?.state
+                            if (state == WorkInfo.State.ENQUEUED || state == WorkInfo.State.RUNNING) {
+                                Spacer(Modifier.height(8.dp))
+                                val progress = aiIndexWorkInfo?.progress
+                                val indexed = progress?.getInt("progress", 0) ?: 0
+                                val total = progress?.getInt("total", 0) ?: 0
+                                
+                                val progressFloat = if (total > 0) indexed.toFloat() / total.toFloat() else 0f
+                                
+                                LinearProgressIndicator(
+                                    progress = { progressFloat },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Indexed $indexed of $total images", 
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                        )
+                        }
+                    },
+                    trailingContent = {
+                        val isRunning = aiIndexWorkInfo?.state == WorkInfo.State.RUNNING || aiIndexWorkInfo?.state == WorkInfo.State.ENQUEUED
+                        if (isRunning) {
+                            FilledTonalButton(onClick = { viewModel.stopAiIndexing() }) {
+                                Text("Pause")
+                            }
+                        } else {
+                            FilledTonalButton(onClick = { viewModel.startAiIndexing() }) {
+                                Text("Start")
+                            }
+                        }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )

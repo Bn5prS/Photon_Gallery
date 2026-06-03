@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class MediaData(
+    val id: Long,
     val uri: Uri,
     val bucketName: String,
     val dateAdded: Long,
@@ -43,15 +44,15 @@ class LocalMediaRepository(
     fun observeImages(folderName: String? = null): Flow<List<MediaData>> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                launch { trySend(getImagesList(folderName)) }
+                launch { trySend(getImagesListForSync(folderName)) }
             }
         }
         contentResolver.registerContentObserver(MediaStore.Files.getContentUri("external"), true, observer)
-        trySend(getImagesList(folderName))
+        trySend(getImagesListForSync(folderName))
         awaitClose { contentResolver.unregisterContentObserver(observer) }
     }
 
-    private suspend fun getImagesList(folderName: String? = null): List<MediaData> = withContext(Dispatchers.IO) {
+    suspend fun getImagesListForSync(folderName: String? = null): List<MediaData> = withContext(Dispatchers.IO) {
         val images = mutableListOf<MediaData>()
 
         val projection = arrayOf(
@@ -116,7 +117,7 @@ class LocalMediaRepository(
                 }
                 
                 val uri = ContentUris.withAppendedId(baseUri, id)
-                images.add(MediaData(uri, bucketName, dateAdded, size, name, dateModified, path, isVideo, durationMs))
+                images.add(MediaData(id, uri, bucketName, dateAdded, size, name, dateModified, path, isVideo, durationMs))
             }
         }
 
@@ -148,8 +149,10 @@ class LocalMediaRepository(
                     if (ext in validExtensions) {
                         val uri = Uri.fromFile(file)
                         val dateAdded = file.lastModified() / 1000
+                        val id = file.absolutePath.hashCode().toLong() // Fallback ID for non-MediaStore files
                         statuses.add(
                             MediaData(
+                                id = id,
                                 uri = uri,
                                 bucketName = "WhatsApp Statuses",
                                 dateAdded = dateAdded,

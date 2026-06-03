@@ -71,6 +71,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import coil3.gif.repeatCount
+import coil3.video.videoFrameMillis
 import com.inferno.gallery.ui.components.WavyProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -329,7 +331,7 @@ fun GalleryGridItem(
     val screenWidth = context.resources.displayMetrics.widthPixels
     val bucketSize = if (gridCellsCount <= 3) screenWidth / 2 else screenWidth / 4
 
-    val request = remember<ImageRequest>(item.uri, bucketSize) {
+    val request = remember<ImageRequest>(item.uri, bucketSize, gridAutoPlay) {
         ImageRequest.Builder(context)
             .data(item.uri)
             .size(bucketSize, bucketSize)
@@ -338,6 +340,12 @@ fun GalleryGridItem(
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
             .crossfade(false)
+            .apply {
+                if (!gridAutoPlay) {
+                    repeatCount(0)
+                    videoFrameMillis(0)
+                }
+            }
             .build()
     }
 

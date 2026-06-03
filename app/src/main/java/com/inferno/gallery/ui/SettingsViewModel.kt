@@ -13,6 +13,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import androidx.work.WorkManager
+import androidx.work.WorkInfo
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
+import com.inferno.gallery.workers.AIIndexWorker
+import kotlinx.coroutines.flow.Flow
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
@@ -90,5 +96,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.updateThumbnailCornerRadius(radius)
         }
+    }
+
+    val aiIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("AIIndexWorker")
+        .map { it.firstOrNull() }
+
+    fun startAiIndexing() {
+        val request = OneTimeWorkRequestBuilder<AIIndexWorker>().build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "AIIndexWorker",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun stopAiIndexing() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("AIIndexWorker")
     }
 }
