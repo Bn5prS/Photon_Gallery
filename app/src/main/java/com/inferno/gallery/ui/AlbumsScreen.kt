@@ -235,21 +235,24 @@ fun AlbumCard(
                 modifier = Modifier.fillMaxSize()
             )
             
-            Text(
-                text = bucket.bucketName,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.6f),
-                        offset = Offset(0f, 4f),
-                        blurRadius = 12f
+            Surface(
+                modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .padding(horizontal = 8.dp),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                Text(
+                    text = bucket.bucketName,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
                     ),
-                    fontWeight = FontWeight.Bold
-                ),
-                color = Color.White,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.padding(bottom = 5.dp).padding(horizontal = 8.dp)
-            )
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
