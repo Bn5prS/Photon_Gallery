@@ -63,7 +63,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import coil3.gif.repeatCount
 import coil3.video.videoFrameMillis
-import com.inferno.gallery.ui.components.overscrollStretch
 @Composable
 fun AlbumsScreen(
     modifier: Modifier = Modifier,
@@ -96,7 +95,6 @@ fun AlbumsScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 8.dp)
-            .overscrollStretch()
     ) {
         if (favoriteItems.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
