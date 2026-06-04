@@ -24,7 +24,8 @@ import kotlinx.coroutines.withContext
 import androidx.work.WorkManager
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
-import com.inferno.gallery.workers.AIIndexWorker
+import com.inferno.gallery.workers.ClipIndexWorker
+import com.inferno.gallery.workers.OcrIndexWorker
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.text.SimpleDateFormat
@@ -32,6 +33,9 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.sqrt
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class GalleryItem(
     val id: String,
     val uri: Uri,
@@ -59,6 +63,7 @@ enum class ViewMode {
     Grouped
 }
 
+@Immutable
 data class AlbumBucket(
     val bucketName: String,
     val coverUri: Uri,
@@ -205,29 +210,39 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val images: StateFlow<List<GalleryItem>> = combine(
         allMedia, sortOrder, _currentBucket, selectedFilterIndex
     ) { raw, order, bucket, filterIndex ->
-        val folderName = when (filterIndex) {
-            1 -> "Camera"
-            2 -> "Screenshots"
-            else -> null
-        }
-        val filtered = if (bucket == "All") {
-            raw
-        } else if (bucket == "Videos") {
-            raw.filter { it.isVideo }
-        } else if (bucket != null) {
-            raw.filter { it.bucketName == bucket }
-        } else if (folderName != null) {
-            raw.filter { it.bucketName == folderName }
+        if (bucket == "search_text") {
+            ftsSearchResults.value.filter { searchItem ->
+                raw.any { it.id == searchItem.id && it.bucketName != "Trash" }
+            }
+        } else if (bucket == "search_visual") {
+            semanticSearchResults.value.filter { searchItem ->
+                raw.any { it.id == searchItem.id && it.bucketName != "Trash" }
+            }
         } else {
-            raw
-        }
+            val folderName = when (filterIndex) {
+                1 -> "Camera"
+                2 -> "Screenshots"
+                else -> null
+            }
+            val filtered = if (bucket == "All") {
+                raw.filter { it.bucketName != "Trash" }
+            } else if (bucket == "Videos") {
+                raw.filter { it.isVideo && it.bucketName != "Trash" }
+            } else if (bucket != null) {
+                raw.filter { it.bucketName == bucket }
+            } else if (folderName != null) {
+                raw.filter { it.bucketName == folderName }
+            } else {
+                raw.filter { it.bucketName != "Trash" }
+            }
 
-        when (order) {
-            SortOrder.NewToOld -> filtered.sortedByDescending { it.dateAdded }
-            SortOrder.OldToNew -> filtered.sortedBy { it.dateAdded }
-            SortOrder.SmallToBig -> filtered.sortedBy { it.size }
-            SortOrder.BigToSmall -> filtered.sortedByDescending { it.size }
-            SortOrder.NameAsc -> filtered.sortedBy { it.name }
+            when (order) {
+                SortOrder.NewToOld -> filtered.sortedByDescending { it.dateAdded }
+                SortOrder.OldToNew -> filtered.sortedBy { it.dateAdded }
+                SortOrder.SmallToBig -> filtered.sortedBy { it.size }
+                SortOrder.BigToSmall -> filtered.sortedByDescending { it.size }
+                SortOrder.NameAsc -> filtered.sortedBy { it.name }
+            }
         }
     }.stateIn(
         scope = viewModelScope,
@@ -476,10 +491,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 android.util.Log.d("GallerySearch", "[$query] p50=$p50, p90=$p90, max=$max, total=${sorted.size}")
                             }
                         }
-                        // Bug 4 fix: Raised from 0.10f → 0.22f. INT8 quantization noise
-                        // produces random similarity ~0.10–0.20; real matches score ≥ 0.22.
-                        // Re-tune after re-indexing with fixed encoders.
-                        .filter { it.second >= 0.22f }
+                        // Bug 4 fix: Lowered to 0.04f. With correct BPE tokenization,
+                        // real matches score in the 0.04 to 0.10 range, whereas non-matching
+                        // noise falls in the -0.05 to 0.03 range.
+                        .filter { it.second >= 0.04f }
                             .sortedByDescending { it.second }
                             .take(50)
                             .map { it.first }
@@ -492,7 +507,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 // Run FTS text-in-image search
                 val ftsResults = withContext(Dispatchers.IO) {
                     try {
-                        val ftsEntities = DatabaseProvider.searchFts(database, query)
+                        val ftsEntities = if (query.isNotBlank()) {
+                            DatabaseProvider.searchFts(database, query)
+                        } else {
+                            emptyList()
+                        }
                         ftsEntities.map { entity ->
                             GalleryItem(
                                 id = entity.id.toString(),
@@ -570,7 +589,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             android.util.Log.d("GallerySearch", "[$query] p50=$p50, p90=$p90, max=$max, total=${sorted.size}")
                         }
                     }
-                    .filter { it.second >= 0.22f }
+                    // Lowered to 0.04f for correct BPE tokenization matches range
+                    .filter { it.second >= 0.04f }
                         .sortedByDescending { it.second }
                         .take(50)
                         .map { it.first }
@@ -641,75 +661,95 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun removeMediaOptimistically(uriString: String) {
         viewModelScope.launch {
+            // Instantly move to Trash bin so the UI updates
+            database.mediaDao().updateBucketByUri(uriString, "Trash")
             _uiEvents.send(UiEvent.DeleteSuccess)
         }
     }
 
-    val aiIndexWorkInfo = WorkManager.getInstance(application)
-        .getWorkInfosForUniqueWorkFlow("AIIndexWorker")
+    val clipIndexWorkInfo = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("ClipIndexWorker")
         .map { it.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
-    val unindexedImagesCount: kotlinx.coroutines.flow.StateFlow<Int> = database.mediaDao().observeUnindexedClipImageCount()
+    val ocrIndexWorkInfo = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("OcrIndexWorker")
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    val unindexedClipImagesCount: kotlinx.coroutines.flow.StateFlow<Int> = database.mediaDao().observeUnindexedClipImageCount()
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+        
+    val unindexedOcrImagesCount: kotlinx.coroutines.flow.StateFlow<Int> = database.mediaDao().observeUnindexedOcrImageCount()
         .stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
     val totalImagesCount: kotlinx.coroutines.flow.StateFlow<Int> = database.mediaDao().observeTotalImageCount()
         .stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
 
-    fun startAiIndexing() {
-        // PERF OPT-7: Expedited request — prioritized by WorkManager.
-        val request = OneTimeWorkRequestBuilder<AIIndexWorker>()
-            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            .build()
-        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-            "AIIndexWorker",
-            ExistingWorkPolicy.REPLACE,
-            request
-        )
-    }
-
-    fun stopAiIndexing() {
-        WorkManager.getInstance(getApplication()).cancelUniqueWork("AIIndexWorker")
-    }
-
-    /**
-     * Wipes all stored CLIP embeddings and resets the indexed flag on every image,
-     * then immediately kicks off a fresh AIIndexWorker pass.
-     *
-     * Call this once after the encoder bug-fixes are deployed so stale embeddings
-     * (generated by the broken tokenizer / attention mask / .array() path) are replaced.
-     */
-    fun clearIndexAndReindex() {
-        viewModelScope.launch(Dispatchers.IO) {
-            // Cancel any running worker first
-            WorkManager.getInstance(getApplication()).cancelUniqueWork("AIIndexWorker")
-
-            // Wipe all stored vectors and OCR index
-            database.searchDao().clearAllVectors()
-            database.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")
-
-            // Reset the clip-indexed and ocr-indexed flags so every image is picked up by the worker
-            val allIds = database.mediaDao().getAllMediaIds()
-            allIds.chunked(500).forEach { chunk ->
-                chunk.forEach { id -> 
-                    database.mediaDao().updateClipIndexStatus(id, false)
-                    database.mediaDao().updateOcrIndexStatus(id, false)
-                }
-            }
-
-            android.util.Log.d("GallerySearch", "Index cleared. Restarting indexing for ${allIds.size} items.")
-
-            // Kick off a fresh index pass
-            // PERF OPT-7: Expedited request — prioritized by WorkManager.
-            val request = OneTimeWorkRequestBuilder<AIIndexWorker>()
+    fun startClipIndexing() {
+        viewModelScope.launch {
+            settingsRepository.updateClipIndexingEnabled(true)
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.ClipIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-                "AIIndexWorker",
-                ExistingWorkPolicy.REPLACE,
-                request
-            )
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("ClipIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
+    fun stopClipIndexing() {
+        viewModelScope.launch {
+            settingsRepository.updateClipIndexingEnabled(false)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("ClipIndexWorker")
+        }
+    }
+
+    fun clearClipIndexAndReindex() {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updateClipIndexingEnabled(true)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("ClipIndexWorker")
+            database.searchDao().clearAllVectors()
+            val allIds = database.mediaDao().getAllMediaIds()
+            allIds.chunked(500).forEach { chunk ->
+                chunk.forEach { id -> database.mediaDao().updateClipIndexStatus(id, false) }
+            }
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.ClipIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("ClipIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
+    fun startOcrIndexing() {
+        viewModelScope.launch {
+            settingsRepository.updateOcrIndexingEnabled(true)
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
+    fun stopOcrIndexing() {
+        viewModelScope.launch {
+            settingsRepository.updateOcrIndexingEnabled(false)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
+        }
+    }
+
+    fun clearOcrIndexAndReindex() {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updateOcrIndexingEnabled(true)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
+            database.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")
+            val allIds = database.mediaDao().getAllMediaIds()
+            allIds.chunked(500).forEach { chunk ->
+                chunk.forEach { id -> database.mediaDao().updateOcrIndexStatus(id, false) }
+            }
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.KEEP, request)
         }
     }
 
