@@ -47,7 +47,6 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.tween
 import java.io.File
-import com.inferno.gallery.ui.components.overscrollStretch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -305,7 +304,7 @@ private fun UnifiedSearchResults(
         verticalArrangement = Arrangement.spacedBy(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-        modifier = Modifier.fillMaxSize().overscrollStretch()
+        modifier = Modifier.fillMaxSize()
     ) {
         if (focusedList == "text") {
             // Header for focused text search results
