@@ -17,7 +17,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkInfo
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.ExistingWorkPolicy
-import com.inferno.gallery.workers.AIIndexWorker
+import com.inferno.gallery.workers.ClipIndexWorker
+import com.inferno.gallery.workers.OcrIndexWorker
 import kotlinx.coroutines.flow.Flow
 import com.inferno.gallery.data.db.DatabaseProvider
 
@@ -118,29 +119,85 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         initialValue = 0
     )
 
-    val unindexedImagesCount: StateFlow<Int> = db.mediaDao().observeUnindexedClipImageCount().stateIn(
+    val unindexedClipImagesCount: StateFlow<Int> = db.mediaDao().observeUnindexedClipImageCount().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
     )
 
-    val aiIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
-        .getWorkInfosForUniqueWorkFlow("AIIndexWorker")
+    val unindexedOcrImagesCount: StateFlow<Int> = db.mediaDao().observeUnindexedOcrImageCount().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val clipIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("ClipIndexWorker")
         .map { it.firstOrNull() }
 
-    fun startAiIndexing() {
-        // PERF OPT-7: Expedited request — prioritized by WorkManager.
-        val request = OneTimeWorkRequestBuilder<AIIndexWorker>()
-            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            .build()
-        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-            "AIIndexWorker",
-            ExistingWorkPolicy.KEEP,
-            request
-        )
+    val ocrIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("OcrIndexWorker")
+        .map { it.firstOrNull() }
+
+    fun startClipIndexing() {
+        viewModelScope.launch {
+            repository.updateClipIndexingEnabled(true)
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.ClipIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("ClipIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
     }
 
-    fun stopAiIndexing() {
-        WorkManager.getInstance(getApplication()).cancelUniqueWork("AIIndexWorker")
+    fun stopClipIndexing() {
+        viewModelScope.launch {
+            repository.updateClipIndexingEnabled(false)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("ClipIndexWorker")
+        }
+    }
+
+    fun rebuildClipIndex() {
+        viewModelScope.launch {
+            repository.updateClipIndexingEnabled(true)
+            db.mediaDao().resetClipIndexStatus()
+            db.searchDao().clearAllVectors()
+            // In rebuild, we enqueue directly or call startClipIndexing. Calling startClipIndexing
+            // is perfect since it already launches and updates datastore.
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.ClipIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("ClipIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
+    fun startOcrIndexing() {
+        viewModelScope.launch {
+            repository.updateOcrIndexingEnabled(true)
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
+    fun stopOcrIndexing() {
+        viewModelScope.launch {
+            repository.updateOcrIndexingEnabled(false)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
+        }
+    }
+
+    fun rebuildOcrIndex() {
+        viewModelScope.launch {
+            repository.updateOcrIndexingEnabled(true)
+            db.mediaDao().resetOcrIndexStatus()
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                db.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")
+            }
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
     }
 }
