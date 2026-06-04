@@ -27,6 +27,8 @@ class SettingsRepository(private val context: Context) {
         val GRID_CELLS_COUNT = androidx.datastore.preferences.core.intPreferencesKey("grid_cells_count")
         val THUMBNAIL_CORNER_RADIUS = floatPreferencesKey("thumbnail_corner_radius")
         val USE_FULL_SCREEN = booleanPreferencesKey("use_full_screen")
+        val CLIP_INDEXING_ENABLED = booleanPreferencesKey("clip_indexing_enabled")
+        val OCR_INDEXING_ENABLED = booleanPreferencesKey("ocr_indexing_enabled")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data
@@ -160,6 +162,28 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateUseFullScreen(use: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[USE_FULL_SCREEN] = use
+        }
+    }
+
+    val clipIndexingEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[CLIP_INDEXING_ENABLED] ?: true
+        }
+
+    val ocrIndexingEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[OCR_INDEXING_ENABLED] ?: true
+        }
+
+    suspend fun updateClipIndexingEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[CLIP_INDEXING_ENABLED] = enabled
+        }
+    }
+
+    suspend fun updateOcrIndexingEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[OCR_INDEXING_ENABLED] = enabled
         }
     }
 }
