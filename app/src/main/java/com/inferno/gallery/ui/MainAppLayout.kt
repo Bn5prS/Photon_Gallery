@@ -82,6 +82,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.inferno.gallery.data.DockStyle
+import com.inferno.gallery.ui.components.overscrollStretch
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -169,7 +170,7 @@ fun MainAppLayout(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().overscrollStretch(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (currentRoute != "settings") {
