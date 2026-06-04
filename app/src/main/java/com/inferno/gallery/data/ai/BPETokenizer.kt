@@ -5,14 +5,17 @@ import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.util.regex.Pattern
 
-class BPETokenizer(context: Context) {
-    private val vocab: Map<String, Int>
+class BPETokenizer(jsonString: String) {
+    val vocab: Map<String, Int>
     private val bpeRanks: Map<Pair<String, String>, Int>
     private val byteEncoder: Map<Int, Char>
     private val cache = mutableMapOf<String, String>()
 
+    constructor(context: Context) : this(
+        context.assets.open("tokenizer.json").bufferedReader().use { it.readText() }
+    )
+
     init {
-        val jsonString = context.assets.open("tokenizer.json").bufferedReader().use { it.readText() }
         val root = JSONObject(jsonString)
         val model = root.getJSONObject("model")
         
@@ -76,7 +79,17 @@ class BPETokenizer(context: Context) {
     private fun bpe(token: String): String {
         if (cache.containsKey(token)) return cache[token]!!
         
-        var word = token.map { it.toString() }.toList()
+        var word = if (token.endsWith("</w>")) {
+            val chars = token.substring(0, token.length - 4).map { it.toString() }.toMutableList()
+            if (chars.isNotEmpty()) {
+                chars[chars.size - 1] = chars[chars.size - 1] + "</w>"
+                chars
+            } else {
+                mutableListOf(token)
+            }
+        } else {
+            token.map { it.toString() }.toList()
+        }
         var pairs = getPairs(word)
         
         if (pairs.isEmpty()) return token
