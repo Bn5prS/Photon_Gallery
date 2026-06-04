@@ -42,6 +42,10 @@ import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material3.DropdownMenu
@@ -100,7 +104,7 @@ import androidx.compose.material3.NavigationBarItem
 fun MainAppLayout(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    onPhotoClick: (String, String?) -> Unit,
+    onPhotoClick: (String, String?, String?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel()
 ) {
@@ -168,48 +172,51 @@ fun MainAppLayout(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            Column(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.background)
-                    .statusBarsPadding()
-            ) {
-                if (isSelectionMode) {
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = { viewModel.clearSelection() }) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Clear selection")
-                            }
-                            Text(
-                                "${selectedUris.size} Selected",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.padding(start = 16.dp).weight(1f)
-                            )
-                        }
-                    }
-                } else if (currentRoute == "album/{bucketName}") {
-                    Surface(color = MaterialTheme.colorScheme.background) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = { nestedNavController.popBackStack() }) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                            }
-                            Text(
-                                albumNameArg ?: "Album",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.padding(start = 16.dp).weight(1f)
-                            )
-                        }
-                    }
-                } else {
-                    Surface(color = MaterialTheme.colorScheme.background) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            if (currentRoute != "settings") {
+                Column(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.background)
+                        .statusBarsPadding()
+                ) {
+                    if (isSelectionMode) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { viewModel.clearSelection() }) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Clear selection")
+                                }
+                                Text(
+                                    "${selectedUris.size} Selected",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.padding(start = 16.dp).weight(1f)
+                                )
+                            }
+                        }
+                    } else if (currentRoute == "album/{bucketName}") {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { nestedNavController.popBackStack() }) {
+                                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                                }
+                                Text(
+                                    albumNameArg ?: "Album",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.padding(start = 16.dp).weight(1f)
+                                )
+                            }
+                        }
+                    } else {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp)
+                                    .padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -283,7 +290,7 @@ fun MainAppLayout(
                             }
                         }
                     }
-                    if (currentRoute == "photos") {
+                    if (currentRoute == "photos" && !isSelectionMode) {
                         QuickFilterRow(
                             selectedFilter = selectedFilter,
                             onFilterSelected = { viewModel.setFilter(it) },
@@ -401,7 +408,11 @@ fun MainAppLayout(
     ) { innerPadding ->
         NavHost(
             navController = nestedNavController,
-            startDestination = "photos"
+            startDestination = "photos",
+            enterTransition = { fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) },
+            exitTransition = { fadeOut(spring(stiffness = Spring.StiffnessMediumLow)) },
+            popEnterTransition = { fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) },
+            popExitTransition = { fadeOut(spring(stiffness = Spring.StiffnessMediumLow)) }
         ) {
             composable("photos") {
                 GalleryScreen(
@@ -413,7 +424,49 @@ fun MainAppLayout(
                     isMainTab = true
                 )
             }
-            composable("albums") {
+            composable(
+                route = "albums",
+                enterTransition = {
+                    if (initialState.destination.route == "album/{bucketName}") {
+                        slideInHorizontally(
+                            initialOffsetX = { -it / 3 },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route == "album/{bucketName}") {
+                        slideOutHorizontally(
+                            targetOffsetX = { -it / 3 },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route == "album/{bucketName}") {
+                        slideInHorizontally(
+                            initialOffsetX = { -it / 3 },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                },
+                popExitTransition = {
+                    if (targetState.destination.route == "album/{bucketName}") {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                }
+            ) {
                 AlbumsScreen(
                     viewModel = viewModel,
                     contentPadding = innerPadding,
@@ -422,7 +475,49 @@ fun MainAppLayout(
                     }
                 )
             }
-            composable("album/{bucketName}") { backStackEntry ->
+            composable(
+                route = "album/{bucketName}",
+                enterTransition = {
+                    if (initialState.destination.route == "albums") {
+                        slideInHorizontally(
+                            initialOffsetX = { it },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route == "albums") {
+                        slideOutHorizontally(
+                            targetOffsetX = { -it },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route == "albums") {
+                        slideInHorizontally(
+                            initialOffsetX = { -it },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                },
+                popExitTransition = {
+                    if (targetState.destination.route == "albums") {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                    }
+                }
+            ) { backStackEntry ->
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
                 GalleryScreen(
                     sharedTransitionScope = sharedTransitionScope,
@@ -580,25 +675,20 @@ private fun QuickFilterRow(
                     onClick = { onFilterSelected(1) }
                 )
             }
-            item {
-                CustomFilterChip(
-                    text = "Screenshots",
-                    icon = Icons.Outlined.PhotoAlbum,
-                    selected = selectedFilter == 2,
-                    onClick = { onFilterSelected(2) }
-                )
-            }
         }
         
         Box {
             androidx.compose.material3.IconButton(
                 onClick = { showSortMenu = true },
-                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest, androidx.compose.foundation.shape.CircleShape)
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, androidx.compose.foundation.shape.CircleShape)
             ) {
                 androidx.compose.material3.Icon(
                     imageVector = Icons.AutoMirrored.Outlined.Sort,
                     contentDescription = "Sort",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(19.dp)
                 )
             }
             DropdownMenu(
