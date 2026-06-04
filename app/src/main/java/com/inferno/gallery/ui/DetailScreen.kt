@@ -257,17 +257,17 @@ fun DetailScreen(
         pendingDeletePage = null
     }
 
-    androidx.compose.runtime.DisposableEffect(showUi, useFullScreenGlobal) {
+    androidx.compose.runtime.DisposableEffect(useFullScreenGlobal) {
         if (window != null && insetsController != null) {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
             
-            if (showUi && !useFullScreenGlobal) {
-                // UI is visible AND we are not in global full screen mode -> Show bars
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-            } else {
-                // UI is hidden OR we are in global full screen mode -> Hide bars
+            if (useFullScreenGlobal) {
+                // Global full screen mode is enabled -> hide system bars
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                // Global full screen mode is disabled -> show system bars
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
         
