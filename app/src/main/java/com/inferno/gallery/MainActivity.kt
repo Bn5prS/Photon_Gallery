@@ -23,6 +23,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
@@ -80,10 +84,15 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = useMaterialYou,
                 useAmoledBlack = useAmoledBlack
             ) {
-                NavigationGraph(
-                    isLoading = isLoading,
-                    settingsViewModel = settingsViewModel
-                )
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    NavigationGraph(
+                        isLoading = isLoading,
+                        settingsViewModel = settingsViewModel
+                    )
+                }
             }
         }
     }
