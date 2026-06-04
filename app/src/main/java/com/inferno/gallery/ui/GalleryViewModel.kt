@@ -447,62 +447,102 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      * Runs both FTS (text-in-image) and Semantic (AI visual) searches
      * concurrently. Called automatically after a 500ms debounce.
      */
+    private suspend fun runSemanticSearch(query: String): List<GalleryItem> = withContext(Dispatchers.Default) {
+        try {
+            val cleanQuery = query.trim().lowercase()
+            if (cleanQuery.isEmpty()) return@withContext emptyList()
+
+            // 1. Dual-prompt templates: Evaluate raw query and "a photo of $query" to boost signal contrast
+            val textEmbeddings = mutableListOf<FloatArray>()
+            textEmbeddings.add(textEncoder.encodeText(cleanQuery))
+            val standardPrefixes = listOf("a photo of", "an image of", "a picture of", "screenshot of", "a screenshot of")
+            if (standardPrefixes.none { cleanQuery.startsWith(it) }) {
+                textEmbeddings.add(textEncoder.encodeText("a photo of $cleanQuery"))
+            }
+
+            val vectors = withContext(Dispatchers.IO) {
+                database.searchDao().getAllVectors()
+            }
+            val allEntities = withContext(Dispatchers.IO) {
+                database.mediaDao().getAllMedia()
+            }
+            val mediaMap = allEntities.associateBy { it.id }
+
+            // 2. Score images
+            val scored = vectors.mapNotNull { vec ->
+                val entity = mediaMap[vec.mediaId] ?: return@mapNotNull null
+                val imgEmb = vec.clipVector.toFloatArray()
+                val score = textEmbeddings.maxOf { queryEmb ->
+                    cosineSimilarity(queryEmb, imgEmb)
+                }
+                
+                val item = GalleryItem(
+                    id = entity.id.toString(),
+                    uri = Uri.parse(entity.uriString),
+                    bucketName = entity.bucketName,
+                    dateAdded = entity.dateAdded,
+                    size = entity.size,
+                    name = entity.name,
+                    dateModified = entity.dateModified,
+                    path = entity.filePath,
+                    isVideo = entity.isVideo,
+                    durationMs = entity.durationMs,
+                    searchScore = score
+                )
+                Pair(item, score)
+            }
+
+            if (scored.isEmpty()) return@withContext emptyList()
+
+            // 3. Compute Mean and Standard Deviation of scores for dynamic thresholding
+            val count = scored.size
+            val mean = scored.map { it.second }.sum() / count
+            val variance = if (count > 1) {
+                scored.map { (it.second - mean) * (it.second - mean) }.sum() / (count - 1)
+            } else 0f
+            val std = sqrt(variance)
+
+            // Log distribution to assist calibration
+            val sortedScores = scored.map { it.second }.sorted()
+            val p50 = sortedScores[count / 2]
+            val p90 = sortedScores[(count * 0.9).toInt().coerceAtMost(count - 1)]
+            val max = sortedScores.last()
+            android.util.Log.d("GallerySearch", "[$query] p50=$p50, p90=$p90, max=$max, mean=$mean, std=$std, total=$count")
+
+            // 4. Z-Score + raw threshold filter
+            // Requiring Z >= 1.2 ensures the image stands out from random background noise,
+            // while raw >= 0.035f ensures there is some positive similarity.
+            val zScoreThreshold = 1.2f
+            val rawFallbackThreshold = 0.035f
+
+            scored.filter { pair ->
+                val score = pair.second
+                if (std > 0.001f) {
+                    val z = (score - mean) / std
+                    z >= zScoreThreshold && score >= rawFallbackThreshold
+                } else {
+                    score >= rawFallbackThreshold
+                }
+            }
+            .sortedByDescending { it.second }
+            .take(50)
+            .map { it.first }
+        } catch (e: Exception) {
+            android.util.Log.e("GalleryViewModel", "Semantic search helper failed: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Runs both FTS (text-in-image) and Semantic (AI visual) searches
+     * concurrently. Called automatically after a 500ms debounce.
+     */
     private fun performUnifiedSearch(query: String) {
         viewModelScope.launch {
             _isSearching.value = true
             try {
                 // Run semantic search
-                val semanticResults = withContext(Dispatchers.Default) {
-                    try {
-                        val queryEmbedding = textEncoder.encodeText(query)
-                        val vectors = withContext(Dispatchers.IO) {
-                            database.searchDao().getAllVectors()
-                        }
-                        val allEntities = withContext(Dispatchers.IO) {
-                            database.mediaDao().getAllMedia()
-                        }
-                        val mediaMap = allEntities.associateBy { it.id }
-                        vectors.mapNotNull { vec ->
-                            val entity = mediaMap[vec.mediaId] ?: return@mapNotNull null
-                            val imgEmb = vec.clipVector.toFloatArray()
-                            val score = cosineSimilarity(queryEmbedding, imgEmb)
-                            
-                            val item = GalleryItem(
-                                id = entity.id.toString(),
-                                uri = Uri.parse(entity.uriString),
-                                bucketName = entity.bucketName,
-                                dateAdded = entity.dateAdded,
-                                size = entity.size,
-                                name = entity.name,
-                                dateModified = entity.dateModified,
-                                path = entity.filePath,
-                                isVideo = entity.isVideo,
-                                durationMs = entity.durationMs,
-                                searchScore = score
-                            )
-                            Pair(item, score)
-                        }.also { allScored ->
-                            // Bug 4 fix: Log score distribution to calibrate threshold after re-indexing.
-                            if (allScored.isNotEmpty()) {
-                                val sorted = allScored.map { it.second }.sorted()
-                                val p50 = sorted[sorted.size / 2]
-                                val p90 = sorted[(sorted.size * 0.9).toInt().coerceAtMost(sorted.size - 1)]
-                                val max = sorted.last()
-                                android.util.Log.d("GallerySearch", "[$query] p50=$p50, p90=$p90, max=$max, total=${sorted.size}")
-                            }
-                        }
-                        // Bug 4 fix: Lowered to 0.04f. With correct BPE tokenization,
-                        // real matches score in the 0.04 to 0.10 range, whereas non-matching
-                        // noise falls in the -0.05 to 0.03 range.
-                        .filter { it.second >= 0.04f }
-                            .sortedByDescending { it.second }
-                            .take(50)
-                            .map { it.first }
-                    } catch (e: Exception) {
-                        android.util.Log.e("GalleryViewModel", "Semantic search failed: ${e.message}")
-                        emptyList()
-                    }
-                }
+                val semanticResults = runSemanticSearch(query)
 
                 // Run FTS text-in-image search
                 val ftsResults = withContext(Dispatchers.IO) {
@@ -549,52 +589,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isSearching.value = true
             try {
-                val queryEmbedding = withContext(Dispatchers.Default) {
-                    textEncoder.encodeText(query)
-                }
-                val vectors = withContext(Dispatchers.IO) {
-                    database.searchDao().getAllVectors()
-                }
-                val allEntities = withContext(Dispatchers.IO) {
-                    database.mediaDao().getAllMedia()
-                }
-                val mediaMap = allEntities.associateBy { it.id }
-
-                val scored = withContext(Dispatchers.Default) {
-                    vectors.mapNotNull { vec ->
-                        val entity = mediaMap[vec.mediaId] ?: return@mapNotNull null
-                        val imgEmb = vec.clipVector.toFloatArray()
-                        val score = cosineSimilarity(queryEmbedding, imgEmb)
-                        
-                        val item = GalleryItem(
-                            id = entity.id.toString(),
-                            uri = Uri.parse(entity.uriString),
-                            bucketName = entity.bucketName,
-                            dateAdded = entity.dateAdded,
-                            size = entity.size,
-                            name = entity.name,
-                            dateModified = entity.dateModified,
-                            path = entity.filePath,
-                            isVideo = entity.isVideo,
-                            durationMs = entity.durationMs,
-                            searchScore = score
-                        )
-                        Pair(item, score)
-                    }.also { allScored ->
-                        if (allScored.isNotEmpty()) {
-                            val sorted = allScored.map { it.second }.sorted()
-                            val p50 = sorted[sorted.size / 2]
-                            val p90 = sorted[(sorted.size * 0.9).toInt().coerceAtMost(sorted.size - 1)]
-                            val max = sorted.last()
-                            android.util.Log.d("GallerySearch", "[$query] p50=$p50, p90=$p90, max=$max, total=${sorted.size}")
-                        }
-                    }
-                    // Lowered to 0.04f for correct BPE tokenization matches range
-                    .filter { it.second >= 0.04f }
-                        .sortedByDescending { it.second }
-                        .take(50)
-                        .map { it.first }
-                }
+                val scored = runSemanticSearch(query)
                 _semanticSearchResults.value = scored
             } catch (e: Exception) {
                 android.util.Log.e("GalleryViewModel", "Semantic search failed: ${e.message}")
