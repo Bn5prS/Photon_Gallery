@@ -74,6 +74,7 @@ import androidx.compose.material3.Text
 import coil3.gif.repeatCount
 import coil3.video.videoFrameMillis
 import com.inferno.gallery.ui.components.WavyProgressIndicator
+import com.inferno.gallery.ui.components.overscrollStretch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -133,12 +134,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val videoThumbnailCache = android.util.LruCache<Uri, Bitmap>(200)
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GalleryScreen(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    onPhotoClick: (mediaId: String, bucketName: String?) -> Unit,
+    onPhotoClick: (mediaId: String, bucketName: String?, query: String?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -181,6 +184,7 @@ fun GalleryScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 4.dp)
+            .overscrollStretch()
             .gridZoomGestureModifier(gridCellsCount, viewModel::setGridCellsCount, isSelectionMode)
             .pointerInput(lazyGridState) {
                 var initialItemUri: String? = null
@@ -245,7 +249,7 @@ fun GalleryScreen(
                         if (isSelectionMode) {
                             viewModel.toggleSelection(item.uri.toString())
                         } else {
-                            onPhotoClick(item.id, bucketName)
+                            onPhotoClick(item.id, bucketName, null)
                         }
                     },
                     modifier = Modifier.animateItem(
@@ -281,7 +285,7 @@ fun GalleryScreen(
                             if (isSelectionMode) {
                                 viewModel.toggleSelection(item.uri.toString())
                         } else {
-                            onPhotoClick(item.id, bucketName)
+                            onPhotoClick(item.id, bucketName, null)
                         }
                     },
                     modifier = Modifier.animateItem(
@@ -361,10 +365,10 @@ fun GalleryGridItem(
     
     val combinedScale = scale
 
-    val videoThumbnail by produceState<Bitmap?>(initialValue = null, item.uri, bucketSize) {
-        if (item.isVideo && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    val videoThumbnail by produceState<Bitmap?>(initialValue = videoThumbnailCache.get(item.uri), item.uri, bucketSize) {
+        if (item.isVideo && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && value == null) {
             kotlinx.coroutines.delay(150)
-            value = withContext(Dispatchers.IO) {
+            val bmp = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.loadThumbnail(
                         item.uri,
@@ -373,12 +377,16 @@ fun GalleryGridItem(
                     )
                 }.getOrNull()
             }
+            if (bmp != null) {
+                videoThumbnailCache.put(item.uri, bmp)
+                value = bmp
+            }
         }
     }
 
     val painter = rememberAsyncImagePainter(
         model = videoThumbnail ?: request,
-        filterQuality = FilterQuality.High
+        filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
     )
 
     LaunchedEffect(gridAutoPlay, painter.state) {
