@@ -10,6 +10,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -42,6 +43,8 @@ fun NavigationGraph(
         return
     }
 
+    val galleryViewModel: GalleryViewModel = viewModel()
+
     SharedTransitionLayout(modifier = modifier) {
         NavHost(
             navController = navController,
@@ -52,30 +55,40 @@ fun NavigationGraph(
                 MainAppLayout(
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
-                    onPhotoClick = { mediaId, bucket ->
-                        val route = if (bucket != null) "detail/$mediaId?bucket=${android.net.Uri.encode(bucket)}" else "detail/$mediaId"
+                    onPhotoClick = { mediaId, bucket, query ->
+                        var route = "detail/$mediaId"
+                        if (bucket != null) route += "?bucket=${android.net.Uri.encode(bucket)}"
+                        if (query != null) {
+                            route += if (bucket != null) "&highlight=${android.net.Uri.encode(query)}" 
+                                     else "?highlight=${android.net.Uri.encode(query)}"
+                        }
                         navController.navigate(route)
-                    }
+                    },
+                    viewModel = galleryViewModel
                 )
             }
 
             composable(
-                route = "detail/{mediaId}?bucket={bucketName}",
+                route = "detail/{mediaId}?bucket={bucketName}&highlight={highlightText}",
                 arguments = listOf(
                     navArgument("mediaId") { type = NavType.StringType },
-                    navArgument("bucketName") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    navArgument("bucketName") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null }
                 )
             ) { backStackEntry ->
                 val mediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
+                val highlightText = backStackEntry.arguments?.getString("highlightText")
                 val useFullScreen by settingsViewModel.useFullScreen.collectAsState()
                 DetailScreen(
                     mediaId = mediaId,
                     bucketName = bucketName,
+                    highlightText = highlightText,
                     useFullScreenGlobal = useFullScreen,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    viewModel = galleryViewModel
                 )
             }
         }
