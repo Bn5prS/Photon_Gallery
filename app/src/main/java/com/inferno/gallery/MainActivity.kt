@@ -28,6 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 
+import androidx.compose.ui.graphics.toArgb
+
 class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
 
@@ -84,9 +86,14 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = useMaterialYou,
                 useAmoledBlack = useAmoledBlack
             ) {
+                val backgroundColor = MaterialTheme.colorScheme.background
+                LaunchedEffect(backgroundColor) {
+                    window.decorView.setBackgroundColor(backgroundColor.toArgb())
+                }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = backgroundColor
                 ) {
                     NavigationGraph(
                         isLoading = isLoading,
