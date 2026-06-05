@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -57,10 +58,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun SettingsScreen(
@@ -108,10 +124,8 @@ fun SettingsScreen(
             val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
             val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
             val gridAutoPlay by galleryViewModel.gridAutoPlay.collectAsState()
-            val clipIndexWorkInfo by viewModel.clipIndexWorkInfo.collectAsState(initial = null)
             val ocrIndexWorkInfo by viewModel.ocrIndexWorkInfo.collectAsState(initial = null)
             val totalImagesCount by viewModel.totalImagesCount.collectAsState()
-            val unindexedClipImagesCount by viewModel.unindexedClipImagesCount.collectAsState()
             val unindexedOcrImagesCount by viewModel.unindexedOcrImagesCount.collectAsState()
             
             val isCurrentlyDark = when (themeMode) {
@@ -321,60 +335,379 @@ fun SettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
+            }
 
+            SettingsGroup(title = "Telegram Cloud Backup") {
+                val savedTokens by viewModel.telegramBotTokens.collectAsState()
+                val savedChatId by viewModel.telegramChatId.collectAsState()
+                val backupEnabled by viewModel.telegramBackupEnabled.collectAsState()
+                val stripLocation by viewModel.telegramStripLocation.collectAsState()
+                val showFolderDialog = remember { mutableStateOf(false) }
+                val selectedFolders by viewModel.telegramAutoBackupFolders.collectAsState()
+                val allFolders by viewModel.allBucketNames.collectAsState()
+
+                var passwordVisible by remember { mutableStateOf(false) }
+
+                var localTokens by remember(savedTokens) { mutableStateOf(savedTokens) }
+                var localChatId by remember(savedChatId) { mutableStateOf(savedChatId) }
+                var localTokenInput by remember { mutableStateOf("") }
+
+                val testResult by viewModel.connectionTestState.collectAsState()
+                val hasChanges = localTokens != savedTokens || localChatId != savedChatId
+
+                LaunchedEffect(testResult) {
+                    val result = testResult
+                    if (result is ConnectionTestResult.Migrated) {
+                        localChatId = result.newChatId
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = localTokenInput,
+                        onValueChange = { 
+                            localTokenInput = it
+                            viewModel.clearConnectionTestResult()
+                        },
+                        label = { Text("Add Telegram Bot Token") },
+                        placeholder = { Text("123456:ABC-DEF...") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(imageVector = image, contentDescription = null)
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                if (localTokenInput.isNotBlank() && !localTokens.contains(localTokenInput.trim())) {
+                                    localTokens = localTokens + localTokenInput.trim()
+                                    localTokenInput = ""
+                                }
+                            },
+                            enabled = localTokenInput.isNotBlank(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Add Bot")
+                        }
+
+                        FilledTonalButton(
+                            onClick = { viewModel.testTelegramConnection(localTokenInput.trim(), localChatId.trim()) },
+                            enabled = testResult != ConnectionTestResult.Testing && localTokenInput.isNotBlank() && localChatId.isNotBlank(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Test Staged")
+                        }
+                    }
+
+                    if (localTokens.isNotEmpty()) {
+                        Text(
+                            text = "Configured Bots (${localTokens.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            localTokens.forEachIndexed { index, token ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            shape = MaterialTheme.shapes.small
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val displayToken = remember(token) {
+                                        if (token.length > 15) {
+                                            token.take(8) + "..." + token.takeLast(6)
+                                        } else {
+                                            token
+                                        }
+                                    }
+                                    Text(
+                                        text = "Bot #${index + 1}: $displayToken",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            localTokens = localTokens.filterIndexed { i, _ -> i != index }
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Close,
+                                            contentDescription = "Remove Bot",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = localChatId,
+                        onValueChange = { 
+                            localChatId = it
+                            viewModel.clearConnectionTestResult()
+                        },
+                        label = { Text("Telegram Channel / Chat ID") },
+                        placeholder = { Text("-100XXXXXXXXXX") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        onClick = { 
+                            viewModel.setTelegramBotTokens(localTokens)
+                            viewModel.setTelegramChatId(localChatId)
+                        },
+                        enabled = hasChanges,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Confirm / Save Changes")
+                    }
+
+                    if (testResult != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            when (val res = testResult) {
+                                ConnectionTestResult.Testing -> {
+                                    com.inferno.gallery.ui.components.WavyProgressIndicator(
+                                        modifier = Modifier.size(width = 32.dp, height = 20.dp),
+                                        strokeWidth = 2.dp,
+                                        amplitude = 3.dp,
+                                        frequency = 1.5f
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Testing connection…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                ConnectionTestResult.Success -> {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = "Success",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Success! Connection verified.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                is ConnectionTestResult.Migrated -> {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = "Success",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Group upgraded to supergroup! Stored ID updated.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                                is ConnectionTestResult.Error -> {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "Error",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Failed: ${res.message}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                                }
+                                else -> {}
+                            }
+                        }
+                    }
+
+                    ListItem(
+                        leadingContent = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                        headlineContent = { Text("Strip Location Metadata") },
+                        supportingContent = { Text("Remove GPS coordinates from images before uploading") },
+                        trailingContent = {
+                            Switch(
+                                checked = stripLocation,
+                                onCheckedChange = { viewModel.setTelegramStripLocation(it) },
+                                thumbContent = {
+                                    Icon(
+                                        imageVector = if (stripLocation) Icons.Outlined.Check else Icons.Outlined.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+
+                    ListItem(
+                        leadingContent = { Icon(Icons.Outlined.Cloud, contentDescription = null) },
+                        headlineContent = { Text("Automated Background Backup") },
+                        supportingContent = { Text("Backup new media in background based on criteria below") },
+                        trailingContent = {
+                            Switch(
+                                checked = backupEnabled,
+                                onCheckedChange = { viewModel.setTelegramBackupEnabled(it) },
+                                thumbContent = {
+                                    Icon(
+                                        imageVector = if (backupEnabled) Icons.Outlined.Check else Icons.Outlined.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+
+                    if (backupEnabled) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val wifiOnly by viewModel.telegramAutoBackupWifiOnly.collectAsState()
+                            val batteryPause by viewModel.telegramAutoBackupBatteryLowPause.collectAsState()
+
+                            ListItem(
+                                leadingContent = { Icon(Icons.Outlined.Folder, contentDescription = null) },
+                                headlineContent = { Text("Choose Folders") },
+                                supportingContent = {
+                                    Text(
+                                        if (selectedFolders.isEmpty()) "No folders selected (Nothing will backup)"
+                                        else selectedFolders.joinToString(", ")
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showFolderDialog.value = true },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+
+                            ListItem(
+                                leadingContent = { Icon(Icons.Outlined.Wifi, contentDescription = null) },
+                                headlineContent = { Text("Wi-Fi Only") },
+                                supportingContent = { Text("Backup only when connected to an unmetered Wi-Fi network") },
+                                trailingContent = {
+                                    Switch(
+                                        checked = wifiOnly,
+                                        onCheckedChange = { viewModel.setTelegramAutoBackupWifiOnly(it) },
+                                        thumbContent = {
+                                            Icon(
+                                                imageVector = if (wifiOnly) Icons.Outlined.Check else Icons.Outlined.Close,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                                            )
+                                        }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+
+                            ListItem(
+                                leadingContent = { Icon(Icons.Outlined.BatteryChargingFull, contentDescription = null) },
+                                headlineContent = { Text("Battery Saver Pause") },
+                                supportingContent = { Text("Pause backup if battery is less than 35% (unless charging)") },
+                                trailingContent = {
+                                    Switch(
+                                        checked = batteryPause,
+                                        onCheckedChange = { viewModel.setTelegramAutoBackupBatteryLowPause(it) },
+                                        thumbContent = {
+                                            Icon(
+                                                imageVector = if (batteryPause) Icons.Outlined.Check else Icons.Outlined.Close,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                                            )
+                                        }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+                        }
+                    }
+
+                    if (showFolderDialog.value) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showFolderDialog.value = false },
+                            title = { Text("Select Backup Folders") },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (allFolders.isEmpty()) {
+                                        Text("No folders found", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else {
+                                        allFolders.forEach { folder ->
+                                            val isChecked = selectedFolders.contains(folder)
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        val updated = if (isChecked) {
+                                                            selectedFolders - folder
+                                                        } else {
+                                                            selectedFolders + folder
+                                                        }
+                                                        viewModel.setTelegramAutoBackupFolders(updated)
+                                                    }
+                                                    .padding(vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                androidx.compose.material3.Checkbox(
+                                                    checked = isChecked,
+                                                    onCheckedChange = { checked ->
+                                                        val updated = if (checked == true) {
+                                                            selectedFolders + folder
+                                                        } else {
+                                                            selectedFolders - folder
+                                                        }
+                                                        viewModel.setTelegramAutoBackupFolders(updated)
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Text(folder, style = MaterialTheme.typography.bodyLarge)
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = { showFolderDialog.value = false }) {
+                                    Text("Done")
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             SettingsGroup(title = "Local AI Engine") {
-                ListItem(
-                    leadingContent = { Icon(Icons.Outlined.SmartToy, contentDescription = null) },
-                    headlineContent = { Text("Visual Semantic Indexing") },
-                    supportingContent = { 
-                        Column {
-                            Text("Index photos locally for visual search")
-                            
-                            val dbIndexed = totalImagesCount - unindexedClipImagesCount
-                            val workerIndexed = clipIndexWorkInfo?.progress?.getInt("progress", 0) ?: 0
-                            val indexed = maxOf(dbIndexed, workerIndexed)
-                            val total = if (totalImagesCount > 0) totalImagesCount else (clipIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
-                            
-                            if (total > 0) {
-                                Spacer(Modifier.height(8.dp))
-                                val progressFloat = indexed.toFloat() / total.toFloat()
-                                
-                                LinearProgressIndicator(
-                                    progress = { progressFloat },
-                                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    if (indexed == total) "Indexing complete ($total images)" else "Indexed $indexed of $total images", 
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    },
-                    trailingContent = {
-                        val isRunning = clipIndexWorkInfo?.state == WorkInfo.State.RUNNING || clipIndexWorkInfo?.state == WorkInfo.State.ENQUEUED
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (isRunning) {
-                                FilledTonalButton(onClick = { viewModel.stopClipIndexing() }) {
-                                    Text("Stop")
-                                }
-                            } else {
-                                FilledTonalButton(onClick = { viewModel.startClipIndexing() }) {
-                                    Text("Start")
-                                }
-                                androidx.compose.material3.OutlinedButton(onClick = { viewModel.rebuildClipIndex() }) {
-                                    Text("Rebuild")
-                                }
-                            }
-                        }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                )
 
                 ListItem(
                     leadingContent = { Icon(Icons.Outlined.Search, contentDescription = null) },
