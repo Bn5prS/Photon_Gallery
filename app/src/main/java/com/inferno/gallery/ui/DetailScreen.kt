@@ -33,7 +33,7 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectTapGestures
+
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,9 +77,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -126,56 +127,6 @@ import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.SettingsRepository
 
 
-suspend fun PointerInputScope.detectZoomPanGesture(
-    onGesture: (centroid: Offset, pan: Offset, zoom: Float, consume: () -> Unit) -> Unit
-) {
-    awaitEachGesture {
-        var zoom = 1f
-        var pan = Offset.Zero
-        var pastTouchSlop = false
-        val touchSlop = viewConfiguration.touchSlop
-
-        awaitFirstDown(requireUnconsumed = true)
-        do {
-            val event = awaitPointerEvent()
-            val canceled = event.changes.any { it.isConsumed }
-            if (!canceled) {
-                val zoomChange = event.calculateZoom()
-                val panChange = event.calculatePan()
-
-                if (!pastTouchSlop) {
-                    zoom *= zoomChange
-                    pan += panChange
-
-                    val centroidSize = event.calculateCentroidSize(useCurrent = false)
-                    val zoomMotion = Math.abs(1 - zoom) * centroidSize
-                    val panMotion = pan.getDistance()
-
-                    if (zoomMotion > touchSlop || panMotion > touchSlop) {
-                        pastTouchSlop = true
-                    }
-                }
-
-                if (pastTouchSlop) {
-                    val centroid = event.calculateCentroid(useCurrent = false)
-                    if (zoomChange != 1f || panChange != Offset.Zero) {
-                        var shouldConsume = false
-                        onGesture(centroid, panChange, zoomChange) {
-                            shouldConsume = true
-                        }
-                        if (shouldConsume) {
-                            event.changes.forEach {
-                                if (it.positionChanged()) {
-                                    it.consume()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } while (!canceled && event.changes.any { it.pressed })
-    }
-}
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -562,91 +513,201 @@ fun DetailScreen(
                                         )
                                     }
                                 )
+                                // IMPORTANT: pointerInput MUST be before graphicsLayer.
+                                // When pointerInput is placed after graphicsLayer, Compose
+                                // inverse-transforms all pointer coordinates through the layer's
+                                // scale matrix (divides by scaleX/Y). At 5x zoom that makes
+                                // calculatePan() return 1/5 of the actual finger delta, causing
+                                // pan to be 5x slower than the finger. With pointerInput first
+                                // (outer), events arrive in screen/layout space — 1:1 with finger.
+                                .pointerInput(Unit) {
+                                    // Unified gesture handler: tap, double-tap, pinch-zoom, pan
+                                    // Uses a single awaitEachGesture loop to eliminate gesture conflicts
+                                    // caused by two stacked pointerInput blocks competing for events.
+                                    var lastTapTime = 0L
+                                    var lastTapPosition = Offset.Zero
+                                    awaitEachGesture {
+                                        // requireUnconsumed=false: prevent missing gestures if a parent
+                                        // or sibling already consumed the DOWN event.
+                                        val firstDown = awaitFirstDown(requireUnconsumed = false)
+                                        val downTime = System.currentTimeMillis()
+                                        val downPosition = firstDown.position
+
+                                        val isDoubleTap = (downTime - lastTapTime) < 300L &&
+                                            (downPosition - lastTapPosition).getDistance() < 100f
+
+                                        var accumulatedZoom = 1f
+                                        var accumulatedPan = Offset.Zero
+                                        var pastTouchSlop = false
+                                        val touchSlop = viewConfiguration.touchSlop
+                                        val composableW = size.width.toFloat()
+                                        val composableH = size.height.toFloat()
+                                        // VelocityTracker records pointer positions each frame so we can
+                                        // compute a fling velocity when the finger lifts.
+                                        val velocityTracker = VelocityTracker()
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            if (event.changes.any { it.isConsumed }) break
+
+                                            // Feed every pointer change into the tracker for accurate velocity.
+                                            event.changes.forEach { velocityTracker.addPointerInputChange(it) }
+
+                                            val zoomChange = event.calculateZoom()
+                                            val panChange = event.calculatePan()
+
+                                            if (!pastTouchSlop) {
+                                                accumulatedZoom *= zoomChange
+                                                accumulatedPan += panChange
+                                                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                                                val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
+                                                val panMotion = accumulatedPan.getDistance()
+                                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                                    pastTouchSlop = true
+                                                    lastTapTime = 0L
+                                                }
+                                            }
+
+                                            if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero)) {
+                                                val centroid = event.calculateCentroid(useCurrent = false)
+                                                animJob.value?.cancel()
+                                                val newScale = (scale.floatValue * zoomChange).coerceIn(1f, 20f)
+
+                                                if (newScale > 1.02f) showUi = false
+                                                if (newScale > 1.05f && isUserScrollEnabled) {
+                                                    isUserScrollEnabled = false
+                                                } else if (newScale <= 1.05f && !isUserScrollEnabled) {
+                                                    isUserScrollEnabled = true
+                                                }
+
+                                                val maxX = (composableW * (newScale - 1)) / 2f
+                                                val maxY = (composableH * (newScale - 1)) / 2f
+
+                                                // BUG FIX: Unified zoom+pan formula.
+                                                // Old code: applied pan first, then wrapped the entire
+                                                // (offset+pan) inside the focal zoom — this multiplied
+                                                // panChange by zoomDelta every frame, amplifying it and
+                                                // causing the image to fly to corners at deep zoom.
+                                                //
+                                                // Correct formula: (offset − focal) × zoomDelta + focal + pan
+                                                // → zoom around focal point, THEN translate by pan.
+                                                // For pure pan (zoomDelta=1) this reduces to offset + pan. ✓
+                                                val focalX = centroid.x - composableW / 2f
+                                                val focalY = centroid.y - composableH / 2f
+                                                var newOffsetX = (offsetX.floatValue - focalX) * zoomChange + focalX + panChange.x
+                                                var newOffsetY = (offsetY.floatValue - focalY) * zoomChange + focalY + panChange.y
+
+                                                newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
+                                                newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
+
+                                                scale.floatValue = newScale
+                                                offsetX.floatValue = newOffsetX
+                                                offsetY.floatValue = newOffsetY
+
+                                                if (newScale > 1f) {
+                                                    val hittingLeft = newOffsetX >= maxX && panChange.x > 0
+                                                    val hittingRight = newOffsetX <= -maxX && panChange.x < 0
+                                                    if (!hittingLeft && !hittingRight) {
+                                                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                    }
+                                                }
+                                            }
+
+                                            if (!event.changes.any { it.pressed }) break
+                                        }
+
+                                        // Fling: if the user was panning a zoomed image, use the
+                                        // measured velocity to animate a momentum scroll on release.
+                                        if (pastTouchSlop && scale.floatValue > 1f) {
+                                            val velocity = velocityTracker.calculateVelocity()
+                                            val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
+                                            val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
+                                            // Project where the image would coast to with natural deceleration.
+                                            val flingFactor = 0.18f
+                                            val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
+                                                .coerceIn(-currentMaxX, currentMaxX)
+                                            val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
+                                                .coerceIn(-currentMaxY, currentMaxY)
+                                            animJob.value?.cancel()
+                                            animJob.value = coroutineScope.launch {
+                                                launch {
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = offsetX.floatValue,
+                                                        targetValue = targetFlingX,
+                                                        initialVelocity = velocity.x,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            stiffness = Spring.StiffnessVeryLow
+                                                        )
+                                                    ) { v, _ -> offsetX.floatValue = v }
+                                                }
+                                                launch {
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = offsetY.floatValue,
+                                                        targetValue = targetFlingY,
+                                                        initialVelocity = velocity.y,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            stiffness = Spring.StiffnessVeryLow
+                                                        )
+                                                    ) { v, _ -> offsetY.floatValue = v }
+                                                }
+                                            }
+                                        }
+
+                                        // --- Tap / double-tap detection (fires after gesture ends) ---
+                                        if (!pastTouchSlop) {
+                                            if (isDoubleTap) {
+                                                lastTapTime = 0L
+                                                animJob.value?.cancel()
+                                                animJob.value = coroutineScope.launch {
+                                                    if (scale.floatValue > 1f) {
+                                                        // Zoom out to fit
+                                                        isUserScrollEnabled = true
+                                                        launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> scale.floatValue = v } }
+                                                        launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetX.floatValue = v } }
+                                                        launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetY.floatValue = v } }
+                                                    } else {
+                                                        // Zoom in to tapped point
+                                                        isUserScrollEnabled = false
+                                                        val targetScale = 3.5f
+                                                        val targetX = -(downPosition.x - composableW / 2f) * (targetScale - 1)
+                                                        val targetY = -(downPosition.y - composableH / 2f) * (targetScale - 1)
+                                                        val maxX = (composableW * (targetScale - 1)) / 2f
+                                                        val maxY = (composableH * (targetScale - 1)) / 2f
+                                                        launch { androidx.compose.animation.core.animate(scale.floatValue, targetScale, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> scale.floatValue = v } }
+                                                        launch { androidx.compose.animation.core.animate(offsetX.floatValue, targetX.coerceIn(-maxX, maxX), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetX.floatValue = v } }
+                                                        launch { androidx.compose.animation.core.animate(offsetY.floatValue, targetY.coerceIn(-maxY, maxY), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetY.floatValue = v } }
+                                                    }
+                                                }
+                                            } else {
+                                                // Single tap — use a short delay so a rapid second tap
+                                                // is detected as a double-tap before the UI toggle fires.
+                                                lastTapTime = downTime
+                                                lastTapPosition = downPosition
+                                                coroutineScope.launch {
+                                                    kotlinx.coroutines.delay(300L)
+                                                    if (lastTapTime == downTime) {
+                                                        activeHighlight = null
+                                                        if (showInfoCard || showUi) {
+                                                            showInfoCard = false
+                                                            showUi = false
+                                                        } else {
+                                                            showUi = true
+                                                        }
+                                                        lastTapTime = 0L
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 .graphicsLayer {
                                     scaleX = scale.floatValue * pagerScale
                                     scaleY = scale.floatValue * pagerScale
                                     alpha = pagerAlpha
                                     translationX = offsetX.floatValue
                                     translationY = offsetY.floatValue
-                                }
-                                .pointerInput(Unit) {
-                                    detectZoomPanGesture { centroid, pan, zoom, consume ->
-                                        animJob.value?.cancel()
-                                        
-                                        val currentScale = scale.floatValue
-                                        val newScale = (currentScale * zoom).coerceIn(1f, 20f)
-                                        
-                                        if (newScale > 1.02f) { showUi = false }
-                                        
-                                        if (newScale > 1.05f && isUserScrollEnabled) {
-                                            isUserScrollEnabled = false
-                                        } else if (newScale <= 1.05f && !isUserScrollEnabled) {
-                                            isUserScrollEnabled = true
-                                        }
-                                        
-                                        val maxX = (screenWidth * (newScale - 1)) / 2
-                                        val maxY = (screenHeight * (newScale - 1)) / 2
-                                        
-                                        var newOffsetX = offsetX.floatValue + pan.x
-                                        var newOffsetY = offsetY.floatValue + pan.y
-                                        
-                                        if (zoom != 1f) {
-                                            val focalX = (centroid.x - screenWidth / 2)
-                                            val focalY = (centroid.y - screenHeight / 2)
-                                            newOffsetX = (newOffsetX - focalX) * zoom + focalX
-                                            newOffsetY = (newOffsetY - focalY) * zoom + focalY
-                                        }
-                                        
-                                        newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
-                                        newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
-                                        
-                                        scale.floatValue = newScale
-                                        offsetX.floatValue = newOffsetX
-                                        offsetY.floatValue = newOffsetY
-                                        
-                                        if (newScale > 1f) {
-                                            val hittingLeft = newOffsetX >= maxX && pan.x > 0
-                                            val hittingRight = newOffsetX <= -maxX && pan.x < 0
-                                            
-                                            if (!hittingLeft && !hittingRight) {
-                                                consume()
-                                            }
-                                        }
-                                    }
-                                }
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onTap = { 
-                                            activeHighlight = null
-                                            if (showInfoCard || showUi) {
-                                                showInfoCard = false
-                                                showUi = false
-                                            } else {
-                                                showUi = true
-                                            }
-                                        },
-                                        onDoubleTap = { tapOffset ->
-                                            animJob.value?.cancel()
-                                            animJob.value = coroutineScope.launch {
-                                                if (scale.floatValue > 1f) {
-                                                    isUserScrollEnabled = true
-                                                    launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> scale.floatValue = v } }
-                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetX.floatValue = v } }
-                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetY.floatValue = v } }
-                                                } else {
-                                                    isUserScrollEnabled = false
-                                                    val targetScale = 3.5f
-                                                    val targetX = -(tapOffset.x - screenWidth / 2) * (targetScale - 1)
-                                                    val targetY = -(tapOffset.y - screenHeight / 2) * (targetScale - 1)
-                                                    val maxX = (screenWidth * (targetScale - 1)) / 2
-                                                    val maxY = (screenHeight * (targetScale - 1)) / 2
-                                                    launch { androidx.compose.animation.core.animate(scale.floatValue, targetScale, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> scale.floatValue = v } }
-                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, targetX.coerceIn(-maxX, maxX), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetX.floatValue = v } }
-                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, targetY.coerceIn(-maxY, maxY), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) { v, _ -> offsetY.floatValue = v } }
-                                                }
-                                            }
-                                        }
-                                    )
                                 }
                         )
                         
@@ -697,15 +758,15 @@ fun DetailScreen(
                     }
                 }
 
-            // Minimap Overlay
+            // Minimap Overlay — top-right corner
             AnimatedVisibility(
                 visible = scale.floatValue >= 5f,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(24.dp)
-                    .padding(bottom = 90.dp) // Clear the scroller
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 16.dp)
             ) {
                 Box(
                     modifier = Modifier
