@@ -36,6 +36,7 @@ class SettingsRepository(private val context: Context) {
         val TELEGRAM_AUTO_BACKUP_FOLDERS = stringPreferencesKey("telegram_auto_backup_folders")
         val TELEGRAM_AUTO_BACKUP_WIFI_ONLY = booleanPreferencesKey("telegram_auto_backup_wifi_only")
         val TELEGRAM_AUTO_BACKUP_BATTERY_LOW_PAUSE = booleanPreferencesKey("telegram_auto_backup_battery_low_pause")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data
@@ -275,6 +276,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateTelegramAutoBackupBatteryLowPause(pause: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[TELEGRAM_AUTO_BACKUP_BATTERY_LOW_PAUSE] = pause
+        }
+    }
+
+    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ONBOARDING_COMPLETED] ?: false
+        }
+
+    suspend fun updateOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ONBOARDING_COMPLETED] = completed
         }
     }
 }

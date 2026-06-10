@@ -16,6 +16,7 @@ import com.inferno.gallery.workers.MediaSyncWorker
 import com.inferno.gallery.workers.OcrIndexWorker
 
 import com.inferno.gallery.data.SettingsRepository
+import com.inferno.gallery.data.MediaStoreThumbnailFetcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okio.Path.Companion.toPath
@@ -43,6 +44,8 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {
+                // Support high-performance system thumbnails for local MediaStore items
+                add(MediaStoreThumbnailFetcher.Factory(context))
                 // Support GIFs, Animated WebP, and Animated HEIF
                 if (SDK_INT >= 28) {
                     add(AnimatedImageDecoder.Factory())
@@ -56,13 +59,13 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory {
             }
             .memoryCache {
                 coil3.memory.MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25) // Use 25% of available heap size
+                    .maxSizePercent(context, 0.40) // Use 40% of available heap size
                     .build()
             }
             .diskCache {
                 coil3.disk.DiskCache.Builder()
                     .directory(context.cacheDir.resolve("image_cache").absolutePath.toPath())
-                    .maxSizeBytes(64L * 1024L * 1024L) // 64 MB disk cache
+                    .maxSizeBytes(512L * 1024L * 1024L) // 512 MB disk cache
                     .build()
             }
             .crossfade(false) // Premium smooth loading transition

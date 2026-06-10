@@ -102,6 +102,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    val onboardingCompleted: StateFlow<Boolean> = settingsRepository.onboardingCompletedFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun completeOnboarding() {
+        viewModelScope.launch {
+            settingsRepository.updateOnboardingCompleted(true)
+        }
+    }
+
 
 
     fun toggleFavorite(id: String) {
@@ -227,11 +239,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = 0
     )
 
-    val gridCellsCount: StateFlow<Int> = settingsRepository.gridCellsCountFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 4
-    )
+    private val _gridCellsCount = MutableStateFlow(4)
+    val gridCellsCount: StateFlow<Int> = _gridCellsCount.asStateFlow()
+
+    private var saveGridCellsJob: kotlinx.coroutines.Job? = null
+
+    init {
+        viewModelScope.launch {
+            _gridCellsCount.value = settingsRepository.gridCellsCountFlow.first()
+        }
+    }
 
     val thumbnailCornerRadius: StateFlow<Float> = settingsRepository.thumbnailCornerRadiusFlow.stateIn(
         scope = viewModelScope,
@@ -543,7 +560,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setGridCellsCount(count: Int) {
-        viewModelScope.launch {
+        _gridCellsCount.value = count
+        saveGridCellsJob?.cancel()
+        saveGridCellsJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(500)
             settingsRepository.updateGridCellsCount(count)
         }
     }

@@ -15,12 +15,6 @@ object DatabaseProvider {
 
     fun getDatabase(context: Context): GalleryDatabase {
         return INSTANCE ?: synchronized(this) {
-            val dbFolder = java.io.File(android.os.Environment.getExternalStorageDirectory(), "PhotonGallery/Database")
-            if (!dbFolder.exists()) {
-                dbFolder.mkdirs()
-            }
-            val dbFile = java.io.File(dbFolder, "gallery_database.db")
-
             val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE telegram_backups ADD COLUMN telegramMessageId INTEGER DEFAULT NULL")
@@ -30,7 +24,7 @@ object DatabaseProvider {
             val instance = Room.databaseBuilder(
                 context.applicationContext,
                 GalleryDatabase::class.java,
-                dbFile.absolutePath
+                "gallery_database.db"
             )
             .addMigrations(MIGRATION_4_5)
             .fallbackToDestructiveMigration(dropAllTables = true)

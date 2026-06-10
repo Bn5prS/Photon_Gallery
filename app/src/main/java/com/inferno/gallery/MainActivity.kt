@@ -13,12 +13,6 @@ import androidx.activity.viewModels
 import com.inferno.gallery.ui.ThemeMode
 import com.inferno.gallery.ui.SettingsViewModel
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import coil3.ImageLoader
-import coil3.SingletonImageLoader
-import coil3.memory.MemoryCache
-import coil3.disk.DiskCache
-import okio.Path.Companion.toOkioPath
-import coil3.request.crossfade
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -37,23 +31,6 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
-        SingletonImageLoader.setSafe { ctx ->
-            ImageLoader.Builder(ctx)
-                .memoryCache {
-                    MemoryCache.Builder()
-                        .maxSizePercent(ctx, 0.50)
-                        .build()
-                }
-                .diskCache {
-                    DiskCache.Builder()
-                        .directory(ctx.cacheDir.resolve("image_cache").toOkioPath())
-                        .maxSizeBytes(500L * 1024 * 1024)
-                        .build()
-                }
-                .crossfade(false)
-                .build()
-        }
 
         setContent {
             val isLoading by settingsViewModel.isLoading.collectAsState()
