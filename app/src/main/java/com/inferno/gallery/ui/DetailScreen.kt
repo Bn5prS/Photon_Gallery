@@ -542,16 +542,28 @@ fun DetailScreen(
                                         val touchSlop = viewConfiguration.touchSlop
                                         val composableW = size.width.toFloat()
                                         val composableH = size.height.toFloat()
-                                        // VelocityTracker records pointer positions each frame so we can
-                                        // compute a fling velocity when the finger lifts.
                                         val velocityTracker = VelocityTracker()
+                                        // Track the peak pointer count so we can distinguish a pure
+                                        // single-finger pan from a pinch that ended on one finger.
+                                        // Fling must NOT fire after pinch — mixing two-finger positions
+                                        // into the VelocityTracker produces garbage velocity that shoots
+                                        // the image to random corners on finger lift.
+                                        var maxPointerCount = 0
 
                                         while (true) {
                                             val event = awaitPointerEvent()
                                             if (event.changes.any { it.isConsumed }) break
 
-                                            // Feed every pointer change into the tracker for accurate velocity.
-                                            event.changes.forEach { velocityTracker.addPointerInputChange(it) }
+                                            val pressedCount = event.changes.count { it.pressed }
+                                            maxPointerCount = maxOf(maxPointerCount, pressedCount)
+
+                                            // Only feed the single active pointer into the tracker.
+                                            // If we add both fingers of a pinch, the interleaved
+                                            // positions produce a random velocity on lift.
+                                            if (pressedCount == 1) {
+                                                event.changes.firstOrNull { it.pressed }
+                                                    ?.let { velocityTracker.addPointerInputChange(it) }
+                                            }
 
                                             val zoomChange = event.calculateZoom()
                                             val panChange = event.calculatePan()
@@ -616,9 +628,13 @@ fun DetailScreen(
                                             if (!event.changes.any { it.pressed }) break
                                         }
 
-                                        // Fling: if the user was panning a zoomed image, use the
-                                        // measured velocity to animate a momentum scroll on release.
-                                        if (pastTouchSlop && scale.floatValue > 1f) {
+                                        // Fling: only for PURE single-finger pan on a zoomed image.
+                                        // Pinch gestures (maxPointerCount > 1) are excluded because
+                                        // the velocity tracker has no pinch data (we stopped feeding it
+                                        // during multi-finger events), so it would produce zero or stale
+                                        // velocity. More importantly, pinch already correctly placed the
+                                        // image — no extra fling is wanted.
+                                        if (pastTouchSlop && scale.floatValue > 1.05f && maxPointerCount == 1) {
                                             val velocity = velocityTracker.calculateVelocity()
                                             val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
                                             val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
