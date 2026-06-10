@@ -57,7 +57,9 @@ fun CloudScreen(
                 dateModified = item.dateModified,
                 path = item.filePath,
                 isVideo = item.isVideo,
-                durationMs = item.durationMs
+                durationMs = item.durationMs,
+                telegramFileId = item.telegramFileId,
+                telegramThumbFileId = item.telegramThumbFileId
             )
         }
     }

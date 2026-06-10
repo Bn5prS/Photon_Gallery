@@ -97,9 +97,27 @@ object SyncManifestManager {
                 // Match priority:
                 // 1. Same filePath
                 // 2. Same name and size
-                val matchedMedia = localMedia.firstOrNull { it.filePath == filePathVal }
+                var matchedMedia = localMedia.firstOrNull { it.filePath == filePathVal }
                     ?: localMedia.firstOrNull { it.name == nameVal && it.size == sizeVal }
                 
+                if (matchedMedia == null) {
+                    val newMedia = com.inferno.gallery.data.db.CoreMediaEntity(
+                        id = timestampVal + i, // Generate unique fake ID
+                        uriString = "telegram://$fileIdVal",
+                        filePath = filePathVal,
+                        bucketName = "telegram_cloud",
+                        dateAdded = timestampVal / 1000,
+                        dateModified = timestampVal / 1000,
+                        size = sizeVal,
+                        name = nameVal,
+                        isVideo = nameVal.endsWith(".mp4", true) || nameVal.endsWith(".webm", true),
+                        durationMs = null,
+                        mimeType = if (nameVal.endsWith(".mp4", true) || nameVal.endsWith(".webm", true)) "video/mp4" else "image/jpeg"
+                    )
+                    db.mediaDao().insertAll(listOf(newMedia))
+                    matchedMedia = newMedia
+                }
+
                 if (matchedMedia != null) {
                     db.telegramBackupDao().insertOrUpdate(
                         TelegramBackupEntity(

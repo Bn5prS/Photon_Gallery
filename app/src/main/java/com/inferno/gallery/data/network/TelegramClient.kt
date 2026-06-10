@@ -341,6 +341,30 @@ class TelegramClient(private val botToken: String, private val chatId: String) {
             return response.body?.string() ?: ""
         }
     }
+
+    /**
+     * Downloads the raw bytes of a file from Telegram to an output stream.
+     */
+    @Throws(IOException::class)
+    fun downloadFileStream(fileUrl: String, outputStream: java.io.OutputStream) {
+        val request = Request.Builder()
+            .url(fileUrl)
+            .header("User-Agent", "PhotonGalleryApp/1.0 (Android; Jetpack Compose)")
+            .build()
+            
+        client.newCall(request).execute().use { response ->
+            if (response.code == 429) {
+                val retryAfterSeconds = response.header("Retry-After")?.toIntOrNull() ?: 10
+                throw RateLimitException(retryAfterSeconds, "Rate limit hit on downloadFileStream")
+            }
+            if (!response.isSuccessful) {
+                throw IOException("Failed to download file with HTTP code ${response.code}")
+            }
+            response.body?.byteStream()?.use { input ->
+                input.copyTo(outputStream)
+            }
+        }
+    }
 }
 
 data class UploadResult(val fileId: String, val thumbFileId: String, val messageId: Long)
