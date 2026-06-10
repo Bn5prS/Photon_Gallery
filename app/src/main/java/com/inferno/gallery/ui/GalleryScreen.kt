@@ -106,6 +106,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.request.CachePolicy
@@ -140,6 +141,8 @@ import java.util.Locale
 
 
 
+private val resolvedUriCache = java.util.concurrent.ConcurrentHashMap<Uri, Uri>()
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GalleryScreen(
@@ -166,6 +169,13 @@ fun GalleryScreen(
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
     val backupStatuses by viewModel.backupStatuses.collectAsState()
     val lazyGridState = rememberLazyGridState()
+    val totalItems = remember(images, groupedImages, viewMode) {
+        if (viewMode == ViewMode.Immersive) {
+            images.size
+        } else {
+            groupedImages.size + images.size
+        }
+    }
     val isScrollInProgress = lazyGridState.isScrollInProgress
     val context = LocalContext.current
 
@@ -173,7 +183,13 @@ fun GalleryScreen(
         viewModel.clearSelection()
     }
 
+    var clickedItemId by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(isScrollInProgress) {
+        if (isScrollInProgress) {
+            clickedItemId = null
+        }
+    }
 
     val coroutineScope = rememberCoroutineScope()
     var boxHeight by remember { mutableStateOf(0f) }
@@ -183,6 +199,7 @@ fun GalleryScreen(
             if (viewModel.isSelectionMode.value) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
+                clickedItemId = item.id
                 onPhotoClick(item.id, bucketName, null)
             }
         }
@@ -253,24 +270,22 @@ fun GalleryScreen(
         if (viewMode == ViewMode.Immersive) {
             items(
                 items = images,
-                key = { it.id }
+                key = { it.id },
+                contentType = { "media" }
             ) { item ->
                 GalleryGridItem(
                     item = item,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onClick = onMediaClick,
-                    modifier = Modifier.animateItem(
-                        placementSpec = if (isScrollInProgress) null else spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    ),
+                    modifier = Modifier,
                     isSelected = selectedUris.contains(item.uri.toString()),
                     gridAutoPlay = gridAutoPlay,
                     gridCellsCount = gridCellsCount,
                     thumbnailCornerRadius = thumbnailCornerRadius,
-                    backupStatus = backupStatuses[item.id.toLongOrNull() ?: -1L]
+                    backupStatus = backupStatuses[item.id.toLongOrNull() ?: -1L],
+                    isScrollInProgress = isScrollInProgress,
+                    isTransitionActive = clickedItemId == item.id
                 )
             }
         } else {
@@ -284,24 +299,22 @@ fun GalleryScreen(
                 }
                 items(
                     items = groupItems,
-                    key = { it.id }
+                    key = { it.id },
+                    contentType = { "media" }
                 ) { item ->
                     GalleryGridItem(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                         onClick = onMediaClick,
-                    modifier = Modifier.animateItem(
-                        placementSpec = if (isScrollInProgress) null else spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    ),
-                    isSelected = selectedUris.contains(item.uri.toString()),
-                    gridAutoPlay = gridAutoPlay,
-                    gridCellsCount = gridCellsCount,
-                    thumbnailCornerRadius = thumbnailCornerRadius,
-                    backupStatus = backupStatuses[item.id.toLongOrNull() ?: -1L]
+                        modifier = Modifier,
+                        isSelected = selectedUris.contains(item.uri.toString()),
+                        gridAutoPlay = gridAutoPlay,
+                        gridCellsCount = gridCellsCount,
+                        thumbnailCornerRadius = thumbnailCornerRadius,
+                        backupStatus = backupStatuses[item.id.toLongOrNull() ?: -1L],
+                        isScrollInProgress = isScrollInProgress,
+                        isTransitionActive = clickedItemId == item.id
                     )
                 }
             }
@@ -311,6 +324,7 @@ fun GalleryScreen(
 
         FastScroller(
             lazyGridState = lazyGridState,
+            totalItems = totalItems,
             images = images,
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -334,63 +348,22 @@ fun GalleryGridItem(
     gridAutoPlay: Boolean = true,
     gridCellsCount: Int = 3,
     thumbnailCornerRadius: Float = 0f,
-    backupStatus: String? = null
+    backupStatus: String? = null,
+    isScrollInProgress: Boolean = false,
+    isTransitionActive: Boolean = false
 ) {
     val context = LocalContext.current
-    val screenWidth = context.resources.displayMetrics.widthPixels
-    val bucketSize = if (gridCellsCount <= 3) screenWidth / 2 else screenWidth / 4
+    var resolvedUri by remember(item.uri) { mutableStateOf(resolvedUriCache[item.uri] ?: item.uri) }
 
-    val resolvedUri by produceState<Uri>(initialValue = item.uri, key1 = item.uri) {
-        val isReadable = withContext(Dispatchers.IO) {
-            try {
-                context.contentResolver.openInputStream(item.uri)?.use { true } ?: false
-            } catch (e: Exception) {
-                false
-            }
-        }
-        if (!isReadable) {
-            val mediaId = item.id.toLongOrNull()
-            if (mediaId != null) {
-                val db = DatabaseProvider.getDatabase(context)
-                val backup = withContext(Dispatchers.IO) {
-                    db.telegramBackupDao().getBackupForMedia(mediaId)
-                }
-                if (backup != null && backup.backupStatus == "SUCCESS") {
-                    val fileId = backup.telegramThumbFileId ?: backup.telegramFileId
-                    if (fileId != null) {
-                        val settingsRepo = SettingsRepository(context)
-                        val token = withContext(Dispatchers.IO) {
-                            try { settingsRepo.telegramBotTokenFlow.first() } catch (e: Exception) { "" }
-                        }
-                        val chatId = withContext(Dispatchers.IO) {
-                            try { settingsRepo.telegramChatIdFlow.first() } catch (e: Exception) { "" }
-                        }
-                        if (token.isNotEmpty() && chatId.isNotEmpty()) {
-                            val resolved = withContext(Dispatchers.IO) {
-                                try {
-                                    com.inferno.gallery.data.network.TelegramClient(token, chatId).getFileUrl(fileId)
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-                            if (resolved != null) {
-                                value = Uri.parse(resolved)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    val request = remember<ImageRequest>(resolvedUri, bucketSize, gridAutoPlay) {
+    val request = remember<ImageRequest>(resolvedUri, gridAutoPlay) {
         ImageRequest.Builder(context)
             .data(resolvedUri)
-            .size(bucketSize, bucketSize)
-            .memoryCacheKey("photo_${resolvedUri}_$bucketSize")
+            .size(384, 384)
+            .memoryCacheKey("photo_${resolvedUri}_384")
             .precision(Precision.INEXACT)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
+            .networkCachePolicy(CachePolicy.ENABLED)
             .crossfade(false)
             .apply {
                 if (item.isVideo || !gridAutoPlay) {
@@ -420,8 +393,10 @@ fun GalleryGridItem(
         filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
     )
 
-    LaunchedEffect(gridAutoPlay, painter.state) {
-        val state = painter.state
+    val painterState by painter.state.collectAsState()
+
+    LaunchedEffect(gridAutoPlay, painterState) {
+        val state = painterState
         if (state is AsyncImagePainter.State.Success) {
             val image = state.result.image
             val drawable = (image as? coil3.DrawableImage)?.drawable
@@ -433,62 +408,137 @@ fun GalleryGridItem(
                     drawable.stop()
                 }
             }
+        } else if (state is AsyncImagePainter.State.Error && resolvedUri == item.uri) {
+            if (resolvedUriCache[item.uri] == item.uri) {
+                return@LaunchedEffect
+            }
+            val mediaId = item.id.toLongOrNull()
+            if (mediaId != null) {
+                withContext(Dispatchers.IO) {
+                    val db = DatabaseProvider.getDatabase(context)
+                    val backup = db.telegramBackupDao().getBackupForMedia(mediaId)
+                    if (backup != null && backup.backupStatus == "SUCCESS") {
+                        val fileId = backup.telegramThumbFileId ?: backup.telegramFileId
+                        if (fileId != null) {
+                            val settingsRepo = SettingsRepository(context)
+                            val token = try { settingsRepo.telegramBotTokenFlow.first() } catch (e: Exception) { "" }
+                            val chatId = try { settingsRepo.telegramChatIdFlow.first() } catch (e: Exception) { "" }
+                            if (token.isNotEmpty() && chatId.isNotEmpty()) {
+                                val resolved = try {
+                                    com.inferno.gallery.data.network.TelegramClient(token, chatId).getFileUrl(fileId)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                                if (resolved != null) {
+                                    val targetUri = Uri.parse(resolved)
+                                    resolvedUriCache[item.uri] = targetUri
+                                    withContext(Dispatchers.Main) {
+                                        resolvedUri = targetUri
+                                    }
+                                    return@withContext
+                                }
+                            }
+                        }
+                    }
+                    resolvedUriCache[item.uri] = item.uri
+                }
+            }
         }
     }
 
     Box(modifier = modifier.scale(combinedScale)) {
-        val isSkeletonVisible = painter.state !is AsyncImagePainter.State.Success
+        val isSkeletonVisible = painterState !is AsyncImagePainter.State.Success
         val skeletonColor = if (isSkeletonVisible) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
 
         with(sharedTransitionScope) {
+            val imageModifier = Modifier
+                .aspectRatio(1f)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(thumbnailCornerRadius.dp))
+                .background(skeletonColor)
+                .clickable { onClick(item) }
+
+            val finalModifier = if (isTransitionActive) {
+                imageModifier.sharedElement(
+                    sharedContentState = rememberSharedContentState(key = sharedKey),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = { _, _ ->
+                        spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    }
+                )
+            } else {
+                imageModifier
+            }
+
             Image(
                 painter = painter,
                 contentDescription = null, 
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .sharedElement(
-                        sharedContentState = rememberSharedContentState(key = sharedKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = { _, _ ->
-                            spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        }
-                    )
-                    .aspectRatio(1f)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(thumbnailCornerRadius.dp))
-                    .background(skeletonColor)
-                    .clickable { onClick(item) }
+                modifier = finalModifier
             )
         }
+
         if (item.isVideo) {
-            Surface(
+            val iconSize = when (gridCellsCount) {
+                1, 2, 3 -> 14.dp
+                4 -> 11.dp
+                else -> 9.dp
+            }
+            val containerSize = when (gridCellsCount) {
+                1, 2, 3 -> 24.dp
+                4 -> 20.dp
+                else -> 16.dp
+            }
+            val fontSize = when (gridCellsCount) {
+                1, 2, 3 -> 11.sp
+                4 -> 9.sp
+                else -> 8.sp
+            }
+
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp),
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurface
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // 1. Duration Text: Outlined/shadowed, NO background shape
+                Text(
+                    text = formatDuration(item.durationMs),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = Color.White,
+                        fontSize = fontSize,
+                        fontWeight = FontWeight.Bold,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black,
+                            offset = Offset(2f, 2f),
+                            blurRadius = 4f
+                        )
+                    )
+                )
+
+                // 2. Play Icon: Rounded/circular background shape
+                Box(
+                    modifier = Modifier
+                        .size(containerSize)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = androidx.compose.foundation.shape.CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = "Video",
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = formatDuration(item.durationMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
                     )
                 }
             }
         }
+
         if (isSelected) {
             // Apply a thick primary border inside the bounds
             Box(
@@ -516,33 +566,16 @@ fun GalleryGridItem(
             }
         }
 
-        if (backupStatus != null && !isSelected) {
-            Surface(
+        if (backupStatus == "SUCCESS" && !isSelected) {
+            Icon(
+                imageVector = Icons.Outlined.CloudDone,
+                contentDescription = "Uploaded",
+                tint = Color.White,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(4.dp),
-                shape = androidx.compose.foundation.shape.CircleShape,
-                color = when (backupStatus) {
-                    "SUCCESS" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-                    "PENDING" -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
-                    else -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f)
-                },
-                contentColor = when (backupStatus) {
-                    "SUCCESS" -> MaterialTheme.colorScheme.onPrimaryContainer
-                    "PENDING" -> MaterialTheme.colorScheme.onSurfaceVariant
-                    else -> MaterialTheme.colorScheme.onErrorContainer
-                }
-            ) {
-                Icon(
-                    imageVector = when (backupStatus) {
-                        "SUCCESS" -> Icons.Outlined.CloudDone
-                        "PENDING" -> Icons.Outlined.CloudUpload
-                        else -> Icons.Outlined.CloudOff
-                    },
-                    contentDescription = backupStatus,
-                    modifier = Modifier.padding(4.dp).size(16.dp)
-                )
-            }
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .size(20.dp)
+            )
         }
 
         val ext = remember(item.name) { item.name.substringAfterLast('.', "").lowercase() }
@@ -666,11 +699,11 @@ private fun Modifier.gridZoomGestureModifier(
 @Composable
 fun FastScroller(
     lazyGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    totalItems: Int,
     images: List<GalleryItem>,
     modifier: Modifier = Modifier
 ) {
-    val actualTotalItems = lazyGridState.layoutInfo.totalItemsCount
-    if (actualTotalItems < 50) return
+    if (totalItems < 50) return
 
     var isDragging by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(0f) }
@@ -694,10 +727,10 @@ fun FastScroller(
     val density = LocalDensity.current
     val thumbHeightPx = with(density) { 48.dp.toPx() } 
 
-    LaunchedEffect(lazyGridState, boxHeight, isDragging) {
+    LaunchedEffect(lazyGridState, boxHeight, isDragging, totalItems) {
         snapshotFlow { lazyGridState.firstVisibleItemIndex }.collectLatest { firstVisible ->
-            if (!isDragging && actualTotalItems > 0 && boxHeight > thumbHeightPx) {
-                val currentPct = firstVisible.toFloat() / actualTotalItems
+            if (!isDragging && totalItems > 0 && boxHeight > thumbHeightPx) {
+                val currentPct = firstVisible.toFloat() / totalItems
                 dragOffset = currentPct * (boxHeight - thumbHeightPx)
             }
         }
@@ -762,7 +795,7 @@ fun FastScroller(
             Spacer(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(actualTotalItems) {
+                    .pointerInput(totalItems) {
                         detectVerticalDragGestures(
                             onDragStart = { offset ->
                                 isDragging = true
@@ -777,7 +810,7 @@ fun FastScroller(
                             if (boxHeight > thumbHeightPx) {
                                 dragOffset = (dragOffset + dragAmount).coerceIn(0f, boxHeight - thumbHeightPx)
                                 val percentage = dragOffset / (boxHeight - thumbHeightPx)
-                                targetIndex = (percentage * actualTotalItems).toInt().coerceIn(0, actualTotalItems - 1)
+                                targetIndex = (percentage * totalItems).toInt().coerceIn(0, totalItems - 1)
                                 
                                 val imagesIndex = (percentage * images.size).toInt().coerceIn(0, maxOf(0, images.size - 1))
                                 val itemDate = images.getOrNull(imagesIndex)?.dateAdded
