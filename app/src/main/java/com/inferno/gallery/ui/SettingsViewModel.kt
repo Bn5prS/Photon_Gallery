@@ -27,8 +27,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val repository = SettingsRepository(application)
     private val db = DatabaseProvider.getDatabase(application)
 
-    private val _isLoading = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1000)
+            _isLoading.value = false
+        }
+    }
 
     val themeMode: StateFlow<ThemeMode> = repository.themeModeFlow.map { modeString ->
         try {
