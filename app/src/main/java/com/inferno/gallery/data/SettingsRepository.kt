@@ -37,6 +37,7 @@ class SettingsRepository(private val context: Context) {
         val TELEGRAM_AUTO_BACKUP_WIFI_ONLY = booleanPreferencesKey("telegram_auto_backup_wifi_only")
         val TELEGRAM_AUTO_BACKUP_BATTERY_LOW_PAUSE = booleanPreferencesKey("telegram_auto_backup_battery_low_pause")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val STRIP_METADATA_ON_SHARE = booleanPreferencesKey("strip_metadata_on_share")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data
@@ -287,6 +288,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun updateOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    val stripMetadataOnShareFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[STRIP_METADATA_ON_SHARE] ?: false
+        }
+
+    suspend fun updateStripMetadataOnShare(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[STRIP_METADATA_ON_SHARE] = enabled
         }
     }
 }
