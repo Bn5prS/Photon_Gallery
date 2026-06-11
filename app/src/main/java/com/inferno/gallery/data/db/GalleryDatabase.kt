@@ -17,8 +17,8 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE (:bucketName IS NULL OR bucketName = :bucketName) ORDER BY dateAdded DESC")
     fun observeMediaPaging(bucketName: String? = null): PagingSource<Int, CoreMediaEntity>
 
-    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])
-    fun observeMediaPagingRaw(query: androidx.sqlite.db.SupportSQLiteQuery): PagingSource<Int, CoreMediaEntity>
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, TelegramBackupEntity::class])
+    fun observeMediaPagingRaw(query: androidx.sqlite.db.SupportSQLiteQuery): PagingSource<Int, MediaWithBackup>
 
     @Query("SELECT DISTINCT bucketName FROM core_media WHERE bucketName != 'Trash' AND bucketName IS NOT NULL")
     fun observeAllBucketNames(): Flow<List<String>>
