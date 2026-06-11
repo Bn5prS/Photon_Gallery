@@ -98,7 +98,12 @@ dependencies {
     // ── Room — Database (stable 2.6.1, FTS5 support) ──
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.room.paging)
     ksp(libs.room.compiler)
+
+    // ── Paging 3 ──
+    implementation(libs.paging.runtime)
+    implementation(libs.paging.compose)
 
     // ── ML Kit (OCR) ──
     implementation(libs.mlkit.text.recognition)

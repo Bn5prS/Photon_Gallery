@@ -29,6 +29,9 @@ exifinterface = "1.3.7"
 # Database — Room (2.7.1 = first stable with Kotlin 2.x / KSP 2.x support)
 room = "2.7.1"
 
+# Paging 3
+paging = "3.3.6"
+
 # ML Kit (OCR)
 mlkitText = "16.0.1"
 
@@ -95,6 +98,11 @@ androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterfa
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
+
+# ── Paging 3 ──
+paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 
 # ── ML Kit ──
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
