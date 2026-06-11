@@ -361,7 +361,7 @@ fun SettingsScreen(
                 ListItem(
                     leadingContent = { Icon(Icons.Outlined.PrivacyTip, contentDescription = null) },
                     headlineContent = { Text("Strip Metadata Before Sharing") },
-                    supportingContent = { Text("Remove GPS, camera info, and timestamps from images when sharing") },
+                    supportingContent = { Text("Remove GPS, camera specifications, timestamps, timezone offsets, and author/attribution details when sharing") },
                     trailingContent = {
                         Switch(
                             checked = stripMetadataOnShare,
