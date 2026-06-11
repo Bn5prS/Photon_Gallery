@@ -32,16 +32,9 @@ class MediaStoreThumbnailFetcher(
 
     override suspend fun fetch(): FetchResult? = withContext(Dispatchers.IO) {
         try {
-            val width = when (val w = options.size.width) {
-                is Dimension.Pixels -> w.px
-                else -> 512
-            }
-            val height = when (val h = options.size.height) {
-                is Dimension.Pixels -> h.px
-                else -> 512
-            }
-            
-            val bitmap = context.contentResolver.loadThumbnail(uri, Size(width, height), null)
+            // Force 512x512 to ensure Android OS hits the pre-generated MINI_KIND cache
+            // instead of synchronously spinning up a video decoder for a custom size (e.g. 384x384)
+            val bitmap = context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
             
             ImageFetchResult(
                 image = bitmap.asImage(),
@@ -49,6 +42,7 @@ class MediaStoreThumbnailFetcher(
                 dataSource = DataSource.DISK
             )
         } catch (e: Exception) {
+            android.util.Log.e("MediaStoreFetcher", "loadThumbnail failed for uri: $uri", e)
             // If loadThumbnail fails (e.g. file deleted or corrupt), return null
             // so that Coil can fall back to its standard decoder pipeline.
             null
@@ -60,6 +54,11 @@ class MediaStoreThumbnailFetcher(
             // Only handle local media content URIs (scheme = content, authority = media)
             val isLocalMedia = data.scheme == "content" && data.authority == "media"
             if (!isLocalMedia) return null
+            
+            // Bypass this fetcher for high-res requests so Coil can decode the full image
+            val width = (options.size.width as? Dimension.Pixels)?.px ?: Int.MAX_VALUE
+            if (width > 512) return null
+            
             return MediaStoreThumbnailFetcher(data, options, context)
         }
     }

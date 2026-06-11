@@ -46,6 +46,31 @@ object DatabaseProvider {
                         )
                         """.trimIndent()
                     )
+                    
+                    // Create trigger to clean up FTS index when core_media is deleted
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_fts_delete 
+                        AFTER DELETE ON core_media 
+                        BEGIN 
+                            DELETE FROM image_fts WHERE mediaId = CAST(old.id AS TEXT); 
+                        END;
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    // Ensure trigger exists for existing users
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_fts_delete 
+                        AFTER DELETE ON core_media 
+                        BEGIN 
+                            DELETE FROM image_fts WHERE mediaId = CAST(old.id AS TEXT); 
+                        END;
+                        """.trimIndent()
+                    )
                 }
             })
             .build()

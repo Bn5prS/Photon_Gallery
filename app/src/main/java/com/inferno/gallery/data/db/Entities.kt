@@ -37,3 +37,12 @@ data class TelegramBackupEntity(
     val backupStatus: String, // "PENDING", "SUCCESS", "FAILED"
     val backupTimestamp: Long
 )
+
+data class BucketMetadata(
+    val bucketName: String,
+    val itemCount: Int,
+    val totalSizeBytes: Long,
+    val maxDate: Long,
+    val coverUriString: String?,
+    val isVideo: Boolean?
+)
