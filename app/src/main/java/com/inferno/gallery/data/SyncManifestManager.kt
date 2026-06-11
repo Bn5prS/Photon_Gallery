@@ -66,6 +66,24 @@ object SyncManifestManager {
             
             if (tempFile.exists()) tempFile.delete()
             Log.d(TAG, "Sync manifest updated successfully. New pinned message ID: ${uploadResult.messageId}")
+        } catch (e: com.inferno.gallery.data.network.TelegramMigrationException) {
+            Log.i(TAG, "Group chat migrated to supergroup! Updating chat ID to ${e.newChatId}")
+            com.inferno.gallery.data.SettingsRepository(context).updateTelegramChatId(e.newChatId.toString())
+            // Retry once with new chat ID
+            try {
+                val retryClient = TelegramClient(botToken, e.newChatId.toString())
+                val tempFile = File(context.cacheDir, MANIFEST_FILE_NAME)
+                val uploadResult = retryClient.uploadDocument(tempFile, "application/json")
+                val oldPinnedId = retryClient.getPinnedMessageIdOrNull()
+                try { retryClient.pinChatMessage(uploadResult.messageId) } catch (ex: Exception) {}
+                if (oldPinnedId != null) {
+                    try { retryClient.deleteMessage(oldPinnedId) } catch (ex: Exception) {}
+                }
+                if (tempFile.exists()) tempFile.delete()
+                Log.d(TAG, "Sync manifest retry updated successfully.")
+            } catch (retryEx: Exception) {
+                Log.e(TAG, "Error retrying sync manifest upload: ${retryEx.message}", retryEx)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating sync manifest: ${e.message}", e)
         }

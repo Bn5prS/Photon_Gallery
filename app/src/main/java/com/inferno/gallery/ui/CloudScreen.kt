@@ -1,6 +1,9 @@
 package com.inferno.gallery.ui
 
 import android.net.Uri
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -43,6 +46,8 @@ fun CloudScreen(
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
     val gridAutoPlay by viewModel.gridAutoPlay.collectAsState()
     val isRefreshing by viewModel.isCloudRefreshing.collectAsState()
+    val selectedUris by viewModel.selectedUris.collectAsState()
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val gridState = rememberLazyGridState()
 
     val galleryItems = remember(cloudMedia) {
@@ -79,7 +84,61 @@ fun CloudScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(gridState) {
+                var initialItemUri: String? = null
+                var dragStarted = false
+                var startOffset = Offset.Zero
+
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        startOffset = offset
+                        dragStarted = false
+                        val x = offset.x.toInt()
+                        val y = offset.y.toInt()
+                        
+                        val item = gridState.layoutInfo.visibleItemsInfo.firstOrNull { itemInfo ->
+                            x in itemInfo.offset.x..(itemInfo.offset.x + itemInfo.size.width) &&
+                            y in itemInfo.offset.y..(itemInfo.offset.y + itemInfo.size.height)
+                        }
+                        item?.let {
+                            val id = it.key as? String
+                            val matchedItem = galleryItems.find { item -> item.id == id }
+                            val uri = matchedItem?.uri?.toString()
+                            if (uri != null) {
+                                viewModel.toggleSelection(uri)
+                                initialItemUri = uri
+                            }
+                        }
+                    },
+                    onDrag = { change, _ ->
+                        val distance = (change.position - startOffset).getDistance()
+                        if (distance > 40f) {
+                            dragStarted = true
+                        }
+
+                        if (dragStarted) {
+                            val x = change.position.x.toInt()
+                            val y = change.position.y.toInt()
+                            
+                            val inset = 30
+                            val item = gridState.layoutInfo.visibleItemsInfo.firstOrNull { itemInfo ->
+                                x in (itemInfo.offset.x + inset)..(itemInfo.offset.x + itemInfo.size.width - inset) &&
+                                y in (itemInfo.offset.y + inset)..(itemInfo.offset.y + itemInfo.size.height - inset)
+                            }
+                            item?.let {
+                                val id = it.key as? String
+                                val matchedItem = galleryItems.find { item -> item.id == id }
+                                val uri = matchedItem?.uri?.toString()
+                                if (uri != null && uri != initialItemUri) {
+                                    viewModel.addSelection(uri) 
+                                }
+                            }
+                        }
+                    }
+                )
+            }
     ) {
         // ── Stats Dashboard Card (Spans all 3 columns) ───────────────────────────
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -253,9 +312,13 @@ fun CloudScreen(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onClick = { _ ->
-                        onPhotoClick(item.id, "telegram_cloud", null)
+                        if (isSelectionMode) {
+                            viewModel.toggleSelection(item.uri.toString())
+                        } else {
+                            onPhotoClick(item.id, "telegram_cloud", null)
+                        }
                     },
-                    isSelected = false,
+                    isSelected = selectedUris.contains(item.uri.toString()),
                     gridAutoPlay = gridAutoPlay,
                     gridCellsCount = 3,
                     thumbnailCornerRadius = thumbnailCornerRadius

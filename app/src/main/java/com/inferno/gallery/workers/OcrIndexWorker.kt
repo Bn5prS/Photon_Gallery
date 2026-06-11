@@ -123,8 +123,10 @@ class OcrIndexWorker(
                             throw e
                         } catch (e: Throwable) {
                             Log.e(TAG, "Stage1 load failed for ${entity.name}: ${e.message}")
-                            runCatching { 
-                                db.mediaDao().updateOcrIndexStatus(entity.id, true)
+                            if (e is java.io.FileNotFoundException) {
+                                runCatching { 
+                                    db.mediaDao().updateOcrIndexStatus(entity.id, true)
+                                }
                             }
                         }
                     }
@@ -159,9 +161,7 @@ class OcrIndexWorker(
                             throw e
                         } catch (e: Throwable) {
                             Log.e(TAG, "Stage2 inference failed for ${loaded.entity.name}: ${e.message}")
-                            runCatching { 
-                                db.mediaDao().updateOcrIndexStatus(loaded.entity.id, true)
-                            }
+                            // Do not mark as true, allowing it to be retried in the next worker pass
                         }
                     }
                     embedChannel.close()
