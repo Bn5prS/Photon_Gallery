@@ -432,6 +432,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    val stripMetadataOnShare: StateFlow<Boolean> = repository.stripMetadataOnShareFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setStripMetadataOnShare(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateStripMetadataOnShare(enabled)
+        }
+    }
 }
 
 sealed class ConnectionTestResult {
