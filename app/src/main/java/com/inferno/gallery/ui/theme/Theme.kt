@@ -126,7 +126,7 @@ private val DarkColorScheme = darkColorScheme(
 //    • MotionScheme.expressive() — all spring-based physics animations
 //    • AppShapes — the full 35-shape scale (8 tokens via Shapes constructor,
 //      remaining 27 via granular vals in Shape.kt)
-//    • AppTypography — Emphasized Typography with Roboto Flex variable font
+//    • AppTypography — Emphasized Typography with Google Sans Flex variable font
 //    • Dynamic Color — wallpaper-derived palette on Android 12+ (S+)
 // ─────────────────────────────────────────────────────────────────────────────
 

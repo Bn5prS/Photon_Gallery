@@ -13,12 +13,12 @@ import androidx.compose.ui.unit.sp
 import com.inferno.gallery.R
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Variable Font: Roboto Flex
+//  Variable Font: Google Sans Flex
 //
-//  Roboto Flex exposes several variation axes that we leverage for the
+//  Google Sans Flex exposes several variation axes that we leverage for the
 //  M3 Expressive Emphasized Typography system:
 //
-//    • wght  (Weight)  — 100..1000   — controls stroke thickness
+//    • wght  (Weight)  — 100..900    — controls stroke thickness
 //    • wdth  (Width)   — 25..151     — controls horizontal proportion
 //    • opsz  (Optical Size) — 8..144 — optimises glyph shapes for size
 //
@@ -32,7 +32,7 @@ import com.inferno.gallery.R
 private fun displayFontFamily(weight: Int = 700, width: Float = 120f, opticalSize: Float = 48f) =
     FontFamily(
         Font(
-            R.font.roboto_flex,
+            R.font.google_sans_flex,
             variationSettings = FontVariation.Settings(
                 FontVariation.weight(weight),
                 FontVariation.width(width),
@@ -45,7 +45,7 @@ private fun displayFontFamily(weight: Int = 700, width: Float = 120f, opticalSiz
 private fun titleFontFamily(weight: Int = 600, width: Float = 110f, opticalSize: Float = 24f) =
     FontFamily(
         Font(
-            R.font.roboto_flex,
+            R.font.google_sans_flex,
             variationSettings = FontVariation.Settings(
                 FontVariation.weight(weight),
                 FontVariation.width(width),
@@ -58,7 +58,7 @@ private fun titleFontFamily(weight: Int = 600, width: Float = 110f, opticalSize:
 private fun bodyFontFamily(weight: Int = 400, width: Float = 100f, opticalSize: Float = 14f) =
     FontFamily(
         Font(
-            R.font.roboto_flex,
+            R.font.google_sans_flex,
             variationSettings = FontVariation.Settings(
                 FontVariation.weight(weight),
                 FontVariation.width(width),
@@ -71,7 +71,7 @@ private fun bodyFontFamily(weight: Int = 400, width: Float = 100f, opticalSize: 
 private fun labelFontFamily(weight: Int = 500, width: Float = 95f, opticalSize: Float = 11f) =
     FontFamily(
         Font(
-            R.font.roboto_flex,
+            R.font.google_sans_flex,
             variationSettings = FontVariation.Settings(
                 FontVariation.weight(weight),
                 FontVariation.width(width),
