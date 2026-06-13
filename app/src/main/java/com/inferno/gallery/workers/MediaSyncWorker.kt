@@ -32,9 +32,10 @@ class MediaSyncWorker(
             val toInsert = mutableListOf<CoreMediaEntity>()
             val toDelete = mutableListOf<Long>()
             
-            // Find items in MediaStore not in DB
+            // Find items in MediaStore not in DB or changed (e.g. trashed/restored)
             for (media in mediaStoreList) {
-                if (!dbMap.containsKey(media.id)) {
+                val dbItem = dbMap[media.id]
+                if (dbItem == null || dbItem.bucketName != media.bucketName || dbItem.dateModified != media.dateModified) {
                     toInsert.add(
                         CoreMediaEntity(
                             id = media.id,
@@ -45,10 +46,10 @@ class MediaSyncWorker(
                             dateModified = media.dateModified,
                             size = media.size,
                             name = media.name,
-                            mimeType = null, 
+                            mimeType = dbItem?.mimeType, 
                             isVideo = media.isVideo,
                             durationMs = media.durationMs,
-                            isIndexedOcr = false
+                            isIndexedOcr = dbItem?.isIndexedOcr ?: false
                         )
                     )
                 }
@@ -106,6 +107,19 @@ class MediaSyncWorker(
                             backupRequest
                         )
                     }
+                }
+
+                // Trigger Smart Search auto-indexing if enabled and model is downloaded
+                val smartSearchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(applicationContext)
+                val autoIndexSmartEnabled = settingsRepo.smartSearchAutoIndexFlow.first()
+                if (autoIndexSmartEnabled && smartSearchEngine.isModelDownloaded()) {
+                    Log.d("MediaSyncWorker", "Auto-indexing new images for Smart Search...")
+                    val indexRequest = androidx.work.OneTimeWorkRequestBuilder<SmartSearchIndexWorker>().build()
+                    androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                        "SmartSearchIndexWorker",
+                        androidx.work.ExistingWorkPolicy.KEEP,
+                        indexRequest
+                    )
                 }
             }
             
