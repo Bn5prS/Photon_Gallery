@@ -113,6 +113,20 @@ class TelegramBackupWorker(
                         continue
                     }
 
+                    if (mediaEntity.size > 50 * 1024 * 1024L) {
+                        Log.w(TAG, "Media item ${mediaEntity.name} exceeds 50MB limit (${mediaEntity.size} bytes). Marking as FAILED.")
+                        backupDao.insertOrUpdate(
+                            TelegramBackupEntity(
+                                mediaId = mediaEntity.id,
+                                telegramFileId = null,
+                                telegramThumbFileId = null,
+                                backupStatus = "FAILED",
+                                backupTimestamp = System.currentTimeMillis()
+                            )
+                        )
+                        continue
+                    }
+
                     val uri = Uri.parse(mediaEntity.uriString)
                     var tempFile: File? = null
 
