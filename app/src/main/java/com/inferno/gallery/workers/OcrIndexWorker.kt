@@ -15,6 +15,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.inferno.gallery.data.db.CoreMediaEntity
 import com.inferno.gallery.data.db.DatabaseProvider
+import android.graphics.BitmapFactory
+import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -32,8 +34,8 @@ class OcrIndexWorker(
         private const val NOTIFICATION_ID = 44
         private const val CHANNEL_ID = "ocr_indexing_channel"
         private const val WRITE_BATCH_SIZE = 1
-        private const val LOAD_CHANNEL_CAPACITY = 8
-        private const val EMBED_CHANNEL_CAPACITY = 8
+        private const val LOAD_CHANNEL_CAPACITY = 2
+        private const val EMBED_CHANNEL_CAPACITY = 2
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
@@ -66,7 +68,7 @@ class OcrIndexWorker(
 
     private data class LoadedImage(
         val entity: CoreMediaEntity,
-        val uri: Uri
+        val bitmap: Bitmap
     )
 
     private data class EmbeddedImage(
@@ -74,7 +76,71 @@ class OcrIndexWorker(
         val extractedText: String?
     )
 
+    private fun openInputStream(context: Context, filePath: String, uriString: String): InputStream {
+        try {
+            val input = context.contentResolver.openInputStream(Uri.parse(uriString))
+            if (input != null) return input
+        } catch (e: SecurityException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(TAG, "ContentResolver failed to open Uri $uriString: ${e.message}")
+        }
+
+        val file = java.io.File(filePath)
+        if (!file.exists() || !file.canRead()) {
+            throw java.io.FileNotFoundException("File does not exist or cannot be read: $filePath")
+        }
+        return file.inputStream()
+    }
+
+    private fun decodeOcrBitmap(context: Context, filePath: String, uriString: String): Bitmap? {
+        var input: InputStream? = null
+        try {
+            input = openInputStream(context, filePath, uriString)
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeStream(input, null, options)
+            input.close()
+
+            if (options.outWidth <= 0 || options.outHeight <= 0) {
+                return null
+            }
+
+            // Downsample if either dimension exceeds 1600px
+            val maxDim = 1600
+            var sampleSize = 1
+            var w = options.outWidth
+            var h = options.outHeight
+            while (w > maxDim || h > maxDim) {
+                sampleSize *= 2
+                w /= 2
+                h /= 2
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            input = openInputStream(context, filePath, uriString)
+            val decoded = BitmapFactory.decodeStream(input, null, decodeOptions)
+            return decoded
+        } finally {
+            try {
+                input?.close()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
     override suspend fun doWork(): Result {
+        com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
+            isIndexing = true,
+            progress = 0,
+            total = 0,
+            currentImageName = "Initializing..."
+        )
         try {
             setForeground(createForegroundInfo("Starting…"))
 
@@ -98,6 +164,13 @@ class OcrIndexWorker(
 
             Log.d(TAG, "OCR indexing started. Unindexed: ${unindexed.size}, total: $totalImageCount")
 
+            com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
+                isIndexing = true,
+                progress = alreadyIndexed,
+                total = totalImageCount,
+                currentImageName = "Starting..."
+            )
+
             setProgress(workDataOf(
                 "progress" to alreadyIndexed,
                 "total" to totalImageCount,
@@ -112,22 +185,25 @@ class OcrIndexWorker(
                     for (entity in unindexed) {
                         if (isStopped) break
                         try {
-                            val uri = Uri.parse(entity.uriString)
-                            // Proactively check if stream is openable, skip if invalid/corrupt
-                            applicationContext.contentResolver.openInputStream(uri)?.use {} 
-                                ?: throw java.io.FileNotFoundException("Could not open input stream")
-
-                            loadChannel.send(LoadedImage(entity, uri))
+                            val bitmap = decodeOcrBitmap(applicationContext, entity.filePath, entity.uriString)
+                            if (bitmap != null) {
+                                loadChannel.send(LoadedImage(entity, bitmap))
+                            } else {
+                                Log.w(TAG, "Bitmap decoding returned null for OCR: ${entity.name}. Marking as indexed.")
+                                db.mediaDao().updateOcrIndexStatus(entity.id, true)
+                            }
 
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
+                        } catch (e: java.io.FileNotFoundException) {
+                            Log.e(TAG, "FileNotFoundException loading ${entity.id} for OCR (${e.message}). Marking as indexed.")
+                            runCatching { 
+                                db.mediaDao().updateOcrIndexStatus(entity.id, true)
+                            }
+                        } catch (e: SecurityException) {
+                            Log.e(TAG, "SecurityException loading ${entity.id} for OCR: ${e.message}. Skipping to retry later.")
                         } catch (e: Throwable) {
                             Log.e(TAG, "Stage1 load failed for ${entity.name}: ${e.message}")
-                            if (e is java.io.FileNotFoundException) {
-                                runCatching { 
-                                    db.mediaDao().updateOcrIndexStatus(entity.id, true)
-                                }
-                            }
                         }
                     }
                     loadChannel.close()
@@ -139,11 +215,14 @@ class OcrIndexWorker(
                     )
 
                     for (loaded in loadChannel) {
-                        if (isStopped) break
+                        if (isStopped) {
+                            loaded.bitmap.recycle()
+                            break
+                        }
                         try {
-                            val inputImage = com.google.mlkit.vision.common.InputImage.fromFilePath(
-                                applicationContext,
-                                loaded.uri
+                            val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(
+                                loaded.bitmap,
+                                0
                             )
                             val extractedText = suspendCancellableCoroutine { cont ->
                                 textRecognizer.process(inputImage)
@@ -161,7 +240,8 @@ class OcrIndexWorker(
                             throw e
                         } catch (e: Throwable) {
                             Log.e(TAG, "Stage2 inference failed for ${loaded.entity.name}: ${e.message}")
-                            // Do not mark as true, allowing it to be retried in the next worker pass
+                        } finally {
+                            loaded.bitmap.recycle()
                         }
                     }
                     embedChannel.close()
@@ -183,7 +263,7 @@ class OcrIndexWorker(
                         if (!embedded.extractedText.isNullOrBlank()) {
                             DatabaseProvider.insertFtsRow(db, embedded.entity.id, embedded.extractedText, "")
                             ocrIndexedBatch.add(embedded.entity.id)
-                        } else if (embedded.extractedText != null || !embedded.entity.isIndexedOcr) {
+                        } else if (embedded.extractedText != null) {
                             ocrIndexedBatch.add(embedded.entity.id)
                         }
 
@@ -196,9 +276,16 @@ class OcrIndexWorker(
                         }
 
                         val current = alreadyIndexed + processedCount
+                        com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
+                            isIndexing = true,
+                            progress = current,
+                            total = totalImageCount,
+                            currentImageName = embedded.entity.name
+                        )
                         setProgress(workDataOf(
                             "progress" to current,
                             "total" to totalImageCount,
+                            "current_image" to embedded.entity.name,
                             "recent_uris" to recentUris.toTypedArray()
                         ))
                         setForeground(createForegroundInfo("$current / $totalImageCount images"))
@@ -217,6 +304,16 @@ class OcrIndexWorker(
             Log.e(TAG, "OcrIndexWorker failed fatally: ${e.message}")
             e.printStackTrace()
             return Result.retry()
+        } finally {
+            val db = DatabaseProvider.getDatabase(applicationContext)
+            val total = runCatching { db.mediaDao().getTotalImageCount() }.getOrDefault(0)
+            val unindexed = runCatching { db.mediaDao().getUnindexedImageCount() }.getOrDefault(0)
+            com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
+                isIndexing = false,
+                progress = total - unindexed,
+                total = total,
+                currentImageName = null
+            )
         }
     }
 }
