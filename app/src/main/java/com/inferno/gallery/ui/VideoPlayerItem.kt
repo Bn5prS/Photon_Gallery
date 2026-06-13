@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -43,7 +45,60 @@ import androidx.media3.ui.PlayerView
 @Composable
 fun VideoPlayerItem(uri: Uri, isCurrentPage: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val exoPlayer = remember {
+    var resolvedPlayUri by remember(uri) { mutableStateOf<Uri?>(null) }
+    var isLoadingUrl by remember(uri) { mutableStateOf(false) }
+
+    LaunchedEffect(uri) {
+        if (uri.scheme == "telegram") {
+            isLoadingUrl = true
+            try {
+                val fileId = uri.host
+                if (fileId != null) {
+                    val settings = com.inferno.gallery.data.SettingsRepository(context)
+                    val botTokens = settings.telegramBotTokensFlow.first()
+                    if (botTokens.isNotEmpty()) {
+                        val client = com.inferno.gallery.data.network.TelegramClient(botTokens.first(), "")
+                        val httpUrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            client.getFileUrl(fileId)
+                        }
+                        resolvedPlayUri = Uri.parse(httpUrl)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoadingUrl = false
+            }
+        } else {
+            resolvedPlayUri = uri
+        }
+    }
+
+    if (resolvedPlayUri != null) {
+        VideoPlayerItemWithResolvedUri(
+            uri = resolvedPlayUri!!,
+            isCurrentPage = isCurrentPage,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier.fillMaxSize().background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoadingUrl) {
+                com.inferno.gallery.ui.components.WavyProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val exoPlayer = remember(uri) {
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
             .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             
@@ -60,7 +115,9 @@ fun VideoPlayerItem(uri: Uri, isCurrentPage: Boolean, modifier: Modifier = Modif
     var currentPosition by remember { mutableStateOf(0L) }
     var videoDuration by remember { mutableStateOf(0L) }
     var dragPosition by remember { mutableStateOf<Long?>(null) }
-    var isMuted by remember { mutableStateOf(false) }
+    val settings = remember { com.inferno.gallery.data.SettingsRepository(context) }
+    val autoplayWithSound by settings.autoplayWithSoundEnabledFlow.collectAsState(initial = false)
+    var isMuted by remember(autoplayWithSound) { mutableStateOf(!autoplayWithSound) }
 
     DisposableEffect(exoPlayer) {
         val listener = object : androidx.media3.common.Player.Listener {
