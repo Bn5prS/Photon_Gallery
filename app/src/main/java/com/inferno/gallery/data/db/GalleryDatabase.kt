@@ -20,11 +20,20 @@ interface MediaDao {
     @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, TelegramBackupEntity::class])
     fun observeMediaPagingRaw(query: androidx.sqlite.db.SupportSQLiteQuery): PagingSource<Int, MediaWithBackup>
 
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, TelegramBackupEntity::class])
+    suspend fun getMediaRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<MediaWithBackup>
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, TelegramBackupEntity::class])
+    suspend fun getUrisRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<String>
+
     @Query("SELECT DISTINCT bucketName FROM core_media WHERE bucketName != 'Trash' AND bucketName IS NOT NULL")
     fun observeAllBucketNames(): Flow<List<String>>
 
     @Query("SELECT * FROM core_media WHERE id IN (:ids) ORDER BY dateAdded DESC")
     fun observeMediaByIds(ids: List<Long>): Flow<List<CoreMediaEntity>>
+
+    @Query("SELECT * FROM core_media WHERE id IN (:ids)")
+    suspend fun getMediaByIdsList(ids: List<Long>): List<CoreMediaEntity>
 
     @Query("SELECT bucketName, COUNT(*) as itemCount, SUM(size) as totalSizeBytes, MAX(dateAdded) as maxDate, (SELECT uriString FROM core_media c2 WHERE c2.bucketName = c1.bucketName ORDER BY dateAdded DESC LIMIT 1) as coverUriString, (SELECT isVideo FROM core_media c2 WHERE c2.bucketName = c1.bucketName ORDER BY dateAdded DESC LIMIT 1) as isVideo FROM core_media c1 WHERE bucketName != 'Trash' AND bucketName IS NOT NULL GROUP BY bucketName ORDER BY maxDate DESC")
     fun observeBuckets(): Flow<List<BucketMetadata>>
@@ -76,20 +85,28 @@ interface MediaDao {
 
     @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0")
     fun observeUnindexedOcrImageCount(): Flow<Int>
+    @Query("SELECT COUNT(*) FROM core_media WHERE bucketName = 'Trash'")
+    fun observeTrashCount(): Flow<Int>
+
+    @Query("UPDATE core_media SET name = :newName WHERE id = :id")
+    suspend fun updateMediaName(id: Long, newName: String)
 }
 
 @Database(
     entities = [
         CoreMediaEntity::class,
-        TelegramBackupEntity::class
+        TelegramBackupEntity::class,
+        MediaEmbeddingEntity::class
         // ImageFtsEntity is intentionally excluded: @Fts5 has a KSP 2.2.x incompatibility.
-        // The FTS5 virtual table is instead created manually in GalleryDatabase.Companion.getDatabase()
-        // via a RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
+        // The FTS5 virtual table is instead created manually in DatabaseProvider's
+        // RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
+@androidx.room.TypeConverters(EmbeddingConverter::class)
 abstract class GalleryDatabase : RoomDatabase() {
     abstract fun mediaDao(): MediaDao
     abstract fun telegramBackupDao(): TelegramBackupDao
+    abstract fun embeddingDao(): EmbeddingDao
 }
