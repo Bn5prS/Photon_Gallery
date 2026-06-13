@@ -27,10 +27,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.CreateNewFolder
 
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PhotoAlbum
@@ -44,6 +46,8 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.LibraryAddCheck
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -51,8 +55,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -63,6 +70,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -72,6 +80,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -111,6 +120,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
@@ -420,6 +430,7 @@ fun MainAppLayout(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onPhotoClick: (String, String?, String?) -> Unit,
+    onCreateCollage: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel()
 ) {
@@ -433,8 +444,16 @@ fun MainAppLayout(
     val gridAutoPlay by viewModel.gridAutoPlay.collectAsState()
     val nestedNavController = rememberNavController()
     var showMenu by remember { mutableStateOf(false) }
+    var showCreateAlbumDialog by remember { mutableStateOf(false) }
+    var newAlbumName by remember { mutableStateOf("") }
     val navBackStackEntry by nestedNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val isScrollDockVisible by viewModel.isScrollDockVisible.collectAsState()
+
+    LaunchedEffect(currentRoute) {
+        viewModel.setScrollDockVisible(true)
+    }
+
     val albumNameArg = navBackStackEntry?.arguments?.getString("bucketName")
     val coroutineScope = rememberCoroutineScope()
 
@@ -509,6 +528,37 @@ fun MainAppLayout(
         )
     }
 
+    val trashLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val selected = viewModel.selectedUris.value.toList()
+            viewModel.deleteSelectedMediaFromDb(selected)
+            viewModel.clearSelection()
+            triggerSync()
+        }
+    }
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.clearSelection()
+            triggerSync()
+        }
+    }
+
+    val permanentDeleteLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val selected = viewModel.selectedUris.value.toList()
+            viewModel.deleteSelectedMediaFromDb(selected)
+            viewModel.clearSelection()
+            triggerSync()
+        }
+    }
+
     val hasRequiredPermissions = photosGranted && videosGranted
     if (!onboardingCompleted && !hasRequiredPermissions) {
         PermissionOnboardingScreen(
@@ -547,11 +597,12 @@ fun MainAppLayout(
     Scaffold(
         modifier = modifier.fillMaxSize().overscrollStretch(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
             if (currentRoute != "settings") {
                 Column(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
                         .statusBarsPadding()
                 ) {
                     if (isSelectionMode) {
@@ -568,10 +619,16 @@ fun MainAppLayout(
                                     style = MaterialTheme.typography.titleLarge,
                                     modifier = Modifier.padding(start = 16.dp).weight(1f)
                                 )
+                                IconButton(onClick = { viewModel.toggleSelectAll() }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LibraryAddCheck,
+                                        contentDescription = "Select or Deselect All"
+                                    )
+                                }
                             }
                         }
                     } else if (currentRoute == "album/{bucketName}") {
-                        Surface(color = MaterialTheme.colorScheme.background) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -587,7 +644,7 @@ fun MainAppLayout(
                             }
                         }
                     } else {
-                        Surface(color = MaterialTheme.colorScheme.background) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -607,61 +664,72 @@ fun MainAppLayout(
                                     titleText,
                                     style = MaterialTheme.typography.displayMedium
                                 )
-                                Box {
-                                    IconButton(onClick = { showMenu = true }) {
-                                        Icon(Icons.Outlined.MoreVert, contentDescription = "Menu")
-                                    }
-                                    DropdownMenu(
-                                        expanded = showMenu,
-                                        onDismissRequest = { showMenu = false },
-                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {
-                                        if (currentRoute == "photos") {
-                                            DropdownMenuItem(
-                                                text = { Text("Immersive View") },
-                                                trailingIcon = {
-                                                    androidx.compose.material3.RadioButton(
-                                                        selected = viewMode == ViewMode.Immersive,
-                                                        onClick = null
-                                                    )
-                                                },
-                                                onClick = {
-                                                    viewModel.setViewMode(ViewMode.Immersive)
-                                                    showMenu = false
-                                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (currentRoute == "albums") {
+                                        IconButton(onClick = { showCreateAlbumDialog = true }) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CreateNewFolder,
+                                                contentDescription = "Create Album",
+                                                tint = MaterialTheme.colorScheme.onSurface
                                             )
+                                        }
+                                    }
+                                    Box {
+                                        IconButton(onClick = { showMenu = true }) {
+                                            Icon(Icons.Outlined.MoreVert, contentDescription = "Menu")
+                                        }
+                                        DropdownMenu(
+                                            expanded = showMenu,
+                                            onDismissRequest = { showMenu = false },
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                        ) {
+                                            if (currentRoute == "photos") {
+                                                DropdownMenuItem(
+                                                    text = { Text("Immersive View") },
+                                                    trailingIcon = {
+                                                        androidx.compose.material3.RadioButton(
+                                                            selected = viewMode == ViewMode.Immersive,
+                                                            onClick = null
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        viewModel.setViewMode(ViewMode.Immersive)
+                                                        showMenu = false
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Grouped View") },
+                                                    trailingIcon = {
+                                                        androidx.compose.material3.RadioButton(
+                                                            selected = viewMode == ViewMode.Grouped,
+                                                            onClick = null
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        viewModel.setViewMode(ViewMode.Grouped)
+                                                        showMenu = false
+                                                    }
+                                                )
+                                            }
                                             DropdownMenuItem(
-                                                text = { Text("Grouped View") },
-                                                trailingIcon = {
-                                                    androidx.compose.material3.RadioButton(
-                                                        selected = viewMode == ViewMode.Grouped,
-                                                        onClick = null
+                                                text = { Text("Settings") },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Settings,
+                                                        contentDescription = "Settings"
                                                     )
                                                 },
                                                 onClick = {
-                                                    viewModel.setViewMode(ViewMode.Grouped)
+                                                    nestedNavController.navigate("settings") {
+                                                        popUpTo("photos") { saveState = true }
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }
                                                     showMenu = false
                                                 }
                                             )
                                         }
-                                        DropdownMenuItem(
-                                            text = { Text("Settings") },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Settings,
-                                                    contentDescription = "Settings"
-                                                )
-                                            },
-                                            onClick = {
-                                                nestedNavController.navigate("settings") {
-                                                    popUpTo("photos") { saveState = true }
-                                                    launchSingleTop = true
-                                                    restoreState = true
-                                                }
-                                                showMenu = false
-                                            }
-                                        )
                                     }
                                 }
                             }
@@ -679,7 +747,7 @@ fun MainAppLayout(
             }
         },
         bottomBar = {
-            val isDockVisible = !isSelectionMode
+            val isDockVisible = currentRoute != "settings" && !isSelectionMode && (dockStyle != DockStyle.PILL || isScrollDockVisible)
             AnimatedVisibility(
                 visible = isDockVisible,
                 enter = slideInVertically(initialOffsetY = { it }),
@@ -695,7 +763,7 @@ fun MainAppLayout(
                     ) {
                         HorizontalFloatingToolbar(
                             expanded = true,
-                            modifier = Modifier.fillMaxWidth(0.9f)
+                            modifier = Modifier.fillMaxWidth(0.765f)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -830,8 +898,8 @@ fun MainAppLayout(
                     if (initialState.destination.route == "album/{bucketName}") {
                         slideInHorizontally(
                             initialOffsetX = { -it / 3 },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -840,8 +908,8 @@ fun MainAppLayout(
                     if (targetState.destination.route == "album/{bucketName}") {
                         slideOutHorizontally(
                             targetOffsetX = { -it / 3 },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -850,8 +918,8 @@ fun MainAppLayout(
                     if (initialState.destination.route == "album/{bucketName}") {
                         slideInHorizontally(
                             initialOffsetX = { -it / 3 },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -860,8 +928,8 @@ fun MainAppLayout(
                     if (targetState.destination.route == "album/{bucketName}") {
                         slideOutHorizontally(
                             targetOffsetX = { it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -881,8 +949,8 @@ fun MainAppLayout(
                     if (initialState.destination.route == "albums") {
                         slideInHorizontally(
                             initialOffsetX = { it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -891,8 +959,8 @@ fun MainAppLayout(
                     if (targetState.destination.route == "albums") {
                         slideOutHorizontally(
                             targetOffsetX = { -it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -901,8 +969,8 @@ fun MainAppLayout(
                     if (initialState.destination.route == "albums") {
                         slideInHorizontally(
                             initialOffsetX = { -it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeIn(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -911,8 +979,8 @@ fun MainAppLayout(
                     if (targetState.destination.route == "albums") {
                         slideOutHorizontally(
                             targetOffsetX = { it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                        ) + fadeOut(spring(stiffness = Spring.StiffnessHigh))
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -950,7 +1018,8 @@ fun MainAppLayout(
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     viewModel = viewModel,
-                    contentPadding = innerPadding
+                    contentPadding = innerPadding,
+                    onNavigateToSettings = { nestedNavController.navigate("settings") }
                 )
             }
         }
@@ -966,6 +1035,23 @@ fun MainAppLayout(
             ) {
             var expanded by remember { mutableStateOf(false) }
             var showMoveSheet by remember { mutableStateOf(false) }
+            var showCopySheet by remember { mutableStateOf(false) }
+            var showSmartDeleteDialog by remember { mutableStateOf(false) }
+            var showCloudDeleteDialog by remember { mutableStateOf(false) }
+            var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
+            val settingsRepo = remember { SettingsRepository(context) }
+            val confirmDeleteEnabled by settingsRepo.confirmDeleteEnabledFlow.collectAsState(initial = true)
+            
+            val cloudMediaIds by viewModel.cloudMediaIds.collectAsState()
+            val selectedIds = remember(selectedUris) {
+                selectedUris.mapNotNull { Uri.parse(it).lastPathSegment }
+            }
+            val hasUnbackedUp = remember(selectedIds, cloudMediaIds) {
+                selectedIds.isEmpty() || selectedIds.any { id -> !cloudMediaIds.contains(id) }
+            }
+            val hasBackedUp = remember(selectedIds, cloudMediaIds) {
+                selectedIds.isNotEmpty() && selectedIds.any { id -> cloudMediaIds.contains(id) }
+            }
             
             if (showMoveSheet) {
                 androidx.compose.material3.ModalBottomSheet(
@@ -1001,116 +1087,512 @@ fun MainAppLayout(
                 }
             }
             
-            Box {
-                CustomSplitButton(
-                    leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                    leadingText = "Share",
-                    onLeadingClick = {
-                        if (selectedUris.isNotEmpty()) {
-                            coroutineScope.launch {
-                                val stripMetadata = withContext(Dispatchers.IO) {
-                                    SettingsRepository(context).stripMetadataOnShareFlow.first()
-                                }
-                                val urisToShare: List<Uri> = if (stripMetadata) {
-                                    withContext(Dispatchers.IO) {
-                                        val shareDir = File(context.cacheDir, "shared_images").also { it.mkdirs() }
-                                        selectedUris.toList().mapIndexed { idx, uriStr ->
-                                            val uri = Uri.parse(uriStr)
-                                            try {
-                                                val extension = context.contentResolver.getType(uri)?.substringAfter("/") ?: "jpg"
-                                                val tempFile = File(shareDir, "share_${System.currentTimeMillis()}_$idx.$extension")
-                                                context.contentResolver.openInputStream(uri)?.use { input ->
-                                                    tempFile.outputStream().use { output -> input.copyTo(output) }
-                                                }
-                                                val exif = androidx.exifinterface.media.ExifInterface(tempFile.absolutePath)
-                                                val piiTags = listOf(
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE_REF,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE_REF,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_ALTITUDE,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_ALTITUDE_REF,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_TIMESTAMP,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_DATESTAMP,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_PROCESSING_METHOD,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_DEST_BEARING,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_DEST_DISTANCE,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_SPEED,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_TRACK,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_GPS_IMG_DIRECTION,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_MAKE,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_MODEL,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_ARTIST,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_COPYRIGHT,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_USER_COMMENT,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_DATETIME,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_DATETIME_ORIGINAL,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_DATETIME_DIGITIZED,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME,
-                                                    androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME_ORIGINAL
-                                                )
-                                                piiTags.forEach { tag -> exif.setAttribute(tag, null) }
-                                                exif.saveAttributes()
-                                                FileProvider.getUriForFile(
-                                                    context,
-                                                    "${context.packageName}.fileprovider",
-                                                    tempFile
-                                                )
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("MainAppLayout", "Failed to strip metadata for $uriStr", e)
-                                                uri  // Fallback to original
-                                            }
+            if (showCopySheet) {
+                androidx.compose.material3.ModalBottomSheet(
+                    onDismissRequest = { showCopySheet = false },
+                ) {
+                    val albums by viewModel.allAlbums.collectAsState()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text("Copy to Album", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
+                        androidx.compose.foundation.lazy.LazyColumn {
+                            items(albums.size) { index ->
+                                val album = albums[index]
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            showCopySheet = false
+                                            viewModel.copySelectedMedia(album.bucketName)
                                         }
-                                    }
-                                } else {
-                                    selectedUris.map { Uri.parse(it) }
-                                }
-                                val shareIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                                    type = "*/*"
-                                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(urisToShare))
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                try {
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share Selected Media"))
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Outlined.PhotoAlbum, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(album.bucketName, style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
                         }
-                    },
-                    onTrailingClick = { expanded = true }
-                )
-                androidx.compose.material3.DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
+                    }
+                }
+            }
 
-                    DropdownMenuItem(
-                        text = { Text("Move") },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = null) },
-                        onClick = { 
-                            expanded = false
-                            showMoveSheet = true
+            if (showSmartDeleteDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showSmartDeleteDialog = false },
+                    title = { Text("Delete Items") },
+                    text = { Text("Some of the selected items are backed up to the cloud. Do you want to delete them everywhere (device and cloud) or from this device only?") },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                showSmartDeleteDialog = false
+                                // Delete everywhere (device & cloud)
+                                viewModel.deleteCloudBackupsByUris(selectedUris)
+                                
+                                val uris = selectedUris.map { Uri.parse(it) }
+                                if (uris.isNotEmpty()) {
+                                    try {
+                                        val trashIntent = android.provider.MediaStore.createTrashRequest(
+                                            context.contentResolver,
+                                            uris,
+                                            true
+                                        )
+                                        trashLauncher.launch(
+                                            androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                        )
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Delete Everywhere", color = MaterialTheme.colorScheme.error)
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Backup to Cloud") },
-                        leadingIcon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null) },
-                        onClick = { 
-                            expanded = false
-                            viewModel.backupSelectedMedia()
+                    },
+                    dismissButton = {
+                        Row {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    showSmartDeleteDialog = false
+                                    // Delete from device only
+                                    val uris = selectedUris.map { Uri.parse(it) }
+                                    if (uris.isNotEmpty()) {
+                                        try {
+                                            val trashIntent = android.provider.MediaStore.createTrashRequest(
+                                                context.contentResolver,
+                                                uris,
+                                                true
+                                            )
+                                            trashLauncher.launch(
+                                                androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                            )
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text("Device Only")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            androidx.compose.material3.TextButton(
+                                onClick = { showSmartDeleteDialog = false }
+                            ) {
+                                Text("Cancel")
+                            }
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete from Cloud") },
-                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    }
+                )
+            }
+
+            if (showCloudDeleteDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showCloudDeleteDialog = false },
+                    title = { Text("Delete Backup from Cloud") },
+                    text = { Text("Are you sure you want to delete the cloud backup for the selected item(s)? The files on your device will NOT be deleted, but the backups on Telegram will be permanently removed.") },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                showCloudDeleteDialog = false
+                                viewModel.deleteCloudBackupsByUris(selectedUris)
+                                viewModel.clearSelection()
+                            }
+                        ) {
+                            Text("Delete Backup", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { showCloudDeleteDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (showMultiDeleteConfirmDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showMultiDeleteConfirmDialog = false },
+                    title = { Text("Move to Recycle Bin") },
+                    text = { Text("Move ${selectedUris.size} items to the Recycle Bin?") },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                showMultiDeleteConfirmDialog = false
+                                val uris = selectedUris.map { Uri.parse(it) }
+                                if (uris.isNotEmpty()) {
+                                    try {
+                                        val trashIntent = android.provider.MediaStore.createTrashRequest(
+                                            context.contentResolver,
+                                            uris,
+                                            true
+                                        )
+                                        trashLauncher.launch(
+                                            androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                        )
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Move to Bin", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = { showMultiDeleteConfirmDialog = false }
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+            
+            val isTrashPage = currentRoute == "album/{bucketName}" && albumNameArg == "Trash"
+            if (isTrashPage) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
                         onClick = {
-                            expanded = false
-                            viewModel.deleteCloudBackupsByUris(selectedUris)
-                            viewModel.clearSelection()
-                        }
+                            val uris = selectedUris.map { Uri.parse(it) }
+                            if (uris.isNotEmpty()) {
+                                try {
+                                    val restoreIntent = android.provider.MediaStore.createTrashRequest(
+                                        context.contentResolver,
+                                        uris,
+                                        false
+                                    )
+                                    restoreLauncher.launch(
+                                        androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
+                                    )
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    android.widget.Toast.makeText(context, "Error restoring: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(50),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = "Restore",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Restore", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val uris = selectedUris.map { Uri.parse(it) }
+                            if (uris.isNotEmpty()) {
+                                try {
+                                    val deleteIntent = android.provider.MediaStore.createDeleteRequest(
+                                        context.contentResolver,
+                                        uris
+                                    )
+                                    permanentDeleteLauncher.launch(
+                                        androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
+                                    )
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(50),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Delete Permanently",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Delete", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isCreateEnabled = selectedUris.size in 1..8
+                    Button(
+                        onClick = { 
+                            if (isCreateEnabled) {
+                                onCreateCollage(selectedUris.toList())
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Collage creation supports up to 8 images",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        shape = RoundedCornerShape(50),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isCreateEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isCreateEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        ),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.GridView,
+                            contentDescription = "Create Collage",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Create", fontWeight = FontWeight.SemiBold)
+                    }
+                    Box {
+                    CustomSplitButton(
+                        leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
+                        leadingText = "Share",
+                        onLeadingClick = {
+                            if (selectedUris.isNotEmpty()) {
+                                coroutineScope.launch {
+                                    val stripMetadata = withContext(Dispatchers.IO) {
+                                        SettingsRepository(context).stripMetadataOnShareFlow.first()
+                                    }
+                                    val urisToShare: List<Uri> = if (stripMetadata) {
+                                        withContext(Dispatchers.IO) {
+                                            val shareDir = File(context.cacheDir, "shared_images").also { it.mkdirs() }
+                                            selectedUris.toList().mapIndexed { idx, uriStr ->
+                                                val uri = Uri.parse(uriStr)
+                                                try {
+                                                    val extension = context.contentResolver.getType(uri)?.substringAfter("/") ?: "jpg"
+                                                    val tempFile = File(shareDir, "share_${System.currentTimeMillis()}_$idx.$extension")
+                                                    context.contentResolver.openInputStream(uri)?.use { input ->
+                                                        tempFile.outputStream().use { output -> input.copyTo(output) }
+                                                    }
+                                                    val exif = androidx.exifinterface.media.ExifInterface(tempFile.absolutePath)
+                                                    val piiTags = listOf(
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE_REF,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE_REF,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_ALTITUDE,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_ALTITUDE_REF,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_TIMESTAMP,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_DATESTAMP,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_PROCESSING_METHOD,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_DEST_BEARING,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_DEST_DISTANCE,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_SPEED,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_TRACK,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_GPS_IMG_DIRECTION,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_MAKE,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_MODEL,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_ARTIST,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_COPYRIGHT,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_USER_COMMENT,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_DATETIME,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_DATETIME_ORIGINAL,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_DATETIME_DIGITIZED,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME,
+                                                        androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME_ORIGINAL
+                                                    )
+                                                    piiTags.forEach { tag -> exif.setAttribute(tag, null) }
+                                                    exif.saveAttributes()
+                                                    FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        tempFile
+                                                    )
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("MainAppLayout", "Failed to strip metadata for $uriStr", e)
+                                                    uri  // Fallback to original
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        selectedUris.map { Uri.parse(it) }
+                                    }
+                                    val shareIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                                        type = "*/*"
+                                        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(urisToShare))
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    try {
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share Selected Media"))
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }
+                        },
+                        onTrailingClick = { expanded = true }
                     )
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+
+                        DropdownMenuItem(
+                            text = { Text("Move") },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = null) },
+                            onClick = { 
+                                expanded = false
+                                showMoveSheet = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy to Album") },
+                            leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
+                            onClick = { 
+                                expanded = false
+                                showCopySheet = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                expanded = false
+                                if (hasBackedUp) {
+                                    showSmartDeleteDialog = true
+                                } else {
+                                    if (confirmDeleteEnabled) {
+                                        showMultiDeleteConfirmDialog = true
+                                    } else {
+                                        val uris = selectedUris.map { Uri.parse(it) }
+                                        if (uris.isNotEmpty()) {
+                                            try {
+                                                val trashIntent = android.provider.MediaStore.createTrashRequest(
+                                                    context.contentResolver,
+                                                    uris,
+                                                    true
+                                                )
+                                                trashLauncher.launch(
+                                                    androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                                )
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                                android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        if (hasUnbackedUp) {
+                            DropdownMenuItem(
+                                text = { Text("Backup to Cloud") },
+                                leadingIcon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null) },
+                                onClick = { 
+                                    expanded = false
+                                    viewModel.backupSelectedMedia()
+                                }
+                            )
+                        }
+                        if (hasBackedUp) {
+                            DropdownMenuItem(
+                                text = { Text("Delete from Cloud") },
+                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    expanded = false
+                                    showCloudDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            }
+        }
+    }
+
+    if (showCreateAlbumDialog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = {
+                showCreateAlbumDialog = false
+                newAlbumName = ""
+            }
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Create new album",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    )
+                    
+                    androidx.compose.material3.OutlinedTextField(
+                        value = newAlbumName,
+                        onValueChange = { newAlbumName = it },
+                        label = { Text("Album name") },
+                        placeholder = { Text("Enter album name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                showCreateAlbumDialog = false
+                                newAlbumName = ""
+                            }
+                        ) {
+                            Text("Cancel")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (newAlbumName.isNotBlank()) {
+                                    val albumToCreate = newAlbumName.trim()
+                                    viewModel.createAlbum(
+                                        albumName = albumToCreate,
+                                        onSuccess = {
+                                            showCreateAlbumDialog = false
+                                            newAlbumName = ""
+                                            android.widget.Toast.makeText(context, "Album '$albumToCreate' created successfully", android.widget.Toast.LENGTH_SHORT).show()
+                                            triggerSync()
+                                        },
+                                        onError = { errorMsg ->
+                                            android.widget.Toast.makeText(context, "Error: $errorMsg", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                    )
+                                }
+                            },
+                            enabled = newAlbumName.isNotBlank()
+                        ) {
+                            Text("Save")
+                        }
+                    }
                 }
             }
         }
@@ -1331,52 +1813,80 @@ private fun DockItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val pillWidth by animateDpAsState(
-        targetValue = if (isSelected) 51.dp else 38.dp,
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val touchScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessLow
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessHigh
         ),
-        label = "pillWidth"
+        label = "dockItemScale"
     )
+
     val pillColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessLow
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessHigh
         ),
         label = "pillColor"
     )
-    val iconTint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "contentColor"
+    )
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
         modifier = Modifier
+            .scale(touchScale)
             .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .background(pillColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .height(22.dp)
-                .width(pillWidth)
-                .clip(CircleShape)
-                .background(pillColor),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides iconTint) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides contentColor
+            ) {
                 icon()
+                
+                AnimatedVisibility(
+                    visible = isSelected,
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = fadeOut() + shrinkHorizontally()
+                ) {
+                    Row {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
-        Spacer(modifier = Modifier.height(1.dp))
-        Text(
-            text = label, 
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 9.sp,
-            lineHeight = 12.sp,
-            color = iconTint,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-        )
     }
 }
 
@@ -1392,42 +1902,16 @@ private fun getTabRouteIndex(route: String?): Int {
 }
 
 private fun getEnterTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.EnterTransition {
-    val initialIndex = getTabRouteIndex(initialRoute)
-    val targetIndex = getTabRouteIndex(targetRoute)
-    return when {
-        targetIndex > initialIndex -> {
-            androidx.compose.animation.slideInHorizontally(
-                initialOffsetX = { it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-            ) + androidx.compose.animation.fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
-        }
-        targetIndex < initialIndex -> {
-            androidx.compose.animation.slideInHorizontally(
-                initialOffsetX = { -it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-            ) + androidx.compose.animation.fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
-        }
-        else -> androidx.compose.animation.fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
-    }
+    return androidx.compose.animation.fadeIn(
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+    )
 }
 
 private fun getExitTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.ExitTransition {
-    val initialIndex = getTabRouteIndex(initialRoute)
-    val targetIndex = getTabRouteIndex(targetRoute)
-    return when {
-        targetIndex > initialIndex -> {
-            androidx.compose.animation.slideOutHorizontally(
-                targetOffsetX = { -it / 3 },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-            ) + androidx.compose.animation.fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-        }
-        targetIndex < initialIndex -> {
-            androidx.compose.animation.slideOutHorizontally(
-                targetOffsetX = { it / 3 },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-            ) + androidx.compose.animation.fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-        }
-        else -> androidx.compose.animation.fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-    }
+    return androidx.compose.animation.fadeOut(
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+    )
 }
+
+
 
