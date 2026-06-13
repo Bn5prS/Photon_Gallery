@@ -33,6 +33,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     init {
         viewModelScope.launch {
             repository.onboardingCompletedFlow.first()
+            val autoClean = repository.autoCleanTrashEnabledFlow.first()
+            val days = repository.autoCleanTrashDaysFlow.first()
+            setupAutoCleanTrashWorker(autoClean, days)
             _isLoading.value = false
         }
     }
@@ -133,6 +136,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         initialValue = 0
     )
 
+    val ocrProgress = com.inferno.gallery.data.IndexingProgressManager.ocrProgress
+
     val ocrIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
         .getWorkInfosForUniqueWorkFlow("OcrIndexWorker")
         .map { it.firstOrNull() }
@@ -143,7 +148,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.KEEP, request)
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.REPLACE, request)
         }
     }
 
@@ -164,7 +169,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.KEEP, request)
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("OcrIndexWorker", ExistingWorkPolicy.REPLACE, request)
         }
     }
 
@@ -234,9 +239,39 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun saveTelegramCredentials(tokens: List<String>, chatId: String) {
+        viewModelScope.launch {
+            repository.updateTelegramBotTokens(tokens)
+            repository.updateTelegramChatId(chatId)
+            val primaryToken = tokens.firstOrNull()
+            if (!primaryToken.isNullOrBlank() && chatId.isNotBlank()) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        android.util.Log.i("SettingsViewModel", "Auto-restoring cloud backups on credentials update...")
+                        com.inferno.gallery.data.SyncManifestManager.restoreFromManifest(getApplication(), primaryToken, chatId)
+                    } catch (e: Exception) {
+                        android.util.Log.e("SettingsViewModel", "Failed to auto-restore from manifest: ${e.message}", e)
+                    }
+                }
+            }
+        }
+    }
+
     fun setTelegramChatId(chatId: String) {
         viewModelScope.launch {
             repository.updateTelegramChatId(chatId)
+            val tokens = repository.telegramBotTokensFlow.first()
+            val primaryToken = tokens.firstOrNull()
+            if (!primaryToken.isNullOrBlank() && chatId.isNotBlank()) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        android.util.Log.i("SettingsViewModel", "Auto-restoring cloud backups on credentials update...")
+                        com.inferno.gallery.data.SyncManifestManager.restoreFromManifest(getApplication(), primaryToken, chatId)
+                    } catch (e: Exception) {
+                        android.util.Log.e("SettingsViewModel", "Failed to auto-restore from manifest: ${e.message}", e)
+                    }
+                }
+            }
         }
     }
 
@@ -293,10 +328,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
             if (!enabled || folders.isEmpty()) return@launch
 
-            // 2. Queue existing backups for newly selected folders
+            // 2. Queue existing backups for newly selected folders (skipping files > 50MB limit)
             val updatedBackups = backupDao.observeAllBackups().first().associateBy { it.mediaId }
             val toQueue = allMedia.filter { media ->
-                folders.contains(media.bucketName) && !updatedBackups.containsKey(media.id)
+                folders.contains(media.bucketName) && !updatedBackups.containsKey(media.id) && media.size <= 50 * 1024 * 1024L
             }
 
             if (toQueue.isNotEmpty()) {
@@ -449,6 +484,213 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setStripMetadataOnShare(enabled: Boolean) {
         viewModelScope.launch {
             repository.updateStripMetadataOnShare(enabled)
+        }
+    }
+
+    // ── Smart Search Integration ──
+
+    val smartSearchAutoIndex: StateFlow<Boolean> = repository.smartSearchAutoIndexFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setSmartSearchAutoIndex(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateSmartSearchAutoIndex(enabled)
+        }
+    }
+
+    val smartSearchThreshold: StateFlow<Float> = repository.smartSearchThresholdFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.20f
+    )
+
+    fun setSmartSearchThreshold(threshold: Float) {
+        viewModelScope.launch {
+            repository.updateSmartSearchThreshold(threshold)
+        }
+    }
+
+    val unindexedSmartSearchCount: StateFlow<Int> = db.embeddingDao().observeUnindexedCount().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val smartSearchModelDownloaded: StateFlow<Boolean> = kotlinx.coroutines.flow.flow {
+        val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication())
+        while (true) {
+            emit(searchEngine.isModelDownloaded())
+            kotlinx.coroutines.delay(2000)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(application).isModelDownloaded()
+    )
+
+    val clipProgress = com.inferno.gallery.data.IndexingProgressManager.clipProgress
+
+    val smartSearchIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("SmartSearchIndexWorker")
+        .map { it.firstOrNull() }
+
+    val modelDownloadWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("ModelDownloadWorker")
+        .map { it.firstOrNull() }
+
+    fun startModelDownload() {
+        val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.ModelDownloadWorker>()
+            .build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "ModelDownloadWorker",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun startSmartSearchIndexing() {
+        val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.SmartSearchIndexWorker>()
+            .build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "SmartSearchIndexWorker",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    fun stopSmartSearchIndexing() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("SmartSearchIndexWorker")
+    }
+
+    fun clearSmartSearchEmbeddings() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("SmartSearchIndexWorker")
+            db.embeddingDao().clearAllEmbeddings()
+        }
+    }
+
+    fun deleteSmartSearchModel() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("SmartSearchIndexWorker")
+            val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication())
+            searchEngine.close()
+            val dir = searchEngine.getModelDir()
+            if (dir.exists()) {
+                dir.deleteRecursively()
+            }
+        }
+    }
+
+    val confirmDeleteEnabled: StateFlow<Boolean> = repository.confirmDeleteEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setConfirmDeleteEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateConfirmDeleteEnabled(enabled)
+        }
+    }
+
+    val autoplayWithSoundEnabled: StateFlow<Boolean> = repository.autoplayWithSoundEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setAutoplayWithSoundEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateAutoplayWithSoundEnabled(enabled)
+        }
+    }
+
+    val autoCleanTrashEnabled: StateFlow<Boolean> = repository.autoCleanTrashEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setAutoCleanTrashEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateAutoCleanTrashEnabled(enabled)
+            setupAutoCleanTrashWorker(enabled, autoCleanTrashDays.value)
+        }
+    }
+
+    val autoCleanTrashDays: StateFlow<Int> = repository.autoCleanTrashDaysFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 30
+    )
+
+    fun setAutoCleanTrashDays(days: Int) {
+        viewModelScope.launch {
+            repository.updateAutoCleanTrashDays(days)
+            if (autoCleanTrashEnabled.value) {
+                setupAutoCleanTrashWorker(true, days)
+            }
+        }
+    }
+
+    private fun setupAutoCleanTrashWorker(enabled: Boolean, days: Int) {
+        val workManager = WorkManager.getInstance(getApplication())
+        if (enabled) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiresBatteryNotLow(false)
+                .build()
+            
+            val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.inferno.gallery.workers.AutoCleanTrashWorker>(
+                24, java.util.concurrent.TimeUnit.HOURS
+            )
+                .setConstraints(constraints)
+                .build()
+            
+            workManager.enqueueUniquePeriodicWork(
+                "AutoCleanTrashWorker",
+                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
+                workRequest
+            )
+        } else {
+            workManager.cancelUniqueWork("AutoCleanTrashWorker")
+        }
+    }
+
+    val cacheThumbnailsEnabled: StateFlow<Boolean> = repository.cacheThumbnailsEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setCacheThumbnailsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateCacheThumbnailsEnabled(enabled)
+            if (enabled) {
+                val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.PrecacheThumbnailsWorker>()
+                    .build()
+                WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                    "PrecacheThumbnailsWorker",
+                    ExistingWorkPolicy.REPLACE,
+                    request
+                )
+            } else {
+                WorkManager.getInstance(getApplication()).cancelUniqueWork("PrecacheThumbnailsWorker")
+            }
+        }
+    }
+
+    val maxBrightnessEnabled: StateFlow<Boolean> = repository.maxBrightnessEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setMaxBrightnessEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateMaxBrightnessEnabled(enabled)
         }
     }
 }
