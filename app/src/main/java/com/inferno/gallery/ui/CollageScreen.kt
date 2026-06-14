@@ -284,14 +284,14 @@ fun CollageScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(8.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.TopCenter
                 ) {
                     if (isSaving) {
                         com.inferno.gallery.ui.components.WavyProgressIndicator(modifier = Modifier.size(64.dp))
                     } else {
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.TopCenter
                         ) {
                             val parentWidth = maxWidth
                             val parentHeight = maxHeight

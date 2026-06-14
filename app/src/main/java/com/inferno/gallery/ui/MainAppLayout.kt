@@ -636,8 +636,13 @@ fun MainAppLayout(
                                 IconButton(onClick = { nestedNavController.popBackStack() }) {
                                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                                 }
+                                val friendlyTitle = when (albumNameArg) {
+                                    "search_text" -> "Text Matches"
+                                    "search_smart" -> "Semantic Matches"
+                                    else -> albumNameArg ?: "Album"
+                                }
                                 Text(
-                                    albumNameArg ?: "Album",
+                                    friendlyTitle,
                                     style = MaterialTheme.typography.titleLarge,
                                     modifier = Modifier.padding(start = 16.dp).weight(1f)
                                 )
@@ -1002,7 +1007,10 @@ fun MainAppLayout(
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     viewModel = viewModel,
-                    contentPadding = innerPadding
+                    contentPadding = innerPadding,
+                    onAlbumClick = { bucketName ->
+                        nestedNavController.navigate("album/$bucketName")
+                    }
                 )
             }
             composable("settings") {

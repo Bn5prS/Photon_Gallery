@@ -45,7 +45,8 @@ fun SearchScreen(
     onPhotoClick: (String, String?, String?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onAlbumClick: (String) -> Unit = {}
 ) {
     val query by viewModel.searchQuery.collectAsState()
     val ftsResults by viewModel.ftsSearchResults.collectAsState()
@@ -125,6 +126,7 @@ fun SearchScreen(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
+                    onAlbumClick = onAlbumClick,
                     query = query,
                     viewModel = viewModel
                 )
@@ -271,6 +273,7 @@ private fun SearchResultsList(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onPhotoClick: (String, String?, String?) -> Unit,
+    onAlbumClick: (String) -> Unit,
     query: String,
     viewModel: GalleryViewModel
 ) {
@@ -281,18 +284,20 @@ private fun SearchResultsList(
         { item: GalleryItem -> onPhotoClick(item.id, "search_smart", query) }
     }
 
-    var isFtsExpanded by remember(query) { mutableStateOf(false) }
-    val maxCollapsedItems = 3
-    val showExpandButton = ftsResults.size > maxCollapsedItems
-    val visibleFtsResults = if (isFtsExpanded) ftsResults else ftsResults.take(maxCollapsedItems)
-
     val lazyGridState = rememberLazyGridState()
 
     LaunchedEffect(lazyGridState) {
         var previousIndex = 0
         var previousScrollOffset = 0
-        snapshotFlow { lazyGridState.firstVisibleItemIndex to lazyGridState.firstVisibleItemScrollOffset }
-            .collectLatest { (index, offset) ->
+        snapshotFlow {
+            Triple(
+                lazyGridState.firstVisibleItemIndex,
+                lazyGridState.firstVisibleItemScrollOffset,
+                lazyGridState.isScrollInProgress
+            )
+        }
+        .collectLatest { (index, offset, isScrollInProgress) ->
+            if (isScrollInProgress) {
                 if (index > previousIndex) {
                     viewModel.setScrollDockVisible(false)
                 } else if (index < previousIndex) {
@@ -304,9 +309,10 @@ private fun SearchResultsList(
                         viewModel.setScrollDockVisible(true)
                     }
                 }
-                previousIndex = index
-                previousScrollOffset = offset
             }
+            previousIndex = index
+            previousScrollOffset = offset
+        }
     }
 
     LazyVerticalGrid(
@@ -317,6 +323,15 @@ private fun SearchResultsList(
         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
         modifier = Modifier.fillMaxSize()
     ) {
+        // Total Matches Header
+        item(span = { GridItemSpan(3) }) {
+            Text(
+                text = "Found ${ftsResults.size + smartResults.size} total matches for \"$query\"",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+            )
+        }
+
         // 1. Text Matches Section (OCR)
         if (ftsResults.isNotEmpty()) {
             item(span = { GridItemSpan(3) }) {
@@ -328,14 +343,14 @@ private fun SearchResultsList(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Found ${ftsResults.size} images containing \"$query\"",
+                        text = "${ftsResults.size} images containing text",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             items(
-                items = visibleFtsResults,
+                items = ftsResults.take(3),
                 key = { "fts_grid_${it.id}" }
             ) { item ->
                 GalleryGridItem(
@@ -345,7 +360,7 @@ private fun SearchResultsList(
                     onClick = onFtsClick
                 )
             }
-            if (showExpandButton && !isFtsExpanded) {
+            if (ftsResults.size > 3) {
                 item(span = { GridItemSpan(3) }) {
                     Box(
                         modifier = Modifier
@@ -354,7 +369,7 @@ private fun SearchResultsList(
                         contentAlignment = Alignment.Center
                     ) {
                         Button(
-                            onClick = { isFtsExpanded = true },
+                            onClick = { onAlbumClick("search_text") },
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                                 contentColor = MaterialTheme.colorScheme.primary
@@ -362,7 +377,7 @@ private fun SearchResultsList(
                             shape = MaterialTheme.shapes.medium
                         ) {
                             Text(
-                                text = "Show all matches (${ftsResults.size})",
+                                text = "Show all text matches (${ftsResults.size})",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -390,14 +405,14 @@ private fun SearchResultsList(
                         color = MaterialTheme.colorScheme.secondary
                     )
                     Text(
-                        text = "Found ${smartResults.size} images semantically matching your description",
+                        text = "${smartResults.size} images matching description",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             items(
-                items = smartResults,
+                items = smartResults.take(3),
                 key = { "smart_grid_${it.id}" }
             ) { item ->
                 GalleryGridItem(
@@ -406,6 +421,31 @@ private fun SearchResultsList(
                     animatedVisibilityScope = animatedVisibilityScope,
                     onClick = onSmartClick
                 )
+            }
+            if (smartResults.size > 3) {
+                item(span = { GridItemSpan(3) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Button(
+                            onClick = { onAlbumClick("search_smart") },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                contentColor = MaterialTheme.colorScheme.secondary
+                            ),
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text(
+                                text = "Show all semantic matches (${smartResults.size})",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -182,8 +182,15 @@ fun GalleryScreen(
     LaunchedEffect(lazyGridState) {
         var previousIndex = 0
         var previousScrollOffset = 0
-        snapshotFlow { lazyGridState.firstVisibleItemIndex to lazyGridState.firstVisibleItemScrollOffset }
-            .collectLatest { (index, offset) ->
+        snapshotFlow {
+            Triple(
+                lazyGridState.firstVisibleItemIndex,
+                lazyGridState.firstVisibleItemScrollOffset,
+                lazyGridState.isScrollInProgress
+            )
+        }
+        .collectLatest { (index, offset, isScrollInProgress) ->
+            if (isScrollInProgress) {
                 if (index > previousIndex) {
                     viewModel.setScrollDockVisible(false)
                 } else if (index < previousIndex) {
@@ -195,9 +202,10 @@ fun GalleryScreen(
                         viewModel.setScrollDockVisible(true)
                     }
                 }
-                previousIndex = index
-                previousScrollOffset = offset
             }
+            previousIndex = index
+            previousScrollOffset = offset
+        }
     }
     val totalItems = pagedMedia.itemCount
     val isScrollInProgress = lazyGridState.isScrollInProgress

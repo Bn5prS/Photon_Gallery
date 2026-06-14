@@ -211,6 +211,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _detailMedia.value = _smartSearchResults.value
                 return@launch
             }
+            if (bucketName == "Favorites") {
+                _detailMedia.value = favoriteMedia.value
+                return@launch
+            }
 
             // Build the SQLite query for the bucket
             val filterIndex = selectedFilterIndex.value
@@ -582,8 +586,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val pagedMediaRaw: Flow<PagingData<GalleryItem>> = combine(
-        _currentBucket, selectedFilterIndex, sortOrder
-    ) { bucket, filterIndex, order ->
+        _currentBucket, selectedFilterIndex, sortOrder, favoritesManager.favoritesFlow
+    ) { bucket, filterIndex, order, favs ->
         var queryString = "SELECT cm.*, tb.telegramFileId, tb.telegramThumbFileId, tb.backupStatus FROM core_media cm LEFT JOIN telegram_backups tb ON cm.id = tb.mediaId "
         val args = mutableListOf<Any>()
         val conditions = mutableListOf<String>()
@@ -600,6 +604,26 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 conditions.add("cm.id IN (${ids.joinToString(",")})")
                 conditions.add("cm.bucketName != 'Trash'")
+            }
+        } else if (bucket == "search_smart") {
+            val ids = smartSearchResults.value.map { it.id }
+            if (ids.isEmpty()) {
+                conditions.add("cm.id IN (0)")
+            } else {
+                conditions.add("cm.id IN (${ids.joinToString(",")})")
+                conditions.add("cm.bucketName != 'Trash'")
+            }
+        } else if (bucket == "Favorites") {
+            if (favs.isEmpty()) {
+                conditions.add("cm.id IN (0)")
+            } else {
+                val ids = favs.mapNotNull { it.toLongOrNull() }
+                if (ids.isEmpty()) {
+                    conditions.add("cm.id IN (0)")
+                } else {
+                    conditions.add("cm.id IN (${ids.joinToString(",")})")
+                    conditions.add("cm.bucketName != 'Trash'")
+                }
             }
         } else {
             if (bucket == "All") {
@@ -842,8 +866,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     val pinnedAlbums: StateFlow<List<AlbumBucket>> = combine(
         database.mediaDao().observeBuckets(),
-        database.mediaDao().observeAllMedia()
-    ) { buckets, allMedia ->
+        database.mediaDao().observeAllMedia(),
+        favoriteMedia
+    ) { buckets, allMedia, favMedia ->
         val validMedia = allMedia.filter { it.bucketName != "Trash" }
         
         val allBucket = AlbumBucket(
@@ -873,6 +898,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             maxDate = videos.maxOfOrNull { it.dateAdded } ?: 0L
         )
 
+        val favoritesBucket = AlbumBucket(
+            bucketName = "Favorites",
+            coverUri = favMedia.firstOrNull()?.uri ?: Uri.EMPTY,
+            itemCount = favMedia.size,
+            totalSizeBytes = favMedia.sumOf { it.size },
+            maxDate = favMedia.maxOfOrNull { it.dateAdded } ?: 0L
+        )
+
         val screenshotsItems = buckets.filter { it.bucketName.contains("Screenshots", ignoreCase = true) || it.bucketName.contains("Screenshot", ignoreCase = true) }
         val screenshotsBucket = AlbumBucket(
             bucketName = screenshotsItems.firstOrNull()?.bucketName ?: "Screenshots",
@@ -891,7 +924,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             maxDate = screenrecordingsItems.maxOfOrNull { it.maxDate } ?: 0L
         )
         
-        listOf(allBucket, cameraBucket, videosBucket, screenshotsBucket, screenrecordingsBucket).filter { it.itemCount > 0 }
+        listOf(
+            allBucket,
+            cameraBucket,
+            videosBucket,
+            favoritesBucket,
+            screenshotsBucket,
+            screenrecordingsBucket
+        ).filter { it.bucketName == "Favorites" || it.itemCount > 0 }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _searchQuery = MutableStateFlow("")

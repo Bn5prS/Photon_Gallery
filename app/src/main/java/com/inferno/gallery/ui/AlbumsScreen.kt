@@ -59,6 +59,8 @@ import coil3.size.Size
 import com.inferno.gallery.ui.theme.AppShapes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
@@ -86,6 +88,12 @@ fun AlbumsScreen(
     val gridAutoPlay by viewModel.gridAutoPlay.collectAsState()
     val trashCount by viewModel.trashCount.collectAsState()
 
+    var isInitialLoading by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(300)
+        isInitialLoading = false
+    }
+
     val pinnedAlbumsWithTrash = remember(pinnedAlbums, trashCount) {
         val list = pinnedAlbums.toMutableList()
         val screenshotIndex = list.indexOfFirst { it.bucketName.contains("Screenshots", ignoreCase = true) || it.bucketName.contains("Screenshot", ignoreCase = true) }
@@ -109,8 +117,15 @@ fun AlbumsScreen(
     LaunchedEffect(lazyGridState) {
         var previousIndex = 0
         var previousScrollOffset = 0
-        snapshotFlow { lazyGridState.firstVisibleItemIndex to lazyGridState.firstVisibleItemScrollOffset }
-            .collectLatest { (index, offset) ->
+        snapshotFlow {
+            Triple(
+                lazyGridState.firstVisibleItemIndex,
+                lazyGridState.firstVisibleItemScrollOffset,
+                lazyGridState.isScrollInProgress
+            )
+        }
+        .collectLatest { (index, offset, isScrollInProgress) ->
+            if (isScrollInProgress) {
                 if (index > previousIndex) {
                     viewModel.setScrollDockVisible(false)
                 } else if (index < previousIndex) {
@@ -122,9 +137,20 @@ fun AlbumsScreen(
                         viewModel.setScrollDockVisible(true)
                     }
                 }
-                previousIndex = index
-                previousScrollOffset = offset
             }
+            previousIndex = index
+            previousScrollOffset = offset
+        }
+    }
+    
+    if (isInitialLoading) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            WavyProgressIndicator(modifier = Modifier.size(48.dp))
+        }
+        return
     }
     
     
@@ -168,7 +194,7 @@ fun AlbumsScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clip(MaterialTheme.shapes.large)
-                                    .expressiveClick { onAlbumClick("All") }
+                                    .expressiveClick { onAlbumClick("Favorites") }
                             ) {
                                 AsyncImage(
                                     model = ImageRequest.Builder(LocalContext.current)
@@ -497,7 +523,8 @@ fun AlbumCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(MaterialTheme.shapes.large),
+                    .clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (bucket.coverUris.size == 4) {
@@ -505,6 +532,22 @@ fun AlbumCard(
                         uris = bucket.coverUris,
                         modifier = Modifier.fillMaxSize(),
                         gridAutoPlay = gridAutoPlay
+                    )
+                } else if (bucket.coverUri == Uri.EMPTY) {
+                    val icon = if (bucket.bucketName == "Favorites") {
+                        Icons.Outlined.FavoriteBorder
+                    } else {
+                        Icons.Outlined.Folder
+                    }
+                    androidx.compose.material3.Icon(
+                        imageVector = icon,
+                        contentDescription = bucket.bucketName,
+                        tint = if (bucket.bucketName == "Favorites") {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(48.dp)
                     )
                 } else {
                     AsyncImage(
