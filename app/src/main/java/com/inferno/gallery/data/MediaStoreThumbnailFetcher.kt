@@ -17,8 +17,12 @@ import coil3.size.Dimension
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.security.MessageDigest
+
+private val videoDecodeSemaphore = Semaphore(3)
 
 /**
  * A custom Coil Fetcher that retrieves pre-generated thumbnails from the Android system's
@@ -68,20 +72,32 @@ class MediaStoreThumbnailFetcher(
         }
 
         // 2. Try loading from MediaStore ContentResolver (normally fast, but involves IPC)
-        var bitmap: Bitmap? = null
         val isVideo = uri.toString().contains("video", ignoreCase = true)
 
-        try {
-            // Force 512x512 to ensure Android OS hits the pre-generated MINI_KIND cache
-            // instead of synchronously spinning up a video decoder for a custom size (e.g. 384x384)
-            bitmap = context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
-        } catch (e: Exception) {
-            android.util.Log.w("MediaStoreFetcher", "loadThumbnail failed for uri: $uri, attempting fallback")
-        }
+        val bitmap: Bitmap? = if (isVideo) {
+            videoDecodeSemaphore.withPermit {
+                var tempBitmap: Bitmap? = null
+                try {
+                    // Force 512x512 to ensure Android OS hits the pre-generated MINI_KIND cache
+                    // instead of synchronously spinning up a video decoder for a custom size (e.g. 384x384)
+                    tempBitmap = context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
+                } catch (e: Exception) {
+                    android.util.Log.w("MediaStoreFetcher", "loadThumbnail failed for uri: $uri, attempting fallback")
+                }
 
-        // 3. Fallback specifically for videos if loadThumbnail fails/misses
-        if (bitmap == null && isVideo) {
-            bitmap = getVideoFrameFallback(context, uri)
+                // 3. Fallback specifically for videos if loadThumbnail fails/misses
+                if (tempBitmap == null) {
+                    tempBitmap = getVideoFrameFallback(context, uri)
+                }
+                tempBitmap
+            }
+        } else {
+            try {
+                context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
+            } catch (e: Exception) {
+                android.util.Log.w("MediaStoreFetcher", "loadThumbnail failed for uri: $uri")
+                null
+            }
         }
 
         if (bitmap != null) {
