@@ -1,0 +1,123 @@
+# ============================================================
+# Android Studio / Gradle / Build Outputs
+# ============================================================
+.gradle/
+.idea/
+.kotlin/
+build/
+*/build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+gradle-local.properties
+*.apk
+*.aab
+*.dex
+*.class
+out/
+
+# ============================================================
+# Log, Debug & Crash Reports
+# ============================================================
+*.log
+*.txt
+*.dump
+*.stackdump
+hs_err_pid*.log
+replay_pid*.log
+crash.png
+crash*.png
+crash*.txt
+
+# ============================================================
+# Sensitive Info, Signing Keys & Credentials (CRITICAL)
+# ============================================================
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.pfx
+*.crt
+*.der
+key.properties
+secret.properties
+credentials.json
+google-services.json
+secrets.xml
+
+# ============================================================
+# Environment Variables & Local Configs
+# ============================================================
+.env
+.env.*
+.env.local
+
+# ============================================================
+# OS-Specific System Files
+# ============================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.tmp
+*.swp
+*~
+*.bak
+
+# ============================================================
+# IDE / Editor Configurations
+# ============================================================
+.vscode/
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.copilot/
+*.iml
+*.iws
+*.ipr
+.history/
+
+# ============================================================
+# AI Assistant, Agent Rules & Internal Docs (NEVER COMMIT)
+# ============================================================
+.agents/
+.gemini/
+.claude/
+.mimosa/
+.assistant/
+.agy/
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+COPILOT.md
+SKILL.md
+*.agent.md
+*.rule.md
+*.rules.md
+PROJECT_OVERVIEW.md
+SCROLL_PERFORMANCE_ARCHITECTURE.md
+cloud_screen.md
+scratch/
+skills/
+
+# ============================================================
+# Local Databases & Caches
+# ============================================================
+*.db
+*.sqlite
+gallery.db
+gallery_database.db
+
+# ============================================================
+# Fastlane metadata (local only)
+# ============================================================
+fastlane/
