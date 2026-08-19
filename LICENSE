@@ -1,0 +1,60 @@
+Photon Gallery — Proprietary Source-Available License
+
+Copyright (c) 2026 Bn5prS
+
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to view,
+study, and use the Software for personal, non-commercial purposes only,
+subject to the following conditions:
+
+1. VIEWING & PERSONAL USE
+   You may view, study, and run the Software on your own devices for personal,
+   non-commercial purposes. You may compile and install the Software from
+   source for personal use.
+
+2. NO REDISTRIBUTION
+   Redistribution of the Software or any derivative work, whether in source
+   code or binary form (including APK, AAB, or any other compiled format), is
+   strictly prohibited without prior written permission from the author.
+
+3. NO COMMERCIAL USE
+   Commercial use of the Software is strictly prohibited. This includes, but
+   is not limited to:
+   - Publishing the Software (or any derivative work) on the Google Play
+     Store, Apple App Store, F-Droid, Amazon Appstore, or any other
+     application distribution platform
+   - Selling, sublicensing, or otherwise monetizing the Software
+   - Using the Software or its code as the basis for a competing product
+
+4. NO DERIVATIVE WORKS FOR DISTRIBUTION
+   You may not modify the Software and distribute the modified version to
+   others. Modifications for personal use only are permitted.
+
+5. BRANDING & TRADEMARKS
+   The name "Photon Gallery", the Photon Gallery logo, and all associated
+   branding are the exclusive property of the author. You may not use these
+   marks in any derivative work, product, or promotional material without
+   prior written permission.
+
+6. CONTRIBUTIONS
+   By submitting a pull request, patch, or any other contribution to this
+   repository, you grant the author a perpetual, worldwide, non-exclusive,
+   royalty-free, irrevocable license to use, reproduce, modify, distribute,
+   and sublicense your contribution as part of the Software under any license
+   the author chooses. You retain copyright to your contribution but agree
+   it may be used under this or any future license chosen by the author.
+
+7. REVOCATION
+   The author reserves the right to revoke this license at any time for any
+   individual or entity that violates these terms.
+
+8. DISCLAIMER OF WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
