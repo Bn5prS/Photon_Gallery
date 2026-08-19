@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Used by FileProvider when sharing metadata-stripped copies of images -->
+    <cache-path name="shared_images" path="." />
+    <!-- Private Space vault files -->
+    <files-path name="vault_files" path="vault/" />
+    <!-- Crash log files for sharing -->
+    <files-path name="crash_logs" path="crash_logs/" />
+</paths>
