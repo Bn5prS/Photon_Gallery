@@ -71,6 +71,14 @@ android {
     buildFeatures {
         compose = true
     }
+
+    applicationVariants.all {
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val abi = output?.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
+            output?.outputFileName = "Photon-$abi.apk"
+        }
+    }
 }
 
 room {
