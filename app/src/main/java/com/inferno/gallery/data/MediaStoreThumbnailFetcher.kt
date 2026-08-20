@@ -34,13 +34,15 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
-private val mediaProviderSemaphore = Semaphore(4) // Max concurrent system ContentResolver.loadThumbnail IPCs — each is CPU-heavy in MediaProvider, so keep headroom for the UI thread
-private val videoDecodeSemaphore = Semaphore(2)   // Max 2 concurrent video frame extractions
+private val mediaProviderSemaphore = Semaphore(
+    Runtime.getRuntime().availableProcessors().coerceIn(6, 12)
+) // Concurrent system ContentResolver.loadThumbnail IPCs — IPC-bound, scaled to available CPU cores
+private val videoDecodeSemaphore = Semaphore(2)   // Max 2 concurrent video frame extractions (CPU/codec-bound)
 private val diskCacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
 private data class CacheTask(val cacheDir: File, val cacheFile: File, val bitmap: Bitmap)
 private val diskCacheChannel = Channel<CacheTask>(
-    capacity = 16,
+    capacity = 64,
     onBufferOverflow = BufferOverflow.DROP_OLDEST
 )
 
@@ -51,7 +53,7 @@ private val diskCacheWorker = diskCacheScope.launch {
             if (!task.cacheDir.exists()) task.cacheDir.mkdirs()
             val tempFile = File(task.cacheDir, "${task.cacheFile.name}.tmp")
             val softwareBitmap = if (task.bitmap.config == Bitmap.Config.HARDWARE) {
-                task.bitmap.copy(Bitmap.Config.RGB_565, false) ?: task.bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                task.bitmap.copy(Bitmap.Config.ARGB_8888, false)
             } else {
                 task.bitmap
             }

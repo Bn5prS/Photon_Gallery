@@ -59,6 +59,7 @@ class LocalMediaRepository(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
             MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.DATE_TAKEN,
             MediaStore.Images.Media.SIZE,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_MODIFIED,
@@ -111,6 +112,7 @@ class LocalMediaRepository(
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
             val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
+            val dateTakenColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
             val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
             val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
             val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
@@ -123,7 +125,10 @@ class LocalMediaRepository(
                 val id = cursor.getLong(idColumn)
                 val isTrashed = if (isTrashedColumn >= 0) cursor.getInt(isTrashedColumn) == 1 else false
                 val bucketName = if (isTrashed) "Trash" else (cursor.getString(bucketColumn) ?: "Unknown")
-                val dateAdded = cursor.getLong(dateAddedColumn)
+                val rawDateAdded = cursor.getLong(dateAddedColumn)
+                val dateTakenMs = if (dateTakenColumn >= 0) cursor.getLong(dateTakenColumn) else 0L
+                val dateTakenSec = if (dateTakenMs > 0) dateTakenMs / 1000L else 0L
+                val dateAdded = if (dateTakenSec > 0) dateTakenSec else rawDateAdded
                 val size = cursor.getLong(sizeColumn)
                 val name = cursor.getString(nameColumn) ?: "Unknown"
                 val dateModified = cursor.getLong(dateModifiedColumn)

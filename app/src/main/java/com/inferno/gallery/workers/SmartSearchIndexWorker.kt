@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -213,6 +214,7 @@ class SmartSearchIndexWorker(
                 }
             }
 
+            val excludedFolders = com.inferno.gallery.data.SettingsRepository.getInstance(applicationContext).excludedFoldersFlow.first()
             val unindexedIds = withContext(Dispatchers.IO) {
                 db.embeddingDao().getUnindexedMediaIds()
             }
@@ -257,8 +259,8 @@ class SmartSearchIndexWorker(
                         var entity: com.inferno.gallery.data.db.CoreMediaEntity? = null
                         try {
                             entity = db.mediaDao().getMediaById(mediaId)
-                            if (entity == null) {
-                                // Deleted in background, skip
+                            if (entity == null || excludedFolders.contains(entity.bucketName) || entity.bucketName == "Trash") {
+                                // Deleted or excluded, skip
                                 continue
                             }
                             val bitmap = decodeDownsampledBitmap(applicationContext, entity.filePath, entity.uriString)

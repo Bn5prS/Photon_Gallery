@@ -19,8 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import com.inferno.gallery.ui.theme.MotionTokens
 
 @Composable
@@ -45,7 +45,10 @@ fun ExpressiveButton(
 
     Button(
         onClick = onClick,
-        modifier = modifier.scale(scale),
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
         enabled = enabled,
         shape = shape,
         colors = colors,
@@ -76,7 +79,10 @@ fun ExpressiveFilledIconButton(
 
     FilledIconButton(
         onClick = onClick,
-        modifier = modifier.scale(scale),
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
         enabled = enabled,
         shape = shape,
         colors = colors,

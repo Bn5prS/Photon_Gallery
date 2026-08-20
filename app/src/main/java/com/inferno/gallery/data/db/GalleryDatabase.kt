@@ -45,10 +45,19 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE id IN (:ids)")
     suspend fun getMediaByIdsList(ids: List<Long>): List<CoreMediaEntity>
 
-    @Query("SELECT bucketName, COUNT(*) as itemCount, SUM(size) as totalSizeBytes, MAX(dateAdded) as maxDate, (SELECT uriString FROM core_media c2 WHERE c2.bucketName = c1.bucketName ORDER BY dateAdded DESC LIMIT 1) as coverUriString, (SELECT isVideo FROM core_media c2 WHERE c2.bucketName = c1.bucketName ORDER BY dateAdded DESC LIMIT 1) as isVideo FROM core_media c1 WHERE bucketName != 'Trash' AND bucketName IS NOT NULL GROUP BY bucketName ORDER BY maxDate DESC")
+    @Query("""
+        SELECT bucketName, COUNT(*) as itemCount, SUM(size) as totalSizeBytes, MAX(dateAdded) as maxDate, 
+        (SELECT uriString FROM core_media c2 WHERE c2.bucketName = c1.bucketName AND c2.uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString, 
+        (SELECT isVideo FROM core_media c2 WHERE c2.bucketName = c1.bucketName AND c2.uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as isVideo 
+        FROM core_media c1 
+        WHERE bucketName != 'Trash' AND bucketName IS NOT NULL 
+          AND uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND filePath NOT IN (SELECT originalPath FROM vault_media)
+        GROUP BY bucketName ORDER BY maxDate DESC
+    """)
     fun observeBuckets(): Flow<List<BucketMetadata>>
 
-    @Query("SELECT * FROM core_media")
+    @Query("SELECT * FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMedia(): List<CoreMediaEntity>
 
     @Query("SELECT * FROM core_media WHERE id = :id LIMIT 1")
@@ -57,7 +66,7 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE uriString = :uriString LIMIT 1")
     suspend fun getMediaByUri(uriString: String): CoreMediaEntity?
 
-    @Query("SELECT id FROM core_media")
+    @Query("SELECT id FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMediaIds(): List<Long>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -87,23 +96,24 @@ interface MediaDao {
     @Query("UPDATE core_media SET is_indexed_ocr = 0")
     suspend fun resetOcrIndexStatus()
 
-    @Query("SELECT * FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0")
+    @Query("SELECT * FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     suspend fun getUnindexedOcrMedia(): List<CoreMediaEntity>
 
-    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0")
+    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     suspend fun getTotalImageCount(): Int
 
-    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0")
+    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     suspend fun getUnindexedImageCount(): Int
 
-    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0")
+    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     fun observeTotalImageCount(): Flow<Int>
 
-    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0")
+    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     fun observeUnindexedImageCount(): Flow<Int>
 
-    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0")
+    @Query("SELECT COUNT(id) FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     fun observeUnindexedOcrImageCount(): Flow<Int>
+
     @Query("SELECT COUNT(*) FROM core_media WHERE bucketName = 'Trash'")
     fun observeTrashCount(): Flow<Int>
 
@@ -113,50 +123,57 @@ interface MediaDao {
     @Query("UPDATE core_media SET fileHash = :hash WHERE id = :id")
     suspend fun updateFileHash(id: Long, hash: String)
 
-
-    @Query("SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate, (SELECT uriString FROM core_media WHERE bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 1) as coverUriString FROM core_media WHERE bucketName != 'Trash'")
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate, 
+        (SELECT uriString FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString 
+        FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
     fun observeAllMediaStats(): Flow<MediaAggregateStats>
 
-    @Query("SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate, (SELECT uriString FROM core_media WHERE isVideo = 1 AND bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 1) as coverUriString FROM core_media WHERE isVideo = 1 AND bucketName != 'Trash'")
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate, 
+        (SELECT uriString FROM core_media WHERE isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString 
+        FROM core_media WHERE isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
     fun observeVideoStats(): Flow<MediaAggregateStats>
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
-        (SELECT uriString FROM core_media WHERE (mimeType LIKE '%raw%' OR mimeType LIKE '%dng%' OR name LIKE '%.dng' OR name LIKE '%.raw' OR name LIKE '%.cr2' OR name LIKE '%.nef' OR name LIKE '%.arw' OR name LIKE '%.orf' OR name LIKE '%.raf') AND bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        (SELECT uriString FROM core_media WHERE (mimeType LIKE '%raw%' OR mimeType LIKE '%dng%' OR name LIKE '%.dng' OR name LIKE '%.raw' OR name LIKE '%.cr2' OR name LIKE '%.nef' OR name LIKE '%.arw' OR name LIKE '%.orf' OR name LIKE '%.raf') AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
         FROM core_media
-        WHERE (mimeType LIKE '%raw%' OR mimeType LIKE '%dng%' OR name LIKE '%.dng' OR name LIKE '%.raw' OR name LIKE '%.cr2' OR name LIKE '%.nef' OR name LIKE '%.arw' OR name LIKE '%.orf' OR name LIKE '%.raf') AND bucketName != 'Trash'
+        WHERE (mimeType LIKE '%raw%' OR mimeType LIKE '%dng%' OR name LIKE '%.dng' OR name LIKE '%.raw' OR name LIKE '%.cr2' OR name LIKE '%.nef' OR name LIKE '%.arw' OR name LIKE '%.orf' OR name LIKE '%.raf') AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observeRawStats(): Flow<MediaAggregateStats>
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
-        (SELECT uriString FROM core_media WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%') AND isVideo = 0 AND bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        (SELECT uriString FROM core_media WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
         FROM core_media
-        WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%') AND isVideo = 0 AND bucketName != 'Trash'
+        WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observePanoramaStats(): Flow<MediaAggregateStats>
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
-        (SELECT uriString FROM core_media WHERE (name LIKE '%SLOW%' OR name LIKE '%HFR%' OR filePath LIKE '%slow_motion%') AND isVideo = 1 AND bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        (SELECT uriString FROM core_media WHERE (name LIKE '%SLOW%' OR name LIKE '%HFR%' OR filePath LIKE '%slow_motion%') AND isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
         FROM core_media
-        WHERE (name LIKE '%SLOW%' OR name LIKE '%HFR%' OR filePath LIKE '%slow_motion%') AND isVideo = 1 AND bucketName != 'Trash'
+        WHERE (name LIKE '%SLOW%' OR name LIKE '%HFR%' OR filePath LIKE '%slow_motion%') AND isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observeSlowMoStats(): Flow<MediaAggregateStats>
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
-        (SELECT uriString FROM core_media WHERE (mimeType = 'image/gif' OR name LIKE '%.gif') AND isVideo = 0 AND bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        (SELECT uriString FROM core_media WHERE (mimeType = 'image/gif' OR name LIKE '%.gif') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
         FROM core_media
-        WHERE (mimeType = 'image/gif' OR name LIKE '%.gif') AND isVideo = 0 AND bucketName != 'Trash'
+        WHERE (mimeType = 'image/gif' OR name LIKE '%.gif') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observeAnimationStats(): Flow<MediaAggregateStats>
 
-    @Query("SELECT uriString FROM core_media WHERE bucketName != 'Trash' ORDER BY dateAdded DESC LIMIT 4")
+    @Query("SELECT uriString FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 4")
     fun observeTopCoverUris(): Flow<List<String>>
 
     @Transaction
-    @Query("SELECT * FROM core_media WHERE size IN (SELECT size FROM core_media WHERE bucketName != 'Trash' AND size > 0 GROUP BY size HAVING COUNT(id) > 1) AND bucketName != 'Trash'")
+    @Query("SELECT * FROM core_media WHERE size IN (SELECT size FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) AND size > 0 GROUP BY size HAVING COUNT(id) > 1) AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     suspend fun getMediaSharingSameSize(): List<CoreMediaEntity>
 
     @Transaction
@@ -180,12 +197,13 @@ interface MediaDao {
         MediaEmbeddingStatusEntity::class,
         VaultMediaEntity::class,
         GeocodedLocation::class,
-        FaceEntity::class
+        FaceEntity::class,
+        PersonClusterEntity::class
         // ImageFtsEntity is intentionally excluded: @Fts5 has a KSP 2.2.x incompatibility.
         // The FTS5 virtual table is instead created manually in DatabaseProvider's
         // RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
     ],
-    version = 21,
+    version = 22,
     exportSchema = true
 )
 @androidx.room.TypeConverters(EmbeddingConverter::class)

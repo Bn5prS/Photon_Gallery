@@ -106,9 +106,24 @@ object MediaQueryBuilder {
             }
         }
 
-        // Apply excluded folders filter for main views
-        val shouldApplyExclusion = bucket == null || bucket == BucketNames.ALL || bucket == BucketNames.VIDEOS
-        if (shouldApplyExclusion && excluded.isNotEmpty()) {
+        // Always ensure items locked in Private Space (Vault) NEVER appear in any gallery query
+        conditions.add("cm.uriString NOT IN (SELECT originalUri FROM vault_media)")
+        conditions.add("cm.filePath NOT IN (SELECT originalPath FROM vault_media)")
+
+        // Apply excluded folders filter across all feed, search, favorite, media type, and general views
+        val isSpecificAlbum = bucket != null &&
+            bucket != BucketNames.ALL &&
+            bucket != BucketNames.VIDEOS &&
+            bucket != BucketNames.FAVORITES &&
+            bucket != BucketNames.SEARCH_TEXT &&
+            bucket != BucketNames.SEARCH_SMART &&
+            bucket != BucketNames.MEDIA_TYPE_RAW &&
+            bucket != BucketNames.MEDIA_TYPE_PANORAMAS &&
+            bucket != BucketNames.MEDIA_TYPE_SLOW_MO &&
+            bucket != BucketNames.MEDIA_TYPE_ANIMATIONS &&
+            !bucket.startsWith("place:")
+
+        if (!isSpecificAlbum && excluded.isNotEmpty()) {
             val placeholders = excluded.joinToString(",") { "?" }
             conditions.add("cm.bucketName NOT IN ($placeholders)")
             args.addAll(excluded)

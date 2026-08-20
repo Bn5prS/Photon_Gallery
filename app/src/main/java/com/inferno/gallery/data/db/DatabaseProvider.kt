@@ -211,12 +211,56 @@ object DatabaseProvider {
                 }
             }
 
+            // v22: Face Detection & Recognition with Person Clustering
+            val MIGRATION_21_22 = object : androidx.room.migration.Migration(21, 22) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE core_media ADD COLUMN is_indexed_faces INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("DROP TABLE IF EXISTS faces")
+                    db.execSQL("""
+                        CREATE TABLE IF NOT EXISTS faces (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            mediaId INTEGER NOT NULL,
+                            clusterId INTEGER NOT NULL,
+                            boundingBoxLeft REAL NOT NULL DEFAULT 0.0,
+                            boundingBoxTop REAL NOT NULL DEFAULT 0.0,
+                            boundingBoxRight REAL NOT NULL DEFAULT 0.0,
+                            boundingBoxBottom REAL NOT NULL DEFAULT 0.0,
+                            cropCachePath TEXT,
+                            embedding BLOB,
+                            FOREIGN KEY(mediaId) REFERENCES core_media(id) ON DELETE CASCADE
+                        )
+                    """.trimIndent())
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_faces_mediaId ON faces(mediaId)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_faces_clusterId ON faces(clusterId)")
+                    db.execSQL("""
+                        CREATE TABLE IF NOT EXISTS person_clusters (
+                            clusterId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            name TEXT,
+                            coverFaceId INTEGER,
+                            coverMediaId INTEGER,
+                            coverCropPath TEXT,
+                            faceCount INTEGER NOT NULL DEFAULT 1,
+                            centroid BLOB,
+                            isFavorite INTEGER NOT NULL DEFAULT 0,
+                            isHidden INTEGER NOT NULL DEFAULT 0,
+                            updatedAt INTEGER NOT NULL DEFAULT 0
+                        )
+                    """.trimIndent())
+                }
+            }
+
             val instance = Room.databaseBuilder(
                 context.applicationContext,
                 GalleryDatabase::class.java,
                 "gallery_database.db"
             )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
+            .addMigrations(
+                MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+                MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+                MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
+                MIGRATION_21_22
+            )
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
@@ -303,6 +347,16 @@ object DatabaseProvider {
         rawDb.insert("image_fts", 0, cv)
     }
 
+    suspend fun deleteFtsRows(
+        db: GalleryDatabase,
+        mediaIds: List<Long>
+    ) = withContext(Dispatchers.IO) {
+        if (mediaIds.isEmpty()) return@withContext
+        val rawDb = db.openHelper.writableDatabase
+        val placeholders = mediaIds.joinToString(",") { "?" }
+        rawDb.execSQL("DELETE FROM image_fts WHERE mediaId IN ($placeholders)", mediaIds.map { it.toString() }.toTypedArray())
+    }
+
     /**
      * FTS5 full-text search — queries image_fts and JOINs with core_media.
      * Returns a list of matching [CoreMediaEntity] ordered by date.
@@ -310,7 +364,8 @@ object DatabaseProvider {
      */
     suspend fun searchFts(
         db: GalleryDatabase,
-        query: String
+        query: String,
+        excluded: Set<String> = emptySet()
     ): List<CoreMediaEntity> = withContext(Dispatchers.IO) {
         val rawDb = db.openHelper.readableDatabase
         val terms = query.trim().split("\\s+".toRegex())
@@ -320,14 +375,24 @@ object DatabaseProvider {
 
         val ftsQuery = terms.map { "$it*" }.joinToString(" AND ")
 
+        val excludedClause = if (excluded.isNotEmpty()) {
+            val placeholders = excluded.joinToString(",") { "?" }
+            " AND cm.bucketName NOT IN ($placeholders)"
+        } else ""
+
         val sql = """
             SELECT cm.* FROM core_media cm
             INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
-            WHERE image_fts MATCH ?
+            WHERE image_fts MATCH ? AND cm.bucketName != 'Trash' $excludedClause
             ORDER BY cm.dateAdded DESC
         """.trimIndent()
 
-        val cursor: Cursor = rawDb.query(sql, arrayOf(ftsQuery))
+        val argsList = mutableListOf<String>(ftsQuery)
+        if (excluded.isNotEmpty()) {
+            argsList.addAll(excluded)
+        }
+
+        val cursor: Cursor = rawDb.query(sql, argsList.toTypedArray())
         val results = mutableListOf<CoreMediaEntity>()
         cursor.use { c ->
             val idIdx            = c.getColumnIndexOrThrow("id")

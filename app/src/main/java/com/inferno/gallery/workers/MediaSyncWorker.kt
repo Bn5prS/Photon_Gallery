@@ -48,8 +48,14 @@ class MediaSyncWorker(
             val toInsert = mutableListOf<CoreMediaEntity>()
             val toDelete = mutableListOf<Long>()
 
+            val vaultUris = database.vaultDao().getAllOriginalUris().toSet()
+            val vaultPaths = database.vaultDao().getAllOriginalPaths().toSet()
+
             // Find items in MediaStore not in DB or changed (using deltaList)
             for (media in deltaList) {
+                if (vaultUris.contains(media.uri.toString()) || vaultPaths.contains(media.path)) {
+                    continue
+                }
                 val dbItem = dbMap[media.id]
                 // For incremental, anything in deltaList needs updating/inserting
                 toInsert.add(
@@ -74,9 +80,9 @@ class MediaSyncWorker(
                 )
             }
 
-            // Find deletions: compare DB against lightweight ID list
+            // Find deletions: compare DB against lightweight ID list and active vault items
             for (dbItem in dbList) {
-                if (!allMediaStoreIds.contains(dbItem.id)) {
+                if (!allMediaStoreIds.contains(dbItem.id) || vaultUris.contains(dbItem.uriString) || vaultPaths.contains(dbItem.filePath)) {
                     toDelete.add(dbItem.id)
                 }
             }
@@ -101,6 +107,21 @@ class MediaSyncWorker(
                     "SmartSearchIndexWorker",
                     androidx.work.ExistingWorkPolicy.KEEP,
                     indexRequest
+                )
+            }
+
+            // Auto-trigger Face Indexing only when model is downloaded and unindexed photos exist
+            val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(applicationContext)
+            val unindexedFaceCount = try {
+                database.faceDao().getUnindexedFaceMedia().size
+            } catch (e: Exception) { 0 }
+            if (faceEngine.isModelDownloaded() && unindexedFaceCount > 0) {
+                Log.d("MediaSyncWorker", "Auto-indexing $unindexedFaceCount images for Face Recognition...")
+                val faceRequest = androidx.work.OneTimeWorkRequestBuilder<FaceIndexWorker>().build()
+                androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                    "FaceIndexWorker",
+                    androidx.work.ExistingWorkPolicy.KEEP,
+                    faceRequest
                 )
             }
 

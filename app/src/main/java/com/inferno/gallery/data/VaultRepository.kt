@@ -121,6 +121,34 @@ class VaultRepository(
         // Insert vault records
         if (entities.isNotEmpty()) {
             insertedIds.addAll(vaultDao.insertAll(entities))
+
+            // Immediately purge hidden media from Room database tables so they NEVER show anywhere in the app
+            try {
+                val db = DatabaseProvider.getDatabase(context)
+                val favManager = FavoritesManager(context)
+
+                val mediaIds = mutableListOf<Long>()
+                for (entity in entities) {
+                    val parsedId = try { ContentUris.parseId(Uri.parse(entity.originalUri)) } catch (_: Exception) { null }
+                    if (parsedId != null) {
+                        mediaIds.add(parsedId)
+                    }
+                    db.mediaDao().deleteByUri(entity.originalUri)
+                }
+
+                if (mediaIds.isNotEmpty()) {
+                    db.mediaDao().deleteByIds(mediaIds)
+                    for (id in mediaIds) {
+                        db.embeddingDao().deleteEmbedding(id)
+                        db.embeddingStatusDao().deleteStatus(id)
+                        db.faceDao().deleteFacesForMedia(id)
+                    }
+                    favManager.removeFavorites(mediaIds.map { it.toString() }.toSet())
+                    DatabaseProvider.deleteFtsRows(db, mediaIds)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("VaultRepository", "Error cleaning DB tables after hide: ${e.message}", e)
+            }
         }
 
         insertedIds

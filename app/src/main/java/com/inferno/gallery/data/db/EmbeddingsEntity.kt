@@ -79,6 +79,9 @@ interface EmbeddingDao {
         LEFT JOIN media_embeddings me ON cm.id = me.mediaId
         LEFT JOIN media_embedding_status ms ON cm.id = ms.mediaId
         WHERE cm.isVideo = 0
+          AND cm.bucketName != 'Trash'
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
           AND (me.mediaId IS NULL OR me.dateModified != cm.dateModified OR me.size != cm.size)
           AND (
               ms.mediaId IS NULL
@@ -101,6 +104,9 @@ interface EmbeddingDao {
         LEFT JOIN media_embeddings me ON cm.id = me.mediaId
         LEFT JOIN media_embedding_status ms ON cm.id = ms.mediaId
         WHERE cm.isVideo = 0
+          AND cm.bucketName != 'Trash'
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
           AND (me.mediaId IS NULL OR me.dateModified != cm.dateModified OR me.size != cm.size)
           AND (
               ms.mediaId IS NULL

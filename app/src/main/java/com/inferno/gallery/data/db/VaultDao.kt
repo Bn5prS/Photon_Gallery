@@ -23,6 +23,15 @@ interface VaultDao {
     @Query("SELECT * FROM vault_media ORDER BY dateHidden DESC")
     suspend fun getAll(): List<VaultMediaEntity>
 
+    @Query("SELECT originalUri FROM vault_media")
+    suspend fun getAllOriginalUris(): List<String>
+
+    @Query("SELECT originalPath FROM vault_media")
+    suspend fun getAllOriginalPaths(): List<String>
+
+    @Query("SELECT COUNT(*) > 0 FROM vault_media WHERE originalUri = :uriString OR originalPath = :filePath")
+    suspend fun isMediaInVault(uriString: String, filePath: String): Boolean
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<VaultMediaEntity>): List<Long>
 

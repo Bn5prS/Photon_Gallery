@@ -30,4 +30,12 @@ class FavoritesManager(private val context: Context) {
             }
         }
     }
+
+    suspend fun removeFavorites(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        context.favoritesDataStore.edit { preferences ->
+            val currentFavorites = preferences[FAVORITES_KEY] ?: emptySet()
+            preferences[FAVORITES_KEY] = currentFavorites - ids
+        }
+    }
 }

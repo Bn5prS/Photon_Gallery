@@ -56,6 +56,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import android.graphics.Bitmap
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.bitmapConfig
+import androidx.compose.ui.layout.ContentScale
+import com.inferno.gallery.data.db.DatabaseProvider
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 
@@ -459,6 +465,17 @@ fun ExifDetailsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeepMetadataSheet by remember { mutableStateOf(false) }
 
+    val db = remember { DatabaseProvider.getDatabase(context) }
+    val detectedFaces by remember(galleryItem.id) {
+        val idLong = galleryItem.id.toLongOrNull() ?: -1L
+        if (idLong > 0) {
+            db.faceDao().observeFacesForMedia(idLong)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }.collectAsState(initial = emptyList())
+    val allClusters by remember { db.faceDao().observeAllClusters() }.collectAsState(initial = emptyList())
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -507,6 +524,90 @@ fun ExifDetailsSheet(
                         )
                     ) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Close")
+                    }
+                }
+            }
+
+            // ── People in this photo Card ────────────────────────────────────
+            if (detectedFaces.isNotEmpty()) {
+                item {
+                    Surface(
+                        shape = ShapeLarge,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_face),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "People in this photo",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                for (face in detectedFaces) {
+                                    val cluster = allClusters.find { it.clusterId == face.clusterId }
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.width(64.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(56.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                                .border(2.dp, MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (!face.cropCachePath.isNullOrBlank()) {
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(File(face.cropCachePath))
+                                                        .size(120, 120)
+                                                        .bitmapConfig(Bitmap.Config.HARDWARE)
+                                                        .build(),
+                                                    contentDescription = cluster?.name,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = cluster?.name ?: "Unnamed",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
