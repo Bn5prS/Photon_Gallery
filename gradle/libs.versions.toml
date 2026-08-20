@@ -32,8 +32,9 @@ room = "2.7.1"
 # Paging 3
 paging = "3.3.6"
 
-# ML Kit (OCR)
+# ML Kit (OCR & Face Detection)
 mlkitText = "16.0.1"
+mlkitFace = "16.1.7"
 
 # ONNX Runtime
 onnxruntime = "1.18.0"
@@ -114,6 +115,7 @@ paging-compose = { group = "androidx.paging", name = "paging-compose", version.r
 
 # ── ML Kit ──
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
+mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFace" }
 
 # ── ONNX Runtime ──
 onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }

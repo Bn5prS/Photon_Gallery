@@ -2,7 +2,9 @@ package com.inferno.gallery.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,133 +21,43 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.utils.tick
-import kotlin.math.roundToInt
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 
-
-@Composable
-fun QuickFilterRow(
-    selectedFilter: Int,
-    onFilterSelected: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        androidx.compose.foundation.lazy.LazyRow(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                CustomFilterChip(
-                    text = "All",
-                    icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                    selected = selectedFilter == 0,
-                    onClick = { onFilterSelected(0) }
-                )
-            }
-            item {
-                CustomFilterChip(
-                    text = "Camera",
-                    icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
-                    selected = selectedFilter == 1,
-                    onClick = { onFilterSelected(1) }
-                )
-            }
-        }
-    }
-}
-
-
-@Composable
-fun CustomFilterChip(
-    text: String,
-    icon: ImageVector? = null,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-    val contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = containerColor,
-        contentColor = contentColor,
-        modifier = Modifier
-            .minimumInteractiveComponentSize()
-            .height(36.dp)
-            .pressScale(pressedScale = 0.95f)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = text,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
-    }
-}
-
 /**
  * Material 3 Expressive Floating Navigation Pill
- * Features a single sliding accented indicator pill that smoothly slides back and forth
- * between the active navigation tabs without bouncy animation.
+ * Features a single accented indicator pill that smoothly slides across the tabs
+ * with graceful non-bouncy physics and zero performance overhead.
  */
 @Composable
 fun FloatingNavigationPill(
@@ -162,96 +74,79 @@ fun FloatingNavigationPill(
         else -> 0
     }
 
-    var tabPositions by remember { mutableStateOf(mapOf<Int, Pair<Float, Float>>()) }
-    val density = LocalDensity.current
-
-    val currentTabPos = tabPositions[selectedIndex]
-    val targetLeft = currentTabPos?.first ?: 0f
-    val targetWidth = currentTabPos?.second ?: 0f
-
-    val indicatorLeft by animateFloatAsState(
-        targetValue = targetLeft,
-        animationSpec = MotionTokens.snappySpring(),
-        label = "pillIndicatorLeft"
-    )
-    val indicatorWidth by animateFloatAsState(
-        targetValue = targetWidth,
-        animationSpec = MotionTokens.snappySpring(),
-        label = "pillIndicatorWidth"
-    )
-
     Surface(
         modifier = modifier
-            .fillMaxWidth(0.80f)
+            .fillMaxWidth(0.82f)
             .height(52.dp)
             .pointerInput(Unit) {},
         shape = ShapeFull,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 0.dp
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 5.dp, vertical = 4.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            // ── Single Sliding Accented Indicator Pill ────────────────────
-            if (indicatorWidth > 0f) {
-                Box(
-                    modifier = Modifier
-                        .offset { IntOffset(indicatorLeft.roundToInt(), 0) }
-                        .width(with(density) { indicatorWidth.toDp() })
-                        .fillMaxHeight()
-                        .clip(ShapeFull)
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                )
-            }
+            val totalWidth = maxWidth
+            val tabWidth = totalWidth / 3
 
-            // ── Tab Items Row ─────────────────────────────────────────────
+            // Smooth non-bouncy sliding animation (Material 3 Emphasized / DampingRatioNoBouncy)
+            val animatedFraction by animateFloatAsState(
+                targetValue = selectedIndex.toFloat(),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "slidingPillFraction"
+            )
+
+            // ── Single Accented Sliding Pill (GPU Translated via graphicsLayer) ──
+            Box(
+                modifier = Modifier
+                    .width(tabWidth)
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        translationX = animatedFraction * tabWidth.toPx()
+                    }
+                    .clip(ShapeFull)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+            )
+
+            // ── The 3 Interactive Tabs ──
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SlidingDockItem(
-                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(22.dp)) },
+                SlidingPillTabItem(
+                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(20.dp)) },
                     label = "Photos",
                     isSelected = selectedIndex == 0,
-                    onPositioned = { left, width ->
-                        if (tabPositions[0]?.first != left || tabPositions[0]?.second != width) {
-                            tabPositions = tabPositions + (0 to (left to width))
-                        }
-                    },
+                    modifier = Modifier.weight(1f),
                     onClick = onNavigateToPhotos
                 )
 
-                SlidingDockItem(
+                SlidingPillTabItem(
                     icon = {
                         Icon(
-                            if (selectedIndex == 1) ImageVector.vectorResource(R.drawable.ic_ms_photo_album) else ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
                             contentDescription = "Albums",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
                     label = "Albums",
                     isSelected = selectedIndex == 1,
-                    onPositioned = { left, width ->
-                        if (tabPositions[1]?.first != left || tabPositions[1]?.second != width) {
-                            tabPositions = tabPositions + (1 to (left to width))
-                        }
-                    },
+                    modifier = Modifier.weight(1f),
                     onClick = onNavigateToAlbums
                 )
 
-                SlidingDockItem(
-                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(22.dp)) },
+                SlidingPillTabItem(
+                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(20.dp)) },
                     label = "Search",
                     isSelected = selectedIndex == 2,
-                    onPositioned = { left, width ->
-                        if (tabPositions[2]?.first != left || tabPositions[2]?.second != width) {
-                            tabPositions = tabPositions + (2 to (left to width))
-                        }
-                    },
+                    modifier = Modifier.weight(1f),
                     onClick = onNavigateToSearch
                 )
             }
@@ -260,45 +155,47 @@ fun FloatingNavigationPill(
 }
 
 @Composable
-fun SlidingDockItem(
+fun SlidingPillTabItem(
     icon: @Composable () -> Unit,
     label: String,
     isSelected: Boolean,
-    onPositioned: (Float, Float) -> Unit,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val view = LocalView.current
 
-    // No bouncy scaling - smooth snappy compression on press
     val touchScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1f,
-        animationSpec = MotionTokens.snappySpring(),
-        label = "dockItemTouchScale"
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "tabItemTouchScale"
     )
 
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) {
             MaterialTheme.colorScheme.onSecondaryContainer
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
         },
-        animationSpec = MotionTokens.snappySpring(),
-        label = "dockItemContentColor"
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "tabItemContentColor"
     )
 
     Box(
-        modifier = Modifier
-            .scale(touchScale)
-            .clip(ShapeFull)
-            .onGloballyPositioned { coordinates ->
-                val parentCoordinates = coordinates.parentLayoutCoordinates
-                if (parentCoordinates != null) {
-                    val positionInParent = parentCoordinates.localPositionOf(coordinates, Offset.Zero)
-                    onPositioned(positionInParent.x, coordinates.size.width.toFloat())
-                }
+        modifier = modifier
+            .fillMaxHeight()
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
             }
+            .clip(ShapeFull)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -306,28 +203,44 @@ fun SlidingDockItem(
                     view.tick()
                     onClick()
                 }
-            )
-            .padding(horizontal = 16.dp, vertical = 7.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 6.dp)
         ) {
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 icon()
 
                 AnimatedVisibility(
                     visible = isSelected,
-                    enter = fadeIn(MotionTokens.snappySpring()) +
-                            expandHorizontally(animationSpec = MotionTokens.snappySpring()) +
-                            slideInHorizontally(animationSpec = MotionTokens.snappySpring(), initialOffsetX = { -it / 4 }),
-                    exit = fadeOut(MotionTokens.snappySpring()) +
-                            shrinkHorizontally(animationSpec = MotionTokens.snappySpring()) +
-                            slideOutHorizontally(animationSpec = MotionTokens.snappySpring(), targetOffsetX = { -it / 4 })
+                    enter = fadeIn(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + expandHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ),
+                    exit = fadeOut(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + shrinkHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelMedium.copy(
@@ -356,7 +269,10 @@ fun DockItem(
 
     val touchScale by animateFloatAsState(
         targetValue = if (isPressed) 0.94f else 1f,
-        animationSpec = MotionTokens.snappySpring(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "dockItemTouchScale"
     )
 
@@ -366,7 +282,10 @@ fun DockItem(
         } else {
             Color.Transparent
         },
-        animationSpec = MotionTokens.snappySpring(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
         label = "pillColor"
     )
 
@@ -376,13 +295,19 @@ fun DockItem(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
         },
-        animationSpec = MotionTokens.snappySpring(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
         label = "contentColor"
     )
 
     Box(
         modifier = Modifier
-            .scale(touchScale)
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
+            }
             .clip(ShapeFull)
             .background(pillColor)
             .clickable(
@@ -405,12 +330,40 @@ fun DockItem(
 
                 AnimatedVisibility(
                     visible = isSelected,
-                    enter = fadeIn(MotionTokens.snappySpring()) +
-                            expandHorizontally(animationSpec = MotionTokens.snappySpring()) +
-                            slideInHorizontally(animationSpec = MotionTokens.snappySpring(), initialOffsetX = { -it / 4 }),
-                    exit = fadeOut(MotionTokens.snappySpring()) +
-                            shrinkHorizontally(animationSpec = MotionTokens.snappySpring()) +
-                            slideOutHorizontally(animationSpec = MotionTokens.snappySpring(), targetOffsetX = { -it / 4 })
+                    enter = fadeIn(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + expandHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + slideInHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        initialOffsetX = { -it / 4 }
+                    ),
+                    exit = fadeOut(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + shrinkHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + slideOutHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        targetOffsetX = { -it / 4 }
+                    )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(modifier = Modifier.width(6.dp))
@@ -428,7 +381,6 @@ fun DockItem(
     }
 }
 
-
 fun getTabRouteIndex(route: String?): Int {
     return when (route) {
         "photos" -> 0
@@ -439,25 +391,21 @@ fun getTabRouteIndex(route: String?): Int {
     }
 }
 
-// Directional tab transitions: slide left/right based on tab order
+// Fast, fluid tab crossfade transitions: eliminates heavy full-screen grid slide bottleneck
 fun getEnterTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.EnterTransition {
-    val fromIndex = getTabRouteIndex(initialRoute)
-    val toIndex = getTabRouteIndex(targetRoute)
     return fadeIn(
-        animationSpec = MotionTokens.snappySpring()
-    ) + slideInHorizontally(
-        initialOffsetX = { if (toIndex > fromIndex) it / 5 else -it / 5 },
-        animationSpec = MotionTokens.snappySpring()
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 180,
+            easing = MotionTokens.EmphasizedDecelerateEasing
+        )
     )
 }
 
 fun getExitTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.ExitTransition {
-    val fromIndex = getTabRouteIndex(initialRoute)
-    val toIndex = getTabRouteIndex(targetRoute)
-    return androidx.compose.animation.fadeOut(
-        animationSpec = MotionTokens.snappySpring()
-    ) + androidx.compose.animation.slideOutHorizontally(
-        targetOffsetX = { if (toIndex > fromIndex) -it / 5 else it / 5 },
-        animationSpec = MotionTokens.snappySpring()
+    return fadeOut(
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 120,
+            easing = MotionTokens.EmphasizedAccelerateEasing
+        )
     )
 }

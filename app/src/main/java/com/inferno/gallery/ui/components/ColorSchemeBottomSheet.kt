@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,11 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.inferno.gallery.ui.SettingsViewModel
 import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
+import com.inferno.gallery.ui.theme.ShapeFull
+import com.inferno.gallery.ui.theme.ShapeLarge
 import com.materialkolor.PaletteStyle
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
@@ -60,6 +65,8 @@ fun ColorSchemeBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -234,12 +241,14 @@ fun ColorSchemeBottomSheet(
                 ) {
                     Button(
                         onClick = onDismissRequest,
+                        modifier = Modifier.height(48.dp),
+                        shape = ShapeFull,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
-                        Text("Close")
+                        Text("Close", style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
@@ -269,81 +278,117 @@ fun PaletteStyleSelector(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(bottom = 16.dp)
     ) {
-        val styles = listOf(
-            PaletteStyle.TonalSpot to "Default palette style, it allows to customize all four colors",
-            PaletteStyle.Neutral to "A style that's slightly more chromatic than monochrome",
-            PaletteStyle.Vibrant to "A loud theme, colorfulness is maximum for Primary palette",
-            PaletteStyle.Expressive to "A playful theme - the source color's hue does not appear in the theme",
-            PaletteStyle.Rainbow to "A playful theme - the source color's hue does not appear in the theme",
-            PaletteStyle.FruitSalad to "A playful theme - the source color's hue does not appear in the theme",
-            PaletteStyle.Monochrome to "A monochrome theme, colors are purely black / white / gray",
-            PaletteStyle.Fidelity to "A theme that matches the source color exactly"
-        )
-        
-        styles.forEach { (style, description) ->
-            Card(
-                onClick = { onStyleSelected(style) },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (currentStyle == style.name) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                ),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
+        // ── Top Header ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.size(48.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Palette style",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // ── Scrollable Styles List ───────────────────────────────────
+        val styles = remember {
+            listOf(
+                PaletteStyle.TonalSpot to "Default palette style, it allows to customize all four colors",
+                PaletteStyle.Neutral to "A style that's slightly more chromatic than monochrome",
+                PaletteStyle.Vibrant to "A loud theme, colorfulness is maximum for Primary palette",
+                PaletteStyle.Expressive to "A playful theme - the source color's hue does not appear in the theme",
+                PaletteStyle.Rainbow to "A playful theme - the source color's hue does not appear in the theme",
+                PaletteStyle.FruitSalad to "A playful theme - the source color's hue does not appear in the theme",
+                PaletteStyle.Monochrome to "A monochrome theme, colors are purely black / white / gray",
+                PaletteStyle.Fidelity to "A theme that matches the source color exactly"
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            styles.forEach { (style, description) ->
+                val isSelected = currentStyle == style.name
+                Card(
+                    onClick = { onStyleSelected(style) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    shape = ShapeLarge,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = getPaletteStyleDisplayName(style.name),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (currentStyle == style.name) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (currentStyle == style.name) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (currentStyle == style.name) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = getPaletteStyleDisplayName(style.name),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Icon(
-                            ImageVector.vectorResource(R.drawable.ic_ms_check_circle), 
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Icon(
-                            ImageVector.vectorResource(R.drawable.ic_ms_circle),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            imageVector = ImageVector.vectorResource(
+                                if (isSelected) R.drawable.ic_ms_check_circle else R.drawable.ic_ms_circle
+                            ),
+                            contentDescription = if (isSelected) "Selected" else "Not selected",
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
         }
-        
+
+        // ── Bottom Action Row ─────────────────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.End
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(ImageVector.vectorResource(R.drawable.ic_ms_palette), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Palette style", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             Button(
                 onClick = onBack,
+                modifier = Modifier.height(48.dp),
+                shape = ShapeFull,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Text("Close")
+                Text(
+                    text = "Close",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         }
     }

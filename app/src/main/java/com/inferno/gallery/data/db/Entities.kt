@@ -18,6 +18,7 @@ data class CoreMediaEntity(
     val isVideo: Boolean,
     val durationMs: Long?,
     @ColumnInfo(name = "is_indexed_ocr") val isIndexedOcr: Boolean = false,
+    @ColumnInfo(name = "is_indexed_faces") val isIndexedFaces: Boolean = false,
     val pHash: Long? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,

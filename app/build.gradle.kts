@@ -72,11 +72,13 @@ android {
         compose = true
     }
 
-    applicationVariants.all {
-        outputs.all {
-            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            val abi = output?.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
-            output?.outputFileName = "PhotonGallery-$abi.apk"
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val abi = output.filters.find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }?.identifier ?: "universal"
+            output.outputFileName.set("PhotonGallery-$abi.apk")
         }
     }
 }
@@ -143,8 +145,9 @@ dependencies {
     implementation(libs.paging.runtime)
     implementation(libs.paging.compose)
 
-    // ── ML Kit (OCR) ──
+    // ── ML Kit (OCR & Face Detection) ──
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.face.detection)
 
     // ── ONNX Runtime ──
     implementation(libs.onnxruntime.android)

@@ -126,8 +126,7 @@ class ModelDownloadWorker(
             val downloadTargets = listOf(
                 DownloadTarget(TOKENIZER_URL, TOKENIZER_NAME, 2_224_081L, TOKENIZER_SHA256),
                 DownloadTarget(TEXT_MODEL_URL, TEXT_MODEL_NAME, 64_504_507L, TEXT_MODEL_SHA256),
-                DownloadTarget(VISION_MODEL_URL, VISION_MODEL_NAME, 87_461_602L, VISION_MODEL_SHA256),
-                DownloadTarget(FACE_MODEL_URL, FACE_MODEL_NAME, 77_072_873L, FACE_MODEL_SHA256)
+                DownloadTarget(VISION_MODEL_URL, VISION_MODEL_NAME, 87_461_602L, VISION_MODEL_SHA256)
             )
 
             val totalBytesExpected = downloadTargets.sumOf { it.expectedSize }

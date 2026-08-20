@@ -1,6 +1,8 @@
 package com.inferno.gallery.ui
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.ButtonDefaults
+import com.inferno.gallery.ui.people.PeopleScreen
+import com.inferno.gallery.ui.people.PersonDetailScreen
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.AnimatedContent
@@ -368,7 +370,7 @@ fun MainAppLayout(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
-            if (currentRoute != "photo_map" && currentRoute != "duplicate_cleaner" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list") {
+            if (currentRoute != "photo_map" && currentRoute != "duplicate_cleaner" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && currentRoute != "people" && currentRoute?.startsWith("person/") != true) {
                 Column(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surfaceContainerLow)
@@ -612,7 +614,7 @@ fun MainAppLayout(
             val isHiddenAlbum = currentRoute?.startsWith("album/") == true
             // Pill dock auto-hide on scroll temporarily disabled per user request (preserved for later revival)
             // val isDockVisible = currentRoute != "settings" && currentRoute != "duplicate_cleaner" && currentRoute != "photo_map" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && !isHiddenAlbum && !isSelectionMode && (dockStyle != DockStyle.PILL || isScrollDockVisible)
-            val isDockVisible = currentRoute != "settings" && currentRoute != "duplicate_cleaner" && currentRoute != "photo_map" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && !isHiddenAlbum && !isSelectionMode
+            val isDockVisible = currentRoute != "settings" && currentRoute != "duplicate_cleaner" && currentRoute != "photo_map" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && currentRoute != "people" && currentRoute?.startsWith("person/") != true && !isHiddenAlbum && !isSelectionMode
             AnimatedVisibility(
                 visible = isDockVisible,
                 enter = slideInVertically(initialOffsetY = { it }),
@@ -803,21 +805,12 @@ fun MainAppLayout(
                 )
             }
             
-/*
             composable(
                 route = "people",
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { fadeIn(androidx.compose.animation.core.tween(150)) },
+                exitTransition = { fadeOut(androidx.compose.animation.core.tween(150)) },
+                popEnterTransition = { fadeIn(androidx.compose.animation.core.tween(150)) },
+                popExitTransition = { fadeOut(androidx.compose.animation.core.tween(150)) }
             ) {
                 PeopleScreen(
                     viewModel = viewModel,
@@ -827,7 +820,6 @@ fun MainAppLayout(
                     }
                 )
             }
-*/
             
             composable(
                 route = "places_list",
@@ -877,34 +869,23 @@ fun MainAppLayout(
                 )
             }
 
-/*
             composable(
                 route = "person/{clusterId}",
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { fadeIn(androidx.compose.animation.core.tween(150)) },
+                exitTransition = { fadeOut(androidx.compose.animation.core.tween(150)) },
+                popEnterTransition = { fadeIn(androidx.compose.animation.core.tween(150)) },
+                popExitTransition = { fadeOut(androidx.compose.animation.core.tween(150)) }
             ) { backStackEntry ->
-                val clusterId = backStackEntry.arguments?.getString("clusterId")?.toIntOrNull() ?: -1
+                val clusterId = backStackEntry.arguments?.getString("clusterId")?.toLongOrNull() ?: -1L
                 PersonDetailScreen(
                     clusterId = clusterId,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = this@composable,
                     viewModel = viewModel,
                     onBack = { nestedNavController.popBackStack() },
-                    onPhotoClick = { uri, index ->
-                        // Currently person detail click just logs or handles photo preview
-                        // In MVP we pass index -1 to avoid crash, V2 will integrate properly with MainAppLayout viewer
-                    }
+                    onPhotoClick = onPhotoClick
                 )
             }
-*/
             composable(
                 route = "album/{bucketName}",
                 enterTransition = {
@@ -969,6 +950,12 @@ fun MainAppLayout(
                     onAlbumClick = { bucketName ->
                         val encoded = android.net.Uri.encode(bucketName)
                         nestedNavController.navigate("album/$encoded")
+                    },
+                    onPersonClick = { clusterId ->
+                        nestedNavController.navigate("person/$clusterId")
+                    },
+                    onViewAllPeopleClick = {
+                        nestedNavController.navigate("people")
                     }
                 )
             }

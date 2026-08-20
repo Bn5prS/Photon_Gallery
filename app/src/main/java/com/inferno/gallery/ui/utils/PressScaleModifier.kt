@@ -7,13 +7,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import com.inferno.gallery.ui.theme.MotionTokens
 
 /**
  * Unified press-scale feedback modifier.
  *
- * Applies a spring-animated scale-down on press and optional selection scale.
+ * Applies a spring-animated scale-down on press and optional selection scale via RenderNode graphicsLayer.
  * Replaces the inline [collectIsPressedAsState] + [animateFloatAsState] blocks
  * duplicated across Albums, AlbumCover, NavigationDock, and SettingsScreen.
  *
@@ -45,5 +45,8 @@ fun Modifier.pressScale(
         label = "pressScale"
     )
 
-    this.scale(scale)
+    this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
 }

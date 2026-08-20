@@ -115,7 +115,7 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             }
             .memoryCache {
                 coil3.memory.MemoryCache.Builder()
-                    .maxSizePercent(context, 0.35) // 35% — enough for buttery scrolling without GC pressure
+                    .maxSizePercent(context, 0.40) // 40% — extra headroom for large galleries; GPU-resident HARDWARE bitmaps live in GPU memory, so Java heap stays healthy
                     .build()
             }
             .diskCache {
