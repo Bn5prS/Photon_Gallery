@@ -169,8 +169,19 @@ fun DetailScreen(
     val window = activity?.window
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
     
-    val galleryItems by viewModel.detailMedia.collectAsState()
+    val rawGalleryItems by viewModel.detailMedia.collectAsState()
+    val initialDetailItem by viewModel.initialDetailItem.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
+
+    val galleryItems = remember(rawGalleryItems, initialDetailItem, mediaId) {
+        if (rawGalleryItems.isNotEmpty()) {
+            rawGalleryItems
+        } else if (initialDetailItem != null && initialDetailItem?.id == mediaId) {
+            listOf(initialDetailItem!!)
+        } else {
+            emptyList()
+        }
+    }
 
     val maxBrightnessEnabled by settingsRepo.maxBrightnessEnabledFlow.collectAsState(initial = false)
     val viewerBlurEffect by settingsRepo.viewerBlurEffectFlow.collectAsState(initial = false)
@@ -199,15 +210,13 @@ fun DetailScreen(
         }
     }
 
-
-
     // Ensure we don't crash if items is empty
     if (galleryItems.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
         return
     }
 
-    val initialPage = remember(mediaId) {
+    val initialPage = remember(mediaId, galleryItems) {
         val index = galleryItems.indexOfFirst { it.id == mediaId }
         if (index >= 0) index else 0
     }

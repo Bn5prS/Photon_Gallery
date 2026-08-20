@@ -67,6 +67,7 @@ import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
+import com.inferno.gallery.ui.people.PeopleCarousel
 import androidx.compose.ui.graphics.vector.ImageVector
 
 
@@ -79,7 +80,9 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    onAlbumClick: (String) -> Unit = {}
+    onAlbumClick: (String) -> Unit = {},
+    onPersonClick: (Long) -> Unit = {},
+    onViewAllPeopleClick: () -> Unit = {}
 ) {
     val query by viewModel.searchQuery.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
@@ -176,7 +179,12 @@ fun SearchScreen(
             modifier = Modifier.fillMaxSize()
         ) { (isBlank, searching, hasResults) ->
             when {
-                isBlank -> EmptySearchState(recentSearches, viewModel)
+                query.isBlank() -> EmptySearchState(
+                    recentSearches = recentSearches,
+                    viewModel = viewModel,
+                    onPersonClick = onPersonClick,
+                    onViewAllPeopleClick = onViewAllPeopleClick
+                )
                 searching -> SearchingState()
                 !hasResults -> NoResultsState(query = query, onClear = { viewModel.updateSearchQuery("") })
                 else -> SearchResultsList(
@@ -195,15 +203,32 @@ fun SearchScreen(
 }
 
 @Composable
-private fun EmptySearchState(recentSearches: List<String>, viewModel: GalleryViewModel) {
+private fun EmptySearchState(
+    recentSearches: List<String>,
+    viewModel: GalleryViewModel,
+    onPersonClick: (Long) -> Unit = {},
+    onViewAllPeopleClick: () -> Unit = {}
+) {
     val haptic = LocalHapticFeedback.current
+    val personClusters by viewModel.personClusters.collectAsState()
 
-    if (recentSearches.isNotEmpty()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // ── People Carousel ──
+        if (personClusters.isNotEmpty()) {
+            item {
+                PeopleCarousel(
+                    clusters = personClusters,
+                    onPersonClick = onPersonClick,
+                    onViewAllClick = onViewAllPeopleClick
+                )
+            }
+        }
+
+        if (recentSearches.isNotEmpty()) {
             item {
                 Row(
                     modifier = Modifier
@@ -283,14 +308,18 @@ private fun EmptySearchState(recentSearches: List<String>, viewModel: GalleryVie
                     }
                 }
             }
+        } else if (personClusters.isEmpty()) {
+            item {
+                PhotonEmptyState(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                    title = "Search photos & videos",
+                    subtitle = "Search by date, place, text inside photos, or describe any scene.",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 48.dp)
+                )
+            }
         }
-    } else {
-        PhotonEmptyState(
-            icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
-            title = "Search photos & videos",
-            subtitle = "Search by date, place, text inside photos, or describe any scene.",
-            modifier = Modifier.fillMaxSize()
-        )
     }
 }
 
@@ -386,11 +415,17 @@ private fun SearchResultsList(
     viewModel: GalleryViewModel
 ) {
     val haptic = LocalHapticFeedback.current
-    val onFtsClick = remember(onPhotoClick, query) {
-        { item: GalleryItem -> onPhotoClick(item.id, "search_text", query) }
+    val onFtsClick = remember(onPhotoClick, query, viewModel) {
+        { item: GalleryItem ->
+            viewModel.setInitialDetailItem(item)
+            onPhotoClick(item.id, "search_text", query)
+        }
     }
-    val onSmartClick = remember(onPhotoClick, query) {
-        { item: GalleryItem -> onPhotoClick(item.id, "search_smart", query) }
+    val onSmartClick = remember(onPhotoClick, query, viewModel) {
+        { item: GalleryItem ->
+            viewModel.setInitialDetailItem(item)
+            onPhotoClick(item.id, "search_smart", query)
+        }
     }
 
     val lazyGridState = rememberLazyGridState()
