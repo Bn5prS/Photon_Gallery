@@ -258,24 +258,43 @@ fun ExpressiveScrollBar(
         val innerIcon = ImageVector.vectorResource(R.drawable.ic_ms_unfold_more)
 
         val isInteracting = isPressed || isDragging
-        
+        val isScrolling = listState?.isScrollInProgress == true || gridState?.isScrollInProgress == true
+        var isScrollbarVisible by remember(listState, gridState) { mutableStateOf(false) }
+
+        LaunchedEffect(isScrolling, isInteracting) {
+            if (isScrolling || isInteracting) {
+                isScrollbarVisible = true
+            } else {
+                kotlinx.coroutines.delay(1200L)
+                isScrollbarVisible = false
+            }
+        }
+
+        val scrollbarAlpha by animateFloatAsState(
+            targetValue = if (isScrollbarVisible) 1f else 0f,
+            animationSpec = tween(durationMillis = 300, easing = MotionTokens.EmphasizedEasing),
+            label = "ScrollbarAlpha"
+        )
+
         val animatedWidth by animateDpAsState(
-            targetValue = if (isInteracting) expandedIndicatorWidth else thickness,
-            animationSpec = tween(durationMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedEasing),
+            targetValue = if (isInteracting) 34.dp else 26.dp,
+            animationSpec = MotionTokens.snappySpring(),
             label = "WidthAnimation"
         )
 
-        val animatedColor by animateColorAsState(
-            targetValue = if (isInteracting) primaryColor else restingColor,
-            animationSpec = tween(durationMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedEasing),
-            label = "ThumbColor"
+        val animatedHeight by animateDpAsState(
+            targetValue = if (isInteracting) 44.dp else 36.dp,
+            animationSpec = MotionTokens.snappySpring(),
+            label = "HeightAnimation"
         )
-        
-        val iconAlpha by animateFloatAsState(
-            targetValue = if (isInteracting) 1f else 0f,
-            animationSpec = tween(durationMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedEasing),
-            label = "IconAlpha"
+
+        val iconSize by animateDpAsState(
+            targetValue = if (isInteracting) 18.dp else 15.dp,
+            animationSpec = MotionTokens.snappySpring(),
+            label = "IconSize"
         )
+
+        val animatedColor = primaryColor
         val density = LocalDensity.current
         val constraintsMaxWidth = maxWidth
         val constraintsMaxHeight = maxHeight
@@ -283,7 +302,7 @@ fun ExpressiveScrollBar(
         val smoothJumpMinDistancePx = with(density) { 10.dp.toPx() }
 
         val availableHeight = with(density) { constraintsMaxHeight.toPx() }
-        val handleHeightPx = with(density) { minHeight.toPx() }
+        val handleHeightPx = with(density) { animatedHeight.toPx() }
         val scrollableHeight = (availableHeight - handleHeightPx).coerceAtLeast(1f)
         
         fun getScrollStats(): ScrollMetrics {
@@ -508,18 +527,22 @@ fun ExpressiveScrollBar(
         ) {
             val rightAnchorX = with(density) { (constraintsMaxWidth - paddingEnd).toPx() }
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = scrollbarAlpha }
+            ) {
                 val visualProgress = displayedProgress.value
                 val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else visualProgress
                 val handleY = displayProgress * scrollableHeight
-                val handleHeightPx = minHeight.toPx()
+                val handleHeightPx = animatedHeight.toPx()
 
                 val indicatorWidthPx = animatedWidth.toPx()
-                val leftCornerRadius = minOf(indicatorWidthPx, handleHeightPx / 2f)
+                val leftCornerRadius = 8.dp.toPx()
 
                 val currentIndicatorX = rightAnchorX - indicatorWidthPx
 
-                // Draw thumb: like a pill, but top-right and bottom-right corners have 0 curve
+                // Draw thumb: pill shape with rounded left corners and flat right edge
                 indicatorPath.reset()
                 indicatorPath.addRoundRect(
                     RoundRect(
@@ -539,39 +562,37 @@ fun ExpressiveScrollBar(
                 )
             }
             
-            if (iconAlpha > 0f) {
-               Box(
-                   modifier = Modifier
-                       .offset {
-                           val visualProgress = displayedProgress.value
-                           val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else visualProgress
-                           val handleY = displayProgress * scrollableHeight
-                           val handleHeightPx = with(density) { minHeight.toPx() }
-                           
-                           val iconSizePx = with(density) { 20.dp.toPx() }
-                           val paddingEndPx = with(density) { paddingEnd.toPx() }
-                           val animatedWidthPx = with(density) { animatedWidth.toPx() }
-                           val maxWidthPx = with(density) { constraintsMaxWidth.toPx() }
-                           
-                           val x = maxWidthPx - paddingEndPx - (animatedWidthPx / 2) - (iconSizePx / 2)
-                           val y = handleY + (handleHeightPx / 2) - (iconSizePx / 2)
-                           
-                           androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt())
-                       }
-                       .size(20.dp)
-                       .graphicsLayer { 
-                           alpha = iconAlpha 
-                           scaleX = iconAlpha
-                           scaleY = iconAlpha
-                       }
-               ) {
-                   Icon(
-                       imageVector = innerIcon,
-                       contentDescription = null,
-                       tint = MaterialTheme.colorScheme.onPrimary,
-                       modifier = Modifier.fillMaxSize()
-                   )
-               }
+            if (scrollbarAlpha > 0f) {
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            val visualProgress = displayedProgress.value
+                            val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else visualProgress
+                            val handleY = displayProgress * scrollableHeight
+                            val handleHeightPx = with(density) { animatedHeight.toPx() }
+                            
+                            val iconSizePx = with(density) { iconSize.toPx() }
+                            val paddingEndPx = with(density) { paddingEnd.toPx() }
+                            val animatedWidthPx = with(density) { animatedWidth.toPx() }
+                            val maxWidthPx = with(density) { constraintsMaxWidth.toPx() }
+                            
+                            val x = maxWidthPx - paddingEndPx - (animatedWidthPx / 2) - (iconSizePx / 2)
+                            val y = handleY + (handleHeightPx / 2) - (iconSizePx / 2)
+                            
+                            androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt())
+                        }
+                        .size(iconSize)
+                        .graphicsLayer { 
+                            alpha = scrollbarAlpha 
+                        }
+                ) {
+                    Icon(
+                        imageVector = innerIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
 
             val displayedDragLabel = activeDragLabel ?: retainedDragLabel
