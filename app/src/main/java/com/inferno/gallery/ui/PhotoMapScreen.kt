@@ -665,6 +665,7 @@ fun PhotoMapScreen(
                                                     .aspectRatio(1f)
                                                     .clip(com.inferno.gallery.ui.theme.ShapeMedium)
                                                     .haptickClickable {
+                                                        galleryViewModel.setInitialDetailItem(item)
                                                         onPhotoClick(item.id, "geotagged", null)
                                                     }
                                             ) {

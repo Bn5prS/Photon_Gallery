@@ -146,6 +146,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import com.inferno.gallery.data.db.DatabaseProvider
@@ -214,6 +215,7 @@ fun GalleryScreen(
             if (viewModel.isSelectionMode.value) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
+                viewModel.setInitialDetailItem(item)
                 val query = if (bucketName == "search_text") viewModel.searchQuery.value else null
                 onPhotoClick(item.id, bucketName, query)
             }
@@ -238,7 +240,9 @@ fun GalleryScreen(
         var previousIndex = 0
         var cachedDateSeconds = -1L
 
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
         snapshotFlow { lazyGridState.firstVisibleItemIndex to lazyGridState.isScrollInProgress }
+            .debounce(80L) // Throttle: skip intermediate positions during fast flings to avoid peek() at 60fps
             .collectLatest { (index, inProgress) ->
 
                 // 1. Dock visibility with debounce threshold to prevent root recomposition thrashing
@@ -440,7 +444,6 @@ fun GalleryScreen(
         FastScroller(
             lazyGridState = lazyGridState,
             totalItems = totalItems,
-            pagedMedia = pagedMedia,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(
@@ -474,31 +477,13 @@ fun formatDuration(millis: Long?): String {
 fun FastScroller(
     lazyGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     totalItems: Int,
-    pagedMedia: androidx.paging.compose.LazyPagingItems<GalleryListItem>,
     modifier: Modifier = Modifier
 ) {
     if (totalItems < 50) return
 
-    val dateFormatter = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
-
     com.inferno.gallery.ui.components.ExpressiveScrollBar(
         gridState = lazyGridState,
-        modifier = modifier,
-        dragLabelProvider = { index ->
-            if (pagedMedia.itemCount <= 0) {
-                null
-            } else {
-                val clampedIndex = index.coerceIn(0, pagedMedia.itemCount - 1)
-                when (val item = pagedMedia.peek(clampedIndex)) {
-                    is GalleryListItem.Header -> item.title
-                    is GalleryListItem.Item -> {
-                        val date = item.galleryItem.dateAdded
-                        if (date > 0) dateFormatter.format(Date(date * 1000L)) else null
-                    }
-                    else -> null
-                }
-            }
-        }
+        modifier = modifier
     )
 }
 

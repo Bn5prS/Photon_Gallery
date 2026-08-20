@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.MediaEntity
 import com.inferno.gallery.data.db.FaceEntity
+import com.inferno.gallery.data.db.PersonClusterEntity
+import com.inferno.gallery.data.IndexingProgressManager
 import com.inferno.gallery.data.LocalMediaRepository
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
@@ -16,6 +18,7 @@ import com.inferno.gallery.data.FavoritesManager
 import com.inferno.gallery.data.VaultAuthManager
 import com.inferno.gallery.data.BucketNames
 import com.inferno.gallery.data.MediaQueryBuilder
+import com.inferno.gallery.data.ai.FaceClusteringManager
 import android.util.Log
 
 import kotlinx.coroutines.CancellationException
@@ -136,9 +139,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val favoritesManager = FavoritesManager(application)
     private val database = DatabaseProvider.getDatabase(application)
     
-    // UI State for Face Clusters
-    private val _peopleClusters = MutableStateFlow<List<FaceEntity>>(emptyList())
-    val peopleClusters: StateFlow<List<FaceEntity>> = _peopleClusters.asStateFlow()
+    // UI State for Person Face Clusters
+    val personClusters: StateFlow<List<PersonClusterEntity>> = database.faceDao().observeAllClusters()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val unindexedFaceCount: StateFlow<Int> = database.faceDao().observeUnindexedFaceCount()
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+
+    val faceIndexingProgress = IndexingProgressManager.faceProgress
 
     // UI State for Place Clusters
     private val _placesClusters = MutableStateFlow<List<com.inferno.gallery.data.db.BucketInfo>>(emptyList())
@@ -179,13 +187,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
-        // Collect face clusters
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().getClusterRepresentatives().collect { clusters ->
-                _peopleClusters.value = clusters
-            }
-        }
-
         // Collect place clusters
         viewModelScope.launch(Dispatchers.IO) {
             database.placesDao().observePlaceClusters().collect { clusters ->
@@ -204,27 +205,34 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     Log.d("GalleryViewModel", "Room empty — running fast initial sync")
                     val mediaList = repository.getImagesListForSync()
                     if (mediaList.isNotEmpty()) {
-                        val entities = mediaList.map { media ->
-                            com.inferno.gallery.data.db.CoreMediaEntity(
-                                id = media.id,
-                                uriString = media.uri.toString(),
-                                filePath = media.path,
-                                bucketName = media.bucketName,
-                                dateAdded = media.dateAdded,
-                                dateModified = media.dateModified,
-                                size = media.size,
-                                name = media.name,
-                                mimeType = null,
-                                isVideo = media.isVideo,
-                                durationMs = media.durationMs,
-                                isIndexedOcr = false,
-                                pHash = null,
-                                latitude = null,
-                                longitude = null,
-                                fileHash = null
-                            )
+                        val vaultUris = database.vaultDao().getAllOriginalUris().toSet()
+                        val vaultPaths = database.vaultDao().getAllOriginalPaths().toSet()
+
+                        val entities = mediaList
+                            .filter { !vaultUris.contains(it.uri.toString()) && !vaultPaths.contains(it.path) }
+                            .map { media ->
+                                com.inferno.gallery.data.db.CoreMediaEntity(
+                                    id = media.id,
+                                    uriString = media.uri.toString(),
+                                    filePath = media.path,
+                                    bucketName = media.bucketName,
+                                    dateAdded = media.dateAdded,
+                                    dateModified = media.dateModified,
+                                    size = media.size,
+                                    name = media.name,
+                                    mimeType = null,
+                                    isVideo = media.isVideo,
+                                    durationMs = media.durationMs,
+                                    isIndexedOcr = false,
+                                    pHash = null,
+                                    latitude = null,
+                                    longitude = null,
+                                    fileHash = null
+                                )
+                            }
+                        if (entities.isNotEmpty()) {
+                            database.mediaDao().insertAll(entities)
                         }
-                        database.mediaDao().insertAll(entities)
                         Log.d("GalleryViewModel", "Fast sync complete: ${entities.size} items inserted")
                     }
                     _isInitialSyncRunning.value = false
@@ -399,42 +407,56 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = false
     )
 
-
-
     fun toggleFavorite(id: String) {
         viewModelScope.launch {
             favoritesManager.toggleFavorite(id)
         }
     }
 
-
-
-    val favoriteMedia: StateFlow<List<GalleryItem>> = favoritesManager.favoritesFlow.flatMapLatest { favs ->
+    val favoriteMedia: StateFlow<List<GalleryItem>> = combine(
+        favoritesManager.favoritesFlow,
+        excludedFolders
+    ) { favs, excluded ->
+        Pair(favs, excluded)
+    }.flatMapLatest { (favs, excluded) ->
         if (favs.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
         else database.mediaDao().observeMediaByIds(favs.mapNotNull { it.toLongOrNull() })
-    }.map { entities ->
-        entities.map { entity ->
-            val uri = Uri.parse(entity.uriString)
-            val (exists, resolved) = resolveItemFields(uri, entity.filePath)
-            GalleryItem(
-                id = entity.id.toString(),
-                uri = uri,
-                bucketName = entity.bucketName,
-                dateAdded = entity.dateAdded,
-                size = entity.size,
-                name = entity.name,
-                dateModified = entity.dateModified,
-                path = entity.filePath,
-                isVideo = entity.isVideo,
-                durationMs = entity.durationMs,
-                localExists = exists,
-                resolvedUri = resolved
-            )
-        }
+            .map { entities ->
+                entities
+                    .filter { !excluded.contains(it.bucketName) && it.bucketName != "Trash" }
+                    .map { entity ->
+                        val uri = Uri.parse(entity.uriString)
+                        val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                        GalleryItem(
+                            id = entity.id.toString(),
+                            uri = uri,
+                            bucketName = entity.bucketName,
+                            dateAdded = entity.dateAdded,
+                            size = entity.size,
+                            name = entity.name,
+                            dateModified = entity.dateModified,
+                            path = entity.filePath,
+                            isVideo = entity.isVideo,
+                            durationMs = entity.durationMs,
+                            localExists = exists,
+                            resolvedUri = resolved
+                        )
+                    }
+            }
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _detailMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
     val detailMedia: StateFlow<List<GalleryItem>> = _detailMedia.asStateFlow()
+
+    private val _initialDetailItem = MutableStateFlow<GalleryItem?>(null)
+    val initialDetailItem: StateFlow<GalleryItem?> = _initialDetailItem.asStateFlow()
+
+    fun setInitialDetailItem(item: GalleryItem) {
+        _initialDetailItem.value = item
+        if (_detailMedia.value.none { it.id == item.id }) {
+            _detailMedia.value = listOf(item)
+        }
+    }
 
     fun loadDetailMedia(mediaId: String, bucketName: String?) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -451,8 +473,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
             if (bucketName == "geotagged") {
-                val queryString = "SELECT cm.* FROM core_media cm WHERE cm.latitude IS NOT NULL AND cm.longitude IS NOT NULL AND cm.bucketName != 'Trash' ORDER BY cm.dateAdded DESC"
-                val query = androidx.sqlite.db.SimpleSQLiteQuery(queryString)
+                val excluded = excludedFolders.value
+                val excludedClause = if (excluded.isNotEmpty()) {
+                    val placeholders = excluded.joinToString(",") { "?" }
+                    " AND cm.bucketName NOT IN ($placeholders)"
+                } else ""
+                val queryString = "SELECT cm.* FROM core_media cm WHERE cm.latitude IS NOT NULL AND cm.longitude IS NOT NULL AND cm.bucketName != 'Trash' AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)$excludedClause ORDER BY cm.dateAdded DESC"
+                val query = androidx.sqlite.db.SimpleSQLiteQuery(queryString, excluded.toTypedArray())
                 val entities = try {
                     database.mediaDao().getMediaRaw(query)
                 } catch (e: Exception) {
@@ -488,7 +515,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val order = sortOrder.value
 
             val smartIds = smartSearchResults.value.map { it.id }
-            val qc = buildMediaConditions(bucket = bucketName, filterIndex = filterIndex, smartIds = smartIds)
+            val qc = buildMediaConditions(
+                bucket = bucketName, 
+                filterIndex = filterIndex, 
+                excluded = excludedFolders.value,
+                favIds = favoriteIds.value,
+                smartIds = smartIds
+            )
             val queryString = "SELECT cm.* FROM core_media cm " +
                 buildWhereClause(qc) + buildOrderClause(order, bucketName, smartIds)
 
@@ -894,9 +927,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             .sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val duplicates: StateFlow<List<DuplicateGroup>> = database.mediaDao().observeExactDuplicates()
-        .map { entities ->
-            entities.map { entity ->
+    val duplicates: StateFlow<List<DuplicateGroup>> = combine(
+        database.mediaDao().observeExactDuplicates(),
+        excludedFolders
+    ) { entities, excluded ->
+        entities.filter { !excluded.contains(it.bucketName) && it.bucketName != "Trash" }
+            .map { entity ->
                 val uri = Uri.parse(entity.uriString)
                 val exists = java.io.File(entity.filePath).exists()
                 GalleryItem(
@@ -922,7 +958,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             .filter { it.value.size > 1 }
             .map { (hash, items) -> DuplicateGroup(hash, items) }
             .sortedByDescending { group -> group.items.sumOf { it.size } }
-        }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun scanForDuplicates() {
         if (_duplicateScanState.value is DuplicateScanState.Scanning) return
@@ -1033,26 +1069,29 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun loadGeotaggedMedia() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val excluded = excludedFolders.value
                 val entities = database.mediaDao().getGeotaggedMedia()
-                _geotaggedMedia.value = entities.map { entity ->
-                    val uri = Uri.parse(entity.uriString)
-                    GalleryItem(
-                        id = entity.id.toString(),
-                        uri = uri,
-                        bucketName = entity.bucketName,
-                        dateAdded = entity.dateAdded,
-                        size = entity.size,
-                        name = entity.name,
-                        dateModified = entity.dateModified,
-                        path = entity.filePath,
-                        isVideo = entity.isVideo,
-                        durationMs = entity.durationMs,
-                        localExists = true,
-                        resolvedUri = resolveFileUri(uri, entity.filePath),
-                        latitude = entity.latitude,
-                        longitude = entity.longitude
-                    )
-                }
+                _geotaggedMedia.value = entities
+                    .filter { !excluded.contains(it.bucketName) && it.bucketName != "Trash" }
+                    .map { entity ->
+                        val uri = Uri.parse(entity.uriString)
+                        GalleryItem(
+                            id = entity.id.toString(),
+                            uri = uri,
+                            bucketName = entity.bucketName,
+                            dateAdded = entity.dateAdded,
+                            size = entity.size,
+                            name = entity.name,
+                            dateModified = entity.dateModified,
+                            path = entity.filePath,
+                            isVideo = entity.isVideo,
+                            durationMs = entity.durationMs,
+                            localExists = true,
+                            resolvedUri = resolveFileUri(uri, entity.filePath),
+                            latitude = entity.latitude,
+                            longitude = entity.longitude
+                        )
+                    }
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Failed to load geotagged media: ${e.message}")
             }
@@ -1062,10 +1101,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val pinnedAlbums: StateFlow<List<AlbumBucket>> = combine(
         database.mediaDao().observeBuckets(),
         database.mediaDao().observeAllMediaStats(),
-        database.mediaDao().observeVideoStats(),
         database.mediaDao().observeTopCoverUris(),
-        favoriteMedia
-    ) { buckets, allStats, videoStats, topCoverUris, favMedia ->
+        excludedFolders
+    ) { buckets, allStats, topCoverUris, excluded ->
         val allBucket = AlbumBucket(
             bucketName = "All",
             coverUri = allStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
@@ -1084,43 +1122,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             maxDate = cameraItems.maxOfOrNull { it.maxDate } ?: 0L
         )
 
-        val videosBucket = AlbumBucket(
-            bucketName = BucketNames.VIDEOS,
-            coverUri = videoStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-            itemCount = videoStats.itemCount,
-            totalSizeBytes = videoStats.totalSizeBytes,
-            maxDate = videoStats.maxDate
-        )
-
-        val favoritesBucket = AlbumBucket(
-            bucketName = BucketNames.FAVORITES,
-            coverUri = favMedia.firstOrNull()?.uri ?: Uri.EMPTY,
-            itemCount = favMedia.size,
-            totalSizeBytes = favMedia.sumOf { it.size },
-            maxDate = favMedia.maxOfOrNull { it.dateAdded } ?: 0L
-        )
-
-        val screenshotsItems = buckets.filter { it.bucketName.contains(BucketNames.SCREENSHOTS, ignoreCase = true) || it.bucketName.contains(BucketNames.SCREENSHOT, ignoreCase = true) }
-        val screenshotsBucket = AlbumBucket(
-            bucketName = screenshotsItems.firstOrNull()?.bucketName ?: BucketNames.SCREENSHOTS,
-            coverUri = screenshotsItems.maxByOrNull { it.maxDate }?.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-            itemCount = screenshotsItems.sumOf { it.itemCount },
-            totalSizeBytes = screenshotsItems.sumOf { it.totalSizeBytes },
-            maxDate = screenshotsItems.maxOfOrNull { it.maxDate } ?: 0L
-        )
-
-        val screenrecordingsItems = buckets.filter { it.bucketName.contains(BucketNames.SCREENRECORDINGS, ignoreCase = true) || it.bucketName.contains(BucketNames.SCREEN_RECORDS, ignoreCase = true) || it.bucketName.contains(BucketNames.SCREEN_RECORDS_NO_SPACE, ignoreCase = true) || it.bucketName.contains(BucketNames.SCREEN_RECORD, ignoreCase = true) }
-        val screenrecordingsBucket = AlbumBucket(
-            bucketName = screenrecordingsItems.firstOrNull()?.bucketName ?: BucketNames.SCREENRECORDINGS,
-            coverUri = screenrecordingsItems.maxByOrNull { it.maxDate }?.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-            itemCount = screenrecordingsItems.sumOf { it.itemCount },
-            totalSizeBytes = screenrecordingsItems.sumOf { it.totalSizeBytes },
-            maxDate = screenrecordingsItems.maxOfOrNull { it.maxDate } ?: 0L
-        )
-
-        listOf(
+        listOfNotNull(
             allBucket,
-            cameraBucket
+            if (!excluded.contains(cameraBucket.bucketName)) cameraBucket else null
         ).filter { it.itemCount > 0 || it.bucketName == BucketNames.ALL || it.bucketName == BucketNames.CAMERA }
     }.combine(settingsRepository.albumCustomCoversFlow) { buckets, customCovers ->
         buckets.map { bucket ->
@@ -1287,12 +1291,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun performUnifiedSearch(query: String) {
         _isSearching.value = true
+        val currentExcluded = excludedFolders.value
         try {
             kotlinx.coroutines.coroutineScope {
                     val ftsDeferred = async(Dispatchers.IO) {
                         try {
                             val ftsEntities = if (query.isNotBlank()) {
-                                DatabaseProvider.searchFts(database, query)
+                                DatabaseProvider.searchFts(database, query, currentExcluded)
                             } else {
                                 emptyList()
                             }
@@ -1353,6 +1358,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                     withContext(Dispatchers.IO) {
                                         val entitiesMap = database.mediaDao().getMediaByIdsList(matchedIds).associateBy { it.id }
                                         val orderedEntities = matchedIds.mapNotNull { entitiesMap[it] }
+                                            .filter { !currentExcluded.contains(it.bucketName) && it.bucketName != "Trash" }
 
                                         orderedEntities.map { entity ->
                                             val uri = Uri.parse(entity.uriString)
@@ -1779,6 +1785,149 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // ── Face Indexing & Clustering Methods ────────────────────────────────
+
+    val isFaceModelDownloaded: StateFlow<Boolean> = kotlinx.coroutines.flow.flow {
+        val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+        while (true) {
+            emit(faceEngine.isModelDownloaded())
+            kotlinx.coroutines.delay(2000)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(application).isModelDownloaded()
+    )
+
+    val faceModelDownloadWorkInfo: StateFlow<androidx.work.WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("FaceModelDownloadWorker")
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun startFaceModelDownload() {
+        viewModelScope.launch {
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("FaceModelDownloadWorker", ExistingWorkPolicy.REPLACE, request)
+        }
+    }
+
+    fun cancelFaceModelDownload() {
+        viewModelScope.launch {
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceModelDownloadWorker")
+        }
+    }
+
+    val faceIndexWorkInfo = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("FaceIndexWorker")
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun startFaceIndexing() {
+        viewModelScope.launch {
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("FaceIndexWorker", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+
+    fun stopFaceIndexing() {
+        viewModelScope.launch {
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+            IndexingProgressManager.updateFaceProgress(isIndexing = false, progress = 0, total = 0)
+        }
+    }
+
+    fun clearFaceIndexAndReindex() {
+        viewModelScope.launch(Dispatchers.IO) {
+            WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+            database.faceDao().clearAllFaces()
+            database.faceDao().clearAllClusters()
+            database.faceDao().resetFaceIndexStatus()
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork("FaceIndexWorker", ExistingWorkPolicy.REPLACE, request)
+            showToast("Re-indexing faces with improved AI engine…")
+        }
+    }
+
+    fun reclusterFaces() {
+        viewModelScope.launch(Dispatchers.IO) {
+            FaceClusteringManager.getInstance(getApplication<Application>()).runGraphClustering()
+            showToast("Faces re-clustered successfully")
+        }
+    }
+
+    fun updatePersonName(clusterId: Long, name: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.faceDao().updatePersonName(clusterId, name.trim())
+            showToast(if (name.isBlank()) "Name removed" else "Named $name")
+        }
+    }
+
+    fun mergePersonClusters(sourceClusterId: Long, targetClusterId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.faceDao().mergeClusters(sourceClusterId, targetClusterId)
+            showToast("People merged successfully")
+        }
+    }
+
+    fun setPersonFavorite(clusterId: Long, isFavorite: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.faceDao().setClusterFavorite(clusterId, isFavorite)
+        }
+    }
+
+    fun setPersonHidden(clusterId: Long, isHidden: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.faceDao().setClusterHidden(clusterId, isHidden)
+            showToast(if (isHidden) "Person hidden" else "Person unhidden")
+        }
+    }
+
+    fun setPersonCover(clusterId: Long, faceId: Long, mediaId: Long, cropPath: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.faceDao().updateClusterCover(clusterId, faceId, mediaId, cropPath)
+            showToast("Cover photo updated")
+        }
+    }
+
+    fun deletePersonCluster(clusterId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.faceDao().deleteFacesForCluster(clusterId)
+            database.faceDao().deleteClusterOnly(clusterId)
+            showToast("Person removed")
+        }
+    }
+
+    fun observeMediaForCluster(clusterId: Long): Flow<List<GalleryItem>> {
+        return combine(database.faceDao().observeMediaForCluster(clusterId), excludedFolders) { entities, excluded ->
+            entities
+                .filter { !excluded.contains(it.bucketName) && it.bucketName != "Trash" }
+                .map { entity ->
+                    GalleryItem(
+                        id = entity.id.toString(),
+                        uri = Uri.parse(entity.uriString),
+                        path = entity.filePath,
+                        name = entity.name,
+                        dateAdded = entity.dateAdded,
+                        dateModified = entity.dateModified,
+                        size = entity.size,
+                        isVideo = entity.isVideo,
+                        durationMs = entity.durationMs,
+                        bucketName = entity.bucketName
+                    )
+                }
+        }.flowOn(Dispatchers.IO)
+    }
+
+    fun observeFacesForMedia(mediaId: Long): Flow<List<FaceEntity>> {
+        return database.faceDao().observeFacesForMedia(mediaId)
+    }
+
 
 
     sealed class UiEvent {
@@ -1820,7 +1969,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
     }.flatMapLatest { query ->
         Pager(
-            config = PagingConfig(pageSize = 120, prefetchDistance = 60, enablePlaceholders = true)
+            config = PagingConfig(pageSize = 120, prefetchDistance = 180, enablePlaceholders = true)
         ) {
             database.mediaDao().observeMediaPagingRaw(query)
         }.flow
@@ -1913,19 +2062,5 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }.cachedIn(viewModelScope)
-    }
-
-
-
-
-
-    fun getFacesForCluster(clusterId: Int): Flow<List<FaceEntity>> {
-        return database.faceDao().getFacesForCluster(clusterId)
-    }
-
-    fun updatePersonName(clusterId: Int, name: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().updatePersonName(clusterId, name)
-        }
     }
 }
