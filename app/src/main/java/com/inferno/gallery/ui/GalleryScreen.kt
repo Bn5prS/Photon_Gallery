@@ -194,10 +194,6 @@ fun GalleryScreen(
         viewModel.setBucket(bucketName)
     }
 
-    LaunchedEffect(selectedFilterIndex, bucketName) {
-        lazyGridState.scrollToItem(0, 0)
-    }
-
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
 
     var previousFilter by remember { mutableStateOf(selectedFilterIndex) }
