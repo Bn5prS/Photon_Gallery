@@ -69,7 +69,6 @@ import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
-import com.inferno.gallery.ui.people.PeopleCarousel
 import androidx.compose.ui.graphics.vector.ImageVector
 
 
@@ -212,23 +211,13 @@ private fun EmptySearchState(
     onViewAllPeopleClick: () -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
-    val personClusters by viewModel.personClusters.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // ── People Carousel ──
-        if (com.inferno.gallery.utils.FeatureFlags.ENABLE_PEOPLE_FEATURE && personClusters.isNotEmpty()) {
-            item {
-                PeopleCarousel(
-                    clusters = personClusters,
-                    onPersonClick = onPersonClick,
-                    onViewAllClick = onViewAllPeopleClick
-                )
-            }
-        }
+
 
         if (recentSearches.isNotEmpty()) {
             item {
@@ -310,7 +299,7 @@ private fun EmptySearchState(
                     }
                 }
             }
-        } else if (personClusters.isEmpty()) {
+        } else {
             item {
                 PhotonEmptyState(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_search),

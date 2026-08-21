@@ -37,17 +37,14 @@ class ModelDownloadWorker(
 
         private const val TEXT_MODEL_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/text_model_quantized.onnx"
         private const val VISION_MODEL_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/vision_model_quantized.onnx"
-        private const val FACE_MODEL_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/ghostfacenet_v1.onnx"
         private const val TOKENIZER_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/tokenizer.json"
 
         private const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
         private const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
-        private const val FACE_MODEL_NAME = "ghostfacenet_v1.onnx"
         private const val TOKENIZER_NAME = "tokenizer.json"
 
         private const val TEXT_MODEL_SHA256 = "9106b51e6c663a56b99182ec617c2b3d53577b037e7e24a7717eb78048a0c97a"
         private const val VISION_MODEL_SHA256 = "44eece4fe5fe4e0359a88268a327adf758633a1aade3917690b952bef1501f96"
-        private const val FACE_MODEL_SHA256 = "f72f85aa3ec2e8cfa5746606aab4589f325792e20c8fb3e51e7d8d6ba4134ae2"
         private const val TOKENIZER_SHA256 = "72ed5c96db5729294468543e4bc75fce14ca63f58e37300290189ba1c1e52b85"
     }
 
