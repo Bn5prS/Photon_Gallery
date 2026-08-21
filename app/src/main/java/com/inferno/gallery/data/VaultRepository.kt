@@ -141,7 +141,6 @@ class VaultRepository(
                     for (id in mediaIds) {
                         db.embeddingDao().deleteEmbedding(id)
                         db.embeddingStatusDao().deleteStatus(id)
-                        db.faceDao().deleteFacesForMedia(id)
                     }
                     favManager.removeFavorites(mediaIds.map { it.toString() }.toSet())
                     DatabaseProvider.deleteFtsRows(db, mediaIds)

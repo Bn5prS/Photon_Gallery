@@ -628,44 +628,9 @@ fun DetailScreen(
                         )
                     }
                 } else {
-                    androidx.compose.runtime.LaunchedEffect(activeHighlight, activeFaceClusterId, page, pagerState.currentPage, resolvedUri) {
+                    androidx.compose.runtime.LaunchedEffect(activeHighlight, page, pagerState.currentPage, resolvedUri) {
                         if (page == pagerState.currentPage) {
-                            if (activeFaceClusterId != null) {
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    try {
-                                        val currentMedia = galleryItems.getOrNull(page)
-                                        val mId = currentMedia?.id?.toLongOrNull()
-                                        val rects = mutableListOf<android.graphics.Rect>()
-                                        if (mId != null) {
-                                            val faceDao = com.inferno.gallery.data.db.DatabaseProvider.getDatabase(context).faceDao()
-                                            val faces = faceDao.getFacesForMedia(mId)
-                                            val matchingFaces = faces.filter { it.clusterId == activeFaceClusterId }
-                                            val targetFaces = if (matchingFaces.isNotEmpty()) matchingFaces else faces
-                                            for (face in targetFaces) {
-                                                rects.add(android.graphics.Rect(
-                                                    face.boundingBoxLeft.toInt(),
-                                                    face.boundingBoxTop.toInt(),
-                                                    face.boundingBoxRight.toInt(),
-                                                    face.boundingBoxBottom.toInt()
-                                                ))
-                                            }
-                                        }
-                                        val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                                        context.contentResolver.openInputStream(resolvedUri)?.use { stream ->
-                                            android.graphics.BitmapFactory.decodeStream(stream, null, options)
-                                        }
-                                        if (options.outWidth > 0 && options.outHeight > 0) {
-                                            highlightImageSize = androidx.compose.ui.geometry.Size(options.outWidth.toFloat(), options.outHeight.toFloat())
-                                        }
-                                        highlightRects = rects
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("DetailScreen", "Face highlight failed", e)
-                                    }
-                                }
-                                highlightOverlayVisible = true
-                                kotlinx.coroutines.delay(4000)
-                                highlightOverlayVisible = false
-                            } else if (activeHighlight != null) {
+                            if (activeHighlight != null) {
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                     try {
                                         val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)

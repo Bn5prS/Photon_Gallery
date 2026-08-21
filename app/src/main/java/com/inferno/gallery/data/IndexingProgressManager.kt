@@ -18,18 +18,11 @@ object IndexingProgressManager {
     private val _clipProgress = MutableStateFlow(ProgressState())
     val clipProgress: StateFlow<ProgressState> = _clipProgress.asStateFlow()
 
-    private val _faceProgress = MutableStateFlow(ProgressState())
-    val faceProgress: StateFlow<ProgressState> = _faceProgress.asStateFlow()
-
     fun updateOcrProgress(isIndexing: Boolean, progress: Int, total: Int, currentImageName: String? = null) {
         _ocrProgress.value = ProgressState(isIndexing, progress, total, currentImageName)
     }
 
     fun updateClipProgress(isIndexing: Boolean, progress: Int, total: Int, currentImageName: String? = null) {
         _clipProgress.value = ProgressState(isIndexing, progress, total, currentImageName)
-    }
-
-    fun updateFaceProgress(isIndexing: Boolean, progress: Int, total: Int, currentImageName: String? = null) {
-        _faceProgress.value = ProgressState(isIndexing, progress, total, currentImageName)
     }
 }

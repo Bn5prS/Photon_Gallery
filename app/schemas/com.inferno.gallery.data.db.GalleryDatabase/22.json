@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 22,
-    "identityHash": "07bbea5f0a4e7c248222dbdda39dbb43",
+    "identityHash": "17d6e79bc1964375bd309d577b7839ff",
     "entities": [
       {
         "tableName": "core_media",
@@ -328,175 +328,11 @@
             "mediaId"
           ]
         }
-      },
-      {
-        "tableName": "faces",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mediaId` INTEGER NOT NULL, `clusterId` INTEGER NOT NULL, `boundingBoxLeft` REAL NOT NULL, `boundingBoxTop` REAL NOT NULL, `boundingBoxRight` REAL NOT NULL, `boundingBoxBottom` REAL NOT NULL, `cropCachePath` TEXT, `embedding` BLOB, FOREIGN KEY(`mediaId`) REFERENCES `core_media`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "mediaId",
-            "columnName": "mediaId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "clusterId",
-            "columnName": "clusterId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "boundingBoxLeft",
-            "columnName": "boundingBoxLeft",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
-            "fieldPath": "boundingBoxTop",
-            "columnName": "boundingBoxTop",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
-            "fieldPath": "boundingBoxRight",
-            "columnName": "boundingBoxRight",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
-            "fieldPath": "boundingBoxBottom",
-            "columnName": "boundingBoxBottom",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
-            "fieldPath": "cropCachePath",
-            "columnName": "cropCachePath",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "embedding",
-            "columnName": "embedding",
-            "affinity": "BLOB"
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_faces_mediaId",
-            "unique": false,
-            "columnNames": [
-              "mediaId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_faces_mediaId` ON `${TABLE_NAME}` (`mediaId`)"
-          },
-          {
-            "name": "index_faces_clusterId",
-            "unique": false,
-            "columnNames": [
-              "clusterId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_faces_clusterId` ON `${TABLE_NAME}` (`clusterId`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "core_media",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "mediaId"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
-      },
-      {
-        "tableName": "person_clusters",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`clusterId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT, `coverFaceId` INTEGER, `coverMediaId` INTEGER, `coverCropPath` TEXT, `faceCount` INTEGER NOT NULL, `centroid` BLOB, `isFavorite` INTEGER NOT NULL, `isHidden` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)",
-        "fields": [
-          {
-            "fieldPath": "clusterId",
-            "columnName": "clusterId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "name",
-            "columnName": "name",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "coverFaceId",
-            "columnName": "coverFaceId",
-            "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "coverMediaId",
-            "columnName": "coverMediaId",
-            "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "coverCropPath",
-            "columnName": "coverCropPath",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "faceCount",
-            "columnName": "faceCount",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "centroid",
-            "columnName": "centroid",
-            "affinity": "BLOB"
-          },
-          {
-            "fieldPath": "isFavorite",
-            "columnName": "isFavorite",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "isHidden",
-            "columnName": "isHidden",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "updatedAt",
-            "columnName": "updatedAt",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "clusterId"
-          ]
-        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '07bbea5f0a4e7c248222dbdda39dbb43')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '17d6e79bc1964375bd309d577b7839ff')"
     ]
   }
 }

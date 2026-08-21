@@ -110,20 +110,7 @@ class MediaSyncWorker(
                 )
             }
 
-            // Auto-trigger Face Indexing only when model is downloaded and unindexed photos exist
-            val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(applicationContext)
-            val unindexedFaceCount = try {
-                database.faceDao().getUnindexedFaceMedia().size
-            } catch (e: Exception) { 0 }
-            if (faceEngine.isModelDownloaded() && unindexedFaceCount > 0) {
-                Log.d("MediaSyncWorker", "Auto-indexing $unindexedFaceCount images for Face Recognition...")
-                val faceRequest = androidx.work.OneTimeWorkRequestBuilder<FaceIndexWorker>().build()
-                androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
-                    "FaceIndexWorker",
-                    androidx.work.ExistingWorkPolicy.KEEP,
-                    faceRequest
-                )
-            }
+
 
             // Auto-trigger Reverse Geocoding & GPS metadata extraction in background
             val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()

@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 23,
-    "identityHash": "7e686bdeba1f2f0aaa794d11c6fa3587",
+    "identityHash": "17d6e79bc1964375bd309d577b7839ff",
     "entities": [
       {
         "tableName": "core_media",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `uriString` TEXT NOT NULL, `filePath` TEXT NOT NULL, `bucketName` TEXT NOT NULL, `dateAdded` INTEGER NOT NULL, `dateModified` INTEGER NOT NULL, `size` INTEGER NOT NULL, `name` TEXT NOT NULL, `mimeType` TEXT, `isVideo` INTEGER NOT NULL, `durationMs` INTEGER, `is_indexed_ocr` INTEGER NOT NULL, `pHash` INTEGER, `latitude` REAL, `longitude` REAL, `fileHash` TEXT, `faceFocalX` REAL, `faceFocalY` REAL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `uriString` TEXT NOT NULL, `filePath` TEXT NOT NULL, `bucketName` TEXT NOT NULL, `dateAdded` INTEGER NOT NULL, `dateModified` INTEGER NOT NULL, `size` INTEGER NOT NULL, `name` TEXT NOT NULL, `mimeType` TEXT, `isVideo` INTEGER NOT NULL, `durationMs` INTEGER, `is_indexed_ocr` INTEGER NOT NULL, `is_indexed_faces` INTEGER NOT NULL, `pHash` INTEGER, `latitude` REAL, `longitude` REAL, `fileHash` TEXT, `faceFocalX` REAL, `faceFocalY` REAL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -75,6 +75,12 @@
           {
             "fieldPath": "isIndexedOcr",
             "columnName": "is_indexed_ocr",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isIndexedFaces",
+            "columnName": "is_indexed_faces",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -289,142 +295,6 @@
         }
       },
       {
-        "tableName": "manual_unstack",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` TEXT NOT NULL, PRIMARY KEY(`mediaId`))",
-        "fields": [
-          {
-            "fieldPath": "mediaId",
-            "columnName": "mediaId",
-            "affinity": "TEXT",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "mediaId"
-          ]
-        }
-      },
-      {
-        "tableName": "face_clusters",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mediaId` INTEGER NOT NULL, `clusterId` INTEGER, `personName` TEXT, `embedding` BLOB NOT NULL, `cropX` INTEGER NOT NULL, `cropY` INTEGER NOT NULL, `cropWidth` INTEGER NOT NULL, `cropHeight` INTEGER NOT NULL, FOREIGN KEY(`mediaId`) REFERENCES `core_media`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "mediaId",
-            "columnName": "mediaId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "clusterId",
-            "columnName": "clusterId",
-            "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "personName",
-            "columnName": "personName",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "embedding",
-            "columnName": "embedding",
-            "affinity": "BLOB",
-            "notNull": true
-          },
-          {
-            "fieldPath": "cropX",
-            "columnName": "cropX",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "cropY",
-            "columnName": "cropY",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "cropWidth",
-            "columnName": "cropWidth",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "cropHeight",
-            "columnName": "cropHeight",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_face_clusters_mediaId",
-            "unique": false,
-            "columnNames": [
-              "mediaId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_face_clusters_mediaId` ON `${TABLE_NAME}` (`mediaId`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "core_media",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "mediaId"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
-      },
-      {
-        "tableName": "virtual_folder_mapping",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` INTEGER NOT NULL, `folderName` TEXT NOT NULL, `dateMapped` INTEGER NOT NULL, PRIMARY KEY(`mediaId`))",
-        "fields": [
-          {
-            "fieldPath": "mediaId",
-            "columnName": "mediaId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "folderName",
-            "columnName": "folderName",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "dateMapped",
-            "columnName": "dateMapped",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "mediaId"
-          ]
-        }
-      },
-      {
         "tableName": "geocoded_locations",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` INTEGER NOT NULL, `placeName` TEXT NOT NULL, `adminArea` TEXT, `timestampMs` INTEGER NOT NULL, PRIMARY KEY(`mediaId`))",
         "fields": [
@@ -462,7 +332,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7e686bdeba1f2f0aaa794d11c6fa3587')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '17d6e79bc1964375bd309d577b7839ff')"
     ]
   }
 }

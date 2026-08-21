@@ -99,7 +99,6 @@ import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
-import com.inferno.gallery.ui.people.PeopleCarousel
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -132,10 +131,8 @@ fun AlbumsScreen(
     val vaultItemCount by viewModel.vaultItemCount.collectAsState()
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val placesClusters by viewModel.placesClusters.collectAsState()
-    val personClusters by viewModel.personClusters.collectAsState()
     val mediaTypeBuckets by viewModel.mediaTypeBuckets.collectAsState()
     val customCovers by viewModel.albumCustomCovers.collectAsState()
-    val isFaceModelDownloaded by viewModel.isFaceModelDownloaded.collectAsState()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
@@ -436,88 +433,7 @@ fun AlbumsScreen(
             }
         }
 
-        // ── 2.5 People & Pets Carousel ──
-        if (com.inferno.gallery.utils.FeatureFlags.ENABLE_PEOPLE_FEATURE) {
-            item(key = "header_people", span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = "People & Pets",
-                    count = if (personClusters.isNotEmpty()) personClusters.size else null,
-                    isExpanded = peopleExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedPeople() },
-                    onSeeAll = onNavigateToPeople
-                )
-            }
 
-            item(key = "content_people", span = { GridItemSpan(maxLineSpan) }) {
-                AnimatedVisibility(
-                    visible = peopleExpanded,
-                    enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                    exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-                ) {
-                    if (personClusters.isNotEmpty()) {
-                        PeopleCarousel(
-                            clusters = personClusters,
-                            onPersonClick = { onPersonClick(it.toString()) },
-                            onViewAllClick = onNavigateToPeople,
-                            showHeader = false
-                        )
-                    } else {
-                        Surface(
-                            onClick = onNavigateToPeople,
-                            shape = ShapeLargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = SpacingTokens.XS)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(SpacingTokens.L),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-                            ) {
-                                Surface(
-                                    shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_face),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(IconSizeTokens.L)
-                                        )
-                                    }
-                                }
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isFaceModelDownloaded) "Discover People & Pets" else "Set Up People & Pets",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = if (isFaceModelDownloaded) "Scan your photos to group friends, family, and pets" else "Download on-device AI model (~77 MB) to group faces accurately",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                FilledTonalButton(
-                                    onClick = onNavigateToPeople,
-                                    shape = ShapeFull,
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                ) {
-                                    Text(if (isFaceModelDownloaded) "Scan" else "Set Up")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // ── 3. Places Carousel ──
         item(key = "header_places", span = { GridItemSpan(maxLineSpan) }) {

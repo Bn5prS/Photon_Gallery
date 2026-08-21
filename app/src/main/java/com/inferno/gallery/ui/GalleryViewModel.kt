@@ -8,8 +8,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.MediaEntity
-import com.inferno.gallery.data.db.FaceEntity
-import com.inferno.gallery.data.db.PersonClusterEntity
 import com.inferno.gallery.data.IndexingProgressManager
 import com.inferno.gallery.data.LocalMediaRepository
 import com.inferno.gallery.data.SettingsRepository
@@ -18,7 +16,6 @@ import com.inferno.gallery.data.FavoritesManager
 import com.inferno.gallery.data.VaultAuthManager
 import com.inferno.gallery.data.BucketNames
 import com.inferno.gallery.data.MediaQueryBuilder
-import com.inferno.gallery.data.ai.FaceClusteringManager
 import android.util.Log
 
 import kotlinx.coroutines.CancellationException
@@ -140,14 +137,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val favoritesManager = FavoritesManager(application)
     private val database = DatabaseProvider.getDatabase(application)
     
-    // UI State for Person Face Clusters
-    val personClusters: StateFlow<List<PersonClusterEntity>> = database.faceDao().observeAllClusters()
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val unindexedFaceCount: StateFlow<Int> = database.faceDao().observeUnindexedFaceCount()
-        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
-
-    val faceIndexingProgress = IndexingProgressManager.faceProgress
 
     // UI State for Place Clusters
     private val _placesClusters = MutableStateFlow<List<com.inferno.gallery.data.db.BucketInfo>>(emptyList())
@@ -1872,148 +1862,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ── Face Indexing & Clustering Methods ────────────────────────────────
 
-    val isFaceModelDownloaded: StateFlow<Boolean> = kotlinx.coroutines.flow.flow {
-        val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
-        while (true) {
-            emit(faceEngine.isModelDownloaded())
-            kotlinx.coroutines.delay(2000)
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(application).isModelDownloaded()
-    )
-
-    val faceModelDownloadWorkInfo: StateFlow<androidx.work.WorkInfo?> = WorkManager.getInstance(application)
-        .getWorkInfosForUniqueWorkFlow("FaceModelDownloadWorker")
-        .map { it.firstOrNull() }
-        .stateIn(viewModelScope, SharingStarted.Lazily, null)
-
-    fun startFaceModelDownload() {
-        viewModelScope.launch {
-            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
-                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork("FaceModelDownloadWorker", ExistingWorkPolicy.REPLACE, request)
-        }
-    }
-
-    fun cancelFaceModelDownload() {
-        viewModelScope.launch {
-            WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceModelDownloadWorker")
-        }
-    }
-
-    val faceIndexWorkInfo = WorkManager.getInstance(application)
-        .getWorkInfosForUniqueWorkFlow("FaceIndexWorker")
-        .map { it.firstOrNull() }
-        .stateIn(viewModelScope, SharingStarted.Lazily, null)
-
-    fun startFaceIndexing() {
-        viewModelScope.launch {
-            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
-                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork("FaceIndexWorker", ExistingWorkPolicy.KEEP, request)
-        }
-    }
-
-    fun stopFaceIndexing() {
-        viewModelScope.launch {
-            WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
-            IndexingProgressManager.updateFaceProgress(isIndexing = false, progress = 0, total = 0)
-        }
-    }
-
-    fun clearFaceIndexAndReindex() {
-        viewModelScope.launch(Dispatchers.IO) {
-            WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
-            database.faceDao().clearAllFaces()
-            database.faceDao().clearAllClusters()
-            database.faceDao().resetFaceIndexStatus()
-            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
-                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork("FaceIndexWorker", ExistingWorkPolicy.REPLACE, request)
-            showToast("Re-indexing faces with improved AI engine…")
-        }
-    }
-
-    fun reclusterFaces() {
-        viewModelScope.launch(Dispatchers.IO) {
-            FaceClusteringManager.getInstance(getApplication<Application>()).runGraphClustering()
-            showToast("Faces re-clustered successfully")
-        }
-    }
-
-    fun updatePersonName(clusterId: Long, name: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().updatePersonName(clusterId, name.trim())
-            showToast(if (name.isBlank()) "Name removed" else "Named $name")
-        }
-    }
-
-    fun mergePersonClusters(sourceClusterId: Long, targetClusterId: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().mergeClusters(sourceClusterId, targetClusterId)
-            showToast("People merged successfully")
-        }
-    }
-
-    fun setPersonFavorite(clusterId: Long, isFavorite: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().setClusterFavorite(clusterId, isFavorite)
-        }
-    }
-
-    fun setPersonHidden(clusterId: Long, isHidden: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().setClusterHidden(clusterId, isHidden)
-            showToast(if (isHidden) "Person hidden" else "Person unhidden")
-        }
-    }
-
-    fun setPersonCover(clusterId: Long, faceId: Long, mediaId: Long, cropPath: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().updateClusterCover(clusterId, faceId, mediaId, cropPath)
-            showToast("Cover photo updated")
-        }
-    }
-
-    fun deletePersonCluster(clusterId: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            database.faceDao().deleteFacesForCluster(clusterId)
-            database.faceDao().deleteClusterOnly(clusterId)
-            showToast("Person removed")
-        }
-    }
-
-    fun observeMediaForCluster(clusterId: Long): Flow<List<GalleryItem>> {
-        return combine(database.faceDao().observeMediaForCluster(clusterId), excludedFolders) { entities, excluded ->
-            entities
-                .filter { !excluded.contains(it.bucketName) && it.bucketName != "Trash" }
-                .map { entity ->
-                    GalleryItem(
-                        id = entity.id.toString(),
-                        uri = Uri.parse(entity.uriString),
-                        path = entity.filePath,
-                        name = entity.name,
-                        dateAdded = entity.dateAdded,
-                        dateModified = entity.dateModified,
-                        size = entity.size,
-                        isVideo = entity.isVideo,
-                        durationMs = entity.durationMs,
-                        bucketName = entity.bucketName
-                    )
-                }
-        }.flowOn(Dispatchers.IO)
-    }
-
-    fun observeFacesForMedia(mediaId: Long): Flow<List<FaceEntity>> {
-        return database.faceDao().observeFacesForMedia(mediaId)
-    }
 
 
 
