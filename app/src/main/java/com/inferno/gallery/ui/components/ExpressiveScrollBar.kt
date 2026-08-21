@@ -277,13 +277,13 @@ fun ExpressiveScrollBar(
         )
 
         val animatedWidth by animateDpAsState(
-            targetValue = if (isInteracting) 34.dp else 26.dp,
+            targetValue = if (isInteracting) 36.dp else 28.dp,
             animationSpec = MotionTokens.snappySpring(),
             label = "WidthAnimation"
         )
 
         val animatedHeight by animateDpAsState(
-            targetValue = if (isInteracting) 44.dp else 36.dp,
+            targetValue = if (isInteracting) 46.dp else 38.dp,
             animationSpec = MotionTokens.snappySpring(),
             label = "HeightAnimation"
         )
@@ -314,47 +314,46 @@ fun ExpressiveScrollBar(
             if (listState != null) {
                 val layoutInfo = listState.layoutInfo
                 totalItemsCount = layoutInfo.totalItemsCount
-                if (totalItemsCount == 0) return ScrollMetrics(0f, 0, 1, scrollableHeight)
-                
+                if (totalItemsCount <= 1) return ScrollMetrics(0f, totalItemsCount, 1, scrollableHeight)
+
                 val visibleItems = layoutInfo.visibleItemsInfo
-                val firstItem = visibleItems.firstOrNull() ?: return ScrollMetrics(0f, totalItemsCount, 1, scrollableHeight)
-                
-                val viewportHeightPx = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
-                var sizeSum = 0
-                for (v in visibleItems) sizeSum += v.size
-                val avgItemSize = (sizeSum.toFloat() / visibleItems.size).coerceAtLeast(1f)
-                val estimatedTotalHeight = totalItemsCount * avgItemSize
-                
-                currentScrollPx = (firstItem.index * avgItemSize) - firstItem.offset.toFloat()
-                totalScrollableContentPx = (estimatedTotalHeight - viewportHeightPx).coerceAtLeast(1f)
-                approximateMaxScrollIndex = totalItemsCount - 1
+                val firstItem = visibleItems.firstOrNull() ?: return ScrollMetrics(0f, totalItemsCount, totalItemsCount - 1, scrollableHeight)
+                val lastItem = visibleItems.lastOrNull()
+                val maxIndex = (totalItemsCount - 1).coerceAtLeast(1)
+
+                val progress = if (lastItem != null && lastItem.index == maxIndex && (lastItem.offset + lastItem.size) <= layoutInfo.viewportEndOffset) {
+                    1f
+                } else {
+                    val itemSize = firstItem.size.toFloat().coerceAtLeast(1f)
+                    val itemFraction = (-firstItem.offset.toFloat() / itemSize).coerceIn(0f, 1f)
+                    val effectiveIndex = firstItem.index + itemFraction
+                    (effectiveIndex / maxIndex.toFloat()).coerceIn(0f, 1f)
+                }
+
+                return ScrollMetrics(progress, totalItemsCount, maxIndex, scrollableHeight)
             } else if (gridState != null) {
                 val layoutInfo = gridState.layoutInfo
                 totalItemsCount = layoutInfo.totalItemsCount
-                if (totalItemsCount == 0) return ScrollMetrics(0f, 0, 1, scrollableHeight)
-                
+                if (totalItemsCount <= 1) return ScrollMetrics(0f, totalItemsCount, 1, scrollableHeight)
+
                 val visibleItems = layoutInfo.visibleItemsInfo
-                val firstItem = visibleItems.firstOrNull() ?: return ScrollMetrics(0f, totalItemsCount, 1, scrollableHeight)
-                
-                val viewportHeightPx = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
-                val spanCount = layoutInfo.maxSpan
-                val totalRows = (totalItemsCount + spanCount - 1) / spanCount
-                
-                var heightSum = 0
-                for (v in visibleItems) heightSum += v.size.height
-                val avgItemSize = (heightSum.toFloat() / visibleItems.size).coerceAtLeast(1f)
-                val estimatedTotalHeight = totalRows * avgItemSize
-                
-                val currentRow = firstItem.index / spanCount
-                currentScrollPx = (currentRow * avgItemSize) - firstItem.offset.y.toFloat()
-                totalScrollableContentPx = (estimatedTotalHeight - viewportHeightPx).coerceAtLeast(1f)
-                approximateMaxScrollIndex = totalItemsCount - 1
+                val firstItem = visibleItems.firstOrNull() ?: return ScrollMetrics(0f, totalItemsCount, totalItemsCount - 1, scrollableHeight)
+                val lastItem = visibleItems.lastOrNull()
+                val maxIndex = (totalItemsCount - 1).coerceAtLeast(1)
+
+                val progress = if (lastItem != null && lastItem.index == maxIndex && (lastItem.offset.y + lastItem.size.height) <= layoutInfo.viewportEndOffset) {
+                    1f
+                } else {
+                    val itemHeight = firstItem.size.height.toFloat().coerceAtLeast(1f)
+                    val itemFraction = (-firstItem.offset.y.toFloat() / itemHeight).coerceIn(0f, 1f)
+                    val effectiveIndex = firstItem.index + itemFraction
+                    (effectiveIndex / maxIndex.toFloat()).coerceIn(0f, 1f)
+                }
+
+                return ScrollMetrics(progress, totalItemsCount, maxIndex, scrollableHeight)
             } else {
                 return ScrollMetrics(0f, 0, 1, scrollableHeight)
             }
-
-            val progress = (currentScrollPx / totalScrollableContentPx).coerceIn(0f, 1f)
-            return ScrollMetrics(progress, totalItemsCount, approximateMaxScrollIndex.coerceAtLeast(1), scrollableHeight)
         }
 
         fun resolveDragTargetIndex(progress: Float, maxScrollIndex: Int, totalItemsCount: Int): Int {

@@ -11,9 +11,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -45,6 +47,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -52,6 +56,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -275,7 +281,7 @@ fun PhotonGrid(
                             if (item is GalleryListItem.Header) "header" else "media"
                         },
                         span = { index ->
-                            val listItem = if (index < pagedMedia.itemCount) (pagedMedia.peek(index) ?: pagedMedia[index]) else null
+                            val listItem = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
                             if (listItem is GalleryListItem.Header) {
                                 GridItemSpan(maxLineSpan)
                             } else {
@@ -472,7 +478,7 @@ fun PhotonGrid(
 
 private val SelectionBorderStroke = BorderStroke(2.dp, Color.White)
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun OptimizedThumbnailCell(
     item: GalleryItem,
@@ -480,6 +486,7 @@ fun OptimizedThumbnailCell(
     animatedVisibilityScope: AnimatedVisibilityScope,
     onClick: (GalleryItem) -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: ((GalleryItem) -> Unit)? = null,
     isSelected: Boolean = false,
     gridCellsCount: Int = 3,
     thumbnailCornerRadius: Float = 0f,
@@ -489,9 +496,18 @@ fun OptimizedThumbnailCell(
     checkIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_check)
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
-    // Hoisted click handler
+    // Hoisted click handlers
     val clickHandler = remember(item, onClick) { { onClick(item) } }
+    val longClickHandler = remember(item, onLongClick) {
+        if (onLongClick != null) {
+            {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                onLongClick(item)
+            }
+        } else null
+    }
 
     // Size optimization based on grid cells — never request more than the rendered size
     val thumbSizePx = remember(gridCellsCount) {
@@ -561,15 +577,26 @@ fun OptimizedThumbnailCell(
     }
 
     Box(modifier = cellModifier) {
+        val clickModifier = if (onLongClick != null) {
+            Modifier.combinedClickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = clickHandler,
+                onLongClick = longClickHandler
+            )
+        } else {
+            Modifier.clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = clickHandler
+            )
+        }
+
         Box(
             modifier = contentModifier
                 .then(sharedTransitionModifier)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                    onClick = clickHandler
-                )
+                .then(clickModifier)
         ) {
             AsyncImage(
                 model = request,
@@ -614,7 +641,7 @@ fun OptimizedThumbnailCell(
                             color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = fontSize,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Normal
                             )
                         )
                     }
@@ -1034,12 +1061,15 @@ private fun findItemAtOffset(lazyGridState: LazyGridState, offset: Offset): Int?
     val visibleItems = layoutInfo.visibleItemsInfo
     if (visibleItems.isEmpty()) return null
 
+    val adjustedY = offset.y - layoutInfo.beforeContentPadding
+    val adjustedX = offset.x
+
     // Exact bounding box test
     for (item in visibleItems) {
         val itemOffset = item.offset
         val itemSize = item.size
-        if (offset.x >= itemOffset.x && offset.x <= itemOffset.x + itemSize.width &&
-            offset.y >= itemOffset.y && offset.y <= itemOffset.y + itemSize.height
+        if (adjustedX >= itemOffset.x && adjustedX <= itemOffset.x + itemSize.width &&
+            adjustedY >= itemOffset.y && adjustedY <= itemOffset.y + itemSize.height
         ) {
             return item.index
         }
@@ -1047,12 +1077,12 @@ private fun findItemAtOffset(lazyGridState: LazyGridState, offset: Offset): Int?
 
     // Row-aligned fallback test
     val matchingRow = visibleItems.filter { item ->
-        offset.y >= item.offset.y && offset.y <= item.offset.y + item.size.height
+        adjustedY >= item.offset.y && adjustedY <= item.offset.y + item.size.height
     }
     if (matchingRow.isNotEmpty()) {
         return matchingRow.minByOrNull { item ->
             val centerX = item.offset.x + item.size.width / 2f
-            kotlin.math.abs(offset.x - centerX)
+            kotlin.math.abs(adjustedX - centerX)
         }?.index
     }
 
@@ -1064,12 +1094,15 @@ private fun findStaggeredItemAtOffset(staggeredState: LazyStaggeredGridState, of
     val visibleItems = layoutInfo.visibleItemsInfo
     if (visibleItems.isEmpty()) return null
 
+    val adjustedY = offset.y - layoutInfo.beforeContentPadding
+    val adjustedX = offset.x
+
     // Exact bounding box test
     for (item in visibleItems) {
         val itemOffset = item.offset
         val itemSize = item.size
-        if (offset.x >= itemOffset.x && offset.x <= itemOffset.x + itemSize.width &&
-            offset.y >= itemOffset.y && offset.y <= itemOffset.y + itemSize.height
+        if (adjustedX >= itemOffset.x && adjustedX <= itemOffset.x + itemSize.width &&
+            adjustedY >= itemOffset.y && adjustedY <= itemOffset.y + itemSize.height
         ) {
             return item.index
         }
@@ -1077,12 +1110,12 @@ private fun findStaggeredItemAtOffset(staggeredState: LazyStaggeredGridState, of
 
     // Band-aligned fallback test
     val matchingBand = visibleItems.filter { item ->
-        offset.y >= item.offset.y && offset.y <= item.offset.y + item.size.height
+        adjustedY >= item.offset.y && adjustedY <= item.offset.y + item.size.height
     }
     if (matchingBand.isNotEmpty()) {
         return matchingBand.minByOrNull { item ->
             val centerX = item.offset.x + item.size.width / 2f
-            kotlin.math.abs(offset.x - centerX)
+            kotlin.math.abs(adjustedX - centerX)
         }?.index
     }
 

@@ -209,70 +209,70 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
                 animationSpec = MotionTokens.gentleSpring(),
                 targetOffsetY = { it / 2 }
             ) + fadeOut(MotionTokens.gentleSpring()),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 76.dp, start = 16.dp, end = 16.dp)
         ) {
             Surface(
-                color = Color.Transparent,
+                shape = com.inferno.gallery.ui.theme.ShapeLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                tonalElevation = 3.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Slider / Timeline
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    Text(
+                        text = formatTime(dragPosition ?: currentPosition),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Slider(
+                        value = (dragPosition ?: currentPosition).toFloat(),
+                        onValueChange = { dragPosition = it.toLong() },
+                        onValueChangeFinished = {
+                            dragPosition?.let {
+                                exoPlayer.seekTo(it)
+                                currentPosition = it
+                            }
+                            dragPosition = null
+                        },
+                        valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            activeTickColor = Color.Transparent,
+                            inactiveTickColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                    )
+
+                    Text(
+                        text = formatTime(videoDuration),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    // Audio mute/unmute
+                    IconButton(
+                        onClick = { isMuted = !isMuted },
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Text(
-                            text = formatTime(dragPosition ?: currentPosition),
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                        Icon(
+                            imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
+                            contentDescription = if (isMuted) "Unmute" else "Mute",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
                         )
-
-                        Slider(
-                            value = (dragPosition ?: currentPosition).toFloat(),
-                            onValueChange = { dragPosition = it.toLong() },
-                            onValueChangeFinished = {
-                                dragPosition?.let {
-                                    exoPlayer.seekTo(it)
-                                    currentPosition = it
-                                }
-                                dragPosition = null
-                            },
-                            valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
-                            colors = androidx.compose.material3.SliderDefaults.colors(
-                                thumbColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                                activeTrackColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                                activeTickColor = Color.Transparent,
-                                inactiveTickColor = Color.Transparent
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 8.dp)
-                        )
-
-                        Text(
-                            text = formatTime(videoDuration),
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
-                        )
-                        
-                        // Audio mute/unmute
-                        androidx.compose.material3.IconButton(
-                            onClick = { isMuted = !isMuted }
-                        ) {
-                            Icon(
-                                imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
-                                contentDescription = if (isMuted) "Unmute" else "Mute",
-                                tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
                     }
                 }
             }

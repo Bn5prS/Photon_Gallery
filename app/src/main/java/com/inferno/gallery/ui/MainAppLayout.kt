@@ -45,6 +45,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -57,6 +59,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -168,6 +171,7 @@ fun MainAppLayout(
 
     LaunchedEffect(currentRoute) {
         viewModel.setScrollDockVisible(true)
+        viewModel.setTopBarCollapsed(false)
     }
 
     val albumNameArg = navBackStackEntry?.arguments?.getString("bucketName")
@@ -365,6 +369,14 @@ fun MainAppLayout(
         )
         return
     }
+    val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
+
+    val topBarColor = if (isSelectionMode) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+
     Scaffold(
             modifier = modifier.fillMaxSize().overscrollStretch(),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -373,17 +385,24 @@ fun MainAppLayout(
             if (currentRoute != "photo_map" && currentRoute != "duplicate_cleaner" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && currentRoute != "people" && currentRoute?.startsWith("person/") != true) {
                 Column(
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .fillMaxWidth()
+                        .background(topBarColor)
                         .statusBarsPadding()
                 ) {
                     if (isSelectionMode) {
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Surface(
+                            color = topBarColor,
+                            shadowElevation = 0.dp
+                        ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp),
+                                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalIconButton(onClick = { viewModel.clearSelection() }) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Clear selection")
+                                FilledTonalIconButton(
+                                    onClick = { viewModel.clearSelection() },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Clear selection", modifier = Modifier.size(22.dp))
                                 }
                                 AnimatedContent(
                                     targetState = selectedUris.size,
@@ -404,22 +423,32 @@ fun MainAppLayout(
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                 }
-                                FilledTonalIconButton(onClick = { viewModel.toggleSelectAll() }) {
+                                FilledTonalIconButton(
+                                    onClick = { viewModel.toggleSelectAll() },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
-                                        contentDescription = "Select or Deselect All"
+                                        contentDescription = "Select or Deselect All",
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
                         }
                     } else if (currentRoute == "album/{bucketName}") {
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Surface(
+                            color = topBarColor,
+                            shadowElevation = 0.dp
+                        ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp),
+                                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalIconButton(onClick = { nestedNavController.popBackStack() }) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
+                                FilledTonalIconButton(
+                                    onClick = { nestedNavController.popBackStack() },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(22.dp))
                                 }
                                 val friendlyTitle = when {
                                     albumNameArg == "search_text" -> "Text Matches"
@@ -436,178 +465,287 @@ fun MainAppLayout(
                                     style = if (friendlyTitle.length > 15) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 16.dp).weight(1f)
+                                    modifier = Modifier
+                                        .padding(start = 16.dp)
+                                        .weight(1f)
                                 )
                             }
                         }
                     } else if (currentRoute == "settings") {
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Surface(
+                            color = topBarColor,
+                            shadowElevation = 0.dp
+                        ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp),
+                                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalIconButton(onClick = {
-                                    if (settingsActiveSection != null) {
-                                        settingsActiveSection = null
-                                    } else {
-                                        nestedNavController.popBackStack()
-                                    }
-                                }) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
+                                FilledTonalIconButton(
+                                    onClick = {
+                                        if (settingsActiveSection != null) {
+                                            settingsActiveSection = null
+                                        } else {
+                                            nestedNavController.popBackStack()
+                                        }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(22.dp))
                                 }
                                 Text(
                                     settingsActiveSection ?: "Settings",
                                     style = if (settingsActiveSection != null) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 16.dp).weight(1f)
+                                    modifier = Modifier
+                                        .padding(start = 16.dp)
+                                        .weight(1f)
                                 )
                             }
                         }
                     } else {
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(72.dp)
-                                    .padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                val titleText = when (currentRoute) {
-                                    "albums" -> "Albums"
-                                    "search" -> "Search"
-                                    "photos" -> "Photos"
-                                    else -> "Photon Gallery"
-                                }
-                                Text(
-                                    titleText,
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    modifier = Modifier.padding(start = 16.dp)
-                                )
+                        Surface(
+                            color = topBarColor,
+                            shadowElevation = 0.dp
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp)
+                                        .padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(end = 8.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    if (currentRoute != "search") {
-                                        FilledTonalIconButton(
-                                            onClick = { nestedNavController.navigate("search") },
-                                            colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                                contentDescription = "Search",
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
+                                    val titleText = when (currentRoute) {
+                                        "albums" -> "Albums"
+                                        "search" -> "Search"
+                                        "photos" -> "Photos"
+                                        else -> "Photon Gallery"
                                     }
-                                    if (currentRoute == "albums") {
-                                        FilledTonalIconButton(
-                                            onClick = { showCreateAlbumDialog = true },
-                                            colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
-                                                contentDescription = "Create Album",
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    }
-                                    
-                                    var showOverflowMenu by remember { mutableStateOf(false) }
-                                    var overflowState by remember { mutableStateOf("main") }
-                                    Box {
-                                        FilledTonalIconButton(
-                                            onClick = { showOverflowMenu = true },
-                                            colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                                contentDescription = "Menu",
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                        DropdownMenu(
-                                            expanded = showOverflowMenu,
-                                            onDismissRequest = { 
-                                                showOverflowMenu = false
-                                                overflowState = "main"
-                                            },
-                                            shape = ShapeExtraLarge,
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                        ) {
-                                            if (overflowState == "main") {
-                                                DropdownMenuItem(
-                                                    text = { Text("Settings") },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
-                                                    onClick = {
-                                                        showOverflowMenu = false
-                                                        overflowState = "main"
-                                                        nestedNavController.navigate("settings") {
-                                                            popUpTo("photos") { saveState = true }
-                                                            launchSingleTop = true
-                                                            restoreState = true
-                                                        }
-                                                    }
+                                    Text(
+                                        titleText,
+                                        style = MaterialTheme.typography.headlineLarge,
+                                        modifier = Modifier.padding(start = 12.dp)
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    ) {
+                                        if (currentRoute != "search") {
+                                            FilledTonalIconButton(
+                                                onClick = { nestedNavController.navigate("search") },
+                                                modifier = Modifier.size(40.dp),
+                                                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                                 )
-                                                
-                                                if (currentRoute == "photos") {
-                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                    DropdownMenuItem(
-                                                        text = { Text("View Mode") },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                        onClick = { overflowState = "view" }
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text("Sort By") },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                        onClick = { overflowState = "sort" }
-                                                    )
-                                                }
-                                            } else if (overflowState == "view") {
-                                                DropdownMenuItem(
-                                                    text = { Text("Back") },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                    onClick = { overflowState = "main" }
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                                                    contentDescription = "Search",
+                                                    modifier = Modifier.size(24.dp)
                                                 )
-                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text("Immersive View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Grouped View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
-                                            } else if (overflowState == "sort") {
-                                                DropdownMenuItem(
-                                                    text = { Text("Back") },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                    onClick = { overflowState = "main" }
-                                                )
-                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text("New to Old") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Old to New") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Large to Small") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Small to Large") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("A - Z") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
                                             }
+                                        }
+                                        if (currentRoute == "albums") {
+                                            FilledTonalIconButton(
+                                                onClick = { showCreateAlbumDialog = true },
+                                                modifier = Modifier.size(40.dp),
+                                                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                                )
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
+                                                    contentDescription = "Create Album",
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                        
+                                        var showOverflowMenu by remember { mutableStateOf(false) }
+                                        var overflowState by remember { mutableStateOf("main") }
+                                        Box {
+                                            FilledTonalIconButton(
+                                                onClick = { showOverflowMenu = true },
+                                                modifier = Modifier.size(40.dp),
+                                                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                                )
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                                                    contentDescription = "Menu",
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showOverflowMenu,
+                                                onDismissRequest = { 
+                                                    showOverflowMenu = false
+                                                    overflowState = "main"
+                                                },
+                                                shape = ShapeExtraLarge,
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                            ) {
+                                                if (overflowState == "main") {
+                                                    DropdownMenuItem(
+                                                        text = { Text("Settings") },
+                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
+                                                        onClick = {
+                                                            showOverflowMenu = false
+                                                            overflowState = "main"
+                                                            nestedNavController.navigate("settings") {
+                                                                popUpTo("photos") { saveState = true }
+                                                                launchSingleTop = true
+                                                                restoreState = true
+                                                            }
+                                                        }
+                                                    )
+                                                    
+                                                    if (currentRoute == "photos") {
+                                                        androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                        DropdownMenuItem(
+                                                            text = { Text("View Mode") },
+                                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                                            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
+                                                            onClick = { overflowState = "view" }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("Sort By") },
+                                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
+                                                            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
+                                                            onClick = { overflowState = "sort" }
+                                                        )
+                                                    }
+                                                } else if (overflowState == "view") {
+                                                    DropdownMenuItem(
+                                                        text = { Text("Back") },
+                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
+                                                        onClick = { overflowState = "main" }
+                                                    )
+                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                    DropdownMenuItem(text = { Text("Immersive View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
+                                                    DropdownMenuItem(text = { Text("Grouped View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
+                                                } else if (overflowState == "sort") {
+                                                    DropdownMenuItem(
+                                                        text = { Text("Back") },
+                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
+                                                        onClick = { overflowState = "main" }
+                                                    )
+                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                    DropdownMenuItem(text = { Text("New to Old") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
+                                                    DropdownMenuItem(text = { Text("Old to New") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
+                                                    DropdownMenuItem(text = { Text("Large to Small") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
+                                                    DropdownMenuItem(text = { Text("Small to Large") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
+                                                    DropdownMenuItem(text = { Text("A - Z") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ── Secondary Chips Row (Below Photos Title) ──
+                                if (currentRoute == "photos") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, bottom = 6.dp, top = 0.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val isAll = selectedFilter == 0
+                                        val isCamera = selectedFilter == 1
+
+                                        val cameraBg by animateColorAsState(
+                                            targetValue = if (isCamera) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                            animationSpec = MotionTokens.snappySpring(),
+                                            label = "CameraChipBg"
+                                        )
+                                        val cameraContentColor by animateColorAsState(
+                                            targetValue = if (isCamera) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            animationSpec = MotionTokens.snappySpring(),
+                                            label = "CameraChipColor"
+                                        )
+                                        val cameraScale by animateFloatAsState(
+                                            targetValue = if (isCamera) 1.02f else 1.0f,
+                                            animationSpec = MotionTokens.bouncySpring(),
+                                            label = "CameraChipScale"
+                                        )
+
+                                        val allBg by animateColorAsState(
+                                            targetValue = if (isAll) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                            animationSpec = MotionTokens.snappySpring(),
+                                            label = "AllChipBg"
+                                        )
+                                        val allContentColor by animateColorAsState(
+                                            targetValue = if (isAll) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            animationSpec = MotionTokens.snappySpring(),
+                                            label = "AllChipColor"
+                                        )
+                                        val allScale by animateFloatAsState(
+                                            targetValue = if (isAll) 1.02f else 1.0f,
+                                            animationSpec = MotionTokens.bouncySpring(),
+                                            label = "AllChipScale"
+                                        )
+
+                                        Surface(
+                                            onClick = {
+                                                if (!isCamera) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.setFilterIndex(1)
+                                                }
+                                            },
+                                            shape = CircleShape,
+                                            color = cameraBg,
+                                            contentColor = cameraContentColor,
+                                            modifier = Modifier.graphicsLayer {
+                                                scaleX = cameraScale
+                                                scaleY = cameraScale
+                                            }
+                                        ) {
+                                            Text(
+                                                text = "Camera",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = if (isCamera) FontWeight.Bold else FontWeight.Medium
+                                                ),
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                            )
+                                        }
+
+                                        Surface(
+                                            onClick = {
+                                                if (!isAll) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.setFilterIndex(0)
+                                                }
+                                            },
+                                            shape = CircleShape,
+                                            color = allBg,
+                                            contentColor = allContentColor,
+                                            modifier = Modifier.graphicsLayer {
+                                                scaleX = allScale
+                                                scaleY = allScale
+                                            }
+                                        ) {
+                                            Text(
+                                                text = "All",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = if (isAll) FontWeight.Bold else FontWeight.Medium
+                                                ),
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
                     }
-
-            }
+                }
             }
         },
         bottomBar = {
