@@ -66,6 +66,9 @@ object MediaQueryBuilder {
                 }
             }
             bucket == BucketNames.ALL || (bucket == null && folderName == null) -> {
+                if (filterIndex == 1) {
+                    conditions.add("(cm.bucketName = 'Camera' OR cm.bucketName = '100MEDIA' OR cm.filePath LIKE '%/DCIM/Camera/%' OR cm.filePath LIKE '%/DCIM/%')")
+                }
                 conditions.add("cm.bucketName != 'Trash'")
             }
             bucket == BucketNames.VIDEOS -> {

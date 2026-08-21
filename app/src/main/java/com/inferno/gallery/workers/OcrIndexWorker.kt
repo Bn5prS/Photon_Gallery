@@ -66,6 +66,14 @@ class OcrIndexWorker(
         )
     }
 
+    private suspend fun safeSetForeground(progress: String) {
+        try {
+            setForeground(createForegroundInfo(progress))
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to set/update foreground service: ${e.message}")
+        }
+    }
+
     private data class LoadedImage(
         val entity: CoreMediaEntity,
         val bitmap: Bitmap
@@ -142,7 +150,7 @@ class OcrIndexWorker(
             currentImageName = "Initializing..."
         )
         try {
-            setForeground(createForegroundInfo("Starting…"))
+            safeSetForeground("Starting…")
 
             val db = DatabaseProvider.getDatabase(applicationContext)
 
@@ -289,7 +297,7 @@ class OcrIndexWorker(
                             "current_image" to embedded.entity.name,
                             "recent_uris" to recentUris.toTypedArray()
                         ))
-                        setForeground(createForegroundInfo("$current / $totalImageCount images"))
+                        safeSetForeground("$current / $totalImageCount images")
                     }
 
                     flush()
