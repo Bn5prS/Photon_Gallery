@@ -125,6 +125,14 @@ class MediaSyncWorker(
                 )
             }
 
+            // Auto-trigger Reverse Geocoding & GPS metadata extraction in background
+            val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
+            androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                "ReverseGeocodeWorker",
+                androidx.work.ExistingWorkPolicy.KEEP,
+                geocodeRequest
+            )
+
             val currentGen = try {
                 android.provider.MediaStore.getGeneration(applicationContext, android.provider.MediaStore.VOLUME_EXTERNAL)
             } catch (e: Exception) { 0L }

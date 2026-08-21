@@ -70,6 +70,14 @@ class SmartSearchIndexWorker(
         )
     }
 
+    private suspend fun safeSetForeground(progress: String) {
+        try {
+            setForeground(createForegroundInfo(progress))
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to set/update foreground service: ${e.message}")
+        }
+    }
+
     private data class LoadedImage(
         val mediaId: Long,
         val bitmap: Bitmap,
@@ -199,7 +207,7 @@ class SmartSearchIndexWorker(
                 return Result.failure()
             }
 
-            setForeground(createForegroundInfo("Loading AI model…"))
+            safeSetForeground("Loading AI model…")
             searchEngine.loadModel()
 
             val db = DatabaseProvider.getDatabase(applicationContext)
@@ -394,7 +402,7 @@ class SmartSearchIndexWorker(
                                 "total" to totalCount,
                                 "current_image" to embedded.name
                             ))
-                            setForeground(createForegroundInfo("$current / $totalCount images scanned"))
+                            safeSetForeground("$current / $totalCount images scanned")
                         } catch (e: Exception) {
                             Log.e(TAG, "Stage3 db insert failed for media ID ${embedded.mediaId}: ${e.message}")
                         }
