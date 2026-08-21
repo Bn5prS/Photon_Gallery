@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -165,8 +166,8 @@ fun AlbumsScreen(
 
     val lazyGridState = rememberLazyGridState()
 
-    // Ensure top pinned section is always visible and not scrolled down when opening Albums
-    var hasPinnedLoaded by remember { mutableStateOf(false) }
+    // Ensure top pinned section is always visible and not scrolled down on initial open
+    var hasPinnedLoaded by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(visiblePinned.isNotEmpty()) {
         if (visiblePinned.isNotEmpty() && !hasPinnedLoaded) {
             hasPinnedLoaded = true
@@ -175,7 +176,6 @@ fun AlbumsScreen(
     }
 
     LaunchedEffect(Unit) {
-        lazyGridState.scrollToItem(0, 0)
         viewModel.setTopBarCollapsed(false)
     }
 
