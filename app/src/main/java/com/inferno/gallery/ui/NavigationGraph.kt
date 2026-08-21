@@ -121,9 +121,17 @@ fun NavigationGraph(
                     animatedVisibilityScope = this@composable,
                     onPhotoClick = { mediaId, bucket, query ->
                         var route = "detail/$mediaId"
-                        if (bucket != null) route += "?bucket=${android.net.Uri.encode(bucket)}"
+                        val params = mutableListOf<String>()
+                        if (bucket != null) params.add("bucket=${android.net.Uri.encode(bucket)}")
                         if (query != null && bucket == "search_text") {
-                            route += "&highlight=${android.net.Uri.encode(query)}"
+                            params.add("highlight=${android.net.Uri.encode(query)}")
+                        }
+                        if (bucket?.startsWith("person_") == true) {
+                            val cId = bucket.removePrefix("person_")
+                            params.add("clusterId=$cId")
+                        }
+                        if (params.isNotEmpty()) {
+                            route += "?" + params.joinToString("&")
                         }
                         navController.navigate(route)
                     },
@@ -149,11 +157,12 @@ fun NavigationGraph(
             }
 
             composable(
-                route = "detail/{mediaId}?bucket={bucketName}&highlight={highlightText}",
+                route = "detail/{mediaId}?bucket={bucketName}&highlight={highlightText}&clusterId={clusterId}",
                 arguments = listOf(
                     navArgument("mediaId") { type = NavType.StringType },
                     navArgument("bucketName") { type = NavType.StringType; nullable = true; defaultValue = null },
-                    navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("clusterId") { type = NavType.StringType; nullable = true; defaultValue = null }
                 ),
                 enterTransition = { fadeIn(tween(MotionTokens.Durations.Short)) },
                 exitTransition = { fadeOut(tween(150)) },
@@ -163,6 +172,7 @@ fun NavigationGraph(
                 val mediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
                 val highlightText = backStackEntry.arguments?.getString("highlightText")
+                val clusterId = backStackEntry.arguments?.getString("clusterId")?.toLongOrNull()
                 
                 androidx.compose.runtime.LaunchedEffect(mediaId, bucketName) {
                     galleryViewModel.loadDetailMedia(mediaId, bucketName)
@@ -173,6 +183,7 @@ fun NavigationGraph(
                     mediaId = mediaId,
                     bucketName = bucketName,
                     highlightText = highlightText,
+                    clusterId = clusterId,
                     useFullScreenGlobal = useFullScreen,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,

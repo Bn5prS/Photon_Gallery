@@ -47,6 +47,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -218,7 +220,7 @@ private fun EmptySearchState(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // ── People Carousel ──
-        if (personClusters.isNotEmpty()) {
+        if (com.inferno.gallery.utils.FeatureFlags.ENABLE_PEOPLE_FEATURE && personClusters.isNotEmpty()) {
             item {
                 PeopleCarousel(
                     clusters = personClusters,
@@ -415,40 +417,37 @@ private fun SearchResultsList(
     viewModel: GalleryViewModel
 ) {
     val haptic = LocalHapticFeedback.current
-    val onFtsClick = remember(onPhotoClick, query, viewModel) {
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
+    val selectedUris by viewModel.selectedUris.collectAsState()
+
+    val onFtsClick = remember(onPhotoClick, query, viewModel, isSelectionMode) {
         { item: GalleryItem ->
-            viewModel.setInitialDetailItem(item)
-            onPhotoClick(item.id, "search_text", query)
+            if (isSelectionMode) {
+                viewModel.toggleSelection(item.uri.toString())
+            } else {
+                viewModel.setInitialDetailItem(item)
+                onPhotoClick(item.id, "search_text", query)
+            }
         }
     }
-    val onSmartClick = remember(onPhotoClick, query, viewModel) {
+    val onSmartClick = remember(onPhotoClick, query, viewModel, isSelectionMode) {
         { item: GalleryItem ->
-            viewModel.setInitialDetailItem(item)
-            onPhotoClick(item.id, "search_smart", query)
+            if (isSelectionMode) {
+                viewModel.toggleSelection(item.uri.toString())
+            } else {
+                viewModel.setInitialDetailItem(item)
+                onPhotoClick(item.id, "search_smart", query)
+            }
+        }
+    }
+
+    val onLongClickItem = remember(viewModel) {
+        { item: GalleryItem ->
+            viewModel.toggleSelection(item.uri.toString())
         }
     }
 
     val lazyGridState = rememberLazyGridState()
-
-    LaunchedEffect(lazyGridState) {
-        var previousIndex = 0
-        var previousScrollOffset = 0
-        snapshotFlow {
-            lazyGridState.firstVisibleItemIndex to lazyGridState.firstVisibleItemScrollOffset
-        }
-        .collect { (index, offset) ->
-            if (lazyGridState.isScrollInProgress) {
-                when {
-                    index > previousIndex              -> viewModel.setScrollDockVisible(false)
-                    index < previousIndex              -> viewModel.setScrollDockVisible(true)
-                    offset > previousScrollOffset + 15 -> viewModel.setScrollDockVisible(false)
-                    offset < previousScrollOffset - 15 -> viewModel.setScrollDockVisible(true)
-                }
-            }
-            previousIndex = index
-            previousScrollOffset = offset
-        }
-    }
 
     val totalMatches = ftsResults.size + smartResults.size
 
@@ -511,12 +510,15 @@ private fun SearchResultsList(
                 items = ftsResults.take(8),
                 key = { "fts_grid_${it.id}" }
             ) { item ->
+                val isSelected = selectedUris.contains(item.uri.toString())
                 com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                     modifier = Modifier.animateItem(),
                     item = item,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    onClick = onFtsClick
+                    onClick = onFtsClick,
+                    onLongClick = onLongClickItem,
+                    isSelected = isSelected
                 )
             }
             if (ftsResults.size > 8) {
@@ -567,12 +569,15 @@ private fun SearchResultsList(
                 items = smartResults.take(8),
                 key = { "smart_grid_${it.id}" }
             ) { item ->
+                val isSelected = selectedUris.contains(item.uri.toString())
                 com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                     modifier = Modifier.animateItem(),
                     item = item,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    onClick = onSmartClick
+                    onClick = onSmartClick,
+                    onLongClick = onLongClickItem,
+                    isSelected = isSelected
                 )
             }
             if (smartResults.size > 8) {

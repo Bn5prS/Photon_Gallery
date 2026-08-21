@@ -151,6 +151,7 @@ fun DetailScreen(
     mediaId: String,
     bucketName: String?,
     highlightText: String? = null,
+    clusterId: Long? = null,
     useFullScreenGlobal: Boolean = false,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -259,10 +260,11 @@ fun DetailScreen(
     }
 
 
+    var activeFaceClusterId by remember { mutableStateOf(clusterId) }
     var activeHighlight by remember { mutableStateOf(highlightText) }
     var highlightRects by remember { mutableStateOf<List<android.graphics.Rect>>(emptyList()) }
     var highlightImageSize by remember { mutableStateOf<androidx.compose.ui.geometry.Size?>(null) }
-    var highlightOverlayVisible by remember { mutableStateOf(highlightText != null) }
+    var highlightOverlayVisible by remember { mutableStateOf(highlightText != null || clusterId != null) }
 
     androidx.compose.runtime.LaunchedEffect(galleryItems, mediaId) {
         if (galleryItems.isNotEmpty()) {
@@ -626,39 +628,76 @@ fun DetailScreen(
                         )
                     }
                 } else {
-                    androidx.compose.runtime.LaunchedEffect(activeHighlight, page, pagerState.currentPage, resolvedUri) {
-                        if (activeHighlight != null && page == pagerState.currentPage) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                try {
-                                    val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
-                                    val inputImage = com.google.mlkit.vision.common.InputImage.fromFilePath(context, resolvedUri)
-                                    val visionText: com.google.mlkit.vision.text.Text? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-                                        recognizer.process(inputImage)
-                                            .addOnSuccessListener { cont.resumeWith(kotlin.Result.success(it)) }
-                                            .addOnFailureListener { cont.resumeWith(kotlin.Result.success(null)) }
-                                    }
-                                    if (visionText != null) {
+                    androidx.compose.runtime.LaunchedEffect(activeHighlight, activeFaceClusterId, page, pagerState.currentPage, resolvedUri) {
+                        if (page == pagerState.currentPage) {
+                            if (activeFaceClusterId != null) {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val currentMedia = galleryItems.getOrNull(page)
+                                        val mId = currentMedia?.id?.toLongOrNull()
                                         val rects = mutableListOf<android.graphics.Rect>()
-                                        for (block in visionText.textBlocks) {
-                                            for (line in block.lines) {
-                                                for (element in line.elements) {
-                                                    if (element.text.contains(activeHighlight!!, ignoreCase = true)) {
-                                                        element.boundingBox?.let { rects.add(it) }
+                                        if (mId != null) {
+                                            val faceDao = com.inferno.gallery.data.db.DatabaseProvider.getDatabase(context).faceDao()
+                                            val faces = faceDao.getFacesForMedia(mId)
+                                            val matchingFaces = faces.filter { it.clusterId == activeFaceClusterId }
+                                            val targetFaces = if (matchingFaces.isNotEmpty()) matchingFaces else faces
+                                            for (face in targetFaces) {
+                                                rects.add(android.graphics.Rect(
+                                                    face.boundingBoxLeft.toInt(),
+                                                    face.boundingBoxTop.toInt(),
+                                                    face.boundingBoxRight.toInt(),
+                                                    face.boundingBoxBottom.toInt()
+                                                ))
+                                            }
+                                        }
+                                        val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                        context.contentResolver.openInputStream(resolvedUri)?.use { stream ->
+                                            android.graphics.BitmapFactory.decodeStream(stream, null, options)
+                                        }
+                                        if (options.outWidth > 0 && options.outHeight > 0) {
+                                            highlightImageSize = androidx.compose.ui.geometry.Size(options.outWidth.toFloat(), options.outHeight.toFloat())
+                                        }
+                                        highlightRects = rects
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("DetailScreen", "Face highlight failed", e)
+                                    }
+                                }
+                                highlightOverlayVisible = true
+                                kotlinx.coroutines.delay(4000)
+                                highlightOverlayVisible = false
+                            } else if (activeHighlight != null) {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+                                        val inputImage = com.google.mlkit.vision.common.InputImage.fromFilePath(context, resolvedUri)
+                                        val visionText: com.google.mlkit.vision.text.Text? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                                            recognizer.process(inputImage)
+                                                .addOnSuccessListener { cont.resumeWith(kotlin.Result.success(it)) }
+                                                .addOnFailureListener { cont.resumeWith(kotlin.Result.success(null)) }
+                                        }
+                                        if (visionText != null) {
+                                            val rects = mutableListOf<android.graphics.Rect>()
+                                            for (block in visionText.textBlocks) {
+                                                for (line in block.lines) {
+                                                    for (element in line.elements) {
+                                                        if (element.text.contains(activeHighlight!!, ignoreCase = true)) {
+                                                            element.boundingBox?.let { rects.add(it) }
+                                                        }
                                                     }
                                                 }
                                             }
+                                            highlightRects = rects
+                                            highlightImageSize = androidx.compose.ui.geometry.Size(inputImage.width.toFloat(), inputImage.height.toFloat())
                                         }
-                                        highlightRects = rects
-                                        highlightImageSize = androidx.compose.ui.geometry.Size(inputImage.width.toFloat(), inputImage.height.toFloat())
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("DetailScreen", "OCR highlight failed", e)
                                     }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("DetailScreen", "OCR highlight failed", e)
                                 }
+                                // Auto dismiss
+                                highlightOverlayVisible = true
+                                kotlinx.coroutines.delay(4000)
+                                highlightOverlayVisible = false
                             }
-                            // Auto dismiss
-                            highlightOverlayVisible = true
-                            kotlinx.coroutines.delay(4000)
-                            highlightOverlayVisible = false
                         }
                     }
 
@@ -695,6 +734,8 @@ fun DetailScreen(
                                     detectTapGestures(
                                         onTap = {
                                             activeHighlight = null
+                                            activeFaceClusterId = null
+                                            highlightOverlayVisible = false
                                             if (showInfoCard || showUi) {
                                                 showInfoCard = false
                                                 showUi = false
@@ -877,7 +918,7 @@ fun DetailScreen(
                                 }
                         )
                         
-                        if (activeHighlight != null) {
+                        if (activeHighlight != null || activeFaceClusterId != null) {
                             val highlightColor = MaterialTheme.colorScheme.primary
                             Canvas(
                                 modifier = Modifier

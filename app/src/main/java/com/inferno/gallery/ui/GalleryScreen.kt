@@ -187,11 +187,30 @@ fun GalleryScreen(
     isMainTab: Boolean = false,
     onNavigateToSettings: () -> Unit = {}
 ) {
+    val selectedFilterIndex by viewModel.selectedFilterIndex.collectAsState()
+    val lazyGridState = rememberLazyGridState()
+
     LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
     }
 
+    LaunchedEffect(selectedFilterIndex, bucketName) {
+        lazyGridState.scrollToItem(0, 0)
+    }
+
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
+
+    var previousFilter by remember { mutableStateOf(selectedFilterIndex) }
+    var previousBucket by remember { mutableStateOf(bucketName) }
+    LaunchedEffect(pagedMedia.loadState.refresh) {
+        if (pagedMedia.loadState.refresh is androidx.paging.LoadState.NotLoading) {
+            if (previousFilter != selectedFilterIndex || previousBucket != bucketName) {
+                previousFilter = selectedFilterIndex
+                previousBucket = bucketName
+                lazyGridState.scrollToItem(0, 0)
+            }
+        }
+    }
     val viewMode by viewModel.viewMode.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
@@ -199,7 +218,6 @@ fun GalleryScreen(
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
     val cacheThumbnailsEnabled by viewModel.cacheThumbnailsEnabled.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
-    val lazyGridState = rememberLazyGridState()
 
     val totalItems = pagedMedia.itemCount
     val context = LocalContext.current
@@ -299,12 +317,9 @@ fun GalleryScreen(
         var previousFirstIndex = lazyGridState.firstVisibleItemIndex
         var inFlight = mutableListOf<coil3.request.Disposable>()
 
-        snapshotFlow { lazyGridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+        snapshotFlow { lazyGridState.firstVisibleItemIndex }
             .distinctUntilChanged()
-            .collect { lastVisible ->
-                if (lastVisible == null) return@collect
-
-                val firstIndex = lazyGridState.firstVisibleItemIndex
+            .collect { firstIndex ->
                 val scrollingDown = firstIndex >= previousFirstIndex
                 previousFirstIndex = firstIndex
 
@@ -315,17 +330,18 @@ fun GalleryScreen(
                 inFlight = mutableListOf()
 
                 if (memoryCache == null) return@collect
+                val visibleCount = gridCellsCount * 6
                 val preloadCount = gridCellsCount * preloadRows
                 val start: Int
                 val end: Int
                 if (scrollingDown) {
-                    start = lastVisible + 1
+                    start = firstIndex + visibleCount
                     end = minOf(start + preloadCount, pagedMedia.itemCount - 1)
                 } else {
                     end = firstIndex - 1
                     start = maxOf(end - preloadCount, 0)
                 }
-                if (start > end) return@collect
+                if (start > end || start >= pagedMedia.itemCount) return@collect
 
                 for (i in start..end) {
                     val listItem = pagedMedia.peek(i) as? GalleryListItem.Item ?: continue
@@ -346,29 +362,42 @@ fun GalleryScreen(
     }
     // ──────────────────────────────────────────────────────────────────────────────────────
 
-    val mainContentBg = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val isFilterChanging = pagedMedia.loadState.refresh is androidx.paging.LoadState.Loading
+    val gridAlpha by animateFloatAsState(
+        targetValue = if (isFilterChanging && totalItems > 0) 0.88f else 1f,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "GridFilterAlpha"
+    )
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        com.inferno.gallery.ui.components.PhotonGrid(
-            pagedMedia = pagedMedia,
-            lazyGridState = lazyGridState,
-            gridCellsCount = gridCellsCount,
-            onGridCountChange = viewModel::setGridCellsCount,
-            isSelectionMode = isSelectionMode,
-            selectedUris = selectedUris,
-            onMediaClick = onMediaClick,
-            onMediaLongClick = onMediaLongClick,
-            viewMode = viewMode,
-            thumbnailCornerRadius = thumbnailCornerRadius,
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope,
-            viewModel = viewModel,
-            modifier = modifier,
-            contentPadding = contentPadding,
-            timelineLayoutMode = timelineLayoutMode
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = gridAlpha
+                }
+        ) {
+            com.inferno.gallery.ui.components.PhotonGrid(
+                pagedMedia = pagedMedia,
+                lazyGridState = lazyGridState,
+                gridCellsCount = gridCellsCount,
+                onGridCountChange = viewModel::setGridCellsCount,
+                isSelectionMode = isSelectionMode,
+                selectedUris = selectedUris,
+                onMediaClick = onMediaClick,
+                onMediaLongClick = onMediaLongClick,
+                viewMode = viewMode,
+                thumbnailCornerRadius = thumbnailCornerRadius,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                viewModel = viewModel,
+                modifier = modifier,
+                contentPadding = contentPadding,
+                timelineLayoutMode = timelineLayoutMode
+            )
+        }
 
         // -- Dynamic Date Badge --
         DynamicDateBadge(

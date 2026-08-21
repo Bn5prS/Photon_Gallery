@@ -529,7 +529,7 @@ fun ExifDetailsSheet(
             }
 
             // ── People in this photo Card ────────────────────────────────────
-            if (detectedFaces.isNotEmpty()) {
+            if (com.inferno.gallery.utils.FeatureFlags.ENABLE_PEOPLE_FEATURE && detectedFaces.isNotEmpty()) {
                 item {
                     Surface(
                         shape = ShapeLarge,
