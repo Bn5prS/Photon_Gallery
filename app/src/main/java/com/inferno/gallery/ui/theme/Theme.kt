@@ -154,7 +154,7 @@ fun PhotonGalleryTheme(
     MaterialExpressiveTheme(
         colorScheme = resolvedScheme,
         shapes = AppShapes,
-        typography = appTypography(useSystemFont),
+        typography = appTypography(useSystemFont = useSystemFont, isDark = darkTheme),
         motionScheme = MotionScheme.expressive(),
     ) {
         // Provide harmonized accent colors blended toward dynamic primary
