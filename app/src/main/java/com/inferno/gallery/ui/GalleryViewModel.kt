@@ -52,6 +52,7 @@ import androidx.work.WorkManager
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import com.inferno.gallery.workers.OcrIndexWorker
+import com.inferno.gallery.workers.ReverseGeocodeWorker
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -168,6 +169,72 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _isInitialSyncRunning = MutableStateFlow(false)
     val isInitialSyncRunning: StateFlow<Boolean> = _isInitialSyncRunning.asStateFlow()
 
+    private val _isTopBarCollapsed = MutableStateFlow(false)
+    val isTopBarCollapsed: StateFlow<Boolean> = _isTopBarCollapsed.asStateFlow()
+
+    fun setTopBarCollapsed(collapsed: Boolean) {
+        if (_isTopBarCollapsed.value != collapsed) {
+            _isTopBarCollapsed.value = collapsed
+        }
+    }
+
+    // ── Albums Section Expansion Persistence ──
+    val albumsExpandedPinned: StateFlow<Boolean> = settingsRepository.albumsExpandedPinnedFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
+    val albumsExpandedMore: StateFlow<Boolean> = settingsRepository.albumsExpandedMoreFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
+    val albumsExpandedPeople: StateFlow<Boolean> = settingsRepository.albumsExpandedPeopleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
+    val albumsExpandedPlaces: StateFlow<Boolean> = settingsRepository.albumsExpandedPlacesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
+    val albumsExpandedMediaTypes: StateFlow<Boolean> = settingsRepository.albumsExpandedMediaTypesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
+
+    fun toggleAlbumsExpandedPinned() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedPinned(!albumsExpandedPinned.value)
+        }
+    }
+
+    fun toggleAlbumsExpandedMore() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedMore(!albumsExpandedMore.value)
+        }
+    }
+
+    fun toggleAlbumsExpandedPeople() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedPeople(!albumsExpandedPeople.value)
+        }
+    }
+
+    fun toggleAlbumsExpandedPlaces() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedPlaces(!albumsExpandedPlaces.value)
+        }
+    }
+
+    fun toggleAlbumsExpandedMediaTypes() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedMediaTypes(!albumsExpandedMediaTypes.value)
+        }
+    }
+
     private var mediaStoreObserverJob: kotlinx.coroutines.Job? = null
 
     private val mediaStoreObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
@@ -241,6 +308,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")
                 _isInitialSyncRunning.value = false
             }
+
+            // Auto-trigger GPS extraction & Reverse Geocoding in background on startup
+            val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                "ReverseGeocodeWorker",
+                ExistingWorkPolicy.KEEP,
+                geocodeRequest
+            )
         }
 
         getApplication<Application>().contentResolver.registerContentObserver(
@@ -717,6 +792,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = 0
     )
 
+    fun setFilterIndex(index: Int) {
+        viewModelScope.launch {
+            settingsRepository.updateSelectedFilterIndex(index)
+        }
+    }
+
     private val _gridCellsCount = MutableStateFlow(4)
     val gridCellsCount: StateFlow<Int> = _gridCellsCount.asStateFlow()
 
@@ -1056,8 +1137,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                // Load geotagged results
+                // Load geotagged results & trigger reverse geocoding to populate Places Carousel
                 loadGeotaggedMedia()
+                val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
+                WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                    "ReverseGeocodeWorker",
+                    ExistingWorkPolicy.REPLACE,
+                    geocodeRequest
+                )
                 _gpsScanState.value = GpsScanState.Done
             } catch (e: Exception) {
                 e.printStackTrace()

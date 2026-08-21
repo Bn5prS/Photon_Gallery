@@ -56,7 +56,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -152,12 +155,12 @@ fun AlbumsScreen(
     val overflowPinned = allPinnedCards.drop(maxVisible)
     var showOverflowMenu by remember { mutableStateOf(false) }
 
-    // Expand states for sections
-    var pinnedExpanded by rememberSaveable { mutableStateOf(true) }
-    var moreExpanded by rememberSaveable { mutableStateOf(true) }
-    var peopleExpanded by rememberSaveable { mutableStateOf(true) }
-    var placesExpanded by rememberSaveable { mutableStateOf(true) }
-    var mediaTypesExpanded by rememberSaveable { mutableStateOf(true) }
+    // Persistent expand states for sections
+    val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
+    val moreExpanded by viewModel.albumsExpandedMore.collectAsState()
+    val peopleExpanded by viewModel.albumsExpandedPeople.collectAsState()
+    val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
+    val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
     val unpinnedAlbums = remember(albums, userPinnedNames) {
         albums.filter { it.bucketName != "Favorites" && it.bucketName !in userPinnedNames }
@@ -176,6 +179,7 @@ fun AlbumsScreen(
 
     LaunchedEffect(Unit) {
         lazyGridState.scrollToItem(0, 0)
+        viewModel.setTopBarCollapsed(false)
     }
 
     LazyVerticalGrid(
@@ -199,7 +203,7 @@ fun AlbumsScreen(
                     title = "Pinned albums",
                     count = allPinnedCards.size,
                     isExpanded = pinnedExpanded,
-                    onToggle = { pinnedExpanded = !pinnedExpanded }
+                    onToggle = { viewModel.toggleAlbumsExpandedPinned() }
                 )
             }
 
@@ -340,7 +344,7 @@ fun AlbumsScreen(
                     title = "More albums",
                     count = unpinnedAlbums.size,
                     isExpanded = moreExpanded,
-                    onToggle = { moreExpanded = !moreExpanded },
+                    onToggle = { viewModel.toggleAlbumsExpandedMore() },
                     onSeeAll = onNavigateToAllAlbums
                 )
             }
@@ -433,78 +437,81 @@ fun AlbumsScreen(
         }
 
         // ── 2.5 People & Pets Carousel ──
-        item(key = "header_people", span = { GridItemSpan(maxLineSpan) }) {
-            SectionHeader(
-                title = "People & Pets",
-                count = if (personClusters.isNotEmpty()) personClusters.size else null,
-                isExpanded = peopleExpanded,
-                onToggle = { peopleExpanded = !peopleExpanded },
-                onSeeAll = onNavigateToPeople
-            )
-        }
+        if (com.inferno.gallery.utils.FeatureFlags.ENABLE_PEOPLE_FEATURE) {
+            item(key = "header_people", span = { GridItemSpan(maxLineSpan) }) {
+                SectionHeader(
+                    title = "People & Pets",
+                    count = if (personClusters.isNotEmpty()) personClusters.size else null,
+                    isExpanded = peopleExpanded,
+                    onToggle = { viewModel.toggleAlbumsExpandedPeople() },
+                    onSeeAll = onNavigateToPeople
+                )
+            }
 
-        item(key = "content_people", span = { GridItemSpan(maxLineSpan) }) {
-            AnimatedVisibility(
-                visible = peopleExpanded,
-                enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-            ) {
-                if (personClusters.isNotEmpty()) {
-                    PeopleCarousel(
-                        clusters = personClusters,
-                        onPersonClick = { onPersonClick(it.toString()) },
-                        onViewAllClick = onNavigateToPeople
-                    )
-                } else {
-                    Surface(
-                        onClick = onNavigateToPeople,
-                        shape = ShapeLargeIncreased,
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = SpacingTokens.XS)
-                    ) {
-                        Row(
+            item(key = "content_people", span = { GridItemSpan(maxLineSpan) }) {
+                AnimatedVisibility(
+                    visible = peopleExpanded,
+                    enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
+                    exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                ) {
+                    if (personClusters.isNotEmpty()) {
+                        PeopleCarousel(
+                            clusters = personClusters,
+                            onPersonClick = { onPersonClick(it.toString()) },
+                            onViewAllClick = onNavigateToPeople,
+                            showHeader = false
+                        )
+                    } else {
+                        Surface(
+                            onClick = onNavigateToPeople,
+                            shape = ShapeLargeIncreased,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(SpacingTokens.L),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                                .padding(vertical = SpacingTokens.XS)
                         ) {
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(48.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(SpacingTokens.L),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_face),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(IconSizeTokens.L)
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_face),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(IconSizeTokens.L)
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isFaceModelDownloaded) "Discover People & Pets" else "Set Up People & Pets",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (isFaceModelDownloaded) "Scan your photos to group friends, family, and pets" else "Download on-device AI model (~77 MB) to group faces accurately",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            }
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isFaceModelDownloaded) "Discover People & Pets" else "Set Up People & Pets",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (isFaceModelDownloaded) "Scan your photos to group friends, family, and pets" else "Download on-device AI model (~77 MB) to group faces accurately",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            FilledTonalButton(
-                                onClick = onNavigateToPeople,
-                                shape = ShapeFull,
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text(if (isFaceModelDownloaded) "Scan" else "Set Up")
+                                FilledTonalButton(
+                                    onClick = onNavigateToPeople,
+                                    shape = ShapeFull,
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text(if (isFaceModelDownloaded) "Scan" else "Set Up")
+                                }
                             }
                         }
                     }
@@ -518,7 +525,7 @@ fun AlbumsScreen(
                 title = "Places",
                 count = if (placesClusters.isNotEmpty()) placesClusters.size else null,
                 isExpanded = placesExpanded,
-                onToggle = { placesExpanded = !placesExpanded },
+                onToggle = { viewModel.toggleAlbumsExpandedPlaces() },
                 onSeeAll = onNavigateToPlacesList
             )
         }
@@ -556,12 +563,14 @@ fun AlbumsScreen(
                                 )
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .height(44.dp)
                                         .background(
                                             Brush.verticalGradient(
                                                 colors = listOf(
-                                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.25f),
-                                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.70f)
+                                                    Color.Transparent,
+                                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f)
                                                 )
                                             )
                                         )
@@ -618,14 +627,15 @@ fun AlbumsScreen(
                                 )
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .height(42.dp)
                                         .background(
                                             Brush.verticalGradient(
                                                 colors = listOf(
                                                     Color.Transparent,
-                                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.75f)
-                                                ),
-                                                startY = 60f
+                                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f)
+                                                )
                                             )
                                         )
                                 )
@@ -666,7 +676,7 @@ fun AlbumsScreen(
                     title = "Media Types",
                     count = mediaTypeBuckets.size,
                     isExpanded = mediaTypesExpanded,
-                    onToggle = { mediaTypesExpanded = !mediaTypesExpanded }
+                    onToggle = { viewModel.toggleAlbumsExpandedMediaTypes() }
                 )
             }
 
@@ -713,14 +723,15 @@ fun AlbumsScreen(
                                         )
                                         Box(
                                             modifier = Modifier
-                                                .fillMaxSize()
+                                                .align(Alignment.BottomCenter)
+                                                .fillMaxWidth()
+                                                .height(48.dp)
                                                 .background(
                                                     Brush.verticalGradient(
                                                         colors = listOf(
                                                             Color.Transparent,
-                                                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.78f)
-                                                        ),
-                                                        startY = 30f
+                                                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f)
+                                                        )
                                                     )
                                                 )
                                         )

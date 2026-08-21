@@ -69,6 +69,12 @@ class SettingsRepository private constructor(private val context: Context) {
         val OCR_INDEXING_ENABLED = booleanPreferencesKey("ocr_indexing_enabled")
         val STORY_MUSIC_MUTED = booleanPreferencesKey("story_music_muted")
 
+        val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
+        val ALBUMS_EXPANDED_MORE = booleanPreferencesKey("albums_expanded_more")
+        val ALBUMS_EXPANDED_PEOPLE = booleanPreferencesKey("albums_expanded_people")
+        val ALBUMS_EXPANDED_PLACES = booleanPreferencesKey("albums_expanded_places")
+        val ALBUMS_EXPANDED_MEDIA_TYPES = booleanPreferencesKey("albums_expanded_media_types")
+
         // Theme Customization
         val APP_SEED_COLOR = intPreferencesKey("app_seed_color")
         val THEME_PALETTE_STYLE = stringPreferencesKey("theme_palette_style")
@@ -81,6 +87,41 @@ class SettingsRepository private constructor(private val context: Context) {
         val TERTIARY_COLOR_OVERRIDE = intPreferencesKey("tertiary_color_override")   // -1 = auto (derived from seed)
         val CONTRAST_PRESET = stringPreferencesKey("contrast_preset")               // "Reduced" | "Default" | "Medium" | "High"
         val ANIMATE_THEME_TRANSITIONS = booleanPreferencesKey("animate_theme_transitions")
+    }
+
+    val albumsExpandedPinnedFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_PINNED] ?: true }
+
+    val albumsExpandedMoreFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_MORE] ?: true }
+
+    val albumsExpandedPeopleFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_PEOPLE] ?: true }
+
+    val albumsExpandedPlacesFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_PLACES] ?: true }
+
+    val albumsExpandedMediaTypesFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_MEDIA_TYPES] ?: true }
+
+    suspend fun updateAlbumsExpandedPinned(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_PINNED] = expanded }
+    }
+
+    suspend fun updateAlbumsExpandedMore(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_MORE] = expanded }
+    }
+
+    suspend fun updateAlbumsExpandedPeople(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_PEOPLE] = expanded }
+    }
+
+    suspend fun updateAlbumsExpandedPlaces(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_PLACES] = expanded }
+    }
+
+    suspend fun updateAlbumsExpandedMediaTypes(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_MEDIA_TYPES] = expanded }
     }
 
 
