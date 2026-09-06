@@ -16,8 +16,8 @@ android {
         applicationId = "com.inferno.gallery"
         minSdk = 31
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.0.2 (beta)"
+        versionCode = 4
+        versionName = "1.0.3 (beta)"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

@@ -1,7 +1,13 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package com.inferno.gallery.ui.components
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.composed
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -190,23 +196,8 @@ fun PhotonGrid(
 
     // ── Live Pinch-to-Zoom Spring Animation & Scale State ───────────────────────
     var isPinching by remember { mutableStateOf(false) }
-    var livePinchScale by remember { mutableFloatStateOf(1f) }
-    var pinchCentroid by remember { mutableStateOf<Offset?>(null) }
-    val columnChangeSettleAnim = remember { Animatable(1f) }
-
-    // When gridCellsCount changes, trigger a subtle, buttery Material 3 Expressive spring settle
-    LaunchedEffect(gridCellsCount) {
-        if (!isPinching) {
-            columnChangeSettleAnim.snapTo(1.05f)
-            columnChangeSettleAnim.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = 0.75f,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
-        }
-    }
+    val livePinchScaleAnim = remember { Animatable(1f) }
+    val pinchScaleScope = rememberCoroutineScope()
 
     val basePinchModifier = Modifier
         .fillMaxSize()
@@ -215,39 +206,30 @@ fun PhotonGrid(
             onGridCountChange = onGridCountChange,
             isSelectionMode = isSelectionMode,
             haptic = haptic,
-            onPinchScaleChange = { scale, centroid ->
+            onPinchScaleChange = { scale, _ ->
                 isPinching = true
-                livePinchScale = scale.coerceIn(0.70f, 1.40f)
-                pinchCentroid = centroid
+                pinchScaleScope.launch {
+                    livePinchScaleAnim.snapTo(scale.coerceIn(0.84f, 1.20f))
+                }
             },
             onPinchEnd = {
-                coroutineScope.launch {
-                    animate(
-                        initialValue = livePinchScale,
+                pinchScaleScope.launch {
+                    livePinchScaleAnim.animateTo(
                         targetValue = 1f,
                         animationSpec = spring(
-                            dampingRatio = 0.72f,
+                            dampingRatio = 0.80f,
                             stiffness = Spring.StiffnessMediumLow
                         )
-                    ) { value, _ ->
-                        livePinchScale = value
-                    }
+                    )
                     isPinching = false
                 }
             }
         )
         .graphicsLayer {
-            val scale = if (isPinching || livePinchScale != 1f) livePinchScale else columnChangeSettleAnim.value
+            val scale = livePinchScaleAnim.value
             scaleX = scale
             scaleY = scale
-            pinchCentroid?.let { c ->
-                if (size.width > 0f && size.height > 0f) {
-                    transformOrigin = TransformOrigin(
-                        pivotFractionX = (c.x / size.width).coerceIn(0f, 1f),
-                        pivotFractionY = (c.y / size.height).coerceIn(0f, 1f)
-                    )
-                }
-            }
+            transformOrigin = TransformOrigin.Center
         }
 
     val staggeredState = rememberLazyStaggeredGridState()
@@ -309,7 +291,12 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(title = listItem.title)
+                            TimelineSectionHeader(
+                                title = listItem.title,
+                                modifier = Modifier.animateItem(
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                )
+                            )
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val uriString = remember(item.id) { item.uri.toString() }
@@ -329,7 +316,9 @@ fun PhotonGrid(
                             }
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier,
+                                modifier = Modifier.animateItem(
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                ),
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -348,6 +337,9 @@ fun PhotonGrid(
                             }
                             Box(
                                 modifier = Modifier
+                                    .animateItem(
+                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                    )
                                     .aspectRatio(1.0f)
                                     .clip(placeholderShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -402,7 +394,12 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(title = listItem.title)
+                            TimelineSectionHeader(
+                                title = listItem.title,
+                                modifier = Modifier.animateItem(
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                )
+                            )
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val uriString = remember(item.id) { item.uri.toString() }
@@ -414,7 +411,9 @@ fun PhotonGrid(
                             }
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier,
+                                modifier = Modifier.animateItem(
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                ),
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -435,6 +434,9 @@ fun PhotonGrid(
                             }
                             Box(
                                 modifier = Modifier
+                                    .animateItem(
+                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                    )
                                     .aspectRatio(mosaicRatio)
                                     .clip(placeholderShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -485,7 +487,12 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(title = listItem.title)
+                            TimelineSectionHeader(
+                                title = listItem.title,
+                                modifier = Modifier.animateItem(
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                )
+                            )
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val uriString = remember(item.id) { item.uri.toString() }
@@ -496,7 +503,9 @@ fun PhotonGrid(
                             }
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier,
+                                modifier = Modifier.animateItem(
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                ),
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -515,6 +524,9 @@ fun PhotonGrid(
                             }
                             Box(
                                 modifier = Modifier
+                                    .animateItem(
+                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                    )
                                     .aspectRatio(1.0f)
                                     .clip(placeholderShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -743,87 +755,95 @@ private fun Modifier.smoothGridPinchZoom(
     haptic: HapticFeedback,
     onPinchScaleChange: (scale: Float, centroid: Offset) -> Unit,
     onPinchEnd: () -> Unit
-): Modifier = this.pointerInput(gridCellsCount, isSelectionMode) {
-    if (isSelectionMode) return@pointerInput
+): Modifier = composed {
+    val currentGridCount by rememberUpdatedState(gridCellsCount)
+    val currentOnGridCountChange by rememberUpdatedState(onGridCountChange)
+    val currentIsSelectionMode by rememberUpdatedState(isSelectionMode)
+    val currentOnPinchScaleChange by rememberUpdatedState(onPinchScaleChange)
+    val currentOnPinchEnd by rememberUpdatedState(onPinchEnd)
 
-    val touchSlop = viewConfiguration.touchSlop
+    Modifier.pointerInput(Unit) {
+        val touchSlop = viewConfiguration.touchSlop
 
-    awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Main)
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
 
-        var initialDistance = -1f
-        var pinchActive = false
-        var pinchEverActivated = false
-        var lastChangeTime = 0L
+            if (currentIsSelectionMode) return@awaitEachGesture
 
-        do {
-            val event = awaitPointerEvent(pass = PointerEventPass.Main)
-            val pressed = event.changes.filter { it.pressed }
+            var initialDistance = -1f
+            var pinchActive = false
+            var pinchEverActivated = false
+            var lastChangeTime = 0L
 
-            if (pressed.size >= 2) {
-                val p1 = pressed[0].position
-                val p2 = pressed[1].position
-                val currentDistance = kotlin.math.hypot(p1.x - p2.x, p1.y - p2.y)
-                val currentCentroid = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
+            try {
+                do {
+                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                    val pressed = event.changes.filter { it.pressed }
 
-                if (initialDistance <= 0f) {
-                    initialDistance = currentDistance
-                } else {
-                    val distanceDiff = kotlin.math.abs(currentDistance - initialDistance)
-                    val rawScale = currentDistance / initialDistance
+                    if (pressed.size >= 2) {
+                        val p1 = pressed[0].position
+                        val p2 = pressed[1].position
+                        val currentDistance = kotlin.math.hypot(p1.x - p2.x, p1.y - p2.y)
+                        val currentCentroid = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
 
-                    // Slop threshold: require noticeable finger movement before activating pinch
-                    if (!pinchActive && distanceDiff > touchSlop * 1.5f && (rawScale > 1.06f || rawScale < 0.94f)) {
-                        pinchActive = true
-                        pinchEverActivated = true
-                    }
+                        if (initialDistance <= 0f) {
+                            initialDistance = currentDistance
+                        } else {
+                            val distanceDiff = kotlin.math.abs(currentDistance - initialDistance)
+                            val rawScale = currentDistance / initialDistance
 
-                    if (pinchActive) {
-                        pressed.forEach { it.consume() }
-                        onPinchScaleChange(rawScale, currentCentroid)
+                            // Slop threshold: require noticeable finger movement before activating pinch
+                            if (!pinchActive && distanceDiff > touchSlop * 1.25f && (rawScale > 1.05f || rawScale < 0.95f)) {
+                                pinchActive = true
+                                pinchEverActivated = true
+                            }
 
-                        val now = System.currentTimeMillis()
-                        // Zoom IN: spreading fingers -> fewer columns (e.g. 4 -> 3)
-                        if (rawScale > 1.22f && now - lastChangeTime > 240L) {
-                            if (gridCellsCount > 1) {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                val oldColumns = gridCellsCount
-                                val newColumns = gridCellsCount - 1
-                                onGridCountChange(newColumns)
-                                lastChangeTime = now
-                                initialDistance = currentDistance
-                                val ratio = oldColumns.toFloat() / newColumns.toFloat()
-                                val compensatingScale = (rawScale / ratio).coerceIn(0.85f, 1.20f)
-                                onPinchScaleChange(compensatingScale, currentCentroid)
+                            if (pinchActive) {
+                                // Consume in Initial pass so child scrollable never sees move events
+                                event.changes.forEach { it.consume() }
+                                currentOnPinchScaleChange(rawScale, currentCentroid)
+
+                                val now = System.currentTimeMillis()
+                                // Zoom IN: spreading fingers -> fewer columns (e.g. 4 -> 3)
+                                if (rawScale > 1.20f && now - lastChangeTime > 260L) {
+                                    val currentCols = currentGridCount
+                                    if (currentCols > 1) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        currentOnGridCountChange(currentCols - 1)
+                                        lastChangeTime = now
+                                        initialDistance = currentDistance
+                                        currentOnPinchScaleChange(1f, currentCentroid)
+                                    }
+                                }
+                                // Zoom OUT: pinching fingers -> more columns (e.g. 3 -> 4)
+                                else if (rawScale < 0.82f && now - lastChangeTime > 260L) {
+                                    val currentCols = currentGridCount
+                                    if (currentCols < 8) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        currentOnGridCountChange(currentCols + 1)
+                                        lastChangeTime = now
+                                        initialDistance = currentDistance
+                                        currentOnPinchScaleChange(1f, currentCentroid)
+                                    }
+                                }
                             }
                         }
-                        // Zoom OUT: pinching fingers -> more columns (e.g. 3 -> 4)
-                        else if (rawScale < 0.80f && now - lastChangeTime > 240L) {
-                            if (gridCellsCount < 8) {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                val oldColumns = gridCellsCount
-                                val newColumns = gridCellsCount + 1
-                                onGridCountChange(newColumns)
-                                lastChangeTime = now
-                                initialDistance = currentDistance
-                                val ratio = oldColumns.toFloat() / newColumns.toFloat()
-                                val compensatingScale = (rawScale / ratio).coerceIn(0.85f, 1.20f)
-                                onPinchScaleChange(compensatingScale, currentCentroid)
-                            }
+                    } else {
+                        // Less than 2 fingers down:
+                        // Crucial: if pinch was ever active in this gesture, consume ALL remaining
+                        // pointers (including during lift-off) so LazyVerticalGrid never flings!
+                        if (pinchEverActivated) {
+                            event.changes.forEach { it.consume() }
                         }
+                        pinchActive = false
+                        initialDistance = -1f
                     }
+                } while (event.changes.any { it.pressed })
+            } finally {
+                if (pinchEverActivated) {
+                    currentOnPinchEnd()
                 }
-            } else {
-                if (pinchActive) {
-                    event.changes.forEach { it.consume() }
-                }
-                pinchActive = false
-                initialDistance = -1f
             }
-        } while (event.changes.any { it.pressed })
-
-        if (pinchEverActivated) {
-            onPinchEnd()
         }
     }
 }
