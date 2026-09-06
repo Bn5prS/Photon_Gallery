@@ -45,7 +45,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -118,7 +117,6 @@ fun AlbumsScreen(
     onNavigateToPhotoMap: () -> Unit = {},
     onNavigateToPlacesList: () -> Unit = {},
     onNavigateToAllAlbums: () -> Unit = {},
-    onNavigateToPeople: () -> Unit = {},
     onChangeCover: (String) -> Unit = {},
     onDeleteCover: (String) -> Unit = {}
 ) {
@@ -156,7 +154,6 @@ fun AlbumsScreen(
     // Persistent expand states for sections
     val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
     val moreExpanded by viewModel.albumsExpandedMore.collectAsState()
-    val peopleExpanded by viewModel.albumsExpandedPeople.collectAsState()
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
@@ -166,8 +163,8 @@ fun AlbumsScreen(
 
     val lazyGridState = rememberLazyGridState()
 
-    // Ensure top pinned section is always visible and not scrolled down on initial open
-    var hasPinnedLoaded by rememberSaveable { mutableStateOf(false) }
+    // Ensure top pinned section is always visible and not scrolled down when opening Albums
+    var hasPinnedLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(visiblePinned.isNotEmpty()) {
         if (visiblePinned.isNotEmpty() && !hasPinnedLoaded) {
             hasPinnedLoaded = true
@@ -432,7 +429,6 @@ fun AlbumsScreen(
                 }
             }
         }
-
 
 
         // ── 3. Places Carousel ──

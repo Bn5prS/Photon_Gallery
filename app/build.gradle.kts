@@ -52,6 +52,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Install alongside the release app so device testing never touches real app data
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

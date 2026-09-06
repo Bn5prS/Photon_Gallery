@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.inferno.gallery.ui.theme.SectionHeaderTitleStyle
 import com.inferno.gallery.ui.theme.ShapeSmall
 
 /**
@@ -60,7 +61,7 @@ fun PhotonSectionHeader(
 
         Text(
             text = title,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            style = SectionHeaderTitleStyle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )

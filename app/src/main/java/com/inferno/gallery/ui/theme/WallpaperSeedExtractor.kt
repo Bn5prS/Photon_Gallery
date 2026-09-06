@@ -20,6 +20,28 @@ object WallpaperSeedExtractor {
     private const val TAG = "WallpaperSeedExtractor"
     private const val MAX_WALLPAPER_EXTRACTION_AREA = 112 * 112
 
+    /**
+     * Instantly retrieves the system accent seed color or wallpaper primary color without disk I/O.
+     */
+    fun getInstantWallpaperSeedColor(context: Context): Int? {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            try {
+                val systemColor = context.getColor(android.R.color.system_accent1_500)
+                if (systemColor != 0) return systemColor
+            } catch (_: Exception) {}
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            try {
+                val wallpaperManager = WallpaperManager.getInstance(context)
+                val nativeColors = wallpaperManager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+                if (nativeColors != null) {
+                    return nativeColors.primaryColor.toArgb()
+                }
+            } catch (_: Exception) {}
+        }
+        return null
+    }
+
     suspend fun getWallpaperSeedColor(context: Context): Int? = withContext(Dispatchers.IO) {
         try {
             // 0. Try native Android 12+ Monet system accent color

@@ -2,9 +2,19 @@ package com.inferno.gallery.data.db
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "core_media")
+@Entity(
+    tableName = "core_media",
+    indices = [
+        Index(value = ["dateAdded", "id"]),
+        Index(value = ["bucketName", "dateAdded", "id"]),
+        Index(value = ["uriString"]),
+        Index(value = ["filePath"]),
+        Index(value = ["isVideo", "bucketName"])
+    ]
+)
 data class CoreMediaEntity(
     @PrimaryKey val id: Long,
     val uriString: String,

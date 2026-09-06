@@ -111,10 +111,10 @@ fun NavigationGraph(
 
             composable(
                 route = "gallery",
-                enterTransition = { fadeIn(tween(MotionTokens.Durations.Short)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(MotionTokens.Durations.Short)) },
-                popExitTransition = { fadeOut(tween(150)) }
+                enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
+                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
             ) {
                 MainAppLayout(
                     sharedTransitionScope = this@SharedTransitionLayout,
@@ -125,10 +125,6 @@ fun NavigationGraph(
                         if (bucket != null) params.add("bucket=${android.net.Uri.encode(bucket)}")
                         if (query != null && bucket == "search_text") {
                             params.add("highlight=${android.net.Uri.encode(query)}")
-                        }
-                        if (bucket?.startsWith("person_") == true) {
-                            val cId = bucket.removePrefix("person_")
-                            params.add("clusterId=$cId")
                         }
                         if (params.isNotEmpty()) {
                             route += "?" + params.joinToString("&")
@@ -157,22 +153,20 @@ fun NavigationGraph(
             }
 
             composable(
-                route = "detail/{mediaId}?bucket={bucketName}&highlight={highlightText}&clusterId={clusterId}",
+                route = "detail/{mediaId}?bucket={bucketName}&highlight={highlightText}",
                 arguments = listOf(
                     navArgument("mediaId") { type = NavType.StringType },
                     navArgument("bucketName") { type = NavType.StringType; nullable = true; defaultValue = null },
-                    navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null },
-                    navArgument("clusterId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null }
                 ),
-                enterTransition = { fadeIn(tween(MotionTokens.Durations.Short)) },
-                exitTransition = { fadeOut(tween(150)) },
-                popEnterTransition = { fadeIn(tween(MotionTokens.Durations.Short)) },
-                popExitTransition = { fadeOut(tween(150)) }
+                enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
+                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
             ) { backStackEntry ->
                 val mediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
                 val highlightText = backStackEntry.arguments?.getString("highlightText")
-                val clusterId = backStackEntry.arguments?.getString("clusterId")?.toLongOrNull()
                 
                 androidx.compose.runtime.LaunchedEffect(mediaId, bucketName) {
                     galleryViewModel.loadDetailMedia(mediaId, bucketName)
@@ -183,7 +177,6 @@ fun NavigationGraph(
                     mediaId = mediaId,
                     bucketName = bucketName,
                     highlightText = highlightText,
-                    clusterId = clusterId,
                     useFullScreenGlobal = useFullScreen,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
@@ -244,20 +237,20 @@ fun NavigationGraph(
                     slideInVertically(
                         animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
                         initialOffsetY = { (it * 0.3f).toInt() }
-                    ) + fadeIn(tween(200))
+                    ) + fadeIn(MotionTokens.fastEffectsSpec())
                 },
                 exitTransition = {
                     slideOutVertically(
                         animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
                         targetOffsetY = { (it * 0.3f).toInt() }
-                    ) + fadeOut(tween(150))
+                    ) + fadeOut(MotionTokens.fastEffectsSpec())
                 },
-                popEnterTransition = { fadeIn(tween(200)) },
+                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 popExitTransition = {
                     slideOutVertically(
                         animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
                         targetOffsetY = { (it * 0.3f).toInt() }
-                    ) + fadeOut(tween(150))
+                    ) + fadeOut(MotionTokens.fastEffectsSpec())
                 }
             ) { backStackEntry ->
                 val uriString = backStackEntry.arguments?.getString("uri") ?: ""

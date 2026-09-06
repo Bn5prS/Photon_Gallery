@@ -135,6 +135,7 @@ import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.ui.components.DetailedExifData
 import com.inferno.gallery.ui.components.ExifDetailsSheet
 import com.inferno.gallery.ui.components.extractDetailedExif
+import com.inferno.gallery.ui.components.AlbumPickerSheet
 import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeNone
 import androidx.compose.ui.res.vectorResource
@@ -151,7 +152,6 @@ fun DetailScreen(
     mediaId: String,
     bucketName: String?,
     highlightText: String? = null,
-    clusterId: Long? = null,
     useFullScreenGlobal: Boolean = false,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -213,7 +213,7 @@ fun DetailScreen(
 
     // Ensure we don't crash if items is empty
     if (galleryItems.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest))
         return
     }
 
@@ -260,11 +260,10 @@ fun DetailScreen(
     }
 
 
-    var activeFaceClusterId by remember { mutableStateOf(clusterId) }
     var activeHighlight by remember { mutableStateOf(highlightText) }
     var highlightRects by remember { mutableStateOf<List<android.graphics.Rect>>(emptyList()) }
     var highlightImageSize by remember { mutableStateOf<androidx.compose.ui.geometry.Size?>(null) }
-    var highlightOverlayVisible by remember { mutableStateOf(highlightText != null || clusterId != null) }
+    var highlightOverlayVisible by remember { mutableStateOf(highlightText != null) }
 
     androidx.compose.runtime.LaunchedEffect(galleryItems, mediaId) {
         if (galleryItems.isNotEmpty()) {
@@ -322,6 +321,9 @@ fun DetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var pendingRenameItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingRenameNewName by remember { mutableStateOf("") }
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showCopySheet by remember { mutableStateOf(false) }
+    var showMoveSheet by remember { mutableStateOf(false) }
 
     val renameLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -455,6 +457,60 @@ fun DetailScreen(
         )
     }
 
+    if (showCopySheet && currentItem != null) {
+        val allAlbumsList by viewModel.allAlbums.collectAsState()
+        AlbumPickerSheet(
+            title = "Copy to Album",
+            itemCount = 1,
+            albums = allAlbumsList,
+            showPrivateSpaceOption = false,
+            confirmPathButtonText = "Copy Here",
+            onDismissRequest = { showCopySheet = false },
+            onSelectAlbum = { bucket ->
+                showCopySheet = false
+                viewModel.copyMedia(listOf(currentItem.uri), bucket)
+            },
+            onSelectPath = { path ->
+                showCopySheet = false
+                viewModel.copyMediaToPath(listOf(currentItem.uri), path)
+            }
+        )
+    }
+
+    if (showMoveSheet && currentItem != null) {
+        val allAlbumsList by viewModel.allAlbums.collectAsState()
+        AlbumPickerSheet(
+            title = "Move to Album",
+            itemCount = 1,
+            albums = allAlbumsList,
+            showPrivateSpaceOption = true,
+            confirmPathButtonText = "Move Here",
+            onDismissRequest = { showMoveSheet = false },
+            onSelectAlbum = { bucket ->
+                showMoveSheet = false
+                viewModel.moveMedia(listOf(currentItem.uri), bucket)
+            },
+            onSelectPath = { path ->
+                showMoveSheet = false
+                viewModel.moveMediaToPath(listOf(currentItem.uri), path)
+            },
+            onSelectPrivateSpace = {
+                showMoveSheet = false
+                val activity = context as? androidx.fragment.app.FragmentActivity
+                if (activity != null) {
+                    viewModel.vaultAuthManager.authenticate(
+                        activity = activity,
+                        onSuccess = {
+                            viewModel.hideMedia(listOf(currentItem.uri))
+                            onBack()
+                        },
+                        onFailure = {}
+                    )
+                }
+            }
+        )
+    }
+
     var showInfoCard by remember { mutableStateOf(false) }
     var currentExif by remember { mutableStateOf<DetailedExifData?>(null) }
     
@@ -477,7 +533,7 @@ fun DetailScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = bgAlpha)),
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center
     ) {
         if (viewerBlurEffect && currentItem != null) {
@@ -629,9 +685,8 @@ fun DetailScreen(
                     }
                 } else {
                     androidx.compose.runtime.LaunchedEffect(activeHighlight, page, pagerState.currentPage, resolvedUri) {
-                        if (page == pagerState.currentPage) {
-                            if (activeHighlight != null) {
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        if (page == pagerState.currentPage && activeHighlight != null) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                     try {
                                         val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
                                         val inputImage = com.google.mlkit.vision.common.InputImage.fromFilePath(context, resolvedUri)
@@ -663,7 +718,6 @@ fun DetailScreen(
                                 kotlinx.coroutines.delay(4000)
                                 highlightOverlayVisible = false
                             }
-                        }
                     }
 
                     with(sharedTransitionScope) {
@@ -699,7 +753,6 @@ fun DetailScreen(
                                     detectTapGestures(
                                         onTap = {
                                             activeHighlight = null
-                                            activeFaceClusterId = null
                                             highlightOverlayVisible = false
                                             if (showInfoCard || showUi) {
                                                 showInfoCard = false
@@ -883,7 +936,7 @@ fun DetailScreen(
                                 }
                         )
                         
-                        if (activeHighlight != null || activeFaceClusterId != null) {
+                        if (activeHighlight != null) {
                             val highlightColor = MaterialTheme.colorScheme.primary
                             Canvas(
                                 modifier = Modifier
@@ -1094,20 +1147,144 @@ fun DetailScreen(
                         contentDescription = "Go back"
                     )
                 }
-                ExpressiveFilledIconButton(
-                    onClick = { showInfoCard = !showInfoCard },
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = if (showInfoCard) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainer,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                        contentDescription = "Info"
-                    )
-                }
+                    ExpressiveFilledIconButton(
+                        onClick = { showInfoCard = !showInfoCard },
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = if (showInfoCard) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                            contentDescription = "Info"
+                        )
+                    }
+
+                    Box {
+                        ExpressiveFilledIconButton(
+                            onClick = { showMoreMenu = true },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = if (showMoreMenu) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                                contentDescription = "More options"
+                            )
+                        }
+
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false },
+                            shape = MaterialTheme.shapes.large,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            if (currentItem != null) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Open with") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_open_in_new), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val uri = resolvedCurrentUri ?: currentItem.uri
+                                        val mimeType = context.contentResolver.getType(uri) ?: if (currentItem.isVideo) "video/*" else "image/*"
+                                        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, mimeType)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        try {
+                                            context.startActivity(Intent.createChooser(viewIntent, "Open with"))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "No app available to open this file", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            }
+                            if (currentItem != null && !currentItem.isVideo) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Set as wallpaper") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
+                                            setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            putExtra("mimeType", "image/*")
+                                        }
+                                        try {
+                                            context.startActivity(Intent.createChooser(intent, "Set as..."))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            }
+                            if (currentItem != null) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Copy to") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showCopySheet = true
+                                    }
+                                )
+                            }
+                            if (currentItem != null) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Move to") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showMoveSheet = true
+                                    }
+                                )
+                            }
+                            if (currentItem != null) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Rename") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showRenameDialog = true
+                                    }
+                                )
+                            }
+                            // Hide (Private Space)
+                            if (currentItem != null) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Hide") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val activity = context as? androidx.fragment.app.FragmentActivity
+                                        if (activity != null) {
+                                            viewModel.vaultAuthManager.authenticate(
+                                                activity = activity,
+                                                onSuccess = {
+                                                    viewModel.hideMedia(listOf(currentItem.uri))
+                                                    onBack()
+                                                },
+                                                onFailure = {}
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
+        }
 
         ExifDetailsSheet(
             isOpen = showInfoCard,
@@ -1131,7 +1308,6 @@ fun DetailScreen(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                var showMoreMenu by remember { mutableStateOf(false) }
                 val currentItem = galleryItems.getOrNull(pagerState.currentPage)
 
                 HorizontalFloatingToolbar(
@@ -1283,67 +1459,6 @@ fun DetailScreen(
                                     }
                             ) { 
                                 Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete") 
-                            }
-                            Box {
-                                IconButton(onClick = { showMoreMenu = true }) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_more_vert), contentDescription = "More")
-                                }
-                                androidx.compose.material3.DropdownMenu(
-                                    expanded = showMoreMenu,
-                                    onDismissRequest = { showMoreMenu = false },
-                                    shape = MaterialTheme.shapes.large,
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {
-                                    if (currentItem != null) {
-                                        androidx.compose.material3.DropdownMenuItem(
-                                            text = { Text("Rename") },
-                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
-                                            enabled = currentItem.localExists,
-                                            onClick = {
-                                                showMoreMenu = false
-                                                showRenameDialog = true
-                                            }
-                                        )
-                                    }
-                                    if (currentItem != null && !currentItem.isVideo) {
-                                        androidx.compose.material3.DropdownMenuItem(
-                                            text = { Text("Set as Wallpaper") },
-                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
-                                            enabled = currentItem.localExists,
-                                            onClick = {
-                                                showMoreMenu = false
-                                                val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
-                                                    setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    putExtra("mimeType", "image/*")
-                                                }
-                                                context.startActivity(Intent.createChooser(intent, "Set as..."))
-                                            }
-                                        )
-                                    }
-                                    // Hide (Private Space)
-                                    if (currentItem != null) {
-                                        androidx.compose.material3.DropdownMenuItem(
-                                            text = { Text("Hide") },
-                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
-                                            enabled = currentItem.localExists,
-                                            onClick = {
-                                                showMoreMenu = false
-                                                val activity = context as? androidx.fragment.app.FragmentActivity
-                                                if (activity != null) {
-                                                    viewModel.vaultAuthManager.authenticate(
-                                                        activity = activity,
-                                                        onSuccess = {
-                                                            viewModel.hideMedia(listOf(currentItem.uri))
-                                                            onBack()
-                                                        },
-                                                        onFailure = {}
-                                                    )
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
                             }
                         }
                     }

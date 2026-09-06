@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -87,6 +88,42 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
     var currentPosition by remember { mutableStateOf(0L) }
     var videoDuration by remember { mutableStateOf(0L) }
     var dragPosition by remember { mutableStateOf<Long?>(null) }
+    var videoAspectRatio by remember(uri) {
+        val vs = exoPlayer.videoSize
+        val initialRatio = if (vs.width > 0 && vs.height > 0) {
+            val par = if (vs.pixelWidthHeightRatio > 0f) vs.pixelWidthHeightRatio else 1f
+            val isRotated = vs.unappliedRotationDegrees == 90 || vs.unappliedRotationDegrees == 270
+            val rawW = if (isRotated) vs.height else vs.width
+            val rawH = if (isRotated) vs.width else vs.height
+            (rawW.toFloat() * par) / rawH.toFloat()
+        } else null
+        mutableStateOf(initialRatio)
+    }
+
+    LaunchedEffect(uri) {
+        withContext(Dispatchers.IO) {
+            try {
+                val retriever = android.media.MediaMetadataRetriever()
+                retriever.setDataSource(context, uri)
+                val widthStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                val heightStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                val rotationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                retriever.release()
+                val w = widthStr?.toFloatOrNull() ?: 0f
+                val h = heightStr?.toFloatOrNull() ?: 0f
+                val rot = rotationStr?.toIntOrNull() ?: 0
+                if (w > 0f && h > 0f) {
+                    val ratio = if (rot == 90 || rot == 270) h / w else w / h
+                    if (ratio > 0f && videoAspectRatio == null) {
+                        withContext(Dispatchers.Main) {
+                            videoAspectRatio = ratio
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
     val settings = remember { com.inferno.gallery.data.SettingsRepository.getInstance(context) }
     val autoplayWithSound by settings.autoplayWithSoundEnabledFlow.collectAsState(initial = false)
     var isMuted by remember(autoplayWithSound) { mutableStateOf(!autoplayWithSound) }
@@ -99,6 +136,18 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == androidx.media3.common.Player.STATE_READY) {
                     videoDuration = exoPlayer.duration.coerceAtLeast(0L)
+                }
+            }
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val par = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1f
+                    val isRotated = videoSize.unappliedRotationDegrees == 90 || videoSize.unappliedRotationDegrees == 270
+                    val rawW = if (isRotated) videoSize.height else videoSize.width
+                    val rawH = if (isRotated) videoSize.width else videoSize.height
+                    val computedRatio = (rawW.toFloat() * par) / rawH.toFloat()
+                    if (computedRatio > 0f) {
+                        videoAspectRatio = computedRatio
+                    }
                 }
             }
         }
@@ -134,7 +183,7 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLowest)
             .clickable(
                 onClick = {
                     onTap?.invoke()
@@ -143,15 +192,39 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             )
     ) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false // Hide default legacy controller
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            val playerModifier = if (videoAspectRatio != null && videoAspectRatio!! > 0f) {
+                Modifier
+                    .fillMaxSize()
+                    .aspectRatio(videoAspectRatio!!, matchHeightConstraintsFirst = false)
+            } else {
+                Modifier.fillMaxSize()
+            }
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false // Hide default legacy controller
+                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        try {
+                            val method = javaClass.getMethod("setEnableComposeSurfaceSyncWorkaround", Boolean::class.javaPrimitiveType)
+                            method.invoke(this, true)
+                        } catch (_: Throwable) {}
+                        layoutParams = android.widget.FrameLayout.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                update = { playerView ->
+                    playerView.player = exoPlayer
+                },
+                modifier = playerModifier
+            )
+        }
 
         // Dim Scrim overlay
         AnimatedVisibility(

@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
+import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -77,11 +78,11 @@ fun AllAlbumsScreen(
                     )
                 },
                 navigationIcon = {
-                    FilledTonalIconButton(
+                    ExpressiveFilledIconButton(
                         onClick = onBackClick,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         Icon(
@@ -93,20 +94,20 @@ fun AllAlbumsScreen(
                 },
                 actions = {
                     Box {
-                        FilledTonalIconButton(
+                        ExpressiveFilledIconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 showSortMenu = true
                             },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
                                 contentDescription = "Sort",
-                                modifier = Modifier.size(IconSizeTokens.M)
+                                modifier = Modifier.size(IconSizeTokens.L)
                             )
                         }
                         DropdownMenu(

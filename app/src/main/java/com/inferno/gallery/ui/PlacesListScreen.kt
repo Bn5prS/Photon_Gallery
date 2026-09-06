@@ -30,6 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -94,25 +95,33 @@ fun PlacesListScreen(
                     )
                 },
                 navigationIcon = {
-                    FilledTonalIconButton(
+                    ExpressiveFilledIconButton(
                         onClick = onNavigateUp,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
+                            contentDescription = "Back",
+                            modifier = Modifier.size(IconSizeTokens.L)
+                        )
                     }
                 },
                 actions = {
-                    FilledTonalIconButton(
+                    ExpressiveFilledIconButton(
                         onClick = onNavigateToMap,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_map), contentDescription = "Open Map View")
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_map),
+                            contentDescription = "Open Map View",
+                            modifier = Modifier.size(IconSizeTokens.L)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

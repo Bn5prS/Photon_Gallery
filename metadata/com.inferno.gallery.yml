@@ -1,0 +1,41 @@
+Categories:
+  - Graphics
+  - Photos
+License: GPL-3.0-or-later
+AuthorName: Bn5prS
+SourceCode: https://github.com/Bn5prS/Photon_Gallery
+IssueTracker: https://github.com/Bn5prS/Photon_Gallery/issues
+Changelog: https://github.com/Bn5prS/Photon_Gallery/releases
+
+AutoName: Photon Gallery
+Summary: Offline, privacy-focused Material 3 Expressive gallery
+Description: |-
+  Photon Gallery is an open-source, fully offline Android gallery designed
+  around privacy, high performance, and stunning Material 3 Expressive design.
+
+  Features:
+  * Fluid media browsing with responsive grid and smooth animations
+  * Material 3 Expressive UI with 5-tier elevation and dynamic theming
+  * 100% offline semantic smart search and OCR text recognition
+  * Full-screen photo viewer with EXIF metadata inspector
+  * Photo map and geotagged places explorer
+  * Album management with pinning, exclusions, and custom covers
+  * In-app photo editor, collage maker, and photo stitcher
+  * Biometric-protected Private Space (Vault)
+  * Duplicate cleaner and recycle bin
+
+RepoType: git
+Repo: https://github.com/Bn5prS/Photon_Gallery.git
+
+Builds:
+  - versionName: 1.0.1
+    versionCode: 2
+    commit: v1.0.1
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.1
+CurrentVersionCode: 2

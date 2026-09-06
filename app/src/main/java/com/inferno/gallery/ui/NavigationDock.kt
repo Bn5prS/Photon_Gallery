@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.theme.NavDockLabelStyle
 import com.inferno.gallery.ui.utils.tick
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
@@ -212,8 +213,6 @@ fun SlidingPillTabItem(
             modifier = Modifier.padding(horizontal = 6.dp)
         ) {
             CompositionLocalProvider(LocalContentColor provides contentColor) {
-                icon()
-
                 AnimatedVisibility(
                     visible = isSelected,
                     enter = fadeIn(
@@ -240,16 +239,16 @@ fun SlidingPillTabItem(
                     )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        icon()
                         Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            maxLines = 1
-                        )
                     }
                 }
+
+                Text(
+                    text = label,
+                    style = NavDockLabelStyle,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -326,8 +325,6 @@ fun DockItem(
             horizontalArrangement = Arrangement.Center
         ) {
             CompositionLocalProvider(LocalContentColor provides contentColor) {
-                icon()
-
                 AnimatedVisibility(
                     visible = isSelected,
                     enter = fadeIn(
@@ -366,16 +363,18 @@ fun DockItem(
                     )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        icon()
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            maxLines = 1
-                        )
                     }
                 }
+
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = 1
+                )
             }
         }
     }

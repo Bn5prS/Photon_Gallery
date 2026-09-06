@@ -163,12 +163,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val appSeedColor: StateFlow<Int> = repository.appSeedColorFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0xFF6750A4.toInt() // Default M3 Purple
+        initialValue = 0xFF0A6EFF.toInt() // Default Photon Blue
     )
 
     fun setAppSeedColor(color: Int) {
         viewModelScope.launch {
             repository.updateAppSeedColor(color)
+        }
+    }
+
+    fun setCuratedPalette(seedColor: Int) {
+        viewModelScope.launch {
+            repository.updateUseMaterialYou(false)
+            repository.updateAppSeedColor(seedColor)
         }
     }
 

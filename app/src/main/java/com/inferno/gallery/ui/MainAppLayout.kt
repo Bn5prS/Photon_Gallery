@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 
@@ -84,7 +85,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.inferno.gallery.data.DockStyle
-import com.inferno.gallery.ui.components.overscrollStretch
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import com.inferno.gallery.ui.components.MorphingVariableTabRow
+import com.inferno.gallery.ui.theme.EditorialPunchyHeadline
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -119,6 +123,8 @@ import androidx.compose.material3.Button
 import androidx.compose.runtime.LaunchedEffect
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.theme.IconSizeTokens
+import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -165,12 +171,11 @@ fun MainAppLayout(
     var settingsActiveSection by remember { mutableStateOf<String?>(null) }
     val navBackStackEntry by nestedNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val isScrollDockVisible by viewModel.isScrollDockVisible.collectAsState()
 
     LaunchedEffect(currentRoute) {
-        viewModel.setScrollDockVisible(true)
         viewModel.setTopBarCollapsed(false)
     }
+
 
     val albumNameArg = navBackStackEntry?.arguments?.getString("bucketName")
     val coroutineScope = rememberCoroutineScope()
@@ -369,14 +374,18 @@ fun MainAppLayout(
     }
     val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
 
-    val topBarColor = if (isSelectionMode) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
+    val topBarColor by animateColorAsState(
+        targetValue = when {
+            isSelectionMode -> MaterialTheme.colorScheme.surfaceContainerHigh
+            isTopBarCollapsed -> MaterialTheme.colorScheme.surfaceContainer
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "topBarColor"
+    )
 
     Scaffold(
-            modifier = modifier.fillMaxSize().overscrollStretch(),
+            modifier = modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
@@ -396,11 +405,15 @@ fun MainAppLayout(
                                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalIconButton(
+                                ExpressiveFilledIconButton(
                                     onClick = { viewModel.clearSelection() },
-                                    modifier = Modifier.size(40.dp)
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
                                 ) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Clear selection", modifier = Modifier.size(22.dp))
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Clear selection", modifier = Modifier.size(IconSizeTokens.L))
                                 }
                                 AnimatedContent(
                                     targetState = selectedUris.size,
@@ -421,14 +434,18 @@ fun MainAppLayout(
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                 }
-                                FilledTonalIconButton(
+                                ExpressiveFilledIconButton(
                                     onClick = { viewModel.toggleSelectAll() },
-                                    modifier = Modifier.size(40.dp)
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
                                 ) {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
                                         contentDescription = "Select or Deselect All",
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(IconSizeTokens.L)
                                     )
                                 }
                             }
@@ -442,11 +459,15 @@ fun MainAppLayout(
                                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalIconButton(
+                                ExpressiveFilledIconButton(
                                     onClick = { nestedNavController.popBackStack() },
-                                    modifier = Modifier.size(40.dp)
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
                                 ) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(22.dp))
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(IconSizeTokens.L))
                                 }
                                 val friendlyTitle = when {
                                     albumNameArg == "search_text" -> "Text Matches"
@@ -460,7 +481,7 @@ fun MainAppLayout(
                                 }
                                 Text(
                                     friendlyTitle,
-                                    style = if (friendlyTitle.length > 15) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
+                                    style = MaterialTheme.typography.headlineMedium,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier
@@ -478,7 +499,7 @@ fun MainAppLayout(
                                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalIconButton(
+                                ExpressiveFilledIconButton(
                                     onClick = {
                                         if (settingsActiveSection != null) {
                                             settingsActiveSection = null
@@ -486,17 +507,21 @@ fun MainAppLayout(
                                             nestedNavController.popBackStack()
                                         }
                                     },
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    ),
                                     modifier = Modifier.size(40.dp)
                                 ) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(22.dp))
+                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(IconSizeTokens.L))
                                 }
                                 Text(
                                     settingsActiveSection ?: "Settings",
-                                    style = if (settingsActiveSection != null) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
+                                    style = if (settingsActiveSection != null) MaterialTheme.typography.headlineMedium else EditorialPunchyHeadline,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier
-                                        .padding(start = 16.dp)
+                                        .padding(start = 12.dp)
                                         .weight(1f)
                                 )
                             }
@@ -506,237 +531,157 @@ fun MainAppLayout(
                             color = topBarColor,
                             shadowElevation = 0.dp
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(52.dp)
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp)
+                                    .padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                if (currentRoute == "photos") {
+                                    MorphingVariableTabRow(
+                                        tabs = listOf("Camera", "All Photos"),
+                                        selectedTabIndex = if (selectedFilter == 1) 0 else 1,
+                                        onTabSelected = { index ->
+                                            viewModel.setFilterIndex(if (index == 0) 1 else 0)
+                                        },
+                                        modifier = Modifier.padding(start = 4.dp),
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
+                                    )
+                                } else {
                                     val titleText = when (currentRoute) {
                                         "albums" -> "Albums"
                                         "search" -> "Search"
-                                        "photos" -> "Photos"
                                         else -> "Photon Gallery"
                                     }
                                     Text(
                                         titleText,
-                                        style = MaterialTheme.typography.headlineLarge,
+                                        style = EditorialPunchyHeadline,
                                         modifier = Modifier.padding(start = 12.dp)
                                     )
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.padding(end = 6.dp)
-                                    ) {
-                                        if (currentRoute != "search") {
-                                            FilledTonalIconButton(
-                                                onClick = { nestedNavController.navigate("search") },
-                                                modifier = Modifier.size(40.dp),
-                                                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                                )
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                                    contentDescription = "Search",
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                        }
-                                        if (currentRoute == "albums") {
-                                            FilledTonalIconButton(
-                                                onClick = { showCreateAlbumDialog = true },
-                                                modifier = Modifier.size(40.dp),
-                                                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                                )
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
-                                                    contentDescription = "Create Album",
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                        }
-                                        
-                                        var showOverflowMenu by remember { mutableStateOf(false) }
-                                        var overflowState by remember { mutableStateOf("main") }
-                                        Box {
-                                            FilledTonalIconButton(
-                                                onClick = { showOverflowMenu = true },
-                                                modifier = Modifier.size(40.dp),
-                                                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                                )
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                                    contentDescription = "Menu",
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                            DropdownMenu(
-                                                expanded = showOverflowMenu,
-                                                onDismissRequest = { 
-                                                    showOverflowMenu = false
-                                                    overflowState = "main"
-                                                },
-                                                shape = ShapeExtraLarge,
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                            ) {
-                                                if (overflowState == "main") {
-                                                    DropdownMenuItem(
-                                                        text = { Text("Settings") },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
-                                                        onClick = {
-                                                            showOverflowMenu = false
-                                                            overflowState = "main"
-                                                            nestedNavController.navigate("settings") {
-                                                                popUpTo("photos") { saveState = true }
-                                                                launchSingleTop = true
-                                                                restoreState = true
-                                                            }
-                                                        }
-                                                    )
-                                                    
-                                                    if (currentRoute == "photos") {
-                                                        androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                        DropdownMenuItem(
-                                                            text = { Text("View Mode") },
-                                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                            onClick = { overflowState = "view" }
-                                                        )
-                                                        DropdownMenuItem(
-                                                            text = { Text("Sort By") },
-                                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                                            trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                            onClick = { overflowState = "sort" }
-                                                        )
-                                                    }
-                                                } else if (overflowState == "view") {
-                                                    DropdownMenuItem(
-                                                        text = { Text("Back") },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                        onClick = { overflowState = "main" }
-                                                    )
-                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                    DropdownMenuItem(text = { Text("Immersive View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
-                                                    DropdownMenuItem(text = { Text("Grouped View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
-                                                } else if (overflowState == "sort") {
-                                                    DropdownMenuItem(
-                                                        text = { Text("Back") },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                        onClick = { overflowState = "main" }
-                                                    )
-                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                    DropdownMenuItem(text = { Text("New to Old") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                    DropdownMenuItem(text = { Text("Old to New") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                    DropdownMenuItem(text = { Text("Large to Small") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
-                                                    DropdownMenuItem(text = { Text("Small to Large") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
-                                                    DropdownMenuItem(text = { Text("A - Z") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
-                                                }
-                                            }
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.padding(end = 6.dp)
+                                ) {
+                                    if (currentRoute != "photos" && currentRoute != "search") {
+                                        ExpressiveFilledIconButton(
+                                            onClick = { nestedNavController.navigate("search") },
+                                            modifier = Modifier.size(40.dp),
+                                            colors = IconButtonDefaults.filledIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                                                contentDescription = "Search",
+                                                modifier = Modifier.size(IconSizeTokens.L)
+                                            )
                                         }
                                     }
-                                }
-
-                                // ── Secondary Chips Row (Below Photos Title) ──
-                                if (currentRoute == "photos") {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, bottom = 6.dp, top = 0.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        val isAll = selectedFilter == 0
-                                        val isCamera = selectedFilter == 1
-
-                                        val cameraBg by animateColorAsState(
-                                            targetValue = if (isCamera) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                            animationSpec = MotionTokens.snappySpring(),
-                                            label = "CameraChipBg"
-                                        )
-                                        val cameraContentColor by animateColorAsState(
-                                            targetValue = if (isCamera) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            animationSpec = MotionTokens.snappySpring(),
-                                            label = "CameraChipColor"
-                                        )
-                                        val cameraScale by animateFloatAsState(
-                                            targetValue = if (isCamera) 1.02f else 1.0f,
-                                            animationSpec = MotionTokens.bouncySpring(),
-                                            label = "CameraChipScale"
-                                        )
-
-                                        val allBg by animateColorAsState(
-                                            targetValue = if (isAll) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                            animationSpec = MotionTokens.snappySpring(),
-                                            label = "AllChipBg"
-                                        )
-                                        val allContentColor by animateColorAsState(
-                                            targetValue = if (isAll) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            animationSpec = MotionTokens.snappySpring(),
-                                            label = "AllChipColor"
-                                        )
-                                        val allScale by animateFloatAsState(
-                                            targetValue = if (isAll) 1.02f else 1.0f,
-                                            animationSpec = MotionTokens.bouncySpring(),
-                                            label = "AllChipScale"
-                                        )
-
-                                        Surface(
-                                            onClick = {
-                                                if (!isCamera) {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    viewModel.setFilterIndex(1)
-                                                }
-                                            },
-                                            shape = CircleShape,
-                                            color = cameraBg,
-                                            contentColor = cameraContentColor,
-                                            modifier = Modifier.graphicsLayer {
-                                                scaleX = cameraScale
-                                                scaleY = cameraScale
-                                            }
+                                    if (currentRoute == "albums") {
+                                        ExpressiveFilledIconButton(
+                                            onClick = { showCreateAlbumDialog = true },
+                                            modifier = Modifier.size(40.dp),
+                                            colors = IconButtonDefaults.filledIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSurface
+                                            )
                                         ) {
-                                            Text(
-                                                text = "Camera",
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = if (isCamera) FontWeight.Bold else FontWeight.Medium
-                                                ),
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
+                                                contentDescription = "Create Album",
+                                                modifier = Modifier.size(IconSizeTokens.L)
                                             )
                                         }
-
-                                        Surface(
+                                    }
+                                    
+                                    var showOverflowMenu by remember { mutableStateOf(false) }
+                                    var overflowState by remember { mutableStateOf("main") }
+                                    Box {
+                                        ExpressiveFilledIconButton(
                                             onClick = {
-                                                if (!isAll) {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    viewModel.setFilterIndex(0)
-                                                }
+                                                overflowState = "main"
+                                                showOverflowMenu = true
                                             },
-                                            shape = CircleShape,
-                                            color = allBg,
-                                            contentColor = allContentColor,
-                                            modifier = Modifier.graphicsLayer {
-                                                scaleX = allScale
-                                                scaleY = allScale
-                                            }
-                                        ) {
-                                            Text(
-                                                text = "All",
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = if (isAll) FontWeight.Bold else FontWeight.Medium
-                                                ),
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                            modifier = Modifier.size(40.dp),
+                                            colors = IconButtonDefaults.filledIconButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSurface
                                             )
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                                                contentDescription = "More options",
+                                                modifier = Modifier.size(IconSizeTokens.L)
+                                            )
+                                        }
+                                        DropdownMenu(
+                                            expanded = showOverflowMenu,
+                                            onDismissRequest = { 
+                                                showOverflowMenu = false
+                                                overflowState = "main"
+                                            },
+                                            shape = com.inferno.gallery.ui.theme.ShapeMedium,
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            tonalElevation = 6.dp,
+                                            modifier = Modifier.widthIn(min = 180.dp)
+                                        ) {
+                                            if (overflowState == "main") {
+                                                DropdownMenuItem(
+                                                    text = { Text("Settings") },
+                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
+                                                    onClick = {
+                                                        showOverflowMenu = false
+                                                        overflowState = "main"
+                                                        nestedNavController.navigate("settings") {
+                                                            popUpTo("photos") { saveState = true }
+                                                            launchSingleTop = true
+                                                            restoreState = true
+                                                        }
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("View Mode") },
+                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                                    trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
+                                                    onClick = { overflowState = "view" }
+                                                )
+                                                if (currentRoute == "photos") {
+                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                    DropdownMenuItem(
+                                                        text = { Text("Sort Order") },
+                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
+                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
+                                                        onClick = { overflowState = "sort" }
+                                                    )
+                                                }
+                                            } else if (overflowState == "view") {
+                                                DropdownMenuItem(
+                                                    text = { Text("Back") },
+                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
+                                                    onClick = { overflowState = "main" }
+                                                )
+                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                DropdownMenuItem(text = { Text("Immersive View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text("Grouped View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
+                                            } else if (overflowState == "sort") {
+                                                DropdownMenuItem(
+                                                    text = { Text("Back") },
+                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
+                                                    onClick = { overflowState = "main" }
+                                                )
+                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                DropdownMenuItem(text = { Text("New to Old") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text("Old to New") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text("Large to Small") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text("Small to Large") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text("A - Z") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
+                                            }
                                         }
                                     }
                                 }
@@ -803,7 +748,7 @@ fun MainAppLayout(
                                 .navigationBarsPadding()
                                 .height(50.dp)
                                 .padding(horizontal = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.SpaceAround,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             DockItem(
@@ -920,9 +865,6 @@ fun MainAppLayout(
                         val encoded = android.net.Uri.encode(bucketName)
                         nestedNavController.navigate("album/$encoded")
                     },
-                    onPersonClick = { personId ->
-                        nestedNavController.navigate("person/$personId")
-                    },
                     onNavigateToVault = onNavigateToVault,
                     onNavigateToDuplicateCleaner = { nestedNavController.navigate("duplicate_cleaner") },
                     onNavigateToPhotoMap = { nestedNavController.navigate("photo_map") },
@@ -988,33 +930,32 @@ fun MainAppLayout(
                 )
             }
 
-
             composable(
                 route = "album/{bucketName}",
                 enterTransition = {
                     if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "search") {
-                        fadeIn(androidx.compose.animation.core.tween(150))
+                        fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 exitTransition = {
                     if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "search") {
-                        fadeOut(androidx.compose.animation.core.tween(150))
+                        fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popEnterTransition = {
                     if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "search") {
-                        fadeIn(androidx.compose.animation.core.tween(150))
+                        fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popExitTransition = {
                     if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "search") {
-                        fadeOut(androidx.compose.animation.core.tween(150))
+                        fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -1025,8 +966,8 @@ fun MainAppLayout(
                     Modifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "album_$bucketName"),
                         animatedVisibilityScope = this@composable,
-                        enter = fadeIn(androidx.compose.animation.core.tween(150)),
-                        exit = fadeOut(androidx.compose.animation.core.tween(150)),
+                        enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                        exit = fadeOut(MotionTokens.fastEffectsSpec()),
                         resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
                         clipInOverlayDuringTransition = OverlayClip(androidx.compose.foundation.shape.RoundedCornerShape(0.dp)),
                         boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
@@ -2000,23 +1941,23 @@ fun MainAppLayout(
                                 }
                             }
                         }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                         }
 
                         // Copy
                         IconButton(onClick = { showCopySheet = true }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = "Copy", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = "Copy", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                         }
 
                         // Move
                         IconButton(onClick = { showMoveSheet = true }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_folder), contentDescription = "Move", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = "Move", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                         }
 
                         // Create (Collage/Stitch)
                         Box {
                             IconButton(onClick = { createMenuExpanded = true }) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_add), contentDescription = "Create", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_add), contentDescription = "Create", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                             }
                             DropdownMenu(
                                 expanded = createMenuExpanded,
@@ -2066,13 +2007,13 @@ fun MainAppLayout(
                                 }
                             }
                         }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error, modifier = Modifier.size(22.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error, modifier = Modifier.size(IconSizeTokens.L))
                         }
 
                         // More options
                         Box {
                             IconButton(onClick = { moreMenuExpanded = true }) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_more_vert), contentDescription = "More", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_more_vert), contentDescription = "More", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                             }
                             DropdownMenu(
                                 expanded = moreMenuExpanded,

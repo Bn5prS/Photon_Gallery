@@ -39,6 +39,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
+import com.inferno.gallery.ui.theme.IconSizeTokens
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
@@ -138,14 +140,18 @@ fun DuplicateCleanerScreen(
                     )
                 },
                 navigationIcon = {
-                    FilledTonalIconButton(
+                    ExpressiveFilledIconButton(
                         onClick = onNavigateBack,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
+                            contentDescription = "Back",
+                            modifier = Modifier.size(IconSizeTokens.L)
+                        )
                     }
                 },
                 actions = {
@@ -155,14 +161,18 @@ fun DuplicateCleanerScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     } else {
-                        FilledTonalIconButton(
+                        ExpressiveFilledIconButton(
                             onClick = { viewModel.scanForDuplicates() },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Rescan")
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                                contentDescription = "Rescan",
+                                modifier = Modifier.size(IconSizeTokens.L)
+                            )
                         }
                     }
                 },

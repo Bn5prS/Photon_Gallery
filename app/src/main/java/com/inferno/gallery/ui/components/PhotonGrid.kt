@@ -5,8 +5,16 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.splineBasedDecay
 import androidx.compose.animation.fadeIn
+import com.inferno.gallery.ui.utils.tick
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -16,6 +24,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -28,6 +38,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -62,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.TransformOrigin
@@ -73,6 +85,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -93,12 +106,59 @@ import com.inferno.gallery.ui.ViewMode
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeFull
+import com.inferno.gallery.ui.theme.TimelineDateHeaderStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+
+/**
+ * Expressive, buttery-smooth fling behavior for Photon Gallery grids.
+ *
+ * Employs standard Android spline-based decay for natural tactile momentum,
+ * but cleanly cuts off when velocity drops below the subpixel crawl threshold (~36 px/s).
+ * This eliminates the 0px/1px alternating quantisation judder that occurs during the tail
+ * end of Compose fling deceleration, ensuring a crisp, smooth landing.
+ */
+@Composable
+fun rememberExpressiveGridFlingBehavior(): FlingBehavior {
+    val density = LocalDensity.current
+    val splineDecay = remember(density) { splineBasedDecay<Float>(density) }
+
+    return remember(splineDecay) {
+        object : FlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+                if (kotlin.math.abs(initialVelocity) <= 16f) return 0f
+
+                var lastValue = 0f
+                var velocityLeft = initialVelocity
+
+                AnimationState(
+                    initialValue = 0f,
+                    initialVelocity = initialVelocity
+                ).animateDecay(splineDecay) {
+                    val delta = value - lastValue
+                    val consumed = scrollBy(delta)
+                    lastValue = value
+                    velocityLeft = this.velocity
+
+                    if (kotlin.math.abs(delta - consumed) > 0.5f) {
+                        this.cancelAnimation()
+                    }
+
+                    // Clean deceleration cutoff: avoids subpixel integer quantisation
+                    // crawl (< 36 px/s = 0.3 px/frame at 120Hz) which causes stutter.
+                    if (kotlin.math.abs(this.velocity) < 36f) {
+                        this.cancelAnimation()
+                    }
+                }
+                return velocityLeft
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -122,46 +182,111 @@ fun PhotonGrid(
 ) {
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
+    val gridFlingBehavior = rememberExpressiveGridFlingBehavior()
 
     // Hoisted static image vectors resolved once per grid, avoiding per-cell recomposition lookups
     val videoIconVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow)
     val checkIconVector = ImageVector.vectorResource(R.drawable.ic_ms_check)
 
-    // ── Live Pinch-to-Zoom Spring Animation State ─────────────────────────────
+    // ── Live Pinch-to-Zoom Spring Animation & Scale State ───────────────────────
     var isPinching by remember { mutableStateOf(false) }
+    var livePinchScale by remember { mutableFloatStateOf(1f) }
+    var pinchCentroid by remember { mutableStateOf<Offset?>(null) }
+    val columnChangeSettleAnim = remember { Animatable(1f) }
+
+    // When gridCellsCount changes, trigger a subtle, buttery Material 3 Expressive spring settle
+    LaunchedEffect(gridCellsCount) {
+        if (!isPinching) {
+            columnChangeSettleAnim.snapTo(1.05f)
+            columnChangeSettleAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.75f,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
+
+    val basePinchModifier = Modifier
+        .fillMaxSize()
+        .smoothGridPinchZoom(
+            gridCellsCount = gridCellsCount,
+            onGridCountChange = onGridCountChange,
+            isSelectionMode = isSelectionMode,
+            haptic = haptic,
+            onPinchScaleChange = { scale, centroid ->
+                isPinching = true
+                livePinchScale = scale.coerceIn(0.70f, 1.40f)
+                pinchCentroid = centroid
+            },
+            onPinchEnd = {
+                coroutineScope.launch {
+                    animate(
+                        initialValue = livePinchScale,
+                        targetValue = 1f,
+                        animationSpec = spring(
+                            dampingRatio = 0.72f,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) { value, _ ->
+                        livePinchScale = value
+                    }
+                    isPinching = false
+                }
+            }
+        )
+        .graphicsLayer {
+            val scale = if (isPinching || livePinchScale != 1f) livePinchScale else columnChangeSettleAnim.value
+            scaleX = scale
+            scaleY = scale
+            pinchCentroid?.let { c ->
+                if (size.width > 0f && size.height > 0f) {
+                    transformOrigin = TransformOrigin(
+                        pivotFractionX = (c.x / size.width).coerceIn(0f, 1f),
+                        pivotFractionY = (c.y / size.height).coerceIn(0f, 1f)
+                    )
+                }
+            }
+        }
+
+    val staggeredState = rememberLazyStaggeredGridState()
+    val isScrolled by remember(timelineLayoutMode) {
+        derivedStateOf {
+            if (timelineLayoutMode == TimelineLayoutMode.STAGGERED_MASONRY) {
+                staggeredState.firstVisibleItemIndex > 0 || staggeredState.firstVisibleItemScrollOffset > 8
+            } else {
+                lazyGridState.firstVisibleItemIndex > 0 || lazyGridState.firstVisibleItemScrollOffset > 8
+            }
+        }
+    }
+
+    LaunchedEffect(isScrolled) {
+        viewModel.setTopBarCollapsed(isScrolled)
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
-        val basePinchModifier = Modifier
-            .fillMaxSize()
-            .robustTwoFingerPinchZoom(
-                gridCellsCount = gridCellsCount,
-                onGridCountChange = onGridCountChange,
-                isSelectionMode = isSelectionMode,
-                haptic = haptic,
-                onPinchUpdate = { pinching ->
-                    isPinching = pinching
-                }
-            )
-
-        when (timelineLayoutMode) {
-            TimelineLayoutMode.STAGGERED_MASONRY -> {
-                // ── Staggered Masonry Layout (True Aspect Ratio Columns) ──────
-                val staggeredState = rememberLazyStaggeredGridState()
-                LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(gridCellsCount),
-                    state = staggeredState,
-                    contentPadding = contentPadding,
-                    verticalItemSpacing = 2.dp,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = basePinchModifier
-                        .staggeredGridDragSelectGesture(
-                            staggeredState = staggeredState,
-                            pagedMedia = pagedMedia,
-                            viewModel = viewModel,
-                            hapticFeedback = haptic,
-                            coroutineScope = coroutineScope
-                        )
-                ) {
+        Box(modifier = basePinchModifier) {
+            when (timelineLayoutMode) {
+                TimelineLayoutMode.STAGGERED_MASONRY -> {
+                    // ── Staggered Masonry Layout (True Aspect Ratio Columns) ──────
+                    LazyVerticalStaggeredGrid(
+                        columns = StaggeredGridCells.Fixed(gridCellsCount),
+                        state = staggeredState,
+                        flingBehavior = gridFlingBehavior,
+                        contentPadding = contentPadding,
+                        verticalItemSpacing = 2.dp,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .staggeredGridDragSelectGesture(
+                                staggeredState = staggeredState,
+                                pagedMedia = pagedMedia,
+                                viewModel = viewModel,
+                                hapticFeedback = haptic,
+                                coroutineScope = coroutineScope
+                            )
+                    ) {
                     items(
                         count = pagedMedia.itemCount,
                         key = { index ->
@@ -184,22 +309,7 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            Row(
-                                modifier = Modifier
-                                    .animateItem(placementSpec = MotionTokens.snappySpring())
-                                    .fillMaxWidth()
-                                    .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = listItem.title.uppercase(),
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        letterSpacing = 0.8.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            TimelineSectionHeader(title = listItem.title)
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val uriString = remember(item.id) { item.uri.toString() }
@@ -219,7 +329,7 @@ fun PhotonGrid(
                             }
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(placementSpec = MotionTokens.snappySpring()),
+                                modifier = Modifier,
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -228,7 +338,6 @@ fun PhotonGrid(
                                 gridCellsCount = gridCellsCount,
                                 thumbnailCornerRadius = thumbnailCornerRadius,
                                 aspectRatio = masonryRatio,
-                                isScrolling = staggeredState.isScrollInProgress,
                                 videoIconVector = videoIconVector,
                                 checkIconVector = checkIconVector
                             )
@@ -239,7 +348,6 @@ fun PhotonGrid(
                             }
                             Box(
                                 modifier = Modifier
-                                    .animateItem(placementSpec = MotionTokens.snappySpring())
                                     .aspectRatio(1.0f)
                                     .clip(placeholderShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -254,10 +362,12 @@ fun PhotonGrid(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(maxOf(3, gridCellsCount)),
                     state = lazyGridState,
+                    flingBehavior = gridFlingBehavior,
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = basePinchModifier
+                    modifier = Modifier
+                        .fillMaxSize()
                         .gridDragSelectGesture(
                             lazyGridState = lazyGridState,
                             pagedMedia = pagedMedia,
@@ -292,22 +402,7 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            Row(
-                                modifier = Modifier
-                                    .animateItem(placementSpec = MotionTokens.snappySpring())
-                                    .fillMaxWidth()
-                                    .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = listItem.title.uppercase(),
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        letterSpacing = 0.8.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            TimelineSectionHeader(title = listItem.title)
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val uriString = remember(item.id) { item.uri.toString() }
@@ -319,7 +414,7 @@ fun PhotonGrid(
                             }
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(placementSpec = MotionTokens.snappySpring()),
+                                modifier = Modifier,
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -328,7 +423,6 @@ fun PhotonGrid(
                                 gridCellsCount = gridCellsCount,
                                 thumbnailCornerRadius = thumbnailCornerRadius,
                                 aspectRatio = mosaicRatio,
-                                isScrolling = lazyGridState.isScrollInProgress,
                                 videoIconVector = videoIconVector,
                                 checkIconVector = checkIconVector
                             )
@@ -341,7 +435,6 @@ fun PhotonGrid(
                             }
                             Box(
                                 modifier = Modifier
-                                    .animateItem(placementSpec = MotionTokens.snappySpring())
                                     .aspectRatio(mosaicRatio)
                                     .clip(placeholderShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -356,10 +449,12 @@ fun PhotonGrid(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(gridCellsCount),
                     state = lazyGridState,
+                    flingBehavior = gridFlingBehavior,
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = basePinchModifier
+                    modifier = Modifier
+                        .fillMaxSize()
                         .gridDragSelectGesture(
                             lazyGridState = lazyGridState,
                             pagedMedia = pagedMedia,
@@ -390,22 +485,7 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            Row(
-                                modifier = Modifier
-                                    .animateItem(placementSpec = MotionTokens.snappySpring())
-                                    .fillMaxWidth()
-                                    .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = listItem.title.uppercase(),
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        letterSpacing = 0.8.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            TimelineSectionHeader(title = listItem.title)
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val uriString = remember(item.id) { item.uri.toString() }
@@ -416,7 +496,7 @@ fun PhotonGrid(
                             }
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(placementSpec = MotionTokens.snappySpring()),
+                                modifier = Modifier,
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -425,7 +505,6 @@ fun PhotonGrid(
                                 gridCellsCount = gridCellsCount,
                                 thumbnailCornerRadius = thumbnailCornerRadius,
                                 aspectRatio = 1.0f,
-                                isScrolling = lazyGridState.isScrollInProgress,
                                 videoIconVector = videoIconVector,
                                 checkIconVector = checkIconVector
                             )
@@ -436,7 +515,6 @@ fun PhotonGrid(
                             }
                             Box(
                                 modifier = Modifier
-                                    .animateItem(placementSpec = MotionTokens.snappySpring())
                                     .aspectRatio(1.0f)
                                     .clip(placeholderShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -446,10 +524,21 @@ fun PhotonGrid(
                 }
             }
         }
+    }
 
         // ── Floating Material 3 Expressive Column Count HUD Badge ─────────────
+        var showHudPill by remember { mutableStateOf(false) }
+        LaunchedEffect(isPinching, gridCellsCount) {
+            if (isPinching) {
+                showHudPill = true
+            } else {
+                kotlinx.coroutines.delay(650)
+                showHudPill = false
+            }
+        }
+
         AnimatedVisibility(
-            visible = isPinching,
+            visible = showHudPill,
             enter = fadeIn(MotionTokens.snappySpring()) + scaleIn(MotionTokens.bouncySpring()),
             exit = fadeOut(MotionTokens.snappySpring()) + scaleOut(MotionTokens.snappySpring()),
             modifier = Modifier
@@ -476,6 +565,29 @@ fun PhotonGrid(
     }
 }
 
+/**
+ * Editorial Leica-style date section header featuring a condensed Google Sans Flex date
+ * and an ultra-subtle horizontal gradient hairline accent rule.
+ */
+@Composable
+fun TimelineSectionHeader(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 16.dp, top = 26.dp, bottom = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = title.uppercase(),
+            style = TimelineDateHeaderStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 private val SelectionBorderStroke = BorderStroke(2.dp, Color.White)
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
@@ -491,7 +603,6 @@ fun OptimizedThumbnailCell(
     gridCellsCount: Int = 3,
     thumbnailCornerRadius: Float = 0f,
     aspectRatio: Float = 1.0f,
-    isScrolling: Boolean = false,
     videoIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
     checkIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_check)
 ) {
@@ -509,38 +620,13 @@ fun OptimizedThumbnailCell(
         } else null
     }
 
-    // Size optimization based on grid cells — never request more than the rendered size
-    val thumbSizePx = remember(gridCellsCount) {
-        when (gridCellsCount) {
-            1, 2 -> 512
-            3 -> 320
-            4 -> 240
-            else -> 160
-        }
-    }
-
-    // Unique per-media key — must match the prefetcher in GalleryScreen
-    val cacheKey: String = remember(item.id) { thumbnailMemoryKey(item.id) }
-
-    val request = remember(item.id, thumbSizePx) {
-        ImageRequest.Builder(context)
-            .data(item.uri)
-            .size(thumbSizePx, thumbSizePx)
-            .precision(Precision.INEXACT)
-            .memoryCacheKey(cacheKey)
-            .memoryCachePolicy(CachePolicy.ENABLED)
-            .diskCachePolicy(CachePolicy.ENABLED)
-            .bitmapConfig(android.graphics.Bitmap.Config.HARDWARE) // GPU-resident bitmaps; eliminates software-copy blit per frame
-            .build()
-    }
-
-    val selectionScale by animateFloatAsState(
-        targetValue = if (isSelected) 0.88f else 1.0f,
-        animationSpec = MotionTokens.bouncySpring(),
-        label = "cellSelectionScale"
-    )
-
-    val cellModifier = if (selectionScale != 1.0f) {
+    // Only allocate and tick selection animation when item is selected
+    val cellModifier = if (isSelected) {
+        val selectionScale by animateFloatAsState(
+            targetValue = 0.88f,
+            animationSpec = MotionTokens.bouncySpring(),
+            label = "cellSelectionScale"
+        )
         modifier.graphicsLayer {
             scaleX = selectionScale
             scaleY = selectionScale
@@ -564,30 +650,37 @@ fun OptimizedThumbnailCell(
         }
     }
 
-    val sharedTransitionModifier = with(sharedTransitionScope) {
-        Modifier.sharedBounds(
-            sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
-            animatedVisibilityScope = animatedVisibilityScope,
-            enter = CellEnterFade,
-            exit = CellExitFade,
-            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-            clipInOverlayDuringTransition = OverlayClip(cellShape),
-            boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
-        )
+    // Shared bounds transition is active for standard grid densities (1-4 columns).
+    // For dense grids (5-8 columns: 70-120+ visible tiles), bypassing sharedBounds
+    // eliminates ApproachLayoutModifierNode evaluation overhead on every scroll tick.
+    val sharedTransitionModifier = if (gridCellsCount <= 4) {
+        with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
+                animatedVisibilityScope = animatedVisibilityScope,
+                enter = CellEnterFade,
+                exit = CellExitFade,
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                clipInOverlayDuringTransition = OverlayClip(cellShape),
+                boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
+            )
+        }
+    } else {
+        Modifier
     }
 
     Box(modifier = cellModifier) {
         val clickModifier = if (onLongClick != null) {
             Modifier.combinedClickable(
                 indication = null,
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = null,
                 onClick = clickHandler,
                 onLongClick = longClickHandler
             )
         } else {
             Modifier.clickable(
                 indication = null,
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = null,
                 onClick = clickHandler
             )
         }
@@ -595,122 +688,32 @@ fun OptimizedThumbnailCell(
         Box(
             modifier = contentModifier
                 .then(sharedTransitionModifier)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .then(clickModifier)
         ) {
-            AsyncImage(
-                model = request,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                filterQuality = FilterQuality.Low,
-                modifier = Modifier.fillMaxSize()
+            PhotonGridThumbnail(
+                item = item,
+                gridCellsCount = gridCellsCount,
+                videoIconVector = videoIconVector
             )
-        }
-
-        // Expressive Video duration badge
-        if (item.isVideo) {
-            val durationText = remember(item.durationMs) {
-                item.durationMs?.let { formatDuration(it) } ?: "0:00"
-            }
-            if (!isScrolling) {
-                val fontSize = when (gridCellsCount) {
-                    1, 2, 3 -> 12.sp
-                    4 -> 11.sp
-                    else -> 10.sp
-                }
-                Surface(
-                    shape = ShapeExtraSmall,
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.80f),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(5.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Icon(
-                            imageVector = videoIconVector,
-                            contentDescription = null,
-                            modifier = Modifier.size(10.dp),
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = durationText,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = fontSize,
-                                fontWeight = FontWeight.Normal
-                            )
-                        )
-                    }
-                }
-            }
-        } else {
-            // RAW / GIF / PANO badge
-            val badgeText = remember(item.name) {
-                when {
-                    item.name.endsWith(".dng", true) || item.name.endsWith(".raw", true) || item.name.endsWith(".cr2", true) || item.name.endsWith(".nef", true) || item.name.endsWith(".arw", true) -> "RAW"
-                    item.name.endsWith(".gif", true) -> "GIF"
-                    item.name.contains("PANO", true) || item.name.contains("PANORAMA", true) -> "PANO"
-                    else -> null
-                }
-            }
-
-            if (badgeText != null && !isScrolling) {
-                Surface(
-                    shape = ShapeExtraSmall,
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.82f),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(5.dp)
-                ) {
-                    Text(
-                        text = badgeText,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        ),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
-                }
-            }
         }
 
         // Selection overlay checkmark badge with solid white contrast border
         if (isSelected) {
-            if (isScrolling) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(18.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                        .border(1.5.dp, Color.White, CircleShape)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(24.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .border(SelectionBorderStroke, CircleShape)
+            ) {
+                Icon(
+                    imageVector = checkIconVector,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(15.dp)
                 )
-            } else {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    border = SelectionBorderStroke,
-                    shadowElevation = 3.dp,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(24.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = checkIconVector,
-                            contentDescription = "Selected",
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                }
             }
         }
     }
@@ -721,95 +724,107 @@ fun OptimizedThumbnailCell(
 internal fun thumbnailMemoryKey(id: String): String = "t_$id"
 
 // Shared-element fade specs — hoisted so cells don't allocate them per composition
-private val CellEnterFade = fadeIn(animationSpec = androidx.compose.animation.core.tween(150))
-private val CellExitFade = fadeOut(animationSpec = androidx.compose.animation.core.tween(150))
+private val CellEnterFade = fadeIn(animationSpec = MotionTokens.fastEffectsSpec())
+private val CellExitFade = fadeOut(animationSpec = MotionTokens.fastEffectsSpec())
 
 // ── Gestures ──────────────────────────────────────────────────────────────────
 
 /**
- * Clean, high-performance two-finger pinch-to-zoom detector with live interactive scaling.
- * Only activates when 2 fingers touch simultaneously so single-finger scrolling
- * and drag selection are never blocked or jittered.
+ * Non-conflicting, smooth two-finger pinch-to-zoom gesture detector for Photon Gallery grids.
+ *
+ * Never blocks or delays single-finger scrolling, fast flings, or drag-selection.
+ * Only engages when two fingers deliberately move apart (zoom in) or together (zoom out)
+ * beyond the touch slop threshold.
  */
-private fun Modifier.robustTwoFingerPinchZoom(
+private fun Modifier.smoothGridPinchZoom(
     gridCellsCount: Int,
     onGridCountChange: (Int) -> Unit,
     isSelectionMode: Boolean,
     haptic: HapticFeedback,
-    onPinchUpdate: (isPinching: Boolean) -> Unit
+    onPinchScaleChange: (scale: Float, centroid: Offset) -> Unit,
+    onPinchEnd: () -> Unit
 ): Modifier = this.pointerInput(gridCellsCount, isSelectionMode) {
     if (isSelectionMode) return@pointerInput
 
+    val touchSlop = viewConfiguration.touchSlop
+
     awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Main)
 
         var initialDistance = -1f
+        var pinchActive = false
+        var pinchEverActivated = false
         var lastChangeTime = 0L
-        var hasActivePinch = false
 
         do {
-            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-            val changes = event.changes
-            var p1x = 0f; var p1y = 0f; var p2x = 0f; var p2y = 0f
-            var pressedCount = 0
-            for (c in changes) {
-                if (c.pressed) {
-                    if (pressedCount == 0) {
-                        p1x = c.position.x; p1y = c.position.y; pressedCount = 1
-                    } else {
-                        p2x = c.position.x; p2y = c.position.y; pressedCount = 2
-                        break
-                    }
-                }
-            }
+            val event = awaitPointerEvent(pass = PointerEventPass.Main)
+            val pressed = event.changes.filter { it.pressed }
 
-            if (pressedCount == 2) {
-                hasActivePinch = true
-                changes.forEach { it.consume() }
-
-                val currentDistance = kotlin.math.hypot(p1x - p2x, p1y - p2y)
+            if (pressed.size >= 2) {
+                val p1 = pressed[0].position
+                val p2 = pressed[1].position
+                val currentDistance = kotlin.math.hypot(p1.x - p2.x, p1.y - p2.y)
+                val currentCentroid = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
 
                 if (initialDistance <= 0f) {
                     initialDistance = currentDistance
-                    onPinchUpdate(true)
                 } else {
+                    val distanceDiff = kotlin.math.abs(currentDistance - initialDistance)
                     val rawScale = currentDistance / initialDistance
-                    val now = System.currentTimeMillis()
 
-                    // Zoom IN (Fingers spreading -> fewer columns, e.g. 3 -> 2)
-                    if (rawScale > 1.20f && now - lastChangeTime > 240L) {
-                        if (gridCellsCount > 1) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onGridCountChange(gridCellsCount - 1)
-                            lastChangeTime = now
-                            initialDistance = currentDistance
-                            onPinchUpdate(true)
-                        }
+                    // Slop threshold: require noticeable finger movement before activating pinch
+                    if (!pinchActive && distanceDiff > touchSlop * 1.5f && (rawScale > 1.06f || rawScale < 0.94f)) {
+                        pinchActive = true
+                        pinchEverActivated = true
                     }
-                    // Zoom OUT (Fingers pinching closer -> more columns, e.g. 3 -> 4)
-                    else if (rawScale < 0.82f && now - lastChangeTime > 240L) {
-                        if (gridCellsCount < 6) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onGridCountChange(gridCellsCount + 1)
-                            lastChangeTime = now
-                            initialDistance = currentDistance
-                            onPinchUpdate(true)
+
+                    if (pinchActive) {
+                        pressed.forEach { it.consume() }
+                        onPinchScaleChange(rawScale, currentCentroid)
+
+                        val now = System.currentTimeMillis()
+                        // Zoom IN: spreading fingers -> fewer columns (e.g. 4 -> 3)
+                        if (rawScale > 1.22f && now - lastChangeTime > 240L) {
+                            if (gridCellsCount > 1) {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                val oldColumns = gridCellsCount
+                                val newColumns = gridCellsCount - 1
+                                onGridCountChange(newColumns)
+                                lastChangeTime = now
+                                initialDistance = currentDistance
+                                val ratio = oldColumns.toFloat() / newColumns.toFloat()
+                                val compensatingScale = (rawScale / ratio).coerceIn(0.85f, 1.20f)
+                                onPinchScaleChange(compensatingScale, currentCentroid)
+                            }
+                        }
+                        // Zoom OUT: pinching fingers -> more columns (e.g. 3 -> 4)
+                        else if (rawScale < 0.80f && now - lastChangeTime > 240L) {
+                            if (gridCellsCount < 8) {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                val oldColumns = gridCellsCount
+                                val newColumns = gridCellsCount + 1
+                                onGridCountChange(newColumns)
+                                lastChangeTime = now
+                                initialDistance = currentDistance
+                                val ratio = oldColumns.toFloat() / newColumns.toFloat()
+                                val compensatingScale = (rawScale / ratio).coerceIn(0.85f, 1.20f)
+                                onPinchScaleChange(compensatingScale, currentCentroid)
+                            }
                         }
                     }
                 }
             } else {
-                if (hasActivePinch) {
-                    // Consume lingering release events so lifting one finger doesn't trigger a single-finger fling/scroll
-                    changes.forEach { it.consume() }
+                if (pinchActive) {
+                    event.changes.forEach { it.consume() }
                 }
-                if (initialDistance > 0f) {
-                    onPinchUpdate(false)
-                }
+                pinchActive = false
                 initialDistance = -1f
             }
         } while (event.changes.any { it.pressed })
 
-        onPinchUpdate(false)
+        if (pinchEverActivated) {
+            onPinchEnd()
+        }
     }
 }
 

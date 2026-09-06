@@ -1,11 +1,15 @@
 package com.inferno.gallery.ui.utils
 
+import android.content.Context
 import android.os.Build
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -15,15 +19,16 @@ import androidx.compose.ui.platform.LocalView
 /**
  * Photon Gallery haptic feedback utilities.
  *
- * Uses Android View-level haptic constants for reliable tactile
- * feedback across devices. Compose's [HapticFeedbackType.TextHandleMove]
- * is imperceptible on many phones, so we bypass it.
+ * Provides crash-proof, multi-tiered tactile feedback across all Android
+ * devices (API 31+ down to legacy) with robust fail-soft guarantees.
  */
 
 // ── Premium Haptic Manager ────────────────────────────────────────
 
 object PremiumHapticsManager {
+    @Volatile
     var enabled: Boolean = true
+    @Volatile
     var strength: Float = 0.5f // 0.0f to 1.0f
 }
 
@@ -32,69 +37,179 @@ object PremiumHapticsManager {
 /** Light tick — perceptible click for regular taps, toggles, small actions. */
 fun View.tick() {
     if (!PremiumHapticsManager.enabled) return
-    val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
-    val vibrator = vibratorManager?.defaultVibrator
-    
-    if (vibrator != null && vibrator.hasVibrator()) {
-        val attrs = android.os.VibrationAttributes.Builder().setUsage(android.os.VibrationAttributes.USAGE_TOUCH).build()
-        if (vibrator.areAllPrimitivesSupported(android.os.VibrationEffect.Composition.PRIMITIVE_TICK)) {
-            vibrator.vibrate(
-                android.os.VibrationEffect.startComposition()
-                    .addPrimitive(android.os.VibrationEffect.Composition.PRIMITIVE_TICK, PremiumHapticsManager.strength)
-                    .compose(),
-                attrs
-            )
-            return
-        } else if (vibrator.hasAmplitudeControl()) {
-            val amplitude = (PremiumHapticsManager.strength * 255).toInt().coerceIn(1, 255)
-            vibrator.vibrate(android.os.VibrationEffect.createOneShot(15, amplitude), attrs)
-            return
+    try {
+        // Tier 1: Modern Android 12+ (API 31+) VibratorManager with rich composition
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                val vibrator = vibratorManager?.defaultVibrator
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    val strength = PremiumHapticsManager.strength.coerceIn(0.1f, 1.0f)
+                    val attrs = VibrationAttributes.Builder()
+                        .setUsage(VibrationAttributes.USAGE_TOUCH)
+                        .build()
+
+                    if (vibrator.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_TICK)) {
+                        vibrator.vibrate(
+                            VibrationEffect.startComposition()
+                                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, strength)
+                                .compose(),
+                            attrs
+                        )
+                        return
+                    } else if (vibrator.hasAmplitudeControl()) {
+                        val amplitude = (strength * 255).toInt().coerceIn(1, 255)
+                        vibrator.vibrate(VibrationEffect.createOneShot(12, amplitude), attrs)
+                        return
+                    }
+                }
+            } catch (_: Throwable) {
+                // Ignore vendor VibratorManager HAL errors; proceed to Tier 2
+            }
         }
+
+        // Tier 2: Standard View.performHapticFeedback (safe on all OEM frameworks)
+        try {
+            val flags = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
+            val performed = performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK, flags)
+            if (performed) return
+
+            // If CLOCK_TICK is unmapped on this OEM, fallback to KEYBOARD_TAP or VIRTUAL_KEY
+            if (performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, flags)) return
+            if (performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY, flags)) return
+        } catch (_: Throwable) {
+            // View may be detached or unsupported; proceed to Tier 3
+        }
+
+        // Tier 3: Classic Vibrator Service fallback
+        try {
+            @Suppress("DEPRECATION")
+            val legacyVibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (legacyVibrator != null && legacyVibrator.hasVibrator()) {
+                val strength = PremiumHapticsManager.strength.coerceIn(0.1f, 1.0f)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val amplitude = if (legacyVibrator.hasAmplitudeControl()) {
+                        (strength * 255).toInt().coerceIn(1, 255)
+                    } else {
+                        VibrationEffect.DEFAULT_AMPLITUDE
+                    }
+                    legacyVibrator.vibrate(VibrationEffect.createOneShot(12, amplitude))
+                } else {
+                    @Suppress("DEPRECATION")
+                    legacyVibrator.vibrate(12)
+                }
+            }
+        } catch (_: Throwable) {
+            // Complete fail-soft
+        }
+    } catch (_: Throwable) {
+        // Guaranteed crash-proof: never let haptic issues crash the application
     }
-    // Fallback if no advanced vibrator features
-    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
 }
 
 /** Firm thud — strong feedback for long-press, destructive actions. */
 fun View.thud() {
     if (!PremiumHapticsManager.enabled) return
-    val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
-    val vibrator = vibratorManager?.defaultVibrator
-    
-    if (vibrator != null && vibrator.hasVibrator()) {
-        val attrs = android.os.VibrationAttributes.Builder().setUsage(android.os.VibrationAttributes.USAGE_TOUCH).build()
-        if (vibrator.areAllPrimitivesSupported(android.os.VibrationEffect.Composition.PRIMITIVE_THUD)) {
-            vibrator.vibrate(
-                android.os.VibrationEffect.startComposition()
-                    .addPrimitive(android.os.VibrationEffect.Composition.PRIMITIVE_THUD, PremiumHapticsManager.strength)
-                    .compose(),
-                attrs
-            )
-            return
-        } else if (vibrator.hasAmplitudeControl()) {
-            val amplitude = (PremiumHapticsManager.strength * 255).toInt().coerceIn(1, 255)
-            vibrator.vibrate(android.os.VibrationEffect.createOneShot(40, amplitude), attrs)
-            return
+    try {
+        // Tier 1: Modern Android 12+ (API 31+) VibratorManager with rich composition
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                val vibrator = vibratorManager?.defaultVibrator
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    val strength = PremiumHapticsManager.strength.coerceIn(0.1f, 1.0f)
+                    val attrs = VibrationAttributes.Builder()
+                        .setUsage(VibrationAttributes.USAGE_TOUCH)
+                        .build()
+
+                    if (vibrator.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_THUD)) {
+                        vibrator.vibrate(
+                            VibrationEffect.startComposition()
+                                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, strength)
+                                .compose(),
+                            attrs
+                        )
+                        return
+                    } else if (vibrator.hasAmplitudeControl()) {
+                        val amplitude = (strength * 255).toInt().coerceIn(1, 255)
+                        vibrator.vibrate(VibrationEffect.createOneShot(35, amplitude), attrs)
+                        return
+                    }
+                }
+            } catch (_: Throwable) {
+                // Ignore vendor VibratorManager HAL errors; proceed to Tier 2
+            }
         }
+
+        // Tier 2: Standard View.performHapticFeedback
+        try {
+            val flags = HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
+            val performed = performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, flags)
+            if (performed) return
+            if (performHapticFeedback(HapticFeedbackConstants.CONFIRM, flags)) return
+        } catch (_: Throwable) {
+            // View may be detached or unsupported; proceed to Tier 3
+        }
+
+        // Tier 3: Classic Vibrator Service fallback
+        try {
+            @Suppress("DEPRECATION")
+            val legacyVibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (legacyVibrator != null && legacyVibrator.hasVibrator()) {
+                val strength = PremiumHapticsManager.strength.coerceIn(0.1f, 1.0f)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val amplitude = if (legacyVibrator.hasAmplitudeControl()) {
+                        (strength * 255).toInt().coerceIn(1, 255)
+                    } else {
+                        VibrationEffect.DEFAULT_AMPLITUDE
+                    }
+                    legacyVibrator.vibrate(VibrationEffect.createOneShot(35, amplitude))
+                } else {
+                    @Suppress("DEPRECATION")
+                    legacyVibrator.vibrate(35)
+                }
+            }
+        } catch (_: Throwable) {
+            // Complete fail-soft
+        }
+    } catch (_: Throwable) {
+        // Guaranteed crash-proof: never let haptic issues crash the application
     }
-    // Fallback if no advanced vibrator features
-    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
 }
 
-// ── Compose-level wrappers (for use where View isn't readily available) ──
+// ── Compose-level wrappers (crash-proof) ──
 
 /**
  * Light tick via Compose [HapticFeedback].
- * NOTE: Compose path cannot fully replicate CLOCK_TICK — TextHandleMove is
- * the lightest available type. For true differentiation use [View.tick()] via
- * [haptickClickable] / [haptickCombinedClickable] which call the View system.
  */
-fun HapticFeedback.tick() =
-    performHapticFeedback(HapticFeedbackType.TextHandleMove)
+fun HapticFeedback.tick() {
+    if (!PremiumHapticsManager.enabled) return
+    try {
+        performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    } catch (_: Throwable) {
+        // Complete fail-soft
+    }
+}
 
 /** Firm thud via Compose [HapticFeedback]. */
-fun HapticFeedback.thud() =
-    performHapticFeedback(HapticFeedbackType.LongPress)
+fun HapticFeedback.thud() {
+    if (!PremiumHapticsManager.enabled) return
+    try {
+        performHapticFeedback(HapticFeedbackType.LongPress)
+    } catch (_: Throwable) {
+        // Complete fail-soft
+    }
+}
+
+/** Generic safe perform for any HapticFeedbackType */
+fun HapticFeedback.safePerform(type: HapticFeedbackType) {
+    if (!PremiumHapticsManager.enabled) return
+    try {
+        performHapticFeedback(type)
+    } catch (_: Throwable) {
+        // Complete fail-soft
+    }
+}
 
 // ── Haptic click modifiers ──────────────────────────────────────────
 
@@ -137,4 +252,3 @@ fun Modifier.haptickCombinedClickable(
         }
     )
 }
-

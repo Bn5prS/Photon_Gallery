@@ -40,42 +40,6 @@ private val mediaProviderSemaphore = Semaphore(
 private val videoDecodeSemaphore = Semaphore(2)   // Max 2 concurrent video frame extractions (CPU/codec-bound)
 private val diskCacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
-private data class CacheTask(val cacheDir: File, val cacheFile: File, val bitmap: Bitmap)
-private val diskCacheChannel = Channel<CacheTask>(
-    capacity = 64,
-    onBufferOverflow = BufferOverflow.DROP_OLDEST
-)
-
-private val diskCacheWorker = diskCacheScope.launch {
-    for (task in diskCacheChannel) {
-        try {
-            if (task.cacheFile.exists() && task.cacheFile.length() > 0) continue
-            if (!task.cacheDir.exists()) task.cacheDir.mkdirs()
-            val tempFile = File(task.cacheDir, "${task.cacheFile.name}.tmp")
-            val softwareBitmap = if (task.bitmap.config == Bitmap.Config.HARDWARE) {
-                task.bitmap.copy(Bitmap.Config.ARGB_8888, false)
-            } else {
-                task.bitmap
-            }
-            if (softwareBitmap != null) {
-                FileOutputStream(tempFile).use { out ->
-                    softwareBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 75, out)
-                    out.flush()
-                }
-                if (softwareBitmap != task.bitmap) {
-                    softwareBitmap.recycle()
-                }
-                if (tempFile.length() > 0) {
-                    tempFile.renameTo(task.cacheFile)
-                } else {
-                    tempFile.delete()
-                }
-            }
-        } catch (_: Exception) {
-        }
-    }
-}
-
 /**
  * A high-performance custom Coil Fetcher that retrieves thumbnails with a 2-tier caching system:
  * 1. App-local fast WebP disk cache (`thumb_cache`) to completely eliminate redundant system Binder IPCs.
@@ -170,11 +134,7 @@ class MediaStoreThumbnailFetcher(
         coroutineContext.ensureActive()
 
         if (bitmap != null) {
-            // Save to local disk cache asynchronously
-            if (cacheEnabled) {
-                saveThumbnailToDiskCache(cacheDir, cacheFile, bitmap)
-            }
-
+            bitmap.prepareToDraw()
             ImageFetchResult(
                 image = bitmap.asImage(),
                 isSampled = true,
@@ -184,9 +144,7 @@ class MediaStoreThumbnailFetcher(
             // Downsampled fallback decode to prevent loading huge unscaled images in memory
             val fallbackBitmap = decodeDownsampledBitmap(context, uri, targetDim)
             if (fallbackBitmap != null) {
-                if (cacheEnabled) {
-                    saveThumbnailToDiskCache(cacheDir, cacheFile, fallbackBitmap)
-                }
+                fallbackBitmap.prepareToDraw()
                 ImageFetchResult(
                     image = fallbackBitmap.asImage(),
                     isSampled = true,
@@ -224,11 +182,6 @@ class MediaStoreThumbnailFetcher(
         } catch (_: Exception) {
             null
         }
-    }
-
-    private fun saveThumbnailToDiskCache(cacheDir: File, cacheFile: File, bitmap: Bitmap) {
-        if (cacheFile.exists() && cacheFile.length() > 0) return
-        diskCacheChannel.trySend(CacheTask(cacheDir, cacheFile, bitmap))
     }
 
     private fun getVideoFrameFallback(context: Context, uri: Uri, targetDim: Int): Bitmap? {

@@ -138,7 +138,7 @@ class MainActivity : FragmentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(
                     androidx.compose.foundation.LocalOverscrollFactory provides null
                 ) {
-                    val backgroundColor = MaterialTheme.colorScheme.background
+                    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLowest
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),

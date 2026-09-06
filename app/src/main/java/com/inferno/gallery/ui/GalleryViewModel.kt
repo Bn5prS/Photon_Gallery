@@ -8,7 +8,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.MediaEntity
-import com.inferno.gallery.data.IndexingProgressManager
 import com.inferno.gallery.data.LocalMediaRepository
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
@@ -137,7 +136,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val favoritesManager = FavoritesManager(application)
     private val database = DatabaseProvider.getDatabase(application)
     
-
 
     // UI State for Place Clusters
     private val _placesClusters = MutableStateFlow<List<com.inferno.gallery.data.db.BucketInfo>>(emptyList())
@@ -1537,40 +1535,106 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun moveSelectedMedia(targetBucket: String) {
-        val selected = _selectedUris.value.toList()
-        if (selected.isEmpty()) return
+    fun moveMedia(uris: List<Uri>, targetBucket: String, onComplete: ((Boolean) -> Unit)? = null) {
+        if (uris.isEmpty()) return
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                    val resolver = getApplication<android.app.Application>().contentResolver
-                    for (uriString in selected) {
-                        val uri = Uri.parse(uriString)
-                        if (uriString.startsWith("content://")) {
-                            val values = android.content.ContentValues().apply {
-                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/" + targetBucket)
-                            }
-                            try {
-                                resolver.update(uri, values, null, null)
-                                database.mediaDao().updateBucketByUri(uriString, targetBucket)
-                            } catch (e: Exception) {
-                                android.util.Log.e("GalleryViewModel", "Failed to move media: ${e.message}")
+                val resolver = getApplication<android.app.Application>().contentResolver
+                var successCount = 0
+                val allMedia = database.mediaDao().getAllMedia().associateBy { it.uriString }
+                val targetDir = java.io.File(
+                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES),
+                    targetBucket
+                )
+                if (!targetDir.exists()) {
+                    targetDir.mkdirs()
+                }
+
+                val movedPaths = mutableListOf<String>()
+
+                for (uri in uris) {
+                    val uriString = uri.toString()
+                    val entity = allMedia[uriString]
+                    var movedSuccessfully = false
+
+                    // Direct file rename if path exists
+                    if (entity != null) {
+                        val srcFile = java.io.File(entity.filePath)
+                        if (srcFile.exists()) {
+                            val destFile = java.io.File(targetDir, srcFile.name)
+                            if (srcFile.renameTo(destFile)) {
+                                database.mediaDao().updatePathAndBucket(
+                                    id = entity.id,
+                                    newPath = destFile.absolutePath,
+                                    newBucket = targetBucket,
+                                    newName = destFile.name
+                                )
+                                movedPaths.add(srcFile.absolutePath)
+                                movedPaths.add(destFile.absolutePath)
+                                movedSuccessfully = true
+                                successCount++
                             }
                         }
                     }
-                    clearSelection()
-                    withContext(Dispatchers.Main) {
-                        showToast("Moved to $targetBucket")
+
+                    // Fallback to MediaStore update
+                    if (!movedSuccessfully && uriString.startsWith("content://")) {
+                        val values = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/" + targetBucket)
+                        }
+                        try {
+                            val rows = resolver.update(uri, values, null, null)
+                            if (rows > 0) {
+                                database.mediaDao().updateBucketByUri(uriString, targetBucket)
+                                successCount++
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("GalleryViewModel", "Failed to move media via MediaStore: ${e.message}")
+                        }
                     }
+                }
+
+                if (movedPaths.isNotEmpty()) {
+                    android.media.MediaScannerConnection.scanFile(
+                        getApplication(),
+                        movedPaths.toTypedArray(),
+                        null,
+                        null
+                    )
+                }
+
+                val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+                androidx.work.WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                    "MediaSyncWorker",
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    syncWorkRequest
+                )
+
+                withContext(Dispatchers.Main) {
+                    showToast("Moved $successCount items to $targetBucket")
+                    onComplete?.invoke(successCount > 0)
+                }
             } catch (e: Exception) {
                 android.util.Log.e("GalleryViewModel", "Error moving media: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    showToast("Error moving media: ${e.message}")
+                    onComplete?.invoke(false)
+                }
             }
         }
     }
 
-    fun moveSelectedMediaToPath(targetDirectoryPath: String) {
+    fun moveSelectedMedia(targetBucket: String) {
         val selected = _selectedUris.value.toList()
         if (selected.isEmpty()) return
+        moveMedia(selected.map { Uri.parse(it) }, targetBucket) {
+            clearSelection()
+        }
+    }
+
+    fun moveMediaToPath(uris: List<Uri>, targetDirectoryPath: String, onComplete: ((Boolean) -> Unit)? = null) {
+        if (uris.isEmpty()) return
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -1583,7 +1647,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val allMedia = database.mediaDao().getAllMedia().associateBy { it.uriString }
                 val movedPaths = mutableListOf<String>()
 
-                for (uriString in selected) {
+                for (uri in uris) {
+                    val uriString = uri.toString()
                     val entity = allMedia[uriString] ?: continue
                     val srcFile = java.io.File(entity.filePath)
                     if (srcFile.exists()) {
@@ -1611,14 +1676,123 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
 
+                val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                    "MediaSyncWorker",
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    syncWorkRequest
+                )
+
                 withContext(Dispatchers.Main) {
-                    clearSelection()
                     showToast("Moved to ${targetDir.name}")
+                    onComplete?.invoke(movedPaths.isNotEmpty())
                 }
             } catch (e: Exception) {
                 android.util.Log.e("GalleryViewModel", "Error moving media to path: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     showToast("Error moving media: ${e.message}")
+                    onComplete?.invoke(false)
+                }
+            }
+        }
+    }
+
+    fun moveSelectedMediaToPath(targetDirectoryPath: String) {
+        val selected = _selectedUris.value.toList()
+        if (selected.isEmpty()) return
+        moveMediaToPath(selected.map { Uri.parse(it) }, targetDirectoryPath) {
+            clearSelection()
+        }
+    }
+
+    fun copyMedia(uris: List<Uri>, targetBucket: String, onComplete: ((Boolean) -> Unit)? = null) {
+        if (uris.isEmpty()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resolver = getApplication<android.app.Application>().contentResolver
+                var successCount = 0
+                for (uri in uris) {
+                    val uriString = uri.toString()
+                    if (uriString.startsWith("content://")) {
+                        // 1. Get info about original file
+                        var displayName: String? = null
+                        var mimeType: String? = null
+                        resolver.query(uri, arrayOf(
+                            android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                            android.provider.MediaStore.MediaColumns.MIME_TYPE
+                        ), null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                displayName = cursor.getString(0)
+                                mimeType = cursor.getString(1)
+                            }
+                        }
+
+                        if (displayName == null) {
+                            displayName = "copied_media_${System.currentTimeMillis()}"
+                        }
+                        if (mimeType == null) {
+                            mimeType = "image/jpeg"
+                        }
+
+                        // 2. Insert copy entry in MediaStore
+                        val isVideo = mimeType.startsWith("video/")
+                        val baseUri = if (isVideo) {
+                            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        } else {
+                            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        }
+
+                        val values = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/" + targetBucket)
+                            put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+                        }
+
+                        val newUri = resolver.insert(baseUri, values)
+                        if (newUri != null) {
+                            try {
+                                // 3. Copy bytes
+                                resolver.openInputStream(uri)?.use { input ->
+                                    resolver.openOutputStream(newUri)?.use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+
+                                // 4. Release pending status
+                                val updateValues = android.content.ContentValues().apply {
+                                    put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
+                                }
+                                resolver.update(newUri, updateValues, null, null)
+                                successCount++
+                            } catch (e: Exception) {
+                                android.util.Log.e("GalleryViewModel", "Failed copy stream: ${e.message}")
+                                resolver.delete(newUri, null, null)
+                            }
+                        }
+                    }
+                }
+
+                if (successCount > 0) {
+                    // Trigger MediaSyncWorker to update our database and grid UI
+                    val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+                    androidx.work.WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                        "MediaSyncWorker",
+                        androidx.work.ExistingWorkPolicy.REPLACE,
+                        syncWorkRequest
+                    )
+                }
+
+                withContext(Dispatchers.Main) {
+                    showToast("Copied $successCount items to $targetBucket")
+                    onComplete?.invoke(successCount > 0)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GalleryViewModel", "Error copying media: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    showToast("Error copying media: ${e.message}")
+                    onComplete?.invoke(false)
                 }
             }
         }
@@ -1627,96 +1801,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun copySelectedMedia(targetBucket: String) {
         val selected = _selectedUris.value.toList()
         if (selected.isEmpty()) return
-
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                    val resolver = getApplication<android.app.Application>().contentResolver
-                    var successCount = 0
-                    for (uriString in selected) {
-                        val uri = Uri.parse(uriString)
-                        if (uriString.startsWith("content://")) {
-                            // 1. Get info about original file
-                            var displayName: String? = null
-                            var mimeType: String? = null
-                            resolver.query(uri, arrayOf(
-                                android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
-                                android.provider.MediaStore.MediaColumns.MIME_TYPE
-                            ), null, null, null)?.use { cursor ->
-                                if (cursor.moveToFirst()) {
-                                    displayName = cursor.getString(0)
-                                    mimeType = cursor.getString(1)
-                                }
-                            }
-
-                            if (displayName == null) {
-                                displayName = "copied_media_${System.currentTimeMillis()}"
-                            }
-                            if (mimeType == null) {
-                                mimeType = "image/jpeg"
-                            }
-
-                            // 2. Insert copy entry in MediaStore
-                            val isVideo = mimeType?.startsWith("video/") == true
-                            val baseUri = if (isVideo) {
-                                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                            } else {
-                                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                            }
-
-                            val values = android.content.ContentValues().apply {
-                                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-                                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/" + targetBucket)
-                                put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
-                            }
-
-                            val newUri = resolver.insert(baseUri, values)
-                            if (newUri != null) {
-                                try {
-                                    // 3. Copy bytes
-                                    resolver.openInputStream(uri)?.use { input ->
-                                        resolver.openOutputStream(newUri)?.use { output ->
-                                            input.copyTo(output)
-                                        }
-                                    }
-
-                                    // 4. Release pending status
-                                    val updateValues = android.content.ContentValues().apply {
-                                        put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
-                                    }
-                                    resolver.update(newUri, updateValues, null, null)
-                                    successCount++
-                                } catch (e: Exception) {
-                                    android.util.Log.e("GalleryViewModel", "Failed copy stream: ${e.message}")
-                                    resolver.delete(newUri, null, null)
-                                }
-                            }
-                        }
-                    }
-
-                    if (successCount > 0) {
-                        // Trigger MediaSyncWorker to update our database and grid UI
-                        val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
-                        androidx.work.WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-                            "MediaSyncWorker",
-                            androidx.work.ExistingWorkPolicy.REPLACE,
-                            syncWorkRequest
-                        )
-                    }
-
-                    clearSelection()
-                    withContext(Dispatchers.Main) {
-                        showToast("Copied $successCount items to $targetBucket")
-                    }
-            } catch (e: Exception) {
-                android.util.Log.e("GalleryViewModel", "Error copying media: ${e.message}", e)
-            }
+        copyMedia(selected.map { Uri.parse(it) }, targetBucket) {
+            clearSelection()
         }
     }
 
-    fun copySelectedMediaToPath(targetDirectoryPath: String) {
-        val selected = _selectedUris.value.toList()
-        if (selected.isEmpty()) return
+    fun copyMediaToPath(uris: List<Uri>, targetDirectoryPath: String, onComplete: ((Boolean) -> Unit)? = null) {
+        if (uris.isEmpty()) return
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -1729,8 +1820,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val allMedia = database.mediaDao().getAllMedia().associateBy { it.uriString }
                 val copiedPaths = mutableListOf<String>()
 
-                for (uriString in selected) {
-                    val entity = allMedia[uriString] ?: continue
+                for (uri in uris) {
+                    val entity = allMedia[uri.toString()] ?: continue
                     val srcFile = java.io.File(entity.filePath)
                     if (srcFile.exists()) {
                         val destFile = java.io.File(targetDir, srcFile.name)
@@ -1750,7 +1841,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         null,
                         null
                     )
-                    
+
                     val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
                     androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
                         "MediaSyncWorker",
@@ -1760,15 +1851,24 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 withContext(Dispatchers.Main) {
-                    clearSelection()
                     showToast("Copied to ${targetDir.name}")
+                    onComplete?.invoke(copiedPaths.isNotEmpty())
                 }
             } catch (e: Exception) {
                 android.util.Log.e("GalleryViewModel", "Error copying media to path: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     showToast("Error copying media: ${e.message}")
+                    onComplete?.invoke(false)
                 }
             }
+        }
+    }
+
+    fun copySelectedMediaToPath(targetDirectoryPath: String) {
+        val selected = _selectedUris.value.toList()
+        if (selected.isEmpty()) return
+        copyMediaToPath(selected.map { Uri.parse(it) }, targetDirectoryPath) {
+            clearSelection()
         }
     }
 
@@ -1865,7 +1965,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
 
 
-
     sealed class UiEvent {
         object DeleteSuccess : UiEvent()
     }
@@ -1899,17 +1998,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             smartIds = smartSearchResults.value.map { it.id }
         )
         val smartIds = smartSearchResults.value.map { it.id }
+        val isSmartSearch = bucket == com.inferno.gallery.data.BucketNames.SEARCH_SMART && smartIds.isNotEmpty()
+
         val queryString = "SELECT cm.* FROM core_media cm " +
             buildWhereClause(qc) + buildOrderClause(order, bucket, smartIds)
-
-        androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
-    }.flatMapLatest { query ->
+        val query = androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
         Pager(
             config = PagingConfig(pageSize = 120, prefetchDistance = 180, enablePlaceholders = true)
         ) {
             database.mediaDao().observeMediaPagingRaw(query)
         }.flow
-    }.cachedIn(viewModelScope)
+    }.flatMapLatest { it }.cachedIn(viewModelScope)
 
     // Simplified paging pipeline — direct entity-to-GalleryItem mapping.
     // Previously this was a combine() of 5 sources (rawPagerFlow + photoStacksEnabledFlow +
@@ -1999,4 +2098,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
         }.cachedIn(viewModelScope)
     }
+
+    private val scrollPositions = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, Int>>()
+
+    fun saveGridScrollPosition(bucket: String?, index: Int, offset: Int) {
+        val key = bucket ?: "main_gallery"
+        scrollPositions[key] = Pair(index, offset)
+    }
+
+    fun getSavedGridScrollPosition(bucket: String?): Pair<Int, Int> {
+        val key = bucket ?: "main_gallery"
+        return scrollPositions[key] ?: Pair(0, 0)
+    }
+
+    fun resetGridScrollPosition(bucket: String?) {
+        val key = bucket ?: "main_gallery"
+        scrollPositions.remove(key)
+    }
 }
+

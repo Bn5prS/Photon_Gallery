@@ -1,10 +1,10 @@
 package com.inferno.gallery.ui
 
 import android.Manifest
-import com.inferno.gallery.ui.utils.verticalFadingEdge
 import com.inferno.gallery.ui.utils.pressScale
 import com.inferno.gallery.ui.components.PhotonEmptyState
 import com.inferno.gallery.ui.components.thumbnailMemoryKey
+import com.inferno.gallery.ui.components.thumbnailTargetPx
 import com.inferno.gallery.ui.theme.MotionTokens
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -14,6 +14,7 @@ import android.os.Environment
 import android.provider.Settings
 import android.graphics.drawable.Animatable
 import androidx.compose.foundation.Image
+import androidx.paging.compose.LazyPagingItems
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,6 +95,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -170,9 +173,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 // Removed resolvedUriCache
 
-// Profiling switch for the prefetch pipeline (kept true in production; used to
-// isolate its cost during frame-pacing investigations).
-private const val PREFETCH_EXPERIMENT_ENABLED = true
+// Profiling switch for the prefetch pipeline (kept false to prevent thread competition during fling deceleration)
+private const val PREFETCH_EXPERIMENT_ENABLED = false
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -188,7 +190,11 @@ fun GalleryScreen(
     onNavigateToSettings: () -> Unit = {}
 ) {
     val selectedFilterIndex by viewModel.selectedFilterIndex.collectAsState()
-    val lazyGridState = rememberLazyGridState()
+    val savedPosition = remember(bucketName) { viewModel.getSavedGridScrollPosition(bucketName) }
+    val lazyGridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = savedPosition.first,
+        initialFirstVisibleItemScrollOffset = savedPosition.second
+    )
 
     LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
@@ -196,17 +202,42 @@ fun GalleryScreen(
 
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
 
-    var previousFilter by remember { mutableStateOf(selectedFilterIndex) }
-    var previousBucket by remember { mutableStateOf(bucketName) }
-    LaunchedEffect(pagedMedia.loadState.refresh) {
-        if (pagedMedia.loadState.refresh is androidx.paging.LoadState.NotLoading) {
-            if (previousFilter != selectedFilterIndex || previousBucket != bucketName) {
-                previousFilter = selectedFilterIndex
-                previousBucket = bucketName
-                lazyGridState.scrollToItem(0, 0)
-            }
+    var previousFilter by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(selectedFilterIndex) }
+    var previousBucket by rememberSaveable { mutableStateOf(bucketName) }
+
+    // Only scroll to top when filter or bucket ACTUALLY changes, NOT when returning from detail screen
+    LaunchedEffect(selectedFilterIndex, bucketName) {
+        if (previousFilter != selectedFilterIndex || previousBucket != bucketName) {
+            previousFilter = selectedFilterIndex
+            previousBucket = bucketName
+            viewModel.resetGridScrollPosition(bucketName)
+            lazyGridState.scrollToItem(0, 0)
         }
     }
+
+    // Persist scroll position when scrolling settles so returning from detail or navigation preserves exact place
+    LaunchedEffect(lazyGridState, bucketName) {
+        snapshotFlow { lazyGridState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { inProgress ->
+                if (!inProgress) {
+                    val index = lazyGridState.firstVisibleItemIndex
+                    val offset = lazyGridState.firstVisibleItemScrollOffset
+                    if (index > 0 || offset > 0) {
+                        viewModel.saveGridScrollPosition(bucketName, index, offset)
+                    }
+                }
+            }
+    }
+
+    // If initial composition clamped to 0 while PagingData was loading, restore to saved position once items load
+    LaunchedEffect(pagedMedia.itemCount) {
+        val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
+        if (savedIndex > 0 && pagedMedia.itemCount > savedIndex && lazyGridState.firstVisibleItemIndex == 0) {
+            lazyGridState.scrollToItem(savedIndex, savedOffset)
+        }
+    }
+
     val viewMode by viewModel.viewMode.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
@@ -224,11 +255,16 @@ fun GalleryScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val onMediaClick = remember(viewModel, bucketName, onPhotoClick) {
+    val onMediaClick = remember(viewModel, bucketName, onPhotoClick, lazyGridState) {
         { item: GalleryItem ->
             if (viewModel.isSelectionMode.value) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
+                viewModel.saveGridScrollPosition(
+                    bucketName,
+                    lazyGridState.firstVisibleItemIndex,
+                    lazyGridState.firstVisibleItemScrollOffset
+                )
                 viewModel.setInitialDetailItem(item)
                 val query = if (bucketName == "search_text") viewModel.searchQuery.value else null
                 onPhotoClick(item.id, bucketName, query)
@@ -242,92 +278,34 @@ fun GalleryScreen(
         }
     }
 
-    var activeDateBadge by remember { mutableStateOf<String?>(null) }
-    var showDateBadge by remember { mutableStateOf(false) }
-
-    // ── Unified scroll observer ──────────────────────────────────────────────────────────
-    // Handles:
-    //   1. Dock hide/show on significant scroll direction changes (threshold >= 12 items)
-    //   2. Date badge update + hide-after-inactivity
-    LaunchedEffect(lazyGridState) {
-        val dateFormat = java.text.SimpleDateFormat("MMMM d, yyyy", java.util.Locale.getDefault())
-        var previousIndex = 0
-        var cachedDateSeconds = -1L
-
-        @OptIn(kotlinx.coroutines.FlowPreview::class)
-        snapshotFlow { lazyGridState.firstVisibleItemIndex to lazyGridState.isScrollInProgress }
-            .debounce(80L) // Throttle: skip intermediate positions during fast flings to avoid peek() at 60fps
-            .collectLatest { (index, inProgress) ->
-
-                // 1. Dock visibility with debounce threshold to prevent root recomposition thrashing
-                if (inProgress && kotlin.math.abs(index - previousIndex) >= 12) {
-                    if (index > previousIndex) viewModel.setScrollDockVisible(false)
-                    else viewModel.setScrollDockVisible(true)
-                    previousIndex = index
-                }
-
-                // 2. Date badge
-                if (index >= 0 && index < pagedMedia.itemCount) {
-                    val listItem = pagedMedia.peek(index)
-                    val dateStr = when (listItem) {
-                        is GalleryListItem.Header -> listItem.title
-                        is GalleryListItem.Item -> {
-                            val seconds = listItem.galleryItem.dateAdded
-                            val dayStart = (seconds / 86400) * 86400
-                            if (dayStart != cachedDateSeconds) {
-                                cachedDateSeconds = dayStart
-                                activeDateBadge = dateFormat.format(java.util.Date(seconds * 1000L))
-                            }
-                            activeDateBadge
-                        }
-                        null -> null
-                    }
-                    if (dateStr != null) activeDateBadge = dateStr
-                }
-                if (inProgress) {
-                    showDateBadge = true
-                } else {
-                    delay(1200)
-                    showDateBadge = false
-                }
-            }
-    }
-    // ────────────────────────────────────────────────────────────────────────────────────────
 
     // ── Scroll-ahead thumbnail prefetcher ──────────────────────────────────────────────────
-    // Warms Coil's memory cache for items that are about to scroll into view.
-    // Kept strictly bounded: 2 rows ahead, direction-aware, previous batch
-    // cancelled, and items already cached are skipped. The old 5-row uncapped
-    // version flooded MediaProvider binder threads and delayed every frame's
-    // start by ~26ms on a mid-range device.
+    // Pre-warms Coil's unified hardware bitmap pool for items about to scroll into view.
+    // Strictly bounded (2 rows ahead, direction-aware, duplicates skipped).
     if (PREFETCH_EXPERIMENT_ENABLED) LaunchedEffect(lazyGridState, gridCellsCount) {
+        val thumbSizePx = thumbnailTargetPx(gridCellsCount)
         val imageLoader = coil3.SingletonImageLoader.get(context)
-        val thumbSizePx = when (gridCellsCount) {
-            1, 2 -> 512
-            3 -> 320
-            4 -> 240
-            else -> 160
-        }
-        val preloadRows = 2
-        val memoryCache = imageLoader.memoryCache
         var previousFirstIndex = lazyGridState.firstVisibleItemIndex
-        var inFlight = mutableListOf<coil3.request.Disposable>()
 
         snapshotFlow { lazyGridState.firstVisibleItemIndex }
             .distinctUntilChanged()
-            .collect { firstIndex ->
+            .collectLatest { firstIndex ->
                 val scrollingDown = firstIndex >= previousFirstIndex
                 previousFirstIndex = firstIndex
 
-                // Cancel the previous batch — those items have either loaded
-                // or scrolled out of the pipeline; letting them run wastes
-                // binder slots and CPU that the UI thread needs.
-                inFlight.forEach { it.dispose() }
-                inFlight = mutableListOf()
+                // Debounce burst ticks during high-velocity flings: only the newest position survives
+                delay(60L)
 
-                if (memoryCache == null) return@collect
-                val visibleCount = gridCellsCount * 6
-                val preloadCount = gridCellsCount * preloadRows
+                val layoutInfo = lazyGridState.layoutInfo
+                val viewportWidth = layoutInfo.viewportSize.width.toFloat()
+                val viewportHeight = layoutInfo.viewportSize.height.toFloat()
+                if (viewportWidth <= 0f || viewportHeight <= 0f) return@collectLatest
+
+                val rowHeightPx = maxOf(viewportWidth / gridCellsCount, 1f)
+                val rowsVisible = kotlin.math.ceil(viewportHeight / rowHeightPx).toInt().coerceAtLeast(4)
+                val visibleCount = gridCellsCount * rowsVisible
+                val preloadCount = gridCellsCount * 2
+
                 val start: Int
                 val end: Int
                 if (scrollingDown) {
@@ -337,22 +315,20 @@ fun GalleryScreen(
                     end = firstIndex - 1
                     start = maxOf(end - preloadCount, 0)
                 }
-                if (start > end || start >= pagedMedia.itemCount) return@collect
+                if (start > end || start >= pagedMedia.itemCount) return@collectLatest
 
                 for (i in start..end) {
                     val listItem = pagedMedia.peek(i) as? GalleryListItem.Item ?: continue
                     val galleryItem = listItem.galleryItem
-                    val cacheKey = thumbnailMemoryKey(galleryItem.id)
-                    if (memoryCache.get(coil3.memory.MemoryCache.Key(cacheKey)) != null) continue
+                    val cacheKey = "t_${galleryItem.id}@$thumbSizePx"
+                    if (imageLoader.memoryCache?.get(coil3.memory.MemoryCache.Key(cacheKey)) != null) continue
                     val req = coil3.request.ImageRequest.Builder(context)
                         .data(galleryItem.uri)
                         .size(thumbSizePx, thumbSizePx)
                         .precision(coil3.size.Precision.INEXACT)
                         .memoryCacheKey(cacheKey)
-                        .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
-                        .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                         .build()
-                    inFlight.add(imageLoader.enqueue(req))
+                    imageLoader.enqueue(req)
                 }
             }
     }
@@ -394,15 +370,6 @@ fun GalleryScreen(
                 timelineLayoutMode = timelineLayoutMode
             )
         }
-
-        // -- Dynamic Date Badge --
-        DynamicDateBadge(
-            visible = showDateBadge,
-            dateText = activeDateBadge,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = contentPadding.calculateTopPadding() + 16.dp)
-        )
 
         // ── Initial sync loading ────────────────────────────────────────────
         val isSyncRunning by viewModel.isInitialSyncRunning.collectAsState()
@@ -512,40 +479,4 @@ fun FastScroller(
     )
 }
 
-@Composable
-private fun DynamicDateBadge(
-    visible: Boolean,
-    dateText: String?,
-    modifier: Modifier = Modifier
-) {
-    AnimatedVisibility(
-        visible = visible && dateText != null,
-        enter = fadeIn(animationSpec = MotionTokens.snappySpring()) + slideInVertically(
-            initialOffsetY = { -it },
-            animationSpec = MotionTokens.snappySpring()
-        ),
-        exit = fadeOut(animationSpec = MotionTokens.snappySpring()) + slideOutVertically(
-            targetOffsetY = { -it },
-            animationSpec = MotionTokens.snappySpring()
-        ),
-        modifier = modifier
-    ) {
-        Surface(
-            shape = androidx.compose.foundation.shape.CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
-            shadowElevation = 3.dp,
-            border = androidx.compose.foundation.BorderStroke(
-                width = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-            )
-        ) {
-            Text(
-                text = dateText ?: "",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
-            )
-        }
-    }
-}
 

@@ -16,13 +16,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import com.materialkolor.PaletteStyle
 import com.materialkolor.ktx.animateColorScheme
 import com.materialkolor.rememberDynamicColorScheme
+
+import androidx.compose.ui.graphics.compositeOver
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PhotonGalleryTheme — M3 Expressive entry point
@@ -45,7 +44,7 @@ fun PhotonGalleryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     useAmoledBlack: Boolean = false,
-    appSeedColor: Int = 0xFF6750A4.toInt(),
+    appSeedColor: Int = 0xFF0A6EFF.toInt(),
     paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     contrastLevel: Double = 0.0,
     invertColors: Boolean = false,
@@ -57,35 +56,7 @@ fun PhotonGalleryTheme(
 ) {
     val context = LocalContext.current
 
-    // ── Adaptive Density (app-wide responsive scaling) ────────────────────────
-    // Design target: 393dp — the iQOO Neo 7 dp width (1080px ÷ density 2.75).
-    // On screens narrower than that (e.g. POCO C61 = 360dp), ALL dp values
-    // (padding, icon sizes, heights, border radii, etc.) scale down automatically
-    // — zero changes needed in any individual screen file.
-    //
-    // sp text is intentionally preserved at its original physical size via
-    // fontScale compensation: newFontScale = originalFontScale / scaleFactor,
-    // so sp.toPx() = sp * density * fontScale stays constant regardless of device.
-    //
-    //  Device          dp-width   scaleFactor   effect
-    //  iQOO Neo 7       393dp       1.000        no change (design target)
-    //  POCO C61         360dp       0.916        ~8.4% smaller dp values
-    //  320dp device     320dp       0.815        ~18.5% smaller dp values
-    val configuration = LocalConfiguration.current
-    val systemDensity = LocalDensity.current
-    val adaptiveDensity = remember(configuration.screenWidthDp, systemDensity) {
-        val designTargetDp = 393f
-        val scaleFactor = (configuration.screenWidthDp / designTargetDp).coerceAtMost(1f)
-        if (scaleFactor < 1f) {
-            Density(
-                density = systemDensity.density * scaleFactor,
-                fontScale = systemDensity.fontScale / scaleFactor
-            )
-        } else {
-            systemDensity
-        }
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+
 
     val systemSeedColor = remember(dynamicColor, context) {
         if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -115,7 +86,6 @@ fun PhotonGalleryTheme(
     val schemeIsDark = if (invertColors) !darkTheme else darkTheme
 
     // MaterialKolor generates the full M3 tonal palette from a seed + style + contrast.
-    // Optional per-slot overrides let secondary/tertiary use independent seed colors.
     val baseColorScheme = rememberDynamicColorScheme(
         seedColor = Color(seedArgb),
         isDark = schemeIsDark,
@@ -126,30 +96,41 @@ fun PhotonGalleryTheme(
         tertiary = if (tertiaryColorOverride != -1) Color(tertiaryColorOverride) else null,
     )
 
-    // Scheme-slot overrides below are the sanctioned exception to the
-    // "no raw Color(...) in composables" rule (see .agents/rules/
-    // m3-expressive-design.md §1): this is scheme *definition* — the same
-    // thing lightColorScheme() does internally — not scheme *application*.
-    // Screens must still consume roles via MaterialTheme.colorScheme only.
-    val colorScheme = if (schemeIsDark && useAmoledBlack) {
-        baseColorScheme.copy(
-            background = Color.Black,
-            surface = Color.Black,
-            surfaceDim = Color.Black,
-            surfaceBright = Color(0xFF141414),
-            surfaceContainerLowest = Color.Black,
-            surfaceContainerLow = Color(0xFF080808),
-            surfaceContainer = Color(0xFF0E0E0E),
-            surfaceContainerHigh = Color(0xFF141414),
-            surfaceContainerHighest = Color(0xFF1C1C1C),
-            surfaceVariant = Color(0xFF161616),
-        )
-    } else {
-        baseColorScheme
+    val colorScheme = when {
+        schemeIsDark && useAmoledBlack -> {
+            baseColorScheme.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceDim = Color.Black,
+                surfaceBright = Color(0xFF141414),
+                surfaceContainerLowest = Color.Black,
+                surfaceContainerLow = Color(0xFF080808),
+                surfaceContainer = Color(0xFF0E0E0E),
+                surfaceContainerHigh = Color(0xFF141414),
+                surfaceContainerHighest = Color(0xFF1C1C1C),
+                surfaceVariant = Color(0xFF161616),
+            )
+        }
+        !schemeIsDark -> {
+            // Soften surfaceContainerLowest from stark #FFFFFF with a warm 40% canvas tint (60% pure white)
+            val softenedSheetWhite = baseColorScheme.surfaceContainer.copy(alpha = 0.40f).compositeOver(Color.White)
+            baseColorScheme.copy(
+                surfaceContainerLowest = softenedSheetWhite
+            )
+        }
+        else -> {
+            baseColorScheme
+        }
     }
 
     // Optionally animate all color token changes using spring physics.
     val resolvedScheme = if (animateTransitions) animateColorScheme(colorScheme) else colorScheme
+
+    val photonColors = when {
+        useAmoledBlack && schemeIsDark -> AmoledPhotonColors
+        schemeIsDark -> DarkPhotonColors
+        else -> LightPhotonColors
+    }
 
     MaterialExpressiveTheme(
         colorScheme = resolvedScheme,
@@ -157,11 +138,11 @@ fun PhotonGalleryTheme(
         typography = appTypography(useSystemFont = useSystemFont, isDark = darkTheme),
         motionScheme = MotionScheme.expressive(),
     ) {
-        // Provide harmonized accent colors blended toward dynamic primary
+        // Provide harmonized accent colors blended toward dynamic primary and extended semantic colors
         val harmonized = harmonizedColors()
         CompositionLocalProvider(
-            LocalDensity provides adaptiveDensity,
             LocalHarmonizedColors provides harmonized,
+            LocalPhotonColors provides photonColors,
             content = content,
         )
     }

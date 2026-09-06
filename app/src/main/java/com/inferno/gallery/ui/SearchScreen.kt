@@ -81,9 +81,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    onAlbumClick: (String) -> Unit = {},
-    onPersonClick: (Long) -> Unit = {},
-    onViewAllPeopleClick: () -> Unit = {}
+    onAlbumClick: (String) -> Unit = {}
 ) {
     val query by viewModel.searchQuery.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
@@ -182,9 +180,7 @@ fun SearchScreen(
             when {
                 query.isBlank() -> EmptySearchState(
                     recentSearches = recentSearches,
-                    viewModel = viewModel,
-                    onPersonClick = onPersonClick,
-                    onViewAllPeopleClick = onViewAllPeopleClick
+                    viewModel = viewModel
                 )
                 searching -> SearchingState()
                 !hasResults -> NoResultsState(query = query, onClear = { viewModel.updateSearchQuery("") })
@@ -206,9 +202,7 @@ fun SearchScreen(
 @Composable
 private fun EmptySearchState(
     recentSearches: List<String>,
-    viewModel: GalleryViewModel,
-    onPersonClick: (Long) -> Unit = {},
-    onViewAllPeopleClick: () -> Unit = {}
+    viewModel: GalleryViewModel
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -217,7 +211,6 @@ private fun EmptySearchState(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-
 
         if (recentSearches.isNotEmpty()) {
             item {
@@ -501,7 +494,6 @@ private fun SearchResultsList(
             ) { item ->
                 val isSelected = selectedUris.contains(item.uri.toString())
                 com.inferno.gallery.ui.components.OptimizedThumbnailCell(
-                    modifier = Modifier.animateItem(),
                     item = item,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
@@ -560,7 +552,6 @@ private fun SearchResultsList(
             ) { item ->
                 val isSelected = selectedUris.contains(item.uri.toString())
                 com.inferno.gallery.ui.components.OptimizedThumbnailCell(
-                    modifier = Modifier.animateItem(),
                     item = item,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,

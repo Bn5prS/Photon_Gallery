@@ -49,6 +49,8 @@ import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.ShapeSmall
+import com.inferno.gallery.ui.theme.TechnicalParamLabelStyle
+import com.inferno.gallery.ui.theme.TechnicalParamValueStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -465,8 +467,6 @@ fun ExifDetailsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeepMetadataSheet by remember { mutableStateOf(false) }
 
-
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -518,7 +518,6 @@ fun ExifDetailsSheet(
                     }
                 }
             }
-
 
 
             // ── File & Timeline Card ─────────────────────────────────────────
@@ -1248,15 +1247,15 @@ private fun ExposureBadge(
             )
             Column {
                 Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = label.uppercase(),
+                    style = TechnicalParamLabelStyle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     softWrap = false
                 )
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    style = TechnicalParamValueStyle,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis

@@ -13,7 +13,7 @@
 [![Views](https://hits.sh/github.com/Bn5prS/Photon_Gallery.svg?style=for-the-badge&color=6750A4&labelColor=1C1B1F&label=Views)](https://github.com/Bn5prS/Photon_Gallery)
 [![Min SDK](https://img.shields.io/badge/Android_12%2B-API_31-3DDC84?style=for-the-badge&logo=android&logoColor=white&labelColor=1C1B1F)](https://developer.android.com/about/versions/12)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white&labelColor=1C1B1F)](https://kotlinlang.org)
-[![License](https://img.shields.io/badge/License-Proprietary-B0BEC5?style=for-the-badge&labelColor=1C1B1F)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPL_v3-4285F4?style=for-the-badge&logo=gnu&logoColor=white&labelColor=1C1B1F)](LICENSE)
 
 <br/>
 
@@ -61,7 +61,7 @@
 | Layer | Technology |
 |---|---|
 | **Language** | Kotlin 2.2, Coroutines, Flow |
-| **UI** | Jetpack Compose, Material 3 Expressive, MaterialKolor, Material Symbols icons, Google Fonts (Outfit · Urbanist · Plus Jakarta Sans) |
+| **UI** | Jetpack Compose, Material 3 Expressive, MaterialKolor, Material Symbols icons, Google Sans Flex (variable font) |
 | **Architecture** | MVVM, ViewModel, Room (SQLite + FTS5) |
 | **Image Loading** | Coil 3 (GIF, WebP, HEIF, SVG, Video thumbnails) |
 | **AI / ML** | ONNX Runtime (MobileCLIP), ML Kit (OCR) |
@@ -103,21 +103,20 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ## 🤝 Contributing
 
-Contributions are welcome! To contribute:
+Contributions are warmly welcomed! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines on project architecture, code style, testing requirements, and pull request workflows.
 
+Quick start:
 1. **Fork** the repository
 2. **Create a branch**: `git checkout -b feature/your-feature`
 3. **Commit your changes**: `git commit -m "feat: add your feature"`
-4. **Push**: `git push origin feature/your-feature`
-5. **Open a Pull Request**
-
-Please follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages.
+4. **Verify tests & lint**: `./gradlew lint testDebugUnitTest`
+5. **Push & Open a Pull Request**: Follow our PR template and [Conventional Commits](https://www.conventionalcommits.org/).
 
 ---
 
 ## 📄 License
 
-This project is licensed under a **Proprietary Source-Available License** — you may view and study the code, but redistribution and commercial use are prohibited. See the [LICENSE](LICENSE) file for full terms.
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)** — an OSI-approved free and open-source license. See the [LICENSE](LICENSE) file for complete license terms. Third-party font and icon licenses are documented in [LICENSES.md](LICENSES.md).
 
 ---
 

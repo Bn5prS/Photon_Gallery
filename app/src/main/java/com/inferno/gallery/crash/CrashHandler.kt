@@ -32,9 +32,20 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     }
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
+        // Ignore ForegroundServiceStartNotAllowedException on Android 14+ (FGS timeout)
+        val exName = throwable.javaClass.name
+        val causeName = throwable.cause?.javaClass?.name ?: ""
+        if (exName.contains("ForegroundServiceStartNotAllowedException") ||
+            causeName.contains("ForegroundServiceStartNotAllowedException") ||
+            throwable.message?.contains("ForegroundServiceStartNotAllowedException") == true) {
+            android.util.Log.w("CrashHandler", "Ignoring ForegroundServiceStartNotAllowedException: ${throwable.message}")
+            return
+        }
+
         try {
             // ── Build crash report ──
             val report = buildCrashReport(thread, throwable)
+            android.util.Log.e("PHOTON_CRASH", report, throwable)
 
             // ── Write to file ──
             val logFile = writeCrashLog(report)

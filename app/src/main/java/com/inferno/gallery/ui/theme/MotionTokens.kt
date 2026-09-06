@@ -62,6 +62,21 @@ object MotionTokens {
     fun <T> gentleSpring(): FiniteAnimationSpec<T> = scheme.slowSpatialSpec()
 
     /**
+     * Fast fade, color and alpha effects — the official expressive scheme's fast effects spec.
+     */
+    fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = scheme.fastEffectsSpec()
+
+    /**
+     * Default fade, color and alpha effects — the official expressive scheme's default effects spec.
+     */
+    fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = scheme.defaultEffectsSpec()
+
+    /**
+     * Slow/gentle fade, color and alpha effects — the official expressive scheme's slow effects spec.
+     */
+    fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = scheme.slowEffectsSpec()
+
+    /**
      * Shared-element/container transforms. M3 defines no dedicated token for
      * shared bounds; springs are the official mechanism, and zero bounce
      * prevents wobbly container morphs per the Compose shared-elements

@@ -38,6 +38,7 @@ class CrashActivity : FragmentActivity() {
 
         val crashReport = intent.getStringExtra(EXTRA_CRASH_REPORT) ?: "No crash data available."
         val crashLogPath = intent.getStringExtra(EXTRA_CRASH_LOG_PATH) ?: ""
+        android.util.Log.e("PHOTON_CRASH", crashReport)
 
         setContent {
             PhotonGalleryTheme(darkTheme = true) {

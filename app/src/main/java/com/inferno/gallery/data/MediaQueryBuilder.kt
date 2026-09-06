@@ -140,12 +140,12 @@ object MediaQueryBuilder {
     }
 
     fun buildOrderClause(order: String): String = when (order) {
-        "NewToOld" -> "ORDER BY cm.dateAdded DESC"
-        "OldToNew" -> "ORDER BY cm.dateAdded ASC"
-        "SmallToBig" -> "ORDER BY cm.size ASC"
-        "BigToSmall" -> "ORDER BY cm.size DESC"
-        "NameAsc" -> "ORDER BY cm.name ASC"
-        else -> "ORDER BY cm.dateAdded DESC"
+        "NewToOld" -> "ORDER BY cm.dateAdded DESC, cm.id DESC"
+        "OldToNew" -> "ORDER BY cm.dateAdded ASC, cm.id ASC"
+        "SmallToBig" -> "ORDER BY cm.size ASC, cm.id ASC"
+        "BigToSmall" -> "ORDER BY cm.size DESC, cm.id DESC"
+        "NameAsc" -> "ORDER BY cm.name ASC, cm.id ASC"
+        else -> "ORDER BY cm.dateAdded DESC, cm.id DESC"
     }
 
     fun buildOrderClause(order: String, bucket: String?, smartIds: List<String>): String {
