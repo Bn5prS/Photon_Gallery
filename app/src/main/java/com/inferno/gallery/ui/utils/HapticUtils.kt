@@ -50,16 +50,15 @@ fun View.tick() {
                         .build()
 
                     if (vibrator.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_TICK)) {
-                        vibrator.vibrate(
-                            VibrationEffect.startComposition()
-                                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, strength)
-                                .compose(),
-                            attrs
-                        )
+                        val effect = VibrationEffect.startComposition()
+                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, strength)
+                            .compose()
+                        safeVibrate(vibrator, effect, attrs)
                         return
                     } else if (vibrator.hasAmplitudeControl()) {
                         val amplitude = (strength * 255).toInt().coerceIn(1, 255)
-                        vibrator.vibrate(VibrationEffect.createOneShot(12, amplitude), attrs)
+                        val effect = VibrationEffect.createOneShot(12, amplitude)
+                        safeVibrate(vibrator, effect, attrs)
                         return
                     }
                 }
@@ -107,6 +106,14 @@ fun View.tick() {
     }
 }
 
+private fun safeVibrate(vibrator: Vibrator, effect: VibrationEffect, attrs: VibrationAttributes) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        vibrator.vibrate(effect, attrs)
+    } else {
+        vibrator.vibrate(effect)
+    }
+}
+
 /** Firm thud — strong feedback for long-press, destructive actions. */
 fun View.thud() {
     if (!PremiumHapticsManager.enabled) return
@@ -123,16 +130,15 @@ fun View.thud() {
                         .build()
 
                     if (vibrator.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_THUD)) {
-                        vibrator.vibrate(
-                            VibrationEffect.startComposition()
-                                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, strength)
-                                .compose(),
-                            attrs
-                        )
+                        val effect = VibrationEffect.startComposition()
+                            .addPrimitive(VibrationEffect.Composition.PRIMITIVE_THUD, strength)
+                            .compose()
+                        safeVibrate(vibrator, effect, attrs)
                         return
                     } else if (vibrator.hasAmplitudeControl()) {
                         val amplitude = (strength * 255).toInt().coerceIn(1, 255)
-                        vibrator.vibrate(VibrationEffect.createOneShot(35, amplitude), attrs)
+                        val effect = VibrationEffect.createOneShot(35, amplitude)
+                        safeVibrate(vibrator, effect, attrs)
                         return
                     }
                 }

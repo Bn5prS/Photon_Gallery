@@ -366,7 +366,7 @@ fun ImageEditorScreen(
         if (undoStack.isNotEmpty()) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             redoStack.add(currentState)
-            currentState = undoStack.removeLast()
+            currentState = undoStack.removeAt(undoStack.lastIndex)
         }
     }
 
@@ -374,7 +374,7 @@ fun ImageEditorScreen(
         if (redoStack.isNotEmpty()) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             undoStack.add(currentState)
-            currentState = redoStack.removeLast()
+            currentState = redoStack.removeAt(redoStack.lastIndex)
         }
     }
 

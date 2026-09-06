@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.compositeOver
 //  All palette generation runs in-process via the HCT color space math.
 // ─────────────────────────────────────────────────────────────────────────────
 
+@android.annotation.SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PhotonGalleryTheme(

@@ -1,5 +1,6 @@
 package com.inferno.gallery.ui.theme
 
+import android.annotation.SuppressLint
 import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
@@ -113,6 +114,7 @@ object WallpaperSeedExtractor {
         return bitmap
     }
 
+    @SuppressLint("RestrictedApi")
     private fun extractBestColor(originalBitmap: Bitmap): Int? {
         var bitmap = originalBitmap
         val area = bitmap.width * bitmap.height
