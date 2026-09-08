@@ -116,7 +116,7 @@ fun AlbumCoverPickerScreen(
             }
 
             withContext(Dispatchers.Main) {
-                uriList = uriStrings.map { Uri.parse(it) }
+                uriList = uriStrings.distinct().map { Uri.parse(it) }
                 isLoading = false
             }
         }

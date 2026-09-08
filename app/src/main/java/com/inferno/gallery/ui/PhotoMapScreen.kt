@@ -171,7 +171,7 @@ fun PhotoMapScreen(
                 geotaggedMedia.forEach { item ->
                     val header = formatGroupHeader(item.dateAdded)
                     if (header != lastHeader) {
-                        list.add(GalleryListItem.Header(header))
+                        list.add(GalleryListItem.Header(title = header, id = item.id))
                         lastHeader = header
                     }
                     list.add(GalleryListItem.Item(item))
@@ -635,7 +635,7 @@ fun PhotoMapScreen(
                                     key = { index ->
                                         val item = groupedMedia[index]
                                         when (item) {
-                                            is GalleryListItem.Header -> "header_${item.title}_$index"
+                                            is GalleryListItem.Header -> "header_${item.id}"
                                             is GalleryListItem.Item -> item.galleryItem.id
                                         }
                                     },

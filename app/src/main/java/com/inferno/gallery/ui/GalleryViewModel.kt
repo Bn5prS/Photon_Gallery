@@ -89,7 +89,7 @@ data class SmartSearchStatus(
 
 sealed class GalleryListItem {
     data class Item(val galleryItem: GalleryItem) : GalleryListItem()
-    data class Header(val title: String) : GalleryListItem()
+    data class Header(val title: String, val id: String = title) : GalleryListItem()
 }
 
 enum class SortOrder {
@@ -1468,8 +1468,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
 
-                    val ftsResults = ftsDeferred.await()
-                    val smartResults = smartDeferred.await()
+                    val ftsResults = ftsDeferred.await().distinctBy { it.id }
+                    val smartResults = smartDeferred.await().distinctBy { it.id }
                     val ftsIds = ftsResults.map { it.id }.toSet()
                     val filteredSmartResults = smartResults.filterNot { it.id in ftsIds }
 
@@ -2068,13 +2068,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val pagedMedia: Flow<PagingData<GalleryListItem>> = combine(viewMode, sortOrder) { mode, order ->
-        Pair(mode, order)
-    }.flatMapLatest { (mode, order) ->
-        val isDateSort = order == SortOrder.NewToOld || order == SortOrder.OldToNew
+    val pagedMedia: Flow<PagingData<GalleryListItem>> = combine(viewMode, sortOrder, _currentBucket) { mode, order, bucket ->
+        Triple(mode, order, bucket)
+    }.flatMapLatest { (mode, order, bucket) ->
+        val isSmartSearch = bucket == BucketNames.SEARCH_SMART
+        val isDateSort = (order == SortOrder.NewToOld || order == SortOrder.OldToNew) && !isSmartSearch
         pagedMediaRaw.map { pagingData ->
             if (mode == ViewMode.Immersive || !isDateSort) {
-                // No date headers in Immersive mode or non-date sorts
+                // No date headers in Immersive mode, Smart Search (ordered by relevance), or non-date sorts
                 pagingData.map { GalleryListItem.Item(it) as GalleryListItem }
             } else {
                 pagingData.insertSeparators { before: GalleryItem?, after: GalleryItem? ->
@@ -2083,11 +2084,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val afterTitle = formatGroupHeader(after.dateAdded)
 
                     if (before == null) {
-                        GalleryListItem.Header(afterTitle)
+                        GalleryListItem.Header(title = afterTitle, id = after.id)
                     } else {
                         val beforeTitle = formatGroupHeader(before.dateAdded)
                         if (beforeTitle != afterTitle) {
-                            GalleryListItem.Header(afterTitle)
+                            GalleryListItem.Header(title = afterTitle, id = after.id)
                         } else {
                             null
                         }

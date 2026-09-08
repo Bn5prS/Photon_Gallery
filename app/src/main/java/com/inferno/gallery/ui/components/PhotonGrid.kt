@@ -274,7 +274,7 @@ fun PhotonGrid(
                         key = { index ->
                             val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
                             when (item) {
-                                is GalleryListItem.Header -> "header_${item.title}"
+                                is GalleryListItem.Header -> "header_${item.id}"
                                 is GalleryListItem.Item -> item.galleryItem.id
                                 null -> "placeholder_$index"
                             }
@@ -373,7 +373,7 @@ fun PhotonGrid(
                         key = { index ->
                             val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
                             when (item) {
-                                is GalleryListItem.Header -> "header_${item.title}"
+                                is GalleryListItem.Header -> "header_${item.id}"
                                 is GalleryListItem.Item -> item.galleryItem.id
                                 null -> "placeholder_$index"
                             }
@@ -470,7 +470,7 @@ fun PhotonGrid(
                         key = { index ->
                             val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
                             when (item) {
-                                is GalleryListItem.Header -> "header_${item.title}"
+                                is GalleryListItem.Header -> "header_${item.id}"
                                 is GalleryListItem.Item -> item.galleryItem.id
                                 null -> "placeholder_$index"
                             }
