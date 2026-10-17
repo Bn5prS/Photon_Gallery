@@ -37,7 +37,7 @@ mlkitText = "16.0.1"
 mlkitFace = "16.1.7"
 
 # ONNX Runtime
-onnxruntime = "1.18.0"
+onnxruntime = "1.22.0"   # 1.21.1+ needed: earlier builds ship 4KB-aligned .so (16KB page devices)
 
 
 # Background Processing
