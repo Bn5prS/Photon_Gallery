@@ -1,5 +1,6 @@
 package com.inferno.gallery.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -9,6 +10,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -40,11 +43,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,6 +71,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -155,15 +163,55 @@ fun MemoryReelViewer(
         }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = scrimAlpha))
-            .graphicsLayer {
-                translationY = dismissOffsetY.value
-                scaleX = contentScale
-                scaleY = contentScale
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        val view = LocalView.current
+        val dialogWindow = remember(view) {
+            var parent = view.parent
+            while (parent != null) {
+                if (parent is DialogWindowProvider) {
+                    return@remember parent.window
+                }
+                parent = parent.parent
             }
+            null
+        }
+
+        SideEffect {
+            dialogWindow?.let { window ->
+                window.setDimAmount(0f)
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                window.setLayout(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT
+                )
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.isAppearanceLightStatusBars = false
+                insetsController.isAppearanceLightNavigationBars = false
+            }
+        }
+
+        BackHandler(enabled = showGridSheet) {
+            showGridSheet = false
+            isPaused = false
+        }
+
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = scrimAlpha))
+                .graphicsLayer {
+                    translationY = dismissOffsetY.value
+                    scaleX = contentScale
+                    scaleY = contentScale
+                }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onVerticalDrag = { change, dragAmount ->
@@ -446,7 +494,6 @@ fun MemoryReelViewer(
                     // Open in full viewer button
                     IconButton(
                         onClick = {
-                            onDismiss()
                             onOpenPhotoDetail(currentItem.id)
                         },
                         modifier = Modifier.size(48.dp)
@@ -462,22 +509,54 @@ fun MemoryReelViewer(
             }
         }
 
-        // Quick Grid Bottom Sheet
-        if (showGridSheet) {
-            ModalBottomSheet(
-                onDismissRequest = {
-                    showGridSheet = false
-                    isPaused = false
-                },
-                shape = ShapeEdgeTop,
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+        // Quick Grid Overlay Sheet
+        AnimatedVisibility(
+            visible = showGridSheet,
+            enter = fadeIn(MotionTokens.snappySpring()) + slideInVertically(MotionTokens.snappySpring()) { it },
+            exit = fadeOut(MotionTokens.snappySpring()) + slideOutVertically(MotionTokens.snappySpring()) { it }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        showGridSheet = false
+                        isPaused = false
+                    },
+                contentAlignment = Alignment.BottomCenter
             ) {
+                Surface(
+                    shape = ShapeEdgeTop,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 16.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {}
+                        .navigationBarsPadding()
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = SpacingTokens.M)
-                        .padding(bottom = SpacingTokens.XL)
+                        .padding(top = SpacingTokens.M, bottom = SpacingTokens.XL)
                 ) {
+                    // Drag handle pill
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(bottom = SpacingTokens.M)
+                            .size(width = 36.dp, height = 4.dp)
+                            .clip(ShapeFull)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    )
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -495,6 +574,18 @@ fun MemoryReelViewer(
                                 text = "${group.formattedDate} • ${group.items.size} moments",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                showGridSheet = false
+                                isPaused = false
+                            }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                contentDescription = "Close grid",
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -548,4 +639,6 @@ fun MemoryReelViewer(
             }
         }
     }
+}
+}
 }
