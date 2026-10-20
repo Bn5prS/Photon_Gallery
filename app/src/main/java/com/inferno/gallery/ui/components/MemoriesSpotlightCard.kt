@@ -1,19 +1,13 @@
 package com.inferno.gallery.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,12 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +46,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -66,11 +55,9 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.inferno.gallery.R
 import com.inferno.gallery.data.MemoryDayGroup
-import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLargeIncreased
-import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
 
@@ -80,7 +67,8 @@ import com.inferno.gallery.ui.utils.pressScale
  * Designed to be non-intrusive:
  * - Single compact card that scrolls naturally with the feed.
  * - Layered swipeable deck when multiple years are available.
- * - Smooth dismiss with quick-collapse into an ambient timeline pill.
+ * - Smooth dismiss with quick-collapse into an ambient timeline banner pill.
+ * - Smooth animated size transition preventing any layout snapping.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -89,48 +77,33 @@ fun MemoriesSpotlightCard(
     isDismissed: Boolean,
     onOpenMemory: (MemoryDayGroup) -> Unit,
     onDismiss: () -> Unit,
-    onRestore: () -> Unit = {},
+    onRestore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (memoryGroups.isEmpty()) return
 
     val haptic = LocalHapticFeedback.current
-    var isClosing by remember { mutableStateOf(false) }
-    val visibleState = remember { MutableTransitionState(!isDismissed) }
 
-    LaunchedEffect(isDismissed) {
-        if (!isDismissed) {
-            isClosing = false
-            visibleState.targetState = true
-        }
-    }
+    AnimatedContent(
+        targetState = isDismissed,
+        transitionSpec = {
+            (fadeIn(animationSpec = MotionTokens.fastEffectsSpec()) +
+                scaleIn(animationSpec = MotionTokens.gentleSpring(), initialScale = 0.96f))
+                .togetherWith(
+                    fadeOut(animationSpec = MotionTokens.fastEffectsSpec()) +
+                        scaleOut(animationSpec = MotionTokens.gentleSpring(), targetScale = 0.96f)
+                ).using(
+                    SizeTransform(clip = true) { _, _ -> MotionTokens.gentleSpring<IntSize>() }
+                )
+        },
+        label = "MemoriesSpotlightTransition",
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S)
+    ) { dismissed ->
+        if (!dismissed) {
+            val pagerState = rememberPagerState(pageCount = { memoryGroups.size })
 
-    LaunchedEffect(isClosing, visibleState.isIdle, visibleState.currentState) {
-        if (isClosing && visibleState.isIdle && !visibleState.currentState) {
-            onDismiss()
-        }
-    }
-
-    AnimatedVisibility(
-        visibleState = visibleState,
-        enter = fadeIn(MotionTokens.snappySpring()) + expandVertically(
-            animationSpec = MotionTokens.gentleSpring(),
-            expandFrom = Alignment.Top
-        ),
-        exit = fadeOut(animationSpec = MotionTokens.fastEffectsSpec()) + shrinkVertically(
-            animationSpec = MotionTokens.gentleSpring(),
-            shrinkTowards = Alignment.Top
-        ),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        val pagerState = rememberPagerState(pageCount = { memoryGroups.size })
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
-            verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-        ) {
             HorizontalPager(
                 state = pagerState,
                 contentPadding = PaddingValues(0.dp),
@@ -160,7 +133,7 @@ fun MemoriesSpotlightCard(
                         .fillMaxSize()
                         .pressScale(pressedScale = 0.98f)
                         .clip(ShapeLargeIncreased)
-                        .clickable(enabled = !isClosing) {
+                        .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onOpenMemory(group)
                         }
@@ -249,14 +222,12 @@ fun MemoriesSpotlightCard(
                                     }
                                 }
 
-                                // Dismiss Button (minimum 48dp touch target)
+                                // Dismiss Button (collapses into ambient timeline banner)
                                 IconButton(
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        isClosing = true
-                                        visibleState.targetState = false
+                                        onDismiss()
                                     },
-                                    enabled = !isClosing,
                                     modifier = Modifier.size(48.dp)
                                 ) {
                                     Surface(
@@ -268,7 +239,7 @@ fun MemoriesSpotlightCard(
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                                contentDescription = "Dismiss memory",
+                                                contentDescription = "Hide memories to banner",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(16.dp)
                                             )
@@ -321,7 +292,7 @@ fun MemoriesSpotlightCard(
                                 shadowElevation = 2.dp,
                                 modifier = Modifier
                                     .pressScale(pressedScale = 0.94f)
-                                    .clickable(enabled = !isClosing) {
+                                    .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onOpenMemory(group)
                                     }
@@ -345,6 +316,85 @@ fun MemoriesSpotlightCard(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        } else {
+            // Ambient Collapsed Memories Banner Pill
+            val firstGroup = memoryGroups.first()
+            val bannerText = if (memoryGroups.size > 1) {
+                "${firstGroup.title} +${memoryGroups.size - 1} • ${memoryGroups.sumOf { it.items.size }} moments"
+            } else {
+                "${firstGroup.title} • ${firstGroup.items.size} moments"
+            }
+
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 2.dp,
+                shadowElevation = 1.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pressScale(pressedScale = 0.98f)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onRestore()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_history),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = bannerText,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Surface(
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .pressScale(pressedScale = 0.92f)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onRestore()
+                            }
+                    ) {
+                        Text(
+                            text = "Show",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
                     }
                 }
             }
