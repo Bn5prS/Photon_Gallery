@@ -166,13 +166,14 @@ fun AlbumsScreen(
             .distinctBy { it.bucketName }
     }
 
-    val maxVisible = when (albumLayoutMode) {
-        AlbumLayoutMode.GRID_2_COL -> 6
-        AlbumLayoutMode.GRID_3_COL -> 6
-        AlbumLayoutMode.LIST -> 6
+    val visibleAlbums = remember(allUnifiedAlbums, albumLayoutMode) {
+        when (albumLayoutMode) {
+            AlbumLayoutMode.LIST -> allUnifiedAlbums // Full list view shows all albums without truncation
+            AlbumLayoutMode.GRID_3_COL -> allUnifiedAlbums.take(9)
+            AlbumLayoutMode.GRID_2_COL -> allUnifiedAlbums.take(6)
+        }
     }
-    val visibleAlbums = remember(allUnifiedAlbums, maxVisible) { allUnifiedAlbums.take(maxVisible) }
-    val hasMoreAlbums = allUnifiedAlbums.size > maxVisible
+    val hasMoreAlbums = allUnifiedAlbums.size > visibleAlbums.size
 
     // Persistent expand states for sections
     val albumsExpanded by viewModel.albumsExpandedPinned.collectAsState()
@@ -194,7 +195,11 @@ fun AlbumsScreen(
             top = contentPadding.calculateTopPadding() + SpacingTokens.M,
             bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
         ),
-        verticalArrangement = Arrangement.spacedBy(SpacingTokens.L),
+        verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+            Arrangement.spacedBy(SpacingTokens.S)
+        } else {
+            Arrangement.spacedBy(SpacingTokens.L)
+        },
         horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
         modifier = modifier.fillMaxSize()
     ) {
@@ -208,7 +213,7 @@ fun AlbumsScreen(
                     isExpanded = albumsExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedPinned() },
                     seeAllText = "Show all",
-                    onSeeAll = onNavigateToAllAlbums
+                    onSeeAll = if (albumLayoutMode == AlbumLayoutMode.LIST) null else if (hasMoreAlbums) onNavigateToAllAlbums else null
                 )
             }
 
@@ -218,12 +223,12 @@ fun AlbumsScreen(
                     AlbumsControlBar(
                         currentLayout = albumLayoutMode,
                         onLayoutChange = { newLayout ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.setAlbumLayoutMode(newLayout)
                         },
                         currentSort = albumSortOrder,
                         onSortChange = { newSort ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.setAlbumSortOrder(newSort)
                         }
                     )
@@ -231,7 +236,7 @@ fun AlbumsScreen(
 
                 items(
                     items = visibleAlbums,
-                    key = { "album_${it.bucketName}" },
+                    key = { "album_${albumLayoutMode.name}_${it.bucketName}" },
                     span = {
                         when (albumLayoutMode) {
                             AlbumLayoutMode.GRID_2_COL -> GridItemSpan(6)
@@ -967,7 +972,6 @@ fun AlbumListRow(
     }
 
     Surface(
-        onClick = onClick,
         shape = ShapeLarge,
         color = MaterialTheme.colorScheme.surfaceContainer,
         shadowElevation = 0.dp,
@@ -1526,7 +1530,7 @@ fun SectionHeader(
                     Modifier
                         .clip(ShapeMedium)
                         .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onToggle()
                         }
                 } else Modifier

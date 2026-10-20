@@ -121,7 +121,7 @@ fun AllAlbumsScreen(
                         ) {
                             Surface(
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     galleryViewModel.setAlbumLayoutMode(AlbumLayoutMode.GRID_2_COL)
                                 },
                                 shape = ShapeFull,
@@ -139,7 +139,7 @@ fun AllAlbumsScreen(
                             }
                             Surface(
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     galleryViewModel.setAlbumLayoutMode(AlbumLayoutMode.GRID_3_COL)
                                 },
                                 shape = ShapeFull,
@@ -157,7 +157,7 @@ fun AllAlbumsScreen(
                             }
                             Surface(
                                 onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     galleryViewModel.setAlbumLayoutMode(AlbumLayoutMode.LIST)
                                 },
                                 shape = ShapeFull,
@@ -297,13 +297,17 @@ fun AllAlbumsScreen(
                     top = paddingValues.calculateTopPadding() + SpacingTokens.M,
                     bottom = paddingValues.calculateBottomPadding() + SpacingTokens.XXL
                 ),
-                verticalArrangement = Arrangement.spacedBy(SpacingTokens.L),
+                verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                    Arrangement.spacedBy(SpacingTokens.S)
+                } else {
+                    Arrangement.spacedBy(SpacingTokens.L)
+                },
                 horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
                 modifier = Modifier.fillMaxSize()
             ) {
             items(
                 items = allDisplayAlbums,
-                key = { "all_folder_${it.bucketName}" },
+                key = { "all_folder_${albumLayoutMode.name}_${it.bucketName}" },
                 span = {
                     when (albumLayoutMode) {
                         AlbumLayoutMode.GRID_2_COL -> GridItemSpan(6)
