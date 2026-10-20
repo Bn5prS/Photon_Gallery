@@ -51,6 +51,11 @@ class SmartSearchEngine(private val context: Context) {
 
     fun getModelDir(): File = modelDirFile
 
+    @Volatile
+    private var hasCheckedBundledAssets = false
+    @Volatile
+    private var bundledAssetsAvailable = false
+
     fun isModelDownloaded(): Boolean {
         if (!isSupported()) return false
         val textFile = File(modelDirFile, TEXT_MODEL_NAME)
@@ -63,7 +68,20 @@ class SmartSearchEngine(private val context: Context) {
                
         if (filesExist) return true
         
-        // Fallback to bundled assets
+        // Check once if models are bundled in assets. If not, never attempt asset copying again.
+        if (!hasCheckedBundledAssets) {
+            hasCheckedBundledAssets = true
+            bundledAssetsAvailable = try {
+                val assetList = context.assets.list("models") ?: emptyArray()
+                assetList.contains(TEXT_MODEL_NAME) && assetList.contains(VISION_MODEL_NAME)
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        if (!bundledAssetsAvailable) return false
+
+        // Fallback to bundled assets only if they exist in APK
         try {
             if (!modelDirFile.exists()) modelDirFile.mkdirs()
             
@@ -106,14 +124,16 @@ class SmartSearchEngine(private val context: Context) {
             this.tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
 
             // Initialize Text Session options
-            val textOptions = OrtSession.SessionOptions()
             val textFile = File(modelDirFile, TEXT_MODEL_NAME)
-            this.textSession = environment.createSession(textFile.absolutePath, textOptions)
+            OrtSession.SessionOptions().use { textOptions ->
+                this.textSession = environment.createSession(textFile.absolutePath, textOptions)
+            }
 
             // Initialize Vision Session options
-            val visionOptions = OrtSession.SessionOptions()
             val visionFile = File(modelDirFile, VISION_MODEL_NAME)
-            this.visionSession = environment.createSession(visionFile.absolutePath, visionOptions)
+            OrtSession.SessionOptions().use { visionOptions ->
+                this.visionSession = environment.createSession(visionFile.absolutePath, visionOptions)
+            }
 
             isLoaded = true
             Log.d(TAG, "SmartSearchEngine models loaded successfully.")
@@ -201,11 +221,22 @@ class SmartSearchEngine(private val context: Context) {
     }
 
     fun encodeImage(bitmap: Bitmap): FloatArray {
+        if (bitmap.isRecycled) return FloatArray(512)
         if (!isLoaded) loadModel()
         val currentEnv = env ?: throw IllegalStateException("Environment not loaded")
         val currentVisionSession = visionSession ?: throw IllegalStateException("Vision session not loaded")
 
-        val inputBitmap = prepareClipInputBitmap(bitmap)
+        // Ensure we have a software-backed bitmap to extract pixels without hardware buffer crashes
+        val softwareBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return FloatArray(512)
+        } else {
+            bitmap
+        }
+
+        val inputBitmap = prepareClipInputBitmap(softwareBitmap)
+        if (softwareBitmap != bitmap) {
+            softwareBitmap.recycle()
+        }
 
         // Preprocess pixels into RGB flat NCHW buffer
         val pixels = IntArray(224 * 224)

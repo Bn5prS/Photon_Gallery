@@ -123,3 +123,10 @@ gallery_database.db
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/
+
+# ============================================================
+# Local Analysis / Pull Artifacts
+# ============================================================
+/pulled_apks/
+/res/
+/screen.png

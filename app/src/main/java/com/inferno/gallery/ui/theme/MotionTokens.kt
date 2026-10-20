@@ -23,8 +23,14 @@ import androidx.compose.material3.MotionScheme
  */
 object MotionTokens {
 
-    /** The official expressive motion scheme — same one the theme installs. */
-    private val scheme = MotionScheme.expressive()
+    @Volatile
+    var isStandardMotion: Boolean = false
+
+    private val expressiveScheme = MotionScheme.expressive()
+    private val standardScheme = MotionScheme.standard()
+
+    val scheme: MotionScheme
+        get() = if (isStandardMotion) standardScheme else expressiveScheme
 
     // ── Official easing tokens ─────────────────────────────────────────
     // https://m3.material.io/styles/motion/easing-and-duration/tokens

@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import com.inferno.gallery.workers.OcrIndexWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -23,8 +26,9 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.compose.ui.graphics.toArgb
-import com.materialkolor.PaletteStyle
+import com.inferno.gallery.update.UpdateManager
+import com.inferno.gallery.update.UpdateState
+import com.inferno.gallery.workers.UpdateCheckWorker
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository.getInstance(application)
@@ -40,7 +44,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val autoClean = repository.autoCleanTrashEnabledFlow.first()
             val days = repository.autoCleanTrashDaysFlow.first()
             setupAutoCleanTrashWorker(autoClean, days)
+            // Pre-warm theme preferences so UI doesn't experience cold-start theme flips
+            repository.useAmoledBlackFlow.first()
+            repository.themeModeFlow.first()
+            repository.useMaterialYouFlow.first()
+            repository.appSeedColorFlow.first()
+            repository.motionStyleFlow.first()
+            repository.dateHeaderAlignmentFlow.first()
             _isLoading.value = false
+        }
+
+        viewModelScope.launch {
+            WorkManager.getInstance(application)
+                .getWorkInfosForUniqueWorkFlow("ModelDownloadWorker")
+                .collect { workInfos ->
+                    val workInfo = workInfos.firstOrNull()
+                    if (workInfo?.state == WorkInfo.State.SUCCEEDED) {
+                        repository.updateSmartSearchAutoIndex(true)
+                    }
+                }
         }
     }
 
@@ -148,15 +170,51 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val useAmoledBlack: StateFlow<Boolean> = repository.useAmoledBlackFlow.stateIn(
+    val colorPresetName: StateFlow<String> = repository.colorPresetNameFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "default_blue"
+    )
+
+    fun setColorPresetName(name: String) {
+        viewModelScope.launch {
+            repository.updateColorPresetName(name)
+        }
+    }
+
+    val useAmoledBlack: StateFlow<Boolean> = repository.useAmoledBlackFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
         initialValue = false
     )
 
     fun setUseAmoledBlack(use: Boolean) {
         viewModelScope.launch {
             repository.updateUseAmoledBlack(use)
+        }
+    }
+
+    val motionStyle: StateFlow<String> = repository.motionStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = "expressive"
+    )
+
+    fun setMotionStyle(style: String) {
+        viewModelScope.launch {
+            repository.updateMotionStyle(style)
+        }
+    }
+
+    val dateHeaderAlignment: StateFlow<String> = repository.dateHeaderAlignmentFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = "CENTER"
+    )
+
+    fun setDateHeaderAlignment(alignment: String) {
+        viewModelScope.launch {
+            repository.updateDateHeaderAlignment(alignment)
         }
     }
 
@@ -169,13 +227,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setAppSeedColor(color: Int) {
         viewModelScope.launch {
             repository.updateAppSeedColor(color)
-        }
-    }
-
-    fun setCuratedPalette(seedColor: Int) {
-        viewModelScope.launch {
-            repository.updateUseMaterialYou(false)
-            repository.updateAppSeedColor(seedColor)
         }
     }
 
@@ -215,84 +266,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // ── Advanced MaterialKolor Theming ──
-
-    val colorPresetName: StateFlow<String> = repository.colorPresetNameFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "Material You"
-    )
-
-    val secondaryColorOverride: StateFlow<Int> = repository.secondaryColorOverrideFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = -1
-    )
-
-    val tertiaryColorOverride: StateFlow<Int> = repository.tertiaryColorOverrideFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = -1
-    )
-
-    val contrastPreset: StateFlow<String> = repository.contrastPresetFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "Default"
-    )
 
     val animateThemeTransitions: StateFlow<Boolean> = repository.animateThemeTransitionsFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = true
     )
-
-    /** Applies a named preset atomically — seed, style, and contrast all update together. */
-    fun setColorPreset(preset: com.inferno.gallery.ui.theme.PhotonColorPreset) {
-        viewModelScope.launch {
-            repository.updateColorPresetName(preset.name)
-            // Clear per-slot overrides so the preset drives everything
-            repository.updateSecondaryColorOverride(-1)
-            repository.updateTertiaryColorOverride(-1)
-            repository.updateContrastPreset(preset.contrastPreset)
-            if (preset.seedColor != null) {
-                repository.updateAppSeedColor(preset.seedColor.toArgb())
-                repository.updateUseMaterialYou(false)
-            } else {
-                // "Material You" preset → re-enable wallpaper extraction
-                repository.updateUseMaterialYou(true)
-            }
-            repository.updateThemePaletteStyle(preset.style.name)
-        }
-    }
-
-    fun setSecondaryColorOverride(colorArgb: Int) {
-        viewModelScope.launch {
-            repository.updateSecondaryColorOverride(colorArgb)
-            repository.updateColorPresetName("Custom")
-        }
-    }
-
-    fun setTertiaryColorOverride(colorArgb: Int) {
-        viewModelScope.launch {
-            repository.updateTertiaryColorOverride(colorArgb)
-            repository.updateColorPresetName("Custom")
-        }
-    }
-
-    fun clearSecondaryColorOverride() {
-        viewModelScope.launch { repository.updateSecondaryColorOverride(-1) }
-    }
-
-    fun clearTertiaryColorOverride() {
-        viewModelScope.launch { repository.updateTertiaryColorOverride(-1) }
-    }
-
-    fun setContrastPreset(preset: String) {
-        viewModelScope.launch {
-            repository.updateContrastPreset(preset)
-        }
-    }
 
     fun setAnimateThemeTransitions(animate: Boolean) {
         viewModelScope.launch { repository.updateAnimateThemeTransitions(animate) }
@@ -319,6 +298,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setShowHiddenAlbums(show: Boolean) {
         viewModelScope.launch {
             repository.updateShowHiddenAlbums(show)
+        }
+    }
+
+    val showMemories: StateFlow<Boolean> = repository.showMemoriesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setShowMemories(show: Boolean) {
+        viewModelScope.launch {
+            repository.updateShowMemories(show)
         }
     }
 
@@ -448,12 +439,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication())
         while (true) {
             emit(searchEngine.isModelDownloaded())
-            kotlinx.coroutines.delay(2000)
+            delay(10000)
         }
-    }.stateIn(
+    }.flowOn(Dispatchers.IO).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(application).isModelDownloaded()
+        initialValue = false
     )
 
     val clipProgress = com.inferno.gallery.data.IndexingProgressManager.clipProgress
@@ -594,28 +585,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val cacheThumbnailsEnabled: StateFlow<Boolean> = repository.cacheThumbnailsEnabledFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
-
-    fun setCacheThumbnailsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.updateCacheThumbnailsEnabled(enabled)
-            if (enabled) {
-                val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.PrecacheThumbnailsWorker>()
-                    .build()
-                WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-                    "PrecacheThumbnailsWorker",
-                    ExistingWorkPolicy.REPLACE,
-                    request
-                )
-            } else {
-                WorkManager.getInstance(getApplication()).cancelUniqueWork("PrecacheThumbnailsWorker")
-            }
-        }
-    }
 
     val maxBrightnessEnabled: StateFlow<Boolean> = repository.maxBrightnessEnabledFlow.stateIn(
         scope = viewModelScope,
@@ -638,6 +607,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setViewerBlurEffect(enabled: Boolean) {
         viewModelScope.launch {
             repository.updateViewerBlurEffect(enabled)
+        }
+    }
+
+    val viewerDynamicColor: StateFlow<Boolean> = repository.viewerDynamicColorFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setViewerDynamicColor(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateViewerDynamicColor(enabled)
         }
     }
 
@@ -665,6 +646,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setOnboardingCompleted(completed: Boolean) {
         viewModelScope.launch {
             repository.updateOnboardingCompleted(completed)
+        }
+    }
+
+    val autoCheckUpdates: StateFlow<Boolean> = repository.autoCheckUpdatesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setAutoCheckUpdates(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateAutoCheckUpdates(enabled)
+            if (enabled) {
+                UpdateCheckWorker.schedulePeriodic(getApplication())
+            } else {
+                UpdateCheckWorker.cancel(getApplication())
+            }
+        }
+    }
+
+    val updateState: StateFlow<UpdateState> = UpdateManager.state
+
+    fun checkForUpdates() {
+        UpdateManager.checkForUpdates(viewModelScope, manual = true)
+    }
+
+    val appIcon: StateFlow<String> = repository.appIconFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "default"
+    )
+
+    fun setAppIcon(iconId: String) {
+        viewModelScope.launch {
+            repository.updateAppIcon(iconId)
         }
     }
 }

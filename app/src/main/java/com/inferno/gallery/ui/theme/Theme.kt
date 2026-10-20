@@ -3,143 +3,127 @@
 package com.inferno.gallery.ui.theme
 
 import android.os.Build
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import com.materialkolor.PaletteStyle
-import com.materialkolor.ktx.animateColorScheme
-import com.materialkolor.rememberDynamicColorScheme
-
-import androidx.compose.ui.graphics.compositeOver
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PhotonGalleryTheme — M3 Expressive entry point
+//  PhotonGalleryTheme — M3 Expressive Theme Entry Point
 //
-//  Powered by MaterialKolor (https://github.com/jordond/MaterialKolor):
-//    • rememberDynamicColorScheme() — full HCT tonal palette from any seed
-//    • animateColorScheme()        — spring-physics animated theme transitions
-//    • PaletteStyle enum           — TonalSpot, Neutral, Vibrant, Expressive…
-//    • isAmoled                    — pure-black AMOLED dark surfaces built-in
-//    • per-slot overrides          — independent secondary + tertiary seeds
-//    • Reduced contrast (-1.0)     — pastel/soft palette mode
-//
-//  Dynamic Color: wallpaper-derived seed on Android 12+, falling back to appSeedColor.
-//  All palette generation runs in-process via the HCT color space math.
+//  Clean Default Material 3 Palette + Native Android System Dynamic Color (Material You).
+//  • When dynamicColor is true (Android 12+): Uses native dynamicLightColorScheme / dynamicDarkColorScheme
+//  • When dynamicColor is false: Uses official DefaultLightColorScheme / DefaultDarkColorScheme
+//  • Supports pure OLED pitch-black when useAmoledBlack is enabled in dark mode.
+//  • Highly optimized for zero frame drops:
+//    - AMOLED toggling is instantaneous (0ms) so OLED pixels turn off immediately without
+//      recomposition thrashing.
+//    - Dynamic system colors, typography, photon colors, and harmonized colors are fully memoized.
 // ─────────────────────────────────────────────────────────────────────────────
 
-@android.annotation.SuppressLint("LocalContextGetResourceValueCall")
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PhotonGalleryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    colorPresetName: String = "default_blue",
     useAmoledBlack: Boolean = false,
-    appSeedColor: Int = 0xFF0A6EFF.toInt(),
-    paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
-    contrastLevel: Double = 0.0,
-    invertColors: Boolean = false,
     useSystemFont: Boolean = false,
-    secondaryColorOverride: Int = -1,   // -1 = auto
-    tertiaryColorOverride: Int = -1,    // -1 = auto
     animateTransitions: Boolean = true,
+    motionStyle: String = "expressive",
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
 
-
-
-    val systemSeedColor = remember(dynamicColor, context) {
-        if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            try {
-                val color = context.getColor(android.R.color.system_accent1_500)
-                if (color != 0) color else null
-            } catch (e: Throwable) {
-                null
+    // Memoize the target color scheme to prevent re-querying system resources on arbitrary recompositions
+    val targetColorScheme: ColorScheme = remember(darkTheme, dynamicColor, colorPresetName, useAmoledBlack, context) {
+        when {
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                if (darkTheme) {
+                    val systemDark = dynamicDarkColorScheme(context)
+                    if (useAmoledBlack) {
+                        systemDark.copy(
+                            background = Color.Black,
+                            surface = Color.Black,
+                            surfaceDim = Color.Black,
+                            surfaceContainerLowest = Color.Black,
+                            surfaceContainerLow = Color.Black,
+                        )
+                    } else {
+                        systemDark
+                    }
+                } else {
+                    dynamicLightColorScheme(context)
+                }
             }
-        } else null
-    }
-
-    var wallpaperSeedColor by remember { mutableStateOf<Int?>(null) }
-
-    LaunchedEffect(dynamicColor) {
-        if (dynamicColor && systemSeedColor == null) {
-            wallpaperSeedColor = WallpaperSeedExtractor.getWallpaperSeedColor(context)
+            else -> {
+                val palette = ThemePalettes.getById(colorPresetName)
+                palette.getScheme(darkTheme = darkTheme, useAmoledBlack = useAmoledBlack)
+            }
         }
     }
 
-    val seedArgb = if (dynamicColor) {
-        systemSeedColor ?: wallpaperSeedColor ?: appSeedColor
+    // Track darkTheme and colorPresetName to run animated scheme transitions when flipping between Light <-> Dark mode or switching palettes.
+    var previousDarkTheme by remember { mutableStateOf(darkTheme) }
+    var previousColorPreset by remember { mutableStateOf(colorPresetName) }
+    var previousDynamicColor by remember { mutableStateOf(dynamicColor) }
+    var shouldAnimateTheme by remember { mutableStateOf(false) }
+
+    if (darkTheme != previousDarkTheme || colorPresetName != previousColorPreset || dynamicColor != previousDynamicColor) {
+        previousDarkTheme = darkTheme
+        previousColorPreset = colorPresetName
+        previousDynamicColor = dynamicColor
+        shouldAnimateTheme = true
+    }
+
+    val resolvedScheme = if (animateTransitions && shouldAnimateTheme) {
+        animateColorScheme(
+            target = targetColorScheme,
+            onFinished = { shouldAnimateTheme = false }
+        )
     } else {
-        appSeedColor
+        targetColorScheme
     }
 
-    val schemeIsDark = if (invertColors) !darkTheme else darkTheme
-
-    // MaterialKolor generates the full M3 tonal palette from a seed + style + contrast.
-    val baseColorScheme = rememberDynamicColorScheme(
-        seedColor = Color(seedArgb),
-        isDark = schemeIsDark,
-        isAmoled = useAmoledBlack,
-        style = paletteStyle,
-        contrastLevel = contrastLevel,
-        secondary = if (secondaryColorOverride != -1) Color(secondaryColorOverride) else null,
-        tertiary = if (tertiaryColorOverride != -1) Color(tertiaryColorOverride) else null,
-    )
-
-    val colorScheme = when {
-        schemeIsDark && useAmoledBlack -> {
-            baseColorScheme.copy(
-                background = Color.Black,
-                surface = Color.Black,
-                surfaceDim = Color.Black,
-                surfaceBright = Color(0xFF141414),
-                surfaceContainerLowest = Color.Black,
-                surfaceContainerLow = Color(0xFF080808),
-                surfaceContainer = Color(0xFF0E0E0E),
-                surfaceContainerHigh = Color(0xFF141414),
-                surfaceContainerHighest = Color(0xFF1C1C1C),
-                surfaceVariant = Color(0xFF161616),
-            )
-        }
-        !schemeIsDark -> {
-            // Soften surfaceContainerLowest from stark #FFFFFF with a warm 40% canvas tint (60% pure white)
-            val softenedSheetWhite = baseColorScheme.surfaceContainer.copy(alpha = 0.40f).compositeOver(Color.White)
-            baseColorScheme.copy(
-                surfaceContainerLowest = softenedSheetWhite
-            )
-        }
-        else -> {
-            baseColorScheme
+    val photonColors = remember(useAmoledBlack, darkTheme) {
+        when {
+            useAmoledBlack && darkTheme -> AmoledPhotonColors
+            darkTheme -> DarkPhotonColors
+            else -> LightPhotonColors
         }
     }
 
-    // Optionally animate all color token changes using spring physics.
-    val resolvedScheme = if (animateTransitions) animateColorScheme(colorScheme) else colorScheme
+    val isStandardMotion = (motionStyle == "standard")
+    MotionTokens.isStandardMotion = isStandardMotion
+    val motionScheme = remember(isStandardMotion) {
+        if (isStandardMotion) MotionScheme.standard() else MotionScheme.expressive()
+    }
 
-    val photonColors = when {
-        useAmoledBlack && schemeIsDark -> AmoledPhotonColors
-        schemeIsDark -> DarkPhotonColors
-        else -> LightPhotonColors
+    // Memoize typography so font families and variation settings are never reallocated on color changes
+    val typography = remember(useSystemFont, darkTheme) {
+        appTypography(useSystemFont = useSystemFont, isDark = darkTheme)
     }
 
     MaterialExpressiveTheme(
         colorScheme = resolvedScheme,
         shapes = AppShapes,
-        typography = appTypography(useSystemFont = useSystemFont, isDark = darkTheme),
-        motionScheme = MotionScheme.expressive(),
+        typography = typography,
+        motionScheme = motionScheme,
     ) {
-        // Provide harmonized accent colors blended toward dynamic primary and extended semantic colors
         val harmonized = harmonizedColors()
         CompositionLocalProvider(
             LocalHarmonizedColors provides harmonized,
@@ -147,4 +131,49 @@ fun PhotonGalleryTheme(
             content = content,
         )
     }
+}
+
+/**
+ * Fast, lightweight Compose implementation of ColorScheme surface animation for Light/Dark mode transitions.
+ * Uses a crisp 150ms tween on active surface and accent tokens.
+ */
+@Composable
+private fun animateColorScheme(
+    target: ColorScheme,
+    animationSpec: AnimationSpec<Color> = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+    onFinished: () -> Unit = {},
+): ColorScheme {
+    val bg = animateColorAsState(
+        target.background,
+        animationSpec,
+        label = "bg",
+        finishedListener = { onFinished() }
+    ).value
+    val surface = animateColorAsState(target.surface, animationSpec, label = "surface").value
+    val surfaceDim = animateColorAsState(target.surfaceDim, animationSpec, label = "surfaceDim").value
+    val surfaceLow = animateColorAsState(target.surfaceContainerLow, animationSpec, label = "surfaceLow").value
+    val surfaceLowest = animateColorAsState(target.surfaceContainerLowest, animationSpec, label = "surfaceLowest").value
+    val surfaceContainer = animateColorAsState(target.surfaceContainer, animationSpec, label = "surfaceContainer").value
+    val surfaceHigh = animateColorAsState(target.surfaceContainerHigh, animationSpec, label = "surfaceHigh").value
+    val surfaceHighest = animateColorAsState(target.surfaceContainerHighest, animationSpec, label = "surfaceHighest").value
+
+    val primary = animateColorAsState(target.primary, animationSpec, label = "primary").value
+    val onPrimary = animateColorAsState(target.onPrimary, animationSpec, label = "onPrimary").value
+    val primaryContainer = animateColorAsState(target.primaryContainer, animationSpec, label = "primaryContainer").value
+    val onPrimaryContainer = animateColorAsState(target.onPrimaryContainer, animationSpec, label = "onPrimaryContainer").value
+
+    return target.copy(
+        background = bg,
+        surface = surface,
+        surfaceDim = surfaceDim,
+        surfaceContainerLow = surfaceLow,
+        surfaceContainerLowest = surfaceLowest,
+        surfaceContainer = surfaceContainer,
+        surfaceContainerHigh = surfaceHigh,
+        surfaceContainerHighest = surfaceHighest,
+        primary = primary,
+        onPrimary = onPrimary,
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = onPrimaryContainer,
+    )
 }

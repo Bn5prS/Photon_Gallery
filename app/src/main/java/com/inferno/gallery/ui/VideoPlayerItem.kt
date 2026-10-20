@@ -18,8 +18,30 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
 import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.theme.ShapeFull
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -80,14 +102,31 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
         builder.build().apply {
             setMediaItem(MediaItem.fromUri(uri))
             prepare()
-            playWhenReady = true
+            playWhenReady = false
         }
     }
 
-    var isPlaying by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableStateOf(0L) }
     var videoDuration by remember { mutableStateOf(0L) }
     var dragPosition by remember { mutableStateOf<Long?>(null) }
+
+    // Zoom & Pan state
+    val scale = remember { mutableFloatStateOf(1f) }
+    val offsetX = remember { mutableFloatStateOf(0f) }
+    val offsetY = remember { mutableFloatStateOf(0f) }
+    val animJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Reset zoom when switching pages
+    LaunchedEffect(isCurrentPage) {
+        if (!isCurrentPage) {
+            animJob.value?.cancel()
+            scale.floatValue = 1f
+            offsetX.floatValue = 0f
+            offsetY.floatValue = 0f
+        }
+    }
     var videoAspectRatio by remember(uri) {
         val vs = exoPlayer.videoSize
         val initialRatio = if (vs.width > 0 && vs.height > 0) {
@@ -183,17 +222,239 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLowest)
-            .clickable(
-                onClick = {
-                    onTap?.invoke()
-                },
-                indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            )
+            .background(androidx.compose.ui.graphics.Color.Black)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        onTap?.invoke()
+                    },
+                    onDoubleTap = { centroid ->
+                        animJob.value?.cancel()
+                        animJob.value = coroutineScope.launch {
+                            val composableW = size.width.toFloat()
+                            val composableH = size.height.toFloat()
+                            if (scale.floatValue > 1.05f) {
+                                // Zoom out back to 1x fit
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = scale.floatValue,
+                                        targetValue = 1f,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> scale.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetX.floatValue,
+                                        targetValue = 0f,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> offsetX.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetY.floatValue,
+                                        targetValue = 0f,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> offsetY.floatValue = v }
+                                }
+                            } else {
+                                // Zoom in to tapped point (2.8x)
+                                val targetScale = 2.8f
+                                val targetX = -(centroid.x - composableW / 2f) * (targetScale - 1)
+                                val targetY = -(centroid.y - composableH / 2f) * (targetScale - 1)
+                                val maxX = (composableW * (targetScale - 1)) / 2f
+                                val maxY = (composableH * (targetScale - 1)) / 2f
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = scale.floatValue,
+                                        targetValue = targetScale,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> scale.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetX.floatValue,
+                                        targetValue = targetX.coerceIn(-maxX, maxX),
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> offsetX.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetY.floatValue,
+                                        targetValue = targetY.coerceIn(-maxY, maxY),
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> offsetY.floatValue = v }
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val firstDown = awaitFirstDown(requireUnconsumed = false)
+
+                    var shouldStartZoomPan = scale.floatValue > 1f
+                    if (!shouldStartZoomPan) {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.changes.any { it.isConsumed }) break
+                            if (event.changes.size > 1) {
+                                shouldStartZoomPan = true
+                                break
+                            }
+                            if (!event.changes.any { it.pressed }) break
+                        }
+                    }
+
+                    if (shouldStartZoomPan) {
+                        var accumulatedZoom = 1f
+                        var accumulatedPan = Offset.Zero
+                        var pastTouchSlop = false
+                        val touchSlop = viewConfiguration.touchSlop
+                        val composableW = size.width.toFloat()
+                        val composableH = size.height.toFloat()
+                        val velocityTracker = VelocityTracker()
+                        var maxPointerCount = 0
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.changes.any { it.isConsumed }) break
+
+                            val pressedCount = event.changes.count { it.pressed }
+                            maxPointerCount = maxOf(maxPointerCount, pressedCount)
+
+                            if (pressedCount == 1) {
+                                event.changes.firstOrNull { it.pressed }
+                                    ?.let { velocityTracker.addPointerInputChange(it) }
+                            }
+
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+
+                            if (!pastTouchSlop) {
+                                accumulatedZoom *= zoomChange
+                                accumulatedPan += panChange
+                                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                                val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
+                                val panMotion = accumulatedPan.getDistance()
+                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                    pastTouchSlop = true
+                                }
+                            }
+
+                            if (pastTouchSlop && scale.floatValue <= 1.05f && maxPointerCount == 1) {
+                                break
+                            }
+
+                            if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero)) {
+                                val centroid = event.calculateCentroid(useCurrent = false)
+                                animJob.value?.cancel()
+                                val newScale = (scale.floatValue * zoomChange).coerceIn(0.85f, 6f)
+
+                                val maxX = (composableW * (newScale - 1)).coerceAtLeast(0f) / 2f
+                                val maxY = (composableH * (newScale - 1)).coerceAtLeast(0f) / 2f
+
+                                val focalX = centroid.x - composableW / 2f
+                                val focalY = centroid.y - composableH / 2f
+                                val effectiveZoom = if (scale.floatValue > 0f) newScale / scale.floatValue else 1f
+                                var newOffsetX = (offsetX.floatValue - focalX) * effectiveZoom + focalX + panChange.x
+                                var newOffsetY = (offsetY.floatValue - focalY) * effectiveZoom + focalY + panChange.y
+
+                                newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
+                                newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
+
+                                scale.floatValue = newScale
+                                offsetX.floatValue = newOffsetX
+                                offsetY.floatValue = newOffsetY
+
+                                if (newScale > 1f) {
+                                    val hittingLeft = newOffsetX >= maxX && panChange.x > 0
+                                    val hittingRight = newOffsetX <= -maxX && panChange.x < 0
+                                    if (!hittingLeft && !hittingRight) {
+                                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                    }
+                                }
+                            }
+
+                            if (!event.changes.any { it.pressed }) break
+                        }
+
+                        // Snap back if released below 1.05x
+                        if (scale.floatValue < 1.05f && scale.floatValue != 1f) {
+                            animJob.value?.cancel()
+                            animJob.value = coroutineScope.launch {
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = scale.floatValue,
+                                        targetValue = 1f,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> scale.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetX.floatValue,
+                                        targetValue = 0f,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> offsetX.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetY.floatValue,
+                                        targetValue = 0f,
+                                        animationSpec = MotionTokens.gentleSpring()
+                                    ) { v, _ -> offsetY.floatValue = v }
+                                }
+                            }
+                        } else if (pastTouchSlop && scale.floatValue >= 1.05f && maxPointerCount == 1) {
+                            // Fling momentum when panning while zoomed
+                            val velocity = velocityTracker.calculateVelocity()
+                            val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
+                            val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
+                            val flingFactor = 0.35f
+                            val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
+                                .coerceIn(-currentMaxX, currentMaxX)
+                            val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
+                                .coerceIn(-currentMaxY, currentMaxY)
+                            animJob.value?.cancel()
+                            animJob.value = coroutineScope.launch {
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetX.floatValue,
+                                        targetValue = targetFlingX,
+                                        initialVelocity = velocity.x,
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
+                                        )
+                                    ) { v, _ -> offsetX.floatValue = v }
+                                }
+                                launch {
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = offsetY.floatValue,
+                                        targetValue = targetFlingY,
+                                        initialVelocity = velocity.y,
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
+                                        )
+                                    ) { v, _ -> offsetY.floatValue = v }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .clipToBounds()
+                .graphicsLayer {
+                    scaleX = scale.floatValue
+                    scaleY = scale.floatValue
+                    translationX = offsetX.floatValue
+                    translationY = offsetY.floatValue
+                },
             contentAlignment = Alignment.Center
         ) {
             val playerModifier = if (videoAspectRatio != null && videoAspectRatio!! > 0f) {
@@ -206,8 +467,16 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
+                        useController = false
+                        controllerAutoShow = false
+                        hideController()
+                        // Completely eradicate the Media3 default controller view from the hierarchy
+                        // so legacy ghost controls (prev/rewind/ffwd/next/progress) never appear
+                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
+                            ctrl.visibility = android.view.View.GONE
+                            (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
+                        }
                         player = exoPlayer
-                        useController = false // Hide default legacy controller
                         resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                         try {
                             val method = javaClass.getMethod("setEnableComposeSurfaceSyncWorkaround", Boolean::class.javaPrimitiveType)
@@ -220,7 +489,16 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
                     }
                 },
                 update = { playerView ->
-                    playerView.player = exoPlayer
+                    playerView.useController = false
+                    playerView.controllerAutoShow = false
+                    playerView.hideController()
+                    playerView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
+                        ctrl.visibility = android.view.View.GONE
+                        (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
+                    }
+                    if (playerView.player != exoPlayer) {
+                        playerView.player = exoPlayer
+                    }
                 },
                 modifier = playerModifier
             )
@@ -247,7 +525,7 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
             exit = fadeOut(MotionTokens.gentleSpring()) + scaleOut(MotionTokens.gentleSpring()),
             modifier = Modifier.align(Alignment.Center)
         ) {
-            FilledTonalIconButton(
+            Surface(
                 onClick = {
                     if (isPlaying) {
                         exoPlayer.pause()
@@ -258,20 +536,24 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
                         exoPlayer.play()
                     }
                 },
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f), CircleShape)
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.45f),
+                contentColor = Color.White,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                modifier = Modifier.size(52.dp)
             ) {
-                Icon(
-                    imageVector = if (isPlaying) ImageVector.vectorResource(R.drawable.ic_ms_pause) else ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(28.dp)
-                )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(if (isPlaying) R.drawable.ic_ms_pause else R.drawable.ic_ms_play_arrow),
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
         }
 
-        // Bottom Controls Overlay
+        // Video playback controls overlay
         AnimatedVisibility(
             visible = showControls && isCurrentPage,
             enter = slideInVertically(
@@ -284,26 +566,32 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
             ) + fadeOut(MotionTokens.gentleSpring()),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 76.dp, start = 16.dp, end = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 68.dp, start = 16.dp, end = 16.dp)
         ) {
             Surface(
-                shape = com.inferno.gallery.ui.theme.ShapeLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
-                tonalElevation = 3.dp,
+                shape = ShapeFull,
+                color = Color.Black.copy(alpha = 0.50f),
+                contentColor = Color.White,
+                border = BorderStroke(
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.20f)
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(42.dp)
                     .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = formatTime(dragPosition ?: currentPosition),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White
                     )
 
                     Slider(
@@ -318,33 +606,33 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
                         },
                         valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
                         colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            thumbColor = Color.White,
+                            activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.25f),
                             activeTickColor = Color.Transparent,
                             inactiveTickColor = Color.Transparent
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 8.dp)
+                            .padding(horizontal = 6.dp)
                     )
 
                     Text(
                         text = formatTime(videoDuration),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White.copy(alpha = 0.75f)
                     )
                     
                     // Audio mute/unmute
                     IconButton(
                         onClick = { isMuted = !isMuted },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
                             contentDescription = if (isMuted) "Unmute" else "Mute",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }

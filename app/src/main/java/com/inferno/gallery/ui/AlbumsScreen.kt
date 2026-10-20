@@ -52,8 +52,10 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.inferno.gallery.data.AlbumLayoutMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -98,7 +100,10 @@ import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.SpacingTokens
+import com.inferno.gallery.ui.theme.AlbumShapes
+import com.inferno.gallery.ui.components.AlbumShapePickerSheet
 import com.inferno.gallery.ui.utils.pressScale
+import com.inferno.gallery.ui.theme.photonColors
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -125,52 +130,56 @@ fun AlbumsScreen(
     val userPinnedAlbums by viewModel.userPinnedAlbums.collectAsState()
     val userPinnedNames by viewModel.userPinnedFolderNames.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
+    val albumLayoutMode by viewModel.albumLayoutMode.collectAsState()
     val favoriteItems by viewModel.favoriteMedia.collectAsState()
     val trashCount by viewModel.trashCount.collectAsState()
     val vaultItemCount by viewModel.vaultItemCount.collectAsState()
+    val videoCount by viewModel.videoCount.collectAsState()
+    val screenshotsCount = remember(albums) {
+        albums.firstOrNull { it.bucketName.equals("Screenshots", ignoreCase = true) }?.itemCount
+            ?: albums.filter { it.bucketName.contains("Screenshot", ignoreCase = true) }.sumOf { it.itemCount }
+    }
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val placesClusters by viewModel.placesClusters.collectAsState()
     val mediaTypeBuckets by viewModel.mediaTypeBuckets.collectAsState()
     val customCovers by viewModel.albumCustomCovers.collectAsState()
+    val customShapes by viewModel.albumCustomShapes.collectAsState()
+    var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
-    // Merge system pinned + user pinned, cap at 6 visible
+    // Merge system pinned + user pinned, followed by unpinned device albums
     val systemPinned = remember(pinnedAlbums) {
         pinnedAlbums.filter {
-            it.bucketName != "Trash" && it.bucketName != "Favorites"
+            it.bucketName != "Trash" && it.bucketName != "Favorites" && it.bucketName != "All" && it.itemCount > 0
         }
     }
 
-    val allPinnedCards = remember(systemPinned, userPinnedAlbums) {
-        (systemPinned + userPinnedAlbums).distinctBy { it.bucketName }
+    val unpinnedAlbums = remember(albums, userPinnedNames) {
+        albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && it.itemCount > 0 }
     }
 
-    val maxVisible = 6
-    val visiblePinned = allPinnedCards.take(maxVisible)
-    val overflowPinned = allPinnedCards.drop(maxVisible)
-    var showOverflowMenu by remember { mutableStateOf(false) }
+    // Unified albums: system pinned ("Camera") + user pinned folders first, then all other albums
+    val allUnifiedAlbums = remember(systemPinned, userPinnedAlbums, unpinnedAlbums) {
+        (systemPinned + userPinnedAlbums + unpinnedAlbums)
+            .filter { it.itemCount > 0 }
+            .distinctBy { it.bucketName }
+    }
+
+    val maxVisible = when (albumLayoutMode) {
+        AlbumLayoutMode.GRID_2_COL -> 6
+        AlbumLayoutMode.GRID_3_COL -> 6
+        AlbumLayoutMode.LIST -> 6
+    }
+    val visibleAlbums = remember(allUnifiedAlbums, maxVisible) { allUnifiedAlbums.take(maxVisible) }
+    val hasMoreAlbums = allUnifiedAlbums.size > maxVisible
 
     // Persistent expand states for sections
-    val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
-    val moreExpanded by viewModel.albumsExpandedMore.collectAsState()
+    val albumsExpanded by viewModel.albumsExpandedPinned.collectAsState()
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
-    val unpinnedAlbums = remember(albums, userPinnedNames) {
-        albums.filter { it.bucketName != "Favorites" && it.bucketName !in userPinnedNames }
-    }
-
     val lazyGridState = rememberLazyGridState()
-
-    // Ensure top pinned section is always visible and not scrolled down when opening Albums
-    var hasPinnedLoaded by remember { mutableStateOf(false) }
-    LaunchedEffect(visiblePinned.isNotEmpty()) {
-        if (visiblePinned.isNotEmpty() && !hasPinnedLoaded) {
-            hasPinnedLoaded = true
-            lazyGridState.scrollToItem(0, 0)
-        }
-    }
 
     LaunchedEffect(Unit) {
         viewModel.setTopBarCollapsed(false)
@@ -190,22 +199,46 @@ fun AlbumsScreen(
         modifier = modifier.fillMaxSize()
     ) {
 
-        // ── 1. Pinned albums ──
-        if (visiblePinned.isNotEmpty()) {
-            item(key = "header_pinned", span = { GridItemSpan(maxLineSpan) }) {
+        // ── 1. Albums (Switchable 2-col cards, 3-col compact cards, or list view) ──
+        if (visibleAlbums.isNotEmpty()) {
+            item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeader(
-                    title = "Pinned albums",
-                    count = allPinnedCards.size,
-                    isExpanded = pinnedExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedPinned() }
+                    title = "Albums",
+                    count = allUnifiedAlbums.size,
+                    isExpanded = albumsExpanded,
+                    onToggle = { viewModel.toggleAlbumsExpandedPinned() },
+                    seeAllText = "Show all",
+                    onSeeAll = onNavigateToAllAlbums
                 )
             }
 
-            if (pinnedExpanded) {
+            if (albumsExpanded) {
+                // Layout switcher & sort control bar
+                item(key = "albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
+                    AlbumsControlBar(
+                        currentLayout = albumLayoutMode,
+                        onLayoutChange = { newLayout ->
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setAlbumLayoutMode(newLayout)
+                        },
+                        currentSort = albumSortOrder,
+                        onSortChange = { newSort ->
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setAlbumSortOrder(newSort)
+                        }
+                    )
+                }
+
                 items(
-                    items = visiblePinned,
-                    key = { "pinned_${it.bucketName}" },
-                    span = { GridItemSpan(4) }
+                    items = visibleAlbums,
+                    key = { "album_${it.bucketName}" },
+                    span = {
+                        when (albumLayoutMode) {
+                            AlbumLayoutMode.GRID_2_COL -> GridItemSpan(6)
+                            AlbumLayoutMode.GRID_3_COL -> GridItemSpan(4)
+                            AlbumLayoutMode.LIST -> GridItemSpan(12)
+                        }
+                    }
                 ) { bucket ->
                     val displayBucketName = when (bucket.bucketName) {
                         "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
@@ -214,217 +247,53 @@ fun AlbumsScreen(
                     val isUserPinned = bucket.bucketName in userPinnedNames
                     var showCardMenu by remember { mutableStateOf(false) }
 
+                    val albumShape = remember(customShapes, bucket.bucketName) {
+                        AlbumShapes.getShape(customShapes[bucket.bucketName])
+                    }
+
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        AlbumCard(
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            bucket = bucket.copy(bucketName = displayBucketName),
-                            showAlbumSize = showAlbumSize,
-                            onClick = { onAlbumClick(bucket.bucketName) },
-                            onLongPress = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                if (overflowPinned.isNotEmpty() && bucket == visiblePinned.last()) {
-                                    showOverflowMenu = true
-                                } else {
+                        if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                            AlbumListRow(
+                                bucket = bucket.copy(bucketName = displayBucketName),
+                                showAlbumSize = showAlbumSize,
+                                customShape = albumShape,
+                                isPinned = isUserPinned || bucket.bucketName == "Camera",
+                                onClick = { onAlbumClick(bucket.bucketName) },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     showCardMenu = true
                                 }
-                            }
-                        )
-
-                        // Context menu for pinned albums
-                        DropdownMenu(
-                            expanded = showCardMenu,
-                            onDismissRequest = { showCardMenu = false },
-                            shape = ShapeExtraLarge,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            if (isUserPinned) {
-                                DropdownMenuItem(
-                                    text = { Text("Unpin Album", style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_folder_off),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(IconSizeTokens.M)
-                                        )
-                                    },
-                                    onClick = {
-                                        showCardMenu = false
-                                        viewModel.togglePinAlbum(bucket.bucketName)
-                                    }
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text("Change Cover", style = MaterialTheme.typography.bodyMedium) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(IconSizeTokens.M)
-                                    )
-                                },
-                                onClick = {
-                                    showCardMenu = false
-                                    onChangeCover(bucket.bucketName)
+                            )
+                        } else {
+                            AlbumCard(
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                bucket = bucket.copy(bucketName = displayBucketName),
+                                showAlbumSize = showAlbumSize,
+                                customShape = albumShape,
+                                isCompact = (albumLayoutMode == AlbumLayoutMode.GRID_3_COL),
+                                onClick = { onAlbumClick(bucket.bucketName) },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showCardMenu = true
                                 }
                             )
-                            if (customCovers.containsKey(bucket.bucketName)) {
-                                DropdownMenuItem(
-                                    text = { Text("Reset to Default Cover", style = MaterialTheme.typography.bodyMedium) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(IconSizeTokens.M)
-                                        )
-                                    },
-                                    onClick = {
-                                        showCardMenu = false
-                                        onDeleteCover(bucket.bucketName)
-                                    }
-                                )
-                            }
                         }
 
-                        // Overflow menu for extra pinned albums
-                        if (overflowPinned.isNotEmpty() && bucket == visiblePinned.last()) {
-                            DropdownMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false },
-                                shape = ShapeExtraLarge,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ) {
-                                overflowPinned.forEach { overflowBucket ->
-                                    DropdownMenuItem(
-                                        text = { Text(overflowBucket.bucketName, style = MaterialTheme.typography.bodyMedium) },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_folder),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(IconSizeTokens.M)
-                                            )
-                                        },
-                                        trailingIcon = {
-                                            Surface(
-                                                shape = ShapeFull,
-                                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                modifier = Modifier.padding(start = SpacingTokens.XS)
-                                            ) {
-                                                Text(
-                                                    text = "${overflowBucket.itemCount}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 2.dp)
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            showOverflowMenu = false
-                                            onAlbumClick(overflowBucket.bucketName)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── 2. More albums (Horizontal Carousel) ──
-        if (unpinnedAlbums.isNotEmpty()) {
-            item(key = "header_more", span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = "More albums",
-                    count = unpinnedAlbums.size,
-                    isExpanded = moreExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedMore() },
-                    onSeeAll = onNavigateToAllAlbums
-                )
-            }
-
-            item(key = "content_more", span = { GridItemSpan(maxLineSpan) }) {
-                AnimatedVisibility(
-                    visible = moreExpanded,
-                    enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                    exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-                ) {
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-                    ) {
-                        items(
-                            items = unpinnedAlbums,
-                            key = { "folder_${it.bucketName}" }
-                        ) { bucket ->
-                            Box(modifier = Modifier.width(116.dp)) {
-                                var showPinMenu by remember { mutableStateOf(false) }
-                                AlbumCard(
-                                    sharedTransitionScope = sharedTransitionScope,
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    bucket = bucket,
-                                    showAlbumSize = showAlbumSize,
-                                    onClick = { onAlbumClick(bucket.bucketName) },
-                                    onLongPress = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        showPinMenu = true
-                                    }
-                                )
-                                DropdownMenu(
-                                    expanded = showPinMenu,
-                                    onDismissRequest = { showPinMenu = false },
-                                    shape = ShapeExtraLarge,
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {
-                                    val isPinned = bucket.bucketName in userPinnedNames
-                                    DropdownMenuItem(
-                                        text = { Text(if (isPinned) "Unpin Album" else "Pin Album", style = MaterialTheme.typography.bodyMedium) },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(if (isPinned) R.drawable.ic_ms_folder_off else R.drawable.ic_ms_folder),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(IconSizeTokens.M)
-                                            )
-                                        },
-                                        onClick = {
-                                            showPinMenu = false
-                                            viewModel.togglePinAlbum(bucket.bucketName)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Change Cover", style = MaterialTheme.typography.bodyMedium) },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(IconSizeTokens.M)
-                                            )
-                                        },
-                                        onClick = {
-                                            showPinMenu = false
-                                            onChangeCover(bucket.bucketName)
-                                        }
-                                    )
-                                    if (customCovers.containsKey(bucket.bucketName)) {
-                                        DropdownMenuItem(
-                                            text = { Text("Reset to Default Cover", style = MaterialTheme.typography.bodyMedium) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(IconSizeTokens.M)
-                                                )
-                                            },
-                                            onClick = {
-                                                showPinMenu = false
-                                                onDeleteCover(bucket.bucketName)
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        // Context menu for albums
+                        AlbumDropdownMenu(
+                            expanded = showCardMenu,
+                            onDismissRequest = { showCardMenu = false },
+                            bucketName = bucket.bucketName,
+                            isUserPinned = isUserPinned,
+                            hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                            hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                            onTogglePin = { viewModel.togglePinAlbum(bucket.bucketName) },
+                            onChangeCover = { onChangeCover(bucket.bucketName) },
+                            onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                            onChangeShape = { shapePickerBucket = bucket },
+                            onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                        )
                     }
                 }
             }
@@ -506,7 +375,7 @@ fun AlbumsScreen(
                                 Text(
                                     text = "Explore Map",
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                                    color = MaterialTheme.photonColors.onMediaScrim,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
                                         .padding(bottom = SpacingTokens.S)
@@ -563,12 +432,12 @@ fun AlbumsScreen(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
                                         contentDescription = null,
                                         modifier = Modifier.size(IconSizeTokens.S),
-                                        tint = MaterialTheme.colorScheme.surfaceContainerLowest
+                                        tint = MaterialTheme.photonColors.onMediaScrim
                                     )
                                     Text(
                                         text = cluster.bucketName,
                                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                                        color = MaterialTheme.photonColors.onMediaScrim,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
@@ -668,12 +537,12 @@ fun AlbumsScreen(
                                                 imageVector = ImageVector.vectorResource(iconRes),
                                                 contentDescription = null,
                                                 modifier = Modifier.size(IconSizeTokens.S),
-                                                tint = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.onSecondaryContainer
+                                                tint = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim else MaterialTheme.colorScheme.onSecondaryContainer
                                             )
                                             Text(
                                                 text = title,
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                color = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.onSecondaryContainer,
+                                                color = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim else MaterialTheme.colorScheme.onSecondaryContainer,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -681,7 +550,7 @@ fun AlbumsScreen(
                                         Text(
                                             text = "${mediaType.itemCount} items",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                            color = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                                             maxLines = 1
                                         )
                                     }
@@ -693,8 +562,8 @@ fun AlbumsScreen(
             }
         }
 
-        // ── 4. Collections Section (Segmented Block Grid) ──
-        item(key = "header_collections", span = { GridItemSpan(maxLineSpan) }) {
+        // ── 4. Utilities & Tools ──
+        item(key = "header_more_tools", span = { GridItemSpan(maxLineSpan) }) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -702,7 +571,7 @@ fun AlbumsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Collections",
+                    text = "Utilities & Tools",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     ),
@@ -711,27 +580,31 @@ fun AlbumsScreen(
             }
         }
 
-        item(key = "content_collections", span = { GridItemSpan(maxLineSpan) }) {
-            val collectionItems = remember(favoriteItems, trashCount, vaultItemCount) {
+        item(key = "row_utilities", span = { GridItemSpan(maxLineSpan) }) {
+            val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount) {
                 listOf(
-                    CollectionBlockItem(
-                        title = "Videos",
-                        iconRes = R.drawable.ic_ms_play_arrow,
-                        onClick = { onAlbumClick("Videos") }
-                    ),
-                    CollectionBlockItem(
-                        title = "Screenshots",
-                        iconRes = R.drawable.ic_ms_aspect_ratio,
-                        onClick = { onAlbumClick("Screenshots") }
-                    ),
-                    CollectionBlockItem(
+                    UtilityItem(
                         title = "Favorites",
                         iconRes = R.drawable.ic_ms_star,
+                        count = favoriteItems.size,
                         onClick = { onAlbumClick("Favorites") }
                     ),
-                    CollectionBlockItem(
+                    UtilityItem(
+                        title = "Screenshots",
+                        iconRes = R.drawable.ic_ms_aspect_ratio,
+                        count = screenshotsCount,
+                        onClick = { onAlbumClick("Screenshots") }
+                    ),
+                    UtilityItem(
+                        title = "Videos",
+                        iconRes = R.drawable.ic_ms_play_arrow,
+                        count = videoCount,
+                        onClick = { onAlbumClick("Videos") }
+                    ),
+                    UtilityItem(
                         title = "Locked",
                         iconRes = R.drawable.ic_ms_lock,
+                        count = vaultItemCount,
                         onClick = {
                             val activity = context as? androidx.fragment.app.FragmentActivity
                             if (activity != null) {
@@ -742,29 +615,164 @@ fun AlbumsScreen(
                                 )
                             }
                         }
+                    )
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = SpacingTokens.XS),
+                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+            ) {
+                utilities.forEachIndexed { index, item ->
+                    val cardShape = when (index) {
+                        0 -> RoundedCornerShape(
+                            topStart = 28.dp,
+                            bottomStart = 28.dp,
+                            topEnd = 12.dp,
+                            bottomEnd = 12.dp
+                        )
+                        utilities.lastIndex -> RoundedCornerShape(
+                            topStart = 12.dp,
+                            bottomStart = 12.dp,
+                            topEnd = 28.dp,
+                            bottomEnd = 28.dp
+                        )
+                        else -> ShapeMedium
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(0.88f)
+                            .pressScale(pressedScale = 0.96f)
+                            .clip(cardShape)
+                            .clickable { item.onClick() },
+                        shape = cardShape,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shadowElevation = 0.dp
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(
+                                        start = SpacingTokens.XS,
+                                        end = SpacingTokens.XS,
+                                        top = 22.dp,
+                                        bottom = SpacingTokens.S
+                                    ),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Bottom
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(40.dp),
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    shadowElevation = 0.dp
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(item.iconRes),
+                                            contentDescription = item.title,
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.size(IconSizeTokens.L)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(SpacingTokens.XS))
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            item.count?.let { count ->
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(
+                                            top = if (index == utilities.lastIndex) 8.dp else 6.dp,
+                                            end = if (index == utilities.lastIndex) 10.dp else 6.dp
+                                        )
+                                ) {
+                                    Text(
+                                        text = "$count",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "content_more_tools", span = { GridItemSpan(maxLineSpan) }) {
+            val toolItems = remember(trashCount) {
+                listOf(
+                    CollectionBlockItem(
+                        title = "Trash",
+                        iconRes = R.drawable.ic_ms_delete,
+                        count = trashCount,
+                        onClick = { onAlbumClick("Trash") }
                     ),
                     CollectionBlockItem(
                         title = "Clean Up",
                         iconRes = R.drawable.ic_ms_cleaning_services,
                         onClick = onNavigateToDuplicateCleaner
-                    ),
-                    CollectionBlockItem(
-                        title = "Trash",
-                        iconRes = R.drawable.ic_ms_delete,
-                        onClick = { onAlbumClick("Trash") }
                     )
                 )
             }
 
             SegmentedCollectionsGrid(
-                items = collectionItems,
+                items = toolItems,
                 modifier = Modifier.fillMaxWidth()
             )
         }
     }
+
+    val pickerBucket = shapePickerBucket
+    if (pickerBucket != null) {
+        AlbumShapePickerSheet(
+            bucket = pickerBucket,
+            currentShapeId = customShapes[pickerBucket.bucketName],
+            onShapeSelected = { shapeId ->
+                viewModel.setAlbumCustomShape(pickerBucket.bucketName, shapeId)
+            },
+            onResetShape = {
+                viewModel.removeAlbumCustomShape(pickerBucket.bucketName)
+            },
+            onDismissRequest = {
+                shapePickerBucket = null
+            }
+        )
+    }
 }
 
-// ── Shared M3 Expressive Album Card ──
+// ── Utility Hub Data Item ──
+
+data class UtilityItem(
+    val title: String,
+    @DrawableRes val iconRes: Int,
+    val count: Int? = null,
+    val onClick: () -> Unit
+)
+
+// ── Shared M3 Expressive Album Card (28dp Squircle, Single Thumbnail) ──
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -774,15 +782,26 @@ fun AlbumCard(
     bucket: AlbumBucket,
     modifier: Modifier = Modifier,
     showAlbumSize: Boolean = false,
+    customShape: Shape? = null,
+    isCompact: Boolean = false,
     onClick: () -> Unit = {},
     onLongPress: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val tileShape = customShape ?: if (isCompact) ShapeMedium else ShapeLarge
 
-    val request = remember<ImageRequest>(bucket.coverUri) {
+    var loadFailed by remember(bucket.coverUri) { mutableStateOf(false) }
+
+    val effectiveUri = if (loadFailed && bucket.defaultCoverUri != Uri.EMPTY) {
+        bucket.defaultCoverUri
+    } else {
+        bucket.coverUri
+    }
+
+    val request = remember<ImageRequest>(effectiveUri) {
         ImageRequest.Builder(context)
-            .data(bucket.coverUri)
-            .size(Size(360, 360))
+            .data(effectiveUri)
+            .size(Size(480, 480))
             .precision(Precision.EXACT)
             .crossfade(false)
             .memoryCachePolicy(CachePolicy.ENABLED)
@@ -790,76 +809,51 @@ fun AlbumCard(
             .build()
     }
 
-    val sharedBoundsModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-        with(sharedTransitionScope) {
-            Modifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(key = "album_${bucket.bucketName}"),
-                animatedVisibilityScope = animatedVisibilityScope,
-                enter = fadeIn(animationSpec = MotionTokens.snappySpring()),
-                exit = fadeOut(animationSpec = MotionTokens.snappySpring()),
-                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-                clipInOverlayDuringTransition = OverlayClip(ShapeLarge),
-                boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
-            )
-        }
-    } else {
-        Modifier
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .pressScale(pressedScale = 0.96f)
-            .clip(ShapeLarge)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongPress
-            ),
+            .pressScale(pressedScale = 0.96f),
         horizontalAlignment = Alignment.Start
     ) {
-        // Outer Card Container (M3 Expressive Carded Surface - Filled Tonal)
+        // Outer Card Container (M3 Expressive Album Tile Shape)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .then(sharedBoundsModifier),
-            shape = ShapeLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                .clip(tileShape)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongPress
+                ),
+            shape = tileShape,
+            color = MaterialTheme.colorScheme.surfaceContainer,
             shadowElevation = 0.dp
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(10.dp)
-            ) {
-                if (bucket.coverUris.size == 4) {
-                    CollageCover(
-                        uris = bucket.coverUris,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (bucket.coverUri == Uri.EMPTY) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (effectiveUri == Uri.EMPTY) {
                     val icon = if (bucket.bucketName == "Favorites") {
                         ImageVector.vectorResource(R.drawable.ic_ms_favorite)
                     } else {
                         ImageVector.vectorResource(R.drawable.ic_ms_photo_album)
                     }
                     Surface(
-                        shape = ShapeLarge,
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                        shape = tileShape,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Surface(
                                 shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
-                                modifier = Modifier.size(52.dp)
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.size(if (isCompact) 36.dp else 44.dp),
+                                shadowElevation = 0.dp
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = icon,
                                         contentDescription = bucket.bucketName,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(IconSizeTokens.L)
+                                        modifier = Modifier.size(if (isCompact) IconSizeTokens.S else IconSizeTokens.M)
                                     )
                                 }
                             }
@@ -870,31 +864,42 @@ fun AlbumCard(
                         model = request,
                         contentDescription = bucket.bucketName,
                         contentScale = ContentScale.Crop,
+                        onError = {
+                            if (!loadFailed && bucket.defaultCoverUri != Uri.EMPTY && bucket.defaultCoverUri != bucket.coverUri) {
+                                loadFailed = true
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(ShapeLarge)
+                            .clip(tileShape)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(SpacingTokens.S))
+        Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
-        // Title
+        // Title (Outfit Bold / SemiBold)
         Text(
             text = bucket.bucketName,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = if (isCompact) {
+                MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+            } else {
+                MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            },
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = SpacingTokens.XS)
         )
 
-        // Metadata: Count and Size
+        // Metadata: Count and Size (Plus Jakarta Sans)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = SpacingTokens.XS, vertical = 2.dp)
         ) {
             val countText = remember(bucket.itemCount) {
                 val formatted = NumberFormat.getInstance(Locale.US).format(bucket.itemCount)
@@ -903,103 +908,497 @@ fun AlbumCard(
 
             Text(
                 text = countText,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
 
             if (showAlbumSize && bucket.totalSizeBytes > 0) {
                 Text(
                     text = "•",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
                 Text(
                     text = Formatter.formatShortFileSize(context, bucket.totalSizeBytes),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1
                 )
             }
         }
     }
 }
 
-// ── 2x2 Collage Cover (Carded 4-thumbnail grid) ──
+// ── Shared M3 Expressive Album List Row (Full-width list item) ──
 
 @Composable
-fun CollageCover(
-    uris: List<Uri>,
-    modifier: Modifier = Modifier
+fun AlbumListRow(
+    bucket: AlbumBucket,
+    modifier: Modifier = Modifier,
+    showAlbumSize: Boolean = false,
+    customShape: Shape? = null,
+    isPinned: Boolean = false,
+    onClick: () -> Unit = {},
+    onLongPress: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val requests = remember(uris) {
-        uris.map { uri ->
-            ImageRequest.Builder(context)
-                .data(uri)
-                .size(180, 180)
-                .precision(Precision.EXACT)
-                .crossfade(false)
-                .memoryCachePolicy(CachePolicy.ENABLED)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .build()
-        }
+    val tileShape = customShape ?: ShapeMedium
+
+    var loadFailed by remember(bucket.coverUri) { mutableStateOf(false) }
+
+    val effectiveUri = if (loadFailed && bucket.defaultCoverUri != Uri.EMPTY) {
+        bucket.defaultCoverUri
+    } else {
+        bucket.coverUri
     }
 
-    Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+    val request = remember<ImageRequest>(effectiveUri) {
+        ImageRequest.Builder(context)
+            .data(effectiveUri)
+            .size(Size(200, 200))
+            .precision(Precision.EXACT)
+            .crossfade(false)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
+
+    Surface(
+        onClick = onClick,
+        shape = ShapeLarge,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .pressScale(pressedScale = 0.98f)
+            .clip(ShapeLarge)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            )
     ) {
         Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .fillMaxWidth()
+                .padding(SpacingTokens.S),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = requests.getOrNull(0),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+            // Leading square thumbnail (56x56dp)
+            Surface(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(ShapeLarge)
-            )
-            AsyncImage(
-                model = requests.getOrNull(1),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(ShapeLarge)
+                    .size(56.dp)
+                    .clip(tileShape),
+                shape = tileShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                if (effectiveUri == Uri.EMPTY) {
+                    val icon = if (bucket.bucketName == "Favorites") {
+                        ImageVector.vectorResource(R.drawable.ic_ms_favorite)
+                    } else {
+                        ImageVector.vectorResource(R.drawable.ic_ms_photo_album)
+                    }
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = bucket.bucketName,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(IconSizeTokens.M)
+                        )
+                    }
+                } else {
+                    AsyncImage(
+                        model = request,
+                        contentDescription = bucket.bucketName,
+                        contentScale = ContentScale.Crop,
+                        onError = {
+                            if (!loadFailed && bucket.defaultCoverUri != Uri.EMPTY && bucket.defaultCoverUri != bucket.coverUri) {
+                                loadFailed = true
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(tileShape)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+            // Metadata text column
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                ) {
+                    Text(
+                        text = bucket.bucketName,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isPinned) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                            contentDescription = "Pinned",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(IconSizeTokens.S)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                ) {
+                    val countText = remember(bucket.itemCount) {
+                        val formatted = NumberFormat.getInstance(Locale.US).format(bucket.itemCount)
+                        if (bucket.itemCount == 1) "1 item" else "$formatted items"
+                    }
+                    Text(
+                        text = countText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    if (showAlbumSize && bucket.totalSizeBytes > 0) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            text = Formatter.formatShortFileSize(context, bucket.totalSizeBytes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(SpacingTokens.S))
+
+            // Trailing Count Pill Badge
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Text(
+                    text = "${bucket.itemCount}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+// ── Reusable Album Context Menu ──
+
+@Composable
+fun AlbumDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    bucketName: String,
+    isUserPinned: Boolean,
+    hasCustomCover: Boolean,
+    hasCustomShape: Boolean,
+    onTogglePin: () -> Unit,
+    onChangeCover: () -> Unit,
+    onDeleteCover: () -> Unit,
+    onChangeShape: () -> Unit,
+    onResetShape: () -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        shape = ShapeExtraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        if (bucketName != "All" && bucketName != "Camera") {
+            DropdownMenuItem(
+                text = { Text(if (isUserPinned) "Unpin Album" else "Pin Album", style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(if (isUserPinned) R.drawable.ic_ms_folder_off else R.drawable.ic_ms_folder),
+                        contentDescription = null,
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onTogglePin()
+                }
             )
         }
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            AsyncImage(
-                model = requests.getOrNull(2),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(ShapeLarge)
+        DropdownMenuItem(
+            text = { Text("Change Cover", style = MaterialTheme.typography.bodyMedium) },
+            leadingIcon = {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                    contentDescription = null,
+                    modifier = Modifier.size(IconSizeTokens.M)
+                )
+            },
+            onClick = {
+                onDismissRequest()
+                onChangeCover()
+            }
+        )
+        if (hasCustomCover) {
+            DropdownMenuItem(
+                text = { Text("Reset to Default Cover", style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        contentDescription = null,
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onDeleteCover()
+                }
             )
-            AsyncImage(
-                model = requests.getOrNull(3),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+        }
+        DropdownMenuItem(
+            text = { Text("Change Shape", style = MaterialTheme.typography.bodyMedium) },
+            leadingIcon = {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                    contentDescription = null,
+                    modifier = Modifier.size(IconSizeTokens.M)
+                )
+            },
+            onClick = {
+                onDismissRequest()
+                onChangeShape()
+            }
+        )
+        if (hasCustomShape) {
+            DropdownMenuItem(
+                text = { Text("Reset to Default Shape", style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                        contentDescription = null,
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onResetShape()
+                }
+            )
+        }
+    }
+}
+
+// ── Albums Control Bar (Layout Switcher & Custom Sorting) ──
+
+@Composable
+fun AlbumsControlBar(
+    currentLayout: AlbumLayoutMode,
+    onLayoutChange: (AlbumLayoutMode) -> Unit,
+    currentSort: SortOrder,
+    onSortChange: (SortOrder) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    val sortLabel = when (currentSort) {
+        SortOrder.NameAsc -> "Name (A-Z)"
+        SortOrder.NameDesc -> "Name (Z-A)"
+        SortOrder.NewToOld -> "Date (Newest)"
+        SortOrder.OldToNew -> "Date (Oldest)"
+        SortOrder.CountDesc -> "Count (Most)"
+        SortOrder.CountAsc -> "Count (Least)"
+        SortOrder.BigToSmall -> "Size (Largest)"
+        SortOrder.SmallToBig -> "Size (Smallest)"
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = SpacingTokens.XS),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Sort Dropdown Pill Button
+        Box {
+            Surface(
+                onClick = { showSortMenu = true },
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(ShapeLarge)
+                    .height(34.dp)
+                    .pressScale(0.96f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = 0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
+                        contentDescription = "Sort Albums",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(IconSizeTokens.S)
+                    )
+                    Text(
+                        text = sortLabel,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_keyboard_arrow_down),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = showSortMenu,
+                onDismissRequest = { showSortMenu = false },
+                shape = ShapeExtraLarge,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                // Name Sorts
+                DropdownMenuItem(
+                    text = { Text("Name (A to Z)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.NameAsc, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.NameAsc)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Name (Z to A)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.NameDesc, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.NameDesc)
+                        showSortMenu = false
+                    }
+                )
+                // Date Modified Sorts
+                DropdownMenuItem(
+                    text = { Text("Date Modified (Newest)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.NewToOld, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.NewToOld)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Date Modified (Oldest)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.OldToNew, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.OldToNew)
+                        showSortMenu = false
+                    }
+                )
+                // Item Count Sorts
+                DropdownMenuItem(
+                    text = { Text("Item Count (Most items)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.CountDesc, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.CountDesc)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Item Count (Least items)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.CountAsc, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.CountAsc)
+                        showSortMenu = false
+                    }
+                )
+            }
+        }
+
+        // Layout Toggle Pill Group (2-col, 3-col, List)
+        Surface(
+            shape = ShapeFull,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.height(34.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 2-Col Button
+                LayoutPillOption(
+                    isSelected = currentLayout == AlbumLayoutMode.GRID_2_COL,
+                    iconRes = R.drawable.ic_ms_grid_view,
+                    description = "2 Columns",
+                    onClick = { onLayoutChange(AlbumLayoutMode.GRID_2_COL) }
+                )
+
+                // 3-Col Button
+                LayoutPillOption(
+                    isSelected = currentLayout == AlbumLayoutMode.GRID_3_COL,
+                    iconRes = R.drawable.ic_ms_dashboard,
+                    description = "3 Columns Compact",
+                    onClick = { onLayoutChange(AlbumLayoutMode.GRID_3_COL) }
+                )
+
+                // List Button
+                LayoutPillOption(
+                    isSelected = currentLayout == AlbumLayoutMode.LIST,
+                    iconRes = R.drawable.ic_ms_list,
+                    description = "List View",
+                    onClick = { onLayoutChange(AlbumLayoutMode.LIST) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LayoutPillOption(
+    isSelected: Boolean,
+    @DrawableRes iconRes: Int,
+    description: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = ShapeFull,
+        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(30.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                imageVector = ImageVector.vectorResource(iconRes),
+                contentDescription = description,
+                modifier = Modifier.size(IconSizeTokens.S)
             )
         }
     }
@@ -1010,6 +1409,7 @@ fun CollageCover(
 data class CollectionBlockItem(
     val title: String,
     @DrawableRes val iconRes: Int,
+    val count: Int? = null,
     val onClick: () -> Unit
 )
 
@@ -1060,8 +1460,7 @@ fun SegmentedCollectionsGrid(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(item.iconRes),
@@ -1069,6 +1468,7 @@ fun SegmentedCollectionsGrid(
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(IconSizeTokens.L)
                             )
+                            Spacer(modifier = Modifier.width(14.dp))
                             Text(
                                 text = item.title,
                                 style = MaterialTheme.typography.bodyLarge.copy(
@@ -1076,8 +1476,22 @@ fun SegmentedCollectionsGrid(
                                 ),
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
+                            item.count?.let { count ->
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                ) {
+                                    Text(
+                                        text = "$count",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1097,6 +1511,7 @@ fun SectionHeader(
     count: Int? = null,
     isExpanded: Boolean = true,
     isCollapsible: Boolean = true,
+    seeAllText: String = "See all",
     onToggle: () -> Unit = {},
     onSeeAll: (() -> Unit)? = null
 ) {
@@ -1108,13 +1523,12 @@ fun SectionHeader(
             .padding(top = SpacingTokens.M, bottom = SpacingTokens.XS)
             .then(
                 if (isCollapsible) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onToggle()
-                    }
+                    Modifier
+                        .clip(ShapeMedium)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onToggle()
+                        }
                 } else Modifier
             ),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1186,7 +1600,7 @@ fun SectionHeader(
                 modifier = Modifier.height(32.dp)
             ) {
                 Text(
-                    text = "See all",
+                    text = seeAllText,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
                 )
             }

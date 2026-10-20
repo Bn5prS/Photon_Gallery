@@ -8,7 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -72,18 +72,29 @@ fun ExpressiveScrollBar(
 
     val expandedIndicatorWidth = (indicatorExpandedWidth + indicatorExpandedWidthBoost).coerceAtLeast(thickness)
 
-    BoxWithConstraints(
+    val totalWidth = expandedIndicatorWidth + paddingEnd
+    var trackHeightPx by remember { mutableFloatStateOf(0f) }
+
+    Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(if (canScroll) expandedIndicatorWidth + paddingEnd else 0.dp)
+            .width(totalWidth)
+            .onSizeChanged { size ->
+                trackHeightPx = size.height.toFloat()
+            }
+            .graphicsLayer {
+                alpha = if (canScroll) 1f else 0f
+            }
     ) {
-        if (!canScroll) return@BoxWithConstraints
+        var isPressed by remember(listState, gridState) { mutableStateOf(false) }
+        var isDragging by remember(listState, gridState) { mutableStateOf(false) }
+        val isInteracting = isPressed || isDragging
+
+        if (!canScroll && !isInteracting) return@Box
 
         val coroutineScope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
 
-        var isPressed by remember(listState, gridState) { mutableStateOf(false) }
-        var isDragging by remember(listState, gridState) { mutableStateOf(false) }
         var dragProgress by remember(listState, gridState) { mutableFloatStateOf(-1f) }
         var pendingScrollIndex by remember(listState, gridState) { mutableIntStateOf(-1) }
         var retainedDragLabel by remember(listState, gridState) { mutableStateOf<String?>(null) }
@@ -91,7 +102,6 @@ fun ExpressiveScrollBar(
         val primaryColor = MaterialTheme.colorScheme.primary
         val innerIcon = ImageVector.vectorResource(R.drawable.ic_ms_unfold_more)
 
-        val isInteracting = isPressed || isDragging
         val isScrolling = listState?.isScrollInProgress == true || gridState?.isScrollInProgress == true
         var isScrollbarVisible by remember(listState, gridState) { mutableStateOf(false) }
 
@@ -129,14 +139,19 @@ fun ExpressiveScrollBar(
         )
 
         val density = LocalDensity.current
-        val constraintsMaxWidth = maxWidth
-        val constraintsMaxHeight = maxHeight
+        val constraintsMaxWidth = totalWidth
 
-        val availableHeight = with(density) { constraintsMaxHeight.toPx() }
+        val availableHeight = trackHeightPx
         val handleHeightPx = with(density) { animatedHeight.toPx() }
         val scrollableHeight = (availableHeight - handleHeightPx).coerceAtLeast(1f)
 
-        // ── Direct O(1) Zero-Allocation Scroll Progress (Passive & VSYNC-aligned) ──
+        var maxVisibleGridSpan by remember(gridState) { mutableIntStateOf(1) }
+        var lastGridTrackHeight by remember(gridState) { mutableFloatStateOf(0f) }
+
+        var maxVisibleListSpan by remember(listState) { mutableIntStateOf(1) }
+        var lastListTrackHeight by remember(listState) { mutableFloatStateOf(0f) }
+
+        // ── Direct O(1) Zero-Allocation Continuous Scroll Progress (Passive & VSYNC-aligned) ──
         fun getEffectiveProgress(): Float {
             if (dragProgress >= 0f) return dragProgress
 
@@ -144,37 +159,70 @@ fun ExpressiveScrollBar(
                 val layoutInfo = gridState.layoutInfo
                 val totalItems = layoutInfo.totalItemsCount
                 if (totalItems <= 1) return 0f
+                if (!gridState.canScrollBackward) return 0f
                 if (!gridState.canScrollForward) return 1f
-                val firstIndex = gridState.firstVisibleItemIndex
+
+                val visibleItems = layoutInfo.visibleItemsInfo
+                if (visibleItems.isEmpty()) return 0f
+
+                val firstItem = visibleItems.first()
+                val lastItem = visibleItems.last()
+                val currentSpan = (lastItem.index - firstItem.index + 1).coerceAtLeast(1)
+
+                if (trackHeightPx != lastGridTrackHeight) {
+                    lastGridTrackHeight = trackHeightPx
+                    maxVisibleGridSpan = currentSpan
+                } else if (currentSpan > maxVisibleGridSpan) {
+                    maxVisibleGridSpan = currentSpan
+                }
+
+                val firstY = firstItem.offset.y
+                var itemsInTopRow = 0
+                for (item in visibleItems) {
+                    if (kotlin.math.abs(item.offset.y - firstY) <= 4) {
+                        itemsInTopRow++
+                    } else {
+                        break
+                    }
+                }
+                val rowSpan = itemsInTopRow.coerceAtLeast(1)
+                val topRowHeight = firstItem.size.height.toFloat().coerceAtLeast(1f)
                 val firstOffset = gridState.firstVisibleItemScrollOffset
-                if (firstIndex == 0 && firstOffset == 0) return 0f
+                val rowOffsetFraction = (firstOffset.toFloat() / topRowHeight).coerceIn(0f, 1f)
 
-                val maxSpan = layoutInfo.maxSpan.coerceAtLeast(1)
-                val totalRows = ((totalItems + maxSpan - 1) / maxSpan).coerceAtLeast(1)
-                val firstVisible = layoutInfo.visibleItemsInfo.firstOrNull()
-                val rowHeight = firstVisible?.size?.height?.toFloat()?.coerceAtLeast(1f) ?: 1f
-                val viewportHeight = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat()
-                val visibleRows = (viewportHeight / rowHeight).coerceAtLeast(1f)
-                val maxScrollableRows = (totalRows.toFloat() - visibleRows).coerceAtLeast(1f)
+                val continuousIndex = gridState.firstVisibleItemIndex.toFloat() + (rowOffsetFraction * rowSpan.toFloat())
+                val maxScrollable = (totalItems - maxVisibleGridSpan).coerceAtLeast(1).toFloat()
 
-                val currentRow = (firstIndex / maxSpan).toFloat()
-                val rowOffsetFraction = (firstOffset.toFloat() / rowHeight).coerceIn(0f, 1f)
-                return ((currentRow + rowOffsetFraction) / maxScrollableRows).coerceIn(0f, 1f)
+                return (continuousIndex / maxScrollable).coerceIn(0f, 1f)
             } else if (listState != null) {
                 val layoutInfo = listState.layoutInfo
                 val totalItems = layoutInfo.totalItemsCount
                 if (totalItems <= 1) return 0f
+                if (!listState.canScrollBackward) return 0f
                 if (!listState.canScrollForward) return 1f
-                val firstIndex = listState.firstVisibleItemIndex
-                val firstOffset = listState.firstVisibleItemScrollOffset
-                if (firstIndex == 0 && firstOffset == 0) return 0f
 
-                val firstVisible = layoutInfo.visibleItemsInfo.firstOrNull()
-                val itemHeight = firstVisible?.size?.toFloat()?.coerceAtLeast(1f) ?: 1f
+                val visibleItems = layoutInfo.visibleItemsInfo
+                if (visibleItems.isEmpty()) return 0f
+
+                val firstItem = visibleItems.first()
+                val lastItem = visibleItems.last()
+                val currentSpan = (lastItem.index - firstItem.index + 1).coerceAtLeast(1)
+
+                if (trackHeightPx != lastListTrackHeight) {
+                    lastListTrackHeight = trackHeightPx
+                    maxVisibleListSpan = currentSpan
+                } else if (currentSpan > maxVisibleListSpan) {
+                    maxVisibleListSpan = currentSpan
+                }
+
+                val itemHeight = firstItem.size.toFloat().coerceAtLeast(1f)
+                val firstOffset = listState.firstVisibleItemScrollOffset
                 val offsetFraction = (firstOffset.toFloat() / itemHeight).coerceIn(0f, 1f)
-                val effectiveIndex = firstIndex.toFloat() + offsetFraction
-                val maxIndex = (totalItems - 1).coerceAtLeast(1).toFloat()
-                return (effectiveIndex / maxIndex).coerceIn(0f, 1f)
+
+                val continuousIndex = listState.firstVisibleItemIndex.toFloat() + offsetFraction
+                val maxScrollable = (totalItems - maxVisibleListSpan).coerceAtLeast(1).toFloat()
+
+                return (continuousIndex / maxScrollable).coerceIn(0f, 1f)
             }
             return 0f
         }

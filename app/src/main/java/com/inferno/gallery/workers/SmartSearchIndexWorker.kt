@@ -148,7 +148,9 @@ class SmartSearchIndexWorker(
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
             if (rotated != bitmap) bitmap.recycle()
             rotated
-        } catch (e: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
             Log.w(TAG, "Failed to apply EXIF orientation: ${e.message}")
             bitmap
         }
@@ -183,6 +185,11 @@ class SmartSearchIndexWorker(
             input = openInputStream(context, filePath, uriString)
             val decoded = BitmapFactory.decodeStream(input, null, decodeOptions)
             return decoded?.let { applyExifOrientation(it, orientation) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.w(TAG, "decodeDownsampledBitmap failed for $uriString: ${e.message}")
+            return null
         } finally {
             try {
                 input?.close()
@@ -194,6 +201,9 @@ class SmartSearchIndexWorker(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun doWork(): Result {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+        } catch (_: Throwable) {}
         com.inferno.gallery.data.IndexingProgressManager.updateClipProgress(
             isIndexing = true,
             progress = 0,
@@ -324,7 +334,9 @@ class SmartSearchIndexWorker(
                                     )
                                 )
                             }
-                        } catch (e: Exception) {
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
                             Log.e(TAG, "Failed loading $mediaId: ${e.message}. Marking as transient failure.")
                             val fallback = entity
                             if (fallback != null) {
@@ -361,7 +373,9 @@ class SmartSearchIndexWorker(
                                     size = loaded.size
                                 )
                             )
-                        } catch (e: Exception) {
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
                             Log.e(TAG, "Stage2 embedding failed for ${loaded.name}: ${e.message}")
                         } finally {
                             loaded.bitmap.recycle()

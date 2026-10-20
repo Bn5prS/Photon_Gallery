@@ -157,7 +157,7 @@ fun PlacesListScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // ── Hero Interactive Map Banner ──
+                // ── Interactive Map Banner Card ──
                 item(span = { GridItemSpan(2) }) {
                     Surface(
                         onClick = onNavigateToMap,

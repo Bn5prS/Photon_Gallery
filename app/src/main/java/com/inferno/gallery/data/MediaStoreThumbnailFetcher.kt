@@ -1,6 +1,5 @@
 package com.inferno.gallery.data
 
-import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,42 +14,26 @@ import coil3.fetch.Fetcher
 import coil3.fetch.ImageFetchResult
 import coil3.request.Options
 import coil3.size.Dimension
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import okio.buffer
-import okio.source
-import java.io.File
-import java.io.FileOutputStream
-import java.util.concurrent.atomic.AtomicBoolean
 
 private val mediaProviderSemaphore = Semaphore(
-    Runtime.getRuntime().availableProcessors().coerceIn(6, 12)
-) // Concurrent system ContentResolver.loadThumbnail IPCs — IPC-bound, scaled to available CPU cores
+    Runtime.getRuntime().availableProcessors().coerceIn(4, 6)
+) // Balanced concurrent ContentResolver.loadThumbnail IPCs — leaves CPU headroom for UI 120Hz flings
 private val videoDecodeSemaphore = Semaphore(2)   // Max 2 concurrent video frame extractions (CPU/codec-bound)
-private val diskCacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
 /**
- * A high-performance custom Coil Fetcher that retrieves thumbnails with a 2-tier caching system:
- * 1. App-local fast WebP disk cache (`thumb_cache`) to completely eliminate redundant system Binder IPCs.
- * 2. MediaStore ContentResolver.loadThumbnail with strict concurrency control (Semaphore) to avoid
- *    saturating system MediaProvider Binder thread pools during rapid scrolling.
+ * A high-performance custom Coil Fetcher that retrieves thumbnails via MediaStore
+ * ContentResolver.loadThumbnail with strict concurrency control and immediate CancellationSignal
+ * to abort off-screen decodes during high-velocity flings.
  */
 class MediaStoreThumbnailFetcher(
     private val uri: Uri,
     private val options: Options,
-    private val context: Context,
-    private val cacheEnabled: Boolean = true
+    private val context: Context
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? = withContext(Dispatchers.IO) {
@@ -63,86 +46,83 @@ class MediaStoreThumbnailFetcher(
         val targetDim = maxOf(reqWidth ?: 256, reqHeight ?: 256).coerceIn(128, 512)
         val targetSize = Size(targetDim, targetDim)
 
-        val uriId = try {
-            ContentUris.parseId(uri).toString()
-        } catch (_: Exception) {
-            uri.lastPathSegment ?: uri.hashCode().toString()
-        }
+        coroutineContext.ensureActive()
 
-        val cacheDir = File(context.cacheDir, "thumb_cache")
-        val cacheKey = "${if (isVideo) "v" else "i"}_${uriId}_${targetDim}.webp"
-        val cacheFile = File(cacheDir, cacheKey)
-
-        // Tier 1: Check fast local file cache (no IPC, <1ms load)
-        if (cacheEnabled && cacheFile.exists() && cacheFile.length() > 0) {
+        val signal = android.os.CancellationSignal()
+        val job = coroutineContext[kotlinx.coroutines.Job]
+        val completionHandle = job?.invokeOnCompletion {
             try {
-                val decodeOpts = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.HARDWARE
-                }
-                val cachedBitmap = BitmapFactory.decodeFile(cacheFile.absolutePath, decodeOpts)
-                if (cachedBitmap != null) {
-                    return@withContext ImageFetchResult(
-                        image = cachedBitmap.asImage(),
-                        isSampled = true,
-                        dataSource = DataSource.DISK
-                    )
-                }
-            } catch (e: Exception) {
-                cacheFile.delete()
-            }
+                signal.cancel()
+            } catch (_: Throwable) {}
         }
 
-        coroutineContext.ensureActive()
-
-        // Tier 2: Fetch from system MediaProvider / MediaMetadataRetriever under concurrency limit
+        // Fetch from system MediaProvider / MediaMetadataRetriever under concurrency limit
         var isFromSystem = false
-        val bitmap: Bitmap? = if (isVideo) {
-            var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
-                coroutineContext.ensureActive()
-                try {
-                    context.contentResolver.loadThumbnail(uri, targetSize, null)
-                } catch (e: Exception) {
-                    null
-                }
-            }
-
-            if (tempBitmap == null) {
-                coroutineContext.ensureActive()
-                tempBitmap = videoDecodeSemaphore.withPermit {
+        val bitmap: Bitmap? = try {
+            if (isVideo) {
+                var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
-                    getVideoFrameFallback(context, uri, targetDim)
+                    try {
+                        context.contentResolver.loadThumbnail(uri, targetSize, signal)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: android.os.OperationCanceledException) {
+                        null
+                    } catch (_: Throwable) {
+                        null
+                    }
                 }
+
+                if (tempBitmap == null && !signal.isCanceled) {
+                    coroutineContext.ensureActive()
+                    tempBitmap = videoDecodeSemaphore.withPermit {
+                        coroutineContext.ensureActive()
+                        getVideoFrameFallback(context, uri, targetDim)
+                    }
+                } else if (tempBitmap != null) {
+                    isFromSystem = true
+                }
+                tempBitmap
             } else {
-                isFromSystem = true
-            }
-            tempBitmap
-        } else {
-            var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
-                coroutineContext.ensureActive()
-                try {
-                    context.contentResolver.loadThumbnail(uri, targetSize, null)
-                } catch (e: Exception) {
-                    null
+                var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
+                    coroutineContext.ensureActive()
+                    try {
+                        context.contentResolver.loadThumbnail(uri, targetSize, signal)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: android.os.OperationCanceledException) {
+                        null
+                    } catch (_: Throwable) {
+                        null
+                    }
                 }
+                if (tempBitmap != null) {
+                    isFromSystem = true
+                }
+                tempBitmap
             }
-            if (tempBitmap != null) {
-                isFromSystem = true
-            }
-            tempBitmap
+        } finally {
+            completionHandle?.dispose()
         }
 
         coroutineContext.ensureActive()
+        if (signal.isCanceled) return@withContext null
 
         if (bitmap != null) {
-            bitmap.prepareToDraw()
+            val rightSized = rightSizeToTarget(bitmap, targetDim)
+            rightSized.prepareToDraw()
             ImageFetchResult(
-                image = bitmap.asImage(),
+                image = rightSized.asImage(),
                 isSampled = true,
                 dataSource = if (isFromSystem) DataSource.DISK else DataSource.MEMORY
             )
         } else {
             // Downsampled fallback decode to prevent loading huge unscaled images in memory
-            val fallbackBitmap = decodeDownsampledBitmap(context, uri, targetDim)
+            val fallbackBitmap = if (com.inferno.gallery.data.decoder.RawImageHelper.isRawUri(context, uri)) {
+                com.inferno.gallery.data.decoder.RawImageHelper.decodeRawBitmap(context, uri, targetDim)
+            } else {
+                decodeDownsampledBitmap(context, uri, targetDim)
+            }
             if (fallbackBitmap != null) {
                 fallbackBitmap.prepareToDraw()
                 ImageFetchResult(
@@ -153,6 +133,31 @@ class MediaStoreThumbnailFetcher(
             } else {
                 null
             }
+        }
+    }
+
+    /**
+     * Downscales provider-returned bitmaps that exceed the requested bucket.
+     *
+     * MediaProvider routinely hands back ~512 px for a 160 px grid request. At 4 bytes/pixel
+     * that is ~1 MB per cell instead of ~100 KB: GPU upload time per cell multiplies and the
+     * LRU evicts hot entries far sooner, so the grid refetches the same thumbnails it just
+     * dropped. HARDWARE bitmaps are already GPU-resident and cannot be cheaply reconfigured,
+     * so they are passed through untouched.
+     */
+    private fun rightSizeToTarget(bitmap: Bitmap, targetPx: Int): Bitmap {
+        if (bitmap.config == Bitmap.Config.HARDWARE) return bitmap
+        val maxSide = maxOf(bitmap.width, bitmap.height)
+        val budget = (targetPx * 1.25f).toInt()
+        if (maxSide <= budget) return bitmap
+
+        val scale = targetPx.toFloat() / maxSide
+        val width = (bitmap.width * scale).toInt().coerceIn(1, bitmap.width)
+        val height = (bitmap.height * scale).toInt().coerceIn(1, bitmap.height)
+        return try {
+            Bitmap.createScaledBitmap(bitmap, width, height, true) ?: bitmap
+        } catch (_: Throwable) {
+            bitmap
         }
     }
 
@@ -179,7 +184,9 @@ class MediaStoreThumbnailFetcher(
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, decodeOpts)
             }
-        } catch (_: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Throwable) {
             null
         }
     }
@@ -189,7 +196,9 @@ class MediaStoreThumbnailFetcher(
         return try {
             retriever.setDataSource(context, uri)
             retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, targetDim, targetDim)
-        } catch (e: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
             android.util.Log.e("MediaStoreFetcher", "Fallback video frame extraction failed for uri: $uri", e)
             null
         } finally {
@@ -202,21 +211,6 @@ class MediaStoreThumbnailFetcher(
 
 
     class Factory(private val context: Context) : Fetcher.Factory<coil3.Uri> {
-
-        private val cacheEnabled = AtomicBoolean(true)
-
-        init {
-            val settings = SettingsRepository.getInstance(context)
-            diskCacheScope.launch {
-                try {
-                    cacheEnabled.set(settings.cacheThumbnailsEnabledFlow.first())
-                } catch (_: Exception) { }
-            }
-            settings.cacheThumbnailsEnabledFlow
-                .onEach { cacheEnabled.set(it) }
-                .launchIn(diskCacheScope)
-        }
-
         override fun create(data: coil3.Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
             val isLocalMedia = data.scheme == "content" && data.authority == "media"
             if (!isLocalMedia) return null
@@ -225,26 +219,11 @@ class MediaStoreThumbnailFetcher(
             if (width > 1024) return null
 
             val androidUri = android.net.Uri.parse(data.toString())
-            return MediaStoreThumbnailFetcher(androidUri, options, context, cacheEnabled.get())
+            return MediaStoreThumbnailFetcher(androidUri, options, context)
         }
     }
 
     class AndroidUriFactory(private val context: Context) : Fetcher.Factory<android.net.Uri> {
-
-        private val cacheEnabled = AtomicBoolean(true)
-
-        init {
-            val settings = SettingsRepository.getInstance(context)
-            diskCacheScope.launch {
-                try {
-                    cacheEnabled.set(settings.cacheThumbnailsEnabledFlow.first())
-                } catch (_: Exception) { }
-            }
-            settings.cacheThumbnailsEnabledFlow
-                .onEach { cacheEnabled.set(it) }
-                .launchIn(diskCacheScope)
-        }
-
         override fun create(data: android.net.Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
             val isLocalMedia = data.scheme == "content" && data.authority == "media"
             if (!isLocalMedia) return null
@@ -252,7 +231,7 @@ class MediaStoreThumbnailFetcher(
             val width = (options.size.width as? Dimension.Pixels)?.px ?: Int.MAX_VALUE
             if (width > 1024) return null
 
-            return MediaStoreThumbnailFetcher(data, options, context, cacheEnabled.get())
+            return MediaStoreThumbnailFetcher(data, options, context)
         }
     }
 }

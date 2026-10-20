@@ -16,8 +16,8 @@ android {
         applicationId = "com.inferno.gallery"
         minSdk = 31
         targetSdk = 37
-        versionCode = 4
-        versionName = "1.0.3 (beta)"
+        versionCode = 5
+        versionName = "1.0.4 (beta)"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -74,8 +74,12 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 androidComponents {
@@ -108,6 +112,9 @@ dependencies {
     // ── Lifecycle ──
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // Installs src/main/baseline-prof.txt on first run (AOT-compiles the grid hot path).
+    // Without this the profile is packaged but never installed, i.e. a no-op.
+    implementation(libs.androidx.profileinstaller)
 
     // ── DataStore ──
     implementation(libs.androidx.datastore.preferences)
@@ -185,7 +192,4 @@ dependencies {
     implementation(libs.lottie.compose)
 
     implementation(libs.material)
-
-    // ── MaterialKolor — Kotlin-native M3 dynamic color engine ──
-    implementation("com.materialkolor:material-kolor:4.1.1")
-}
+}

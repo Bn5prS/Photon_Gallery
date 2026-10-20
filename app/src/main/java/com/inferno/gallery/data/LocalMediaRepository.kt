@@ -103,54 +103,64 @@ class LocalMediaRepository(
             putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sortOrder)
         }
 
-        contentResolver.query(
-            MediaStore.Files.getContentUri("external"),
-            projection,
-            bundle,
-            null
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-            val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
-            val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
-            val dateTakenColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
-            val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
-            val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
-            val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
-            val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-            val mediaTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
-            val durationColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
-            val isTrashedColumn = cursor.getColumnIndex(MediaStore.MediaColumns.IS_TRASHED)
+        try {
+            contentResolver.query(
+                MediaStore.Files.getContentUri("external"),
+                projection,
+                bundle,
+                null
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                val bucketColumn = cursor.getColumnIndex(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
+                val dateAddedColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
+                val dateTakenColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
+                val sizeColumn = cursor.getColumnIndex(MediaStore.Images.Media.SIZE)
+                val nameColumn = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+                val dateModifiedColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATE_MODIFIED)
+                val pathColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                val mediaTypeColumn = cursor.getColumnIndex(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                val durationColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
+                val isTrashedColumn = cursor.getColumnIndex(MediaStore.MediaColumns.IS_TRASHED)
 
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                val isTrashed = if (isTrashedColumn >= 0) cursor.getInt(isTrashedColumn) == 1 else false
-                val bucketName = if (isTrashed) "Trash" else (cursor.getString(bucketColumn) ?: "Unknown")
-                val rawDateAdded = cursor.getLong(dateAddedColumn)
-                val dateTakenMs = if (dateTakenColumn >= 0) cursor.getLong(dateTakenColumn) else 0L
-                val dateTakenSec = if (dateTakenMs > 0) dateTakenMs / 1000L else 0L
-                val dateAdded = if (dateTakenSec > 0) dateTakenSec else rawDateAdded
-                val size = cursor.getLong(sizeColumn)
-                val name = cursor.getString(nameColumn) ?: "Unknown"
-                val dateModified = cursor.getLong(dateModifiedColumn)
-                val path = cursor.getString(pathColumn) ?: ""
-                val mediaType = cursor.getInt(mediaTypeColumn)
-                val isVideo = mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
-                
-                var durationMs: Long? = null
-                if (durationColumn >= 0) {
-                    val durationStr = cursor.getString(durationColumn)
-                    durationMs = durationStr?.toLongOrNull()
+                if (idColumn < 0) return@use
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val isTrashed = if (isTrashedColumn >= 0) cursor.getInt(isTrashedColumn) == 1 else false
+                    val bucketName = if (isTrashed) "Trash" else ((if (bucketColumn >= 0) cursor.getString(bucketColumn) else null) ?: "Unknown")
+                    val rawDateAdded = if (dateAddedColumn >= 0) cursor.getLong(dateAddedColumn) else 0L
+                    val dateTakenMs = if (dateTakenColumn >= 0) cursor.getLong(dateTakenColumn) else 0L
+                    val dateTakenSec = if (dateTakenMs > 0) dateTakenMs / 1000L else 0L
+                    val dateModified = if (dateModifiedColumn >= 0) cursor.getLong(dateModifiedColumn) else 0L
+                    val dateAdded = when {
+                        dateTakenSec > 0 -> dateTakenSec
+                        dateModified > 0 -> dateModified
+                        else -> rawDateAdded
+                    }
+                    val size = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
+                    val name = (if (nameColumn >= 0) cursor.getString(nameColumn) else null) ?: "Unknown"
+                    val path = (if (pathColumn >= 0) cursor.getString(pathColumn) else null) ?: ""
+                    val mediaType = if (mediaTypeColumn >= 0) cursor.getInt(mediaTypeColumn) else 0
+                    val isVideo = mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                    
+                    var durationMs: Long? = null
+                    if (durationColumn >= 0) {
+                        val durationStr = cursor.getString(durationColumn)
+                        durationMs = durationStr?.toLongOrNull()
+                    }
+                    
+                    val baseUri = if (isVideo) {
+                        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    } else {
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    }
+                    
+                    val uri = ContentUris.withAppendedId(baseUri, id)
+                    images.add(MediaData(id, uri, bucketName, dateAdded, size, name, dateModified, path, isVideo, durationMs))
                 }
-                
-                val baseUri = if (isVideo) {
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                } else {
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                }
-                
-                val uri = ContentUris.withAppendedId(baseUri, id)
-                images.add(MediaData(id, uri, bucketName, dateAdded, size, name, dateModified, path, isVideo, durationMs))
             }
+        } catch (e: SecurityException) {
+            // Permissions revoked or restricted
         }
 
         images.sortByDescending { it.dateAdded }
@@ -168,16 +178,22 @@ class LocalMediaRepository(
             putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
         }
 
-        contentResolver.query(
-            MediaStore.Files.getContentUri("external"),
-            projection,
-            bundle,
-            null
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-            while (cursor.moveToNext()) {
-                ids.add(cursor.getLong(idCol))
+        try {
+            contentResolver.query(
+                MediaStore.Files.getContentUri("external"),
+                projection,
+                bundle,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                if (idCol >= 0) {
+                    while (cursor.moveToNext()) {
+                        ids.add(cursor.getLong(idCol))
+                    }
+                }
             }
+        } catch (e: SecurityException) {
+            // Permissions revoked or restricted
         }
         ids
     }

@@ -4,7 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -21,6 +21,8 @@ data class PhotonColors(
     val successContainer: Color,
     /** Star / favorite accent. */
     val star: Color,
+    /** High-contrast text & icon color for photo/video scrim overlays. */
+    val onMediaScrim: Color = Color(0xFFFFFFFF),
 )
 
 // Tuned per scheme so contrast holds up on light, dark, and pure-black AMOLED surfaces.
@@ -29,6 +31,7 @@ internal val LightPhotonColors = PhotonColors(
     onSuccess = Color(0xFFFFFFFF),
     successContainer = Color(0xFFD1FAE5),
     star = Color(0xFFE0A400),
+    onMediaScrim = Color(0xFFFFFFFF),
 )
 
 internal val DarkPhotonColors = PhotonColors(
@@ -36,6 +39,7 @@ internal val DarkPhotonColors = PhotonColors(
     onSuccess = Color(0xFF00382A),
     successContainer = Color(0xFF0B3D2E),
     star = Color(0xFFFFD700),
+    onMediaScrim = Color(0xFFFFFFFF),
 )
 
 // Slightly brighter accents so they don't sink into a pure-black background.
@@ -44,9 +48,10 @@ internal val AmoledPhotonColors = PhotonColors(
     onSuccess = Color(0xFF00291E),
     successContainer = Color(0xFF08251B),
     star = Color(0xFFFFD54A),
+    onMediaScrim = Color(0xFFFFFFFF),
 )
 
-val LocalPhotonColors = staticCompositionLocalOf { LightPhotonColors }
+val LocalPhotonColors = compositionLocalOf { LightPhotonColors }
 
 /** Convenience accessor: `MaterialTheme.photonColors.success`. */
 val MaterialTheme.photonColors: PhotonColors

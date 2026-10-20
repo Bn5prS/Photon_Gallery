@@ -18,8 +18,10 @@ import com.inferno.gallery.data.db.DatabaseProvider
 import android.graphics.BitmapFactory
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -33,7 +35,7 @@ class OcrIndexWorker(
         private const val TAG = "OcrIndexWorker"
         private const val NOTIFICATION_ID = 44
         private const val CHANNEL_ID = "ocr_indexing_channel"
-        private const val WRITE_BATCH_SIZE = 1
+        private const val WRITE_BATCH_SIZE = 25
         private const val LOAD_CHANNEL_CAPACITY = 2
         private const val EMBED_CHANNEL_CAPACITY = 2
     }
@@ -142,7 +144,11 @@ class OcrIndexWorker(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun doWork(): Result {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+        } catch (_: Throwable) {}
         com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
             isIndexing = true,
             progress = 0,
@@ -190,6 +196,9 @@ class OcrIndexWorker(
 
             coroutineScope {
                 launch(Dispatchers.IO) {
+                    try {
+                        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                    } catch (_: Throwable) {}
                     for (entity in unindexed) {
                         if (isStopped) break
                         try {
@@ -213,11 +222,15 @@ class OcrIndexWorker(
                         } catch (e: Throwable) {
                             Log.e(TAG, "Stage1 load failed for ${entity.name}: ${e.message}")
                         }
+                        delay(15L)
                     }
                     loadChannel.close()
                 }
 
-                launch(Dispatchers.Default) {
+                launch(Dispatchers.Default.limitedParallelism(1)) {
+                    try {
+                        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                    } catch (_: Throwable) {}
                     val textRecognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
                         com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
                     )
@@ -251,11 +264,15 @@ class OcrIndexWorker(
                         } finally {
                             loaded.bitmap.recycle()
                         }
+                        delay(20L)
                     }
                     embedChannel.close()
                 }
 
                 launch(Dispatchers.IO) {
+                    try {
+                        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                    } catch (_: Throwable) {}
                     val ocrIndexedBatch  = mutableListOf<Long>()
 
                     suspend fun flush() {

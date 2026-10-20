@@ -470,7 +470,7 @@ fun ExifDetailsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         shape = ShapeEdgeTop,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
@@ -984,7 +984,7 @@ private fun DeepMetadataInspectorSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         shape = ShapeEdgeTop,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {

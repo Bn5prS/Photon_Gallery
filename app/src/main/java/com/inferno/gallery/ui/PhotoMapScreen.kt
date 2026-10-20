@@ -75,19 +75,12 @@ private fun formatGroupHeader(dateAddedSeconds: Long): String {
     
     val today = java.time.LocalDate.now()
     val yesterday = today.minusDays(1)
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
     
     return when (itemDate) {
-        today -> "Today"
-        yesterday -> "Yesterday"
-        else -> {
-            if (itemDate.year == today.year) {
-                val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d", java.util.Locale.getDefault())
-                itemDate.format(formatter)
-            } else {
-                val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
-                itemDate.format(formatter)
-            }
-        }
+        today -> "Today, ${today.year}"
+        yesterday -> "Yesterday, ${yesterday.year}"
+        else -> itemDate.format(formatter)
     }
 }
 
@@ -234,7 +227,7 @@ fun PhotoMapScreen(
             val haptic = LocalHapticFeedback.current
             var lastHapticId by remember { mutableStateOf<String?>(null) }
 
-            // Snappy Tactile feedback on scrolling
+            // Haptic feedback on scroll index change
             LaunchedEffect(firstVisibleImage) {
                 val item = firstVisibleImage
                 if (item != null && item.id != lastHapticId) {
@@ -243,7 +236,7 @@ fun PhotoMapScreen(
                 }
             }
 
-            // Liquid breathing wave phase animation
+            // Phase animation for map marker oscillation
             val infiniteTransition = rememberInfiniteTransition(label = "markerBreathe")
             val breatheAnimation by infiniteTransition.animateFloat(
                 initialValue = 0f,
@@ -257,10 +250,10 @@ fun PhotoMapScreen(
 
             var loadedBitmapState by remember { mutableStateOf<Bitmap?>(null) }
 
-            // Spring-pop scale Animatable for focused marker
+            // Scale animatable for focused marker
             val markerScale = remember { Animatable(1f) }
 
-            // Spring-pop animation: plays when focused image changes
+            // Scale animation triggered on focused image change
             LaunchedEffect(firstVisibleImage) {
                 markerScale.snapTo(0f)
                 markerScale.animateTo(
@@ -649,7 +642,7 @@ fun PhotoMapScreen(
                                         is GalleryListItem.Header -> {
                                             Text(
                                                 text = listItem.title,
-                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                style = com.inferno.gallery.ui.theme.TimelineDateHeaderStyle,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -665,7 +658,7 @@ fun PhotoMapScreen(
                                                     .aspectRatio(1f)
                                                     .clip(com.inferno.gallery.ui.theme.ShapeMedium)
                                                     .haptickClickable {
-                                                        galleryViewModel.setInitialDetailItem(item)
+                                                        galleryViewModel.setInitialDetailItem(item, "geotagged")
                                                         onPhotoClick(item.id, "geotagged", null)
                                                     }
                                             ) {

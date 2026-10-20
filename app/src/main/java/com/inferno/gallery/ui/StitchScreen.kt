@@ -139,7 +139,7 @@ fun StitchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // ── Live Preview Area ─────────────────────────────────────────
@@ -324,12 +324,14 @@ fun StitchScreen(
                                 isSaving = false
                                 onBack()
                             }
-                        } catch (e: Exception) {
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
                             e.printStackTrace()
                             withContext(Dispatchers.Main) {
                                 Toast.makeText(
                                     context,
-                                    "Error saving: ${e.message}",
+                                    "Error saving: ${e.message ?: "Out of memory"}",
                                     Toast.LENGTH_LONG
                                 ).show()
                                 isSaving = false
@@ -887,12 +889,12 @@ private fun StitchControlsPanel(
                     val presetColors = listOf(
                         Color.Black,
                         Color.White,
-                        Color(0xFF1E1E1E),
-                        Color(0xFF2D2D2D),
-                        Color(0xFFF5F5F0),
-                        Color(0xFFE8D5C4),
-                        Color(0xFF0D1B2A),
-                        Color(0xFF1B4332)
+                        MaterialTheme.colorScheme.surfaceContainer,
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.secondaryContainer,
+                        MaterialTheme.colorScheme.tertiaryContainer,
+                        MaterialTheme.colorScheme.errorContainer
                     )
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -917,10 +919,11 @@ private fun StitchControlsPanel(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isSelected) {
+                                    val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
                                         contentDescription = null,
-                                        tint = if (color == Color.White || color == Color(0xFFF5F5F0) || color == Color(0xFFE8D5C4)) Color.Black else Color.White,
+                                        tint = if (isLight) Color.Black else Color.White,
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
@@ -944,7 +947,7 @@ private fun SaveOptionsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         shape = ShapeEdgeTop,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
@@ -1087,7 +1090,9 @@ private fun decodeSampledBitmapForStitch(
         context.contentResolver.openInputStream(uri)?.use { stream ->
             BitmapFactory.decodeStream(stream, null, decodeOptions)
         }
-    } catch (e: Exception) {
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Throwable) {
         e.printStackTrace()
         null
     }
@@ -1165,18 +1170,27 @@ private suspend fun saveStitchedImage(
         return@withContext
     }
 
-    val (canvasWidth, canvasHeight) = if (orientation == StitchOrientation.VERTICAL) {
+    var (canvasWidth, canvasHeight) = if (orientation == StitchOrientation.VERTICAL) {
         val primaryWidth = minOf(boundsList.maxOf { it.first }, maxDimension)
         val scaledHeights = boundsList.map { (w, h) -> (primaryWidth.toFloat() / w * h).roundToInt() }
         val totalH = scaledHeights.sum() + totalSpacing.roundToInt()
-        val finalH = minOf(totalH, maxDimension * 4)
+        val finalH = minOf(totalH, maxDimension * 2)
         Pair(primaryWidth, finalH)
     } else {
         val primaryHeight = minOf(boundsList.maxOf { it.second }, maxDimension)
         val scaledWidths = boundsList.map { (w, h) -> (primaryHeight.toFloat() / h * w).roundToInt() }
         val totalW = scaledWidths.sum() + totalSpacing.roundToInt()
-        val finalW = minOf(totalW, maxDimension * 4)
+        val finalW = minOf(totalW, maxDimension * 2)
         Pair(finalW, primaryHeight)
+    }
+
+    // Safety guard: limit total pixels to 16M (64MB RAM at ARGB_8888) to prevent OOM
+    val maxPixels = 16_777_216L
+    val currentPixels = canvasWidth.toLong() * canvasHeight.toLong()
+    if (currentPixels > maxPixels) {
+        val scaleDown = kotlin.math.sqrt(maxPixels.toDouble() / currentPixels.toDouble()).toFloat()
+        canvasWidth = (canvasWidth * scaleDown).roundToInt().coerceAtLeast(1)
+        canvasHeight = (canvasHeight * scaleDown).roundToInt().coerceAtLeast(1)
     }
 
     val bitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)

@@ -19,16 +19,20 @@ class MediaSyncWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+        } catch (_: Throwable) {}
+        try {
             Log.d("MediaSyncWorker", "Starting MediaStore sync...")
             val mediaRepository = LocalMediaRepository(applicationContext.contentResolver)
             val database = DatabaseProvider.getDatabase(applicationContext)
             val settingsRepo = SettingsRepository.getInstance(applicationContext)
 
             val prefs = applicationContext.getSharedPreferences("photon_sync", Context.MODE_PRIVATE)
-            val lastGeneration = prefs.getLong("last_generation", 0L)
+            val isDateFallbackMigrated = prefs.getBoolean("date_fallback_migrated_v1", false)
+            val lastGeneration = if (!isDateFallbackMigrated) 0L else prefs.getLong("last_generation", 0L)
             
             // Get delta inserts/updates
-            var deltaList = mediaRepository.getImagesListForSync(null, lastGeneration)
+            var deltaList = mediaRepository.getImagesListForSync(null, if (lastGeneration > 0) lastGeneration else null)
             
             val dbList = database.mediaDao().getAllMedia()
             val dbMap = dbList.associateBy { it.id }
@@ -64,7 +68,7 @@ class MediaSyncWorker(
                         uriString = media.uri.toString(),
                         filePath = media.path,
                         bucketName = media.bucketName,
-                        dateAdded = dbItem?.dateAdded ?: media.dateAdded,
+                        dateAdded = media.dateAdded,
                         dateModified = media.dateModified,
                         size = media.size,
                         name = media.name,
@@ -125,6 +129,9 @@ class MediaSyncWorker(
             
             if (currentGen > 0) {
                 prefs.edit().putLong("last_generation", currentGen).apply()
+            }
+            if (!isDateFallbackMigrated) {
+                prefs.edit().putBoolean("date_fallback_migrated_v1", true).apply()
             }
 
             Log.d("MediaSyncWorker", "Sync complete. Generation updated to $currentGen.")

@@ -94,3 +94,11 @@ Common types:
 3. Verify that all unit tests and lint checks pass.
 4. Fill out the provided [Pull Request Template](.github/pull_request_template.md).
 5. Attach screenshots or screen recordings for any UI changes.
+
+---
+
+## 🌐 Localization & Translations
+
+- Source strings are located in `app/src/main/res/values/strings.xml`.
+- To add or update a language translation, contribute directly by adding or updating `app/src/main/res/values-<locale>/strings.xml` and opening a Pull Request.
+

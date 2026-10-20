@@ -220,8 +220,9 @@ class ModelDownloadWorker(
             val shouldAutoIndex = withContext(Dispatchers.IO) {
                 db.embeddingDao().clearAllEmbeddings()
                 db.embeddingStatusDao().clearAllStatuses()
-                com.inferno.gallery.data.SettingsRepository.getInstance(applicationContext)
-                    .smartSearchAutoIndexFlow
+                val settingsRepo = com.inferno.gallery.data.SettingsRepository.getInstance(applicationContext)
+                settingsRepo.updateSmartSearchAutoIndex(true)
+                settingsRepo.smartSearchAutoIndexFlow
                     .first() && db.embeddingDao().getUnindexedMediaIds().isNotEmpty()
             }
 

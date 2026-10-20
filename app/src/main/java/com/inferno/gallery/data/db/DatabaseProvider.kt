@@ -8,6 +8,25 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+data class SearchMediaResult(
+    val entity: CoreMediaEntity,
+    val matchType: String,
+    val matchSnippet: String? = null
+)
+
+object SearchMatchType {
+    const val OCR = "OCR"
+    const val FILE_NAME = "NAME"
+    const val FORMAT = "FORMAT"
+    const val SEMANTIC = "SEMANTIC"
+    const val ALBUM = "ALBUM"
+    const val LOCATION = "LOCATION"
+    const val DATE = "DATE"
+}
 
 object DatabaseProvider {
     @Volatile
@@ -433,21 +452,292 @@ object DatabaseProvider {
         rawDb.execSQL("DELETE FROM image_fts WHERE mediaId IN ($placeholders)", mediaIds.map { it.toString() }.toTypedArray())
     }
 
+    private val monthMap = mapOf(
+        "january" to "01", "jan" to "01",
+        "february" to "02", "feb" to "02",
+        "march" to "03", "mar" to "03",
+        "april" to "04", "apr" to "04",
+        "may" to "05",
+        "june" to "06", "jun" to "06",
+        "july" to "07", "jul" to "07",
+        "august" to "08", "aug" to "08",
+        "september" to "09", "sep" to "09", "sept" to "09",
+        "october" to "10", "oct" to "10",
+        "november" to "11", "nov" to "11",
+        "december" to "12", "dec" to "12"
+    )
+
     /**
-     * FTS5 full-text search — queries image_fts and JOINs with core_media.
-     * Returns a list of matching [CoreMediaEntity] ordered by date.
-     * Must be called from a coroutine on Dispatchers.IO.
+     * Unified media search — queries core_media by:
+     * 1. Filename (exact, prefix, and substring)
+     * 2. File type / extensions (e.g. video, gif, png, raw, mp4, etc.)
+     * 3. Folder / Album name (bucketName)
+     * 4. Date (year, month name, e.g. "2024", "October", "July 2024")
+     * 5. Geocoded locations (placeName)
+     * 6. OCR full-text search (image_fts)
+     *
+     * Orders results by relevance (exact/filename matches first, followed by
+     * album/type/date matches, followed by OCR text matches) with newest items first.
      */
-    suspend fun searchFts(
+    suspend fun searchMedia(
         db: GalleryDatabase,
         query: String,
         excluded: Set<String> = emptySet()
-    ): List<CoreMediaEntity> = withContext(Dispatchers.IO) {
+    ): List<SearchMediaResult> = withContext(Dispatchers.IO) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return@withContext emptyList()
+
         val rawDb = db.openHelper.readableDatabase
+
+        // 1. Perform metadata search on core_media
+        val metadataResults = searchMetadata(rawDb, cleanQuery, excluded)
+
+        // 2. Perform OCR text search on image_fts
+        val ftsResults = searchFtsInternal(rawDb, cleanQuery, excluded)
+
+        // 3. Score and merge results
+        val tokens = cleanQuery.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
+        val ftsMap = ftsResults.associate { it.first.id to it.second }
+        val ftsIds = ftsMap.keys
+
+        val scoredMetadata = metadataResults.map { entity ->
+            val isAlsoFts = entity.id in ftsIds
+            val score = calculateRelevanceScore(entity, cleanQuery, tokens) + (if (isAlsoFts) 50 else 0)
+            entity to score
+        }
+
+        val existingIds = metadataResults.map { it.id }.toSet()
+        val nonOverlappingFts = ftsResults.filter { it.first.id !in existingIds }.map { (entity, _) ->
+            entity to 20 // Base score for OCR-only matches
+        }
+
+        val combinedEntities = (scoredMetadata + nonOverlappingFts)
+            .sortedWith(
+                compareByDescending<Pair<CoreMediaEntity, Int>> { it.second }
+                    .thenByDescending { it.first.dateAdded }
+            )
+            .map { it.first }
+
+        // Find geocoded locations
+        val locationMap = mutableMapOf<Long, String>()
+        try {
+            val locCursor = rawDb.query(
+                "SELECT mediaId, placeName FROM geocoded_locations WHERE placeName LIKE ?",
+                arrayOf("%$cleanQuery%")
+            )
+            locCursor.use { c ->
+                val mIdIdx = c.getColumnIndex("mediaId")
+                val pNameIdx = c.getColumnIndex("placeName")
+                while (c.moveToNext()) {
+                    if (mIdIdx >= 0 && pNameIdx >= 0 && !c.isNull(pNameIdx)) {
+                        locationMap[c.getLong(mIdIdx)] = c.getString(pNameIdx)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        combinedEntities.map { entity ->
+            classifySearchResult(entity, cleanQuery, ftsMap, locationMap)
+        }
+    }
+
+    private fun searchMetadata(
+        rawDb: SupportSQLiteDatabase,
+        query: String,
+        excluded: Set<String>
+    ): List<CoreMediaEntity> {
+        val cleanQuery = query.trim()
+        val lower = cleanQuery.lowercase()
+        val tokens = cleanQuery.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
+
+        val baseConditions = mutableListOf<String>()
+        val baseArgs = mutableListOf<String>()
+
+        baseConditions.add("cm.bucketName != 'Trash'")
+        baseConditions.add("cm.uriString NOT IN (SELECT originalUri FROM vault_media)")
+        baseConditions.add("cm.filePath NOT IN (SELECT originalPath FROM vault_media)")
+
+        if (excluded.isNotEmpty()) {
+            val placeholders = excluded.joinToString(",") { "?" }
+            baseConditions.add("cm.bucketName NOT IN ($placeholders)")
+            baseArgs.addAll(excluded)
+        }
+
+        val matchClauses = mutableListOf<String>()
+        val matchArgs = mutableListOf<String>()
+
+        // 1. Full query substring match on filename, path, or album
+        matchClauses.add("(cm.name LIKE ? OR cm.filePath LIKE ? OR cm.bucketName LIKE ?)")
+        matchArgs.add("%$cleanQuery%")
+        matchArgs.add("%$cleanQuery%")
+        matchArgs.add("%$cleanQuery%")
+
+        // 2. Geocoded location match
+        matchClauses.add("cm.id IN (SELECT mediaId FROM geocoded_locations WHERE placeName LIKE ?)")
+        matchArgs.add("%$cleanQuery%")
+
+        // 3. File type / media type / extension matching
+        when {
+            lower in setOf("video", "videos", "movie", "movies", "clip", "clips", "vid", "vids", "recording", "recordings") -> {
+                matchClauses.add("cm.isVideo = 1")
+            }
+            lower in setOf("photo", "photos", "image", "images", "picture", "pictures", "pic", "pics") -> {
+                matchClauses.add("cm.isVideo = 0")
+            }
+            lower in setOf("gif", "gifs", "animation", "animations") -> {
+                matchClauses.add("(cm.mimeType = 'image/gif' OR cm.name LIKE '%.gif')")
+            }
+            lower in setOf("raw", "dng") -> {
+                matchClauses.add("(cm.mimeType LIKE '%raw%' OR cm.mimeType LIKE '%dng%' OR cm.name LIKE '%.dng' OR cm.name LIKE '%.raw' OR cm.name LIKE '%.cr2' OR cm.name LIKE '%.nef' OR cm.name LIKE '%.arw' OR cm.name LIKE '%.orf' OR cm.name LIKE '%.raf')")
+            }
+            lower in setOf("panorama", "panoramas", "pano") -> {
+                matchClauses.add("((cm.name LIKE '%PANO%' OR cm.name LIKE '%PANORAMA%' OR cm.filePath LIKE '%PANO%' OR cm.filePath LIKE '%panorama%') AND cm.isVideo = 0)")
+            }
+            lower in setOf("slowmo", "slow-mo", "slow motion", "slow_motion") -> {
+                matchClauses.add("((cm.name LIKE '%SLOW%' OR cm.name LIKE '%HFR%' OR cm.filePath LIKE '%slow_motion%') AND cm.isVideo = 1)")
+            }
+            lower in setOf("screenshot", "screenshots") -> {
+                matchClauses.add("(cm.name LIKE '%Screenshot%' OR cm.bucketName LIKE '%Screenshot%' OR cm.filePath LIKE '%Screenshot%')")
+            }
+            lower.removePrefix(".") in setOf("jpg", "jpeg", "png", "webp", "mp4", "mkv", "mov", "avi", "heic", "heif", "3gp") -> {
+                val ext = lower.removePrefix(".")
+                matchClauses.add("(cm.name LIKE '%.' || ? OR cm.mimeType LIKE '%' || ? || '%')")
+                matchArgs.add(ext)
+                matchArgs.add(ext)
+            }
+        }
+
+        // 4. Date matching (Year / Month)
+        val yearMatch = Regex("""\b(19\d\d|20\d\d)\b""").find(lower)?.value
+        val monthMatch = monthMap.entries.firstOrNull { Regex("""\b${it.key}\b""").containsMatchIn(lower) }?.value
+
+        if (yearMatch != null && monthMatch != null) {
+            matchClauses.add("(strftime('%Y', datetime(cm.dateAdded, 'unixepoch', 'localtime')) = ? AND strftime('%m', datetime(cm.dateAdded, 'unixepoch', 'localtime')) = ?)")
+            matchArgs.add(yearMatch)
+            matchArgs.add(monthMatch)
+        } else if (yearMatch != null) {
+            matchClauses.add("(strftime('%Y', datetime(cm.dateAdded, 'unixepoch', 'localtime')) = ? OR cm.name LIKE ?)")
+            matchArgs.add(yearMatch)
+            matchArgs.add("%$yearMatch%")
+        } else if (monthMatch != null) {
+            matchClauses.add("strftime('%m', datetime(cm.dateAdded, 'unixepoch', 'localtime')) = ?")
+            matchArgs.add(monthMatch)
+        }
+
+        // 5. Multi-token combination: ALL tokens must be satisfied
+        if (tokens.size > 1) {
+            val tokenClauses = mutableListOf<String>()
+            val tokenArgs = mutableListOf<String>()
+            for (token in tokens) {
+                val tLower = token.lowercase()
+                when {
+                    tLower in setOf("video", "videos", "movie", "movies", "clip", "clips", "vid", "vids") -> {
+                        tokenClauses.add("cm.isVideo = 1")
+                    }
+                    tLower in setOf("photo", "photos", "image", "images", "picture", "pictures", "pic", "pics") -> {
+                        tokenClauses.add("cm.isVideo = 0")
+                    }
+                    tLower in setOf("gif", "gifs", "animation") -> {
+                        tokenClauses.add("(cm.mimeType = 'image/gif' OR cm.name LIKE '%.gif')")
+                    }
+                    tLower in setOf("raw", "dng") -> {
+                        tokenClauses.add("(cm.mimeType LIKE '%raw%' OR cm.mimeType LIKE '%dng%' OR cm.name LIKE '%.dng' OR cm.name LIKE '%.raw')")
+                    }
+                    tLower in setOf("screenshot", "screenshots") -> {
+                        tokenClauses.add("(cm.name LIKE '%Screenshot%' OR cm.bucketName LIKE '%Screenshot%' OR cm.filePath LIKE '%Screenshot%')")
+                    }
+                    tLower.removePrefix(".") in setOf("jpg", "jpeg", "png", "webp", "mp4", "mkv", "mov", "avi", "heic", "heif") -> {
+                        val ext = tLower.removePrefix(".")
+                        tokenClauses.add("(cm.name LIKE '%.' || ? OR cm.mimeType LIKE '%' || ? || '%')")
+                        tokenArgs.add(ext)
+                        tokenArgs.add(ext)
+                    }
+                    Regex("""\b(19\d\d|20\d\d)\b""").matches(tLower) -> {
+                        tokenClauses.add("(strftime('%Y', datetime(cm.dateAdded, 'unixepoch', 'localtime')) = ? OR cm.name LIKE ?)")
+                        tokenArgs.add(tLower)
+                        tokenArgs.add("%$tLower%")
+                    }
+                    monthMap.containsKey(tLower) -> {
+                        tokenClauses.add("strftime('%m', datetime(cm.dateAdded, 'unixepoch', 'localtime')) = ?")
+                        tokenArgs.add(monthMap[tLower]!!)
+                    }
+                    else -> {
+                        tokenClauses.add("(cm.name LIKE ? OR cm.filePath LIKE ? OR cm.bucketName LIKE ? OR cm.id IN (SELECT mediaId FROM geocoded_locations WHERE placeName LIKE ?))")
+                        tokenArgs.add("%$token%")
+                        tokenArgs.add("%$token%")
+                        tokenArgs.add("%$token%")
+                        tokenArgs.add("%$token%")
+                    }
+                }
+            }
+            if (tokenClauses.isNotEmpty()) {
+                matchClauses.add("(${tokenClauses.joinToString(" AND ")})")
+                matchArgs.addAll(tokenArgs)
+            }
+        }
+
+        val allWhere = (baseConditions + "(${matchClauses.joinToString(" OR ")})").joinToString(" AND ")
+        val sql = "SELECT cm.* FROM core_media cm WHERE $allWhere ORDER BY cm.dateAdded DESC LIMIT 1000"
+        val finalArgs = (baseArgs + matchArgs).toTypedArray()
+
+        return try {
+            val cursor: Cursor = rawDb.query(sql, finalArgs)
+            val results = mutableListOf<CoreMediaEntity>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    results += parseCoreMediaEntity(c)
+                }
+            }
+            results
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun calculateRelevanceScore(
+        entity: CoreMediaEntity,
+        query: String,
+        tokens: List<String>
+    ): Int {
+        val q = query.trim()
+        val name = entity.name
+        val bucket = entity.bucketName
+        val nameWithoutExt = name.substringBeforeLast(".")
+
+        if (name.equals(q, ignoreCase = true) || nameWithoutExt.equals(q, ignoreCase = true)) {
+            return 1000
+        }
+        if (name.startsWith(q, ignoreCase = true)) {
+            return 850
+        }
+        if (name.contains(q, ignoreCase = true)) {
+            return 750
+        }
+        if (tokens.isNotEmpty() && tokens.all { name.contains(it, ignoreCase = true) }) {
+            return 650
+        }
+        if (bucket.equals(q, ignoreCase = true)) {
+            return 550
+        }
+        if (bucket.contains(q, ignoreCase = true)) {
+            return 450
+        }
+        if (tokens.any { name.contains(it, ignoreCase = true) }) {
+            return 350
+        }
+        return 200
+    }
+
+    private fun searchFtsInternal(
+        rawDb: SupportSQLiteDatabase,
+        query: String,
+        excluded: Set<String>
+    ): List<Pair<CoreMediaEntity, String?>> {
+        val ftsKeywords = setOf("AND", "OR", "NOT", "NEAR")
         val terms = query.trim().split("\\s+".toRegex())
             .map { it.filter { c -> c.isLetterOrDigit() } }
-            .filter { it.isNotBlank() }
-        if (terms.isEmpty()) return@withContext emptyList()
+            .filter { it.isNotBlank() && it.uppercase() !in ftsKeywords }
+        if (terms.isEmpty()) return emptyList()
 
         val ftsQuery = terms.map { "$it*" }.joinToString(" AND ")
 
@@ -457,9 +747,13 @@ object DatabaseProvider {
         } else ""
 
         val sql = """
-            SELECT cm.* FROM core_media cm
+            SELECT cm.*, fts.extractedText AS ocrText FROM core_media cm
             INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
-            WHERE image_fts MATCH ? AND cm.bucketName != 'Trash' $excludedClause
+            WHERE image_fts MATCH ?
+              AND cm.bucketName != 'Trash'
+              AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+              AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+              $excludedClause
             ORDER BY cm.dateAdded DESC
         """.trimIndent()
 
@@ -468,38 +762,185 @@ object DatabaseProvider {
             argsList.addAll(excluded)
         }
 
-        val cursor: Cursor = rawDb.query(sql, argsList.toTypedArray())
-        val results = mutableListOf<CoreMediaEntity>()
-        cursor.use { c ->
-            val idIdx            = c.getColumnIndexOrThrow("id")
-            val uriIdx           = c.getColumnIndexOrThrow("uriString")
-            val fileIdx          = c.getColumnIndexOrThrow("filePath")
-            val bucketIdx        = c.getColumnIndexOrThrow("bucketName")
-            val addedIdx         = c.getColumnIndexOrThrow("dateAdded")
-            val modIdx           = c.getColumnIndexOrThrow("dateModified")
-            val sizeIdx          = c.getColumnIndexOrThrow("size")
-            val nameIdx          = c.getColumnIndexOrThrow("name")
-            val mimeIdx          = c.getColumnIndexOrThrow("mimeType")
-            val videoIdx         = c.getColumnIndexOrThrow("isVideo")
-            val durIdx           = c.getColumnIndexOrThrow("durationMs")
-            val ocrIdx           = c.getColumnIndexOrThrow("is_indexed_ocr")
-            while (c.moveToNext()) {
-                results += CoreMediaEntity(
-                    id              = c.getLong(idIdx),
-                    uriString       = c.getString(uriIdx),
-                    filePath        = c.getString(fileIdx),
-                    bucketName      = c.getString(bucketIdx),
-                    dateAdded       = c.getLong(addedIdx),
-                    dateModified    = c.getLong(modIdx),
-                    size            = c.getLong(sizeIdx),
-                    name            = c.getString(nameIdx),
-                    mimeType        = if (c.isNull(mimeIdx)) null else c.getString(mimeIdx),
-                    isVideo         = c.getInt(videoIdx) != 0,
-                    durationMs      = if (c.isNull(durIdx)) null else c.getLong(durIdx),
-                    isIndexedOcr    = c.getInt(ocrIdx) != 0,
-                )
+        return try {
+            val cursor: Cursor = rawDb.query(sql, argsList.toTypedArray())
+            val results = mutableListOf<Pair<CoreMediaEntity, String?>>()
+            cursor.use { c ->
+                val ocrIdx = c.getColumnIndex("ocrText")
+                while (c.moveToNext()) {
+                    val entity = parseCoreMediaEntity(c)
+                    val ocrText = if (ocrIdx >= 0 && !c.isNull(ocrIdx)) c.getString(ocrIdx) else null
+                    results += (entity to ocrText)
+                }
+            }
+            results
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun extractOcrSnippet(text: String, query: String): String {
+        val clean = text.replace(Regex("\\s+"), " ").trim()
+        val index = clean.indexOf(query, ignoreCase = true)
+        if (index >= 0) {
+            val start = (index - 18).coerceAtLeast(0)
+            val end = (index + query.length + 18).coerceAtMost(clean.length)
+            val prefix = if (start > 0) "…" else ""
+            val suffix = if (end < clean.length) "…" else ""
+            return prefix + clean.substring(start, end).trim() + suffix
+        }
+        val tokens = query.split(Regex("\\s+")).filter { it.isNotBlank() }
+        for (t in tokens) {
+            val tIndex = clean.indexOf(t, ignoreCase = true)
+            if (tIndex >= 0) {
+                val start = (tIndex - 18).coerceAtLeast(0)
+                val end = (tIndex + t.length + 18).coerceAtMost(clean.length)
+                val prefix = if (start > 0) "…" else ""
+                val suffix = if (end < clean.length) "…" else ""
+                return prefix + clean.substring(start, end).trim() + suffix
             }
         }
-        results
+        return clean.take(40) + if (clean.length > 40) "…" else ""
+    }
+
+    private fun classifySearchResult(
+        entity: CoreMediaEntity,
+        cleanQuery: String,
+        ftsMap: Map<Long, String?>,
+        locationMap: Map<Long, String>
+    ): SearchMediaResult {
+        val lower = cleanQuery.lowercase()
+        val name = entity.name
+        val lowerName = name.lowercase()
+        val ext = name.substringAfterLast(".", "").lowercase()
+        val nameWithoutExt = name.substringBeforeLast(".")
+
+        // 1. FORMAT / EXTENSION MATCH
+        val isFormatQuery = when {
+            lower in setOf("video", "videos", "movie", "movies", "clip", "clips", "vid", "vids", "recording", "recordings") -> true
+            lower in setOf("photo", "photos", "image", "images", "picture", "pictures", "pic", "pics") -> true
+            lower in setOf("gif", "gifs", "animation", "animations") -> true
+            lower in setOf("raw", "dng", "cr2", "nef", "arw", "orf", "raf") -> true
+            lower in setOf("panorama", "panoramas", "pano") -> true
+            lower in setOf("slowmo", "slow-mo", "slow motion", "slow_motion") -> true
+            lower in setOf("screenshot", "screenshots") -> true
+            lower.removePrefix(".") in setOf("jpg", "jpeg", "png", "webp", "mp4", "mkv", "mov", "avi", "heic", "heif", "3gp") -> true
+            else -> false
+        }
+
+        if (isFormatQuery) {
+            val formatLabel = when {
+                lower in setOf("video", "videos", "movie", "movies", "clip", "clips", "vid", "vids") -> "Video"
+                lower in setOf("photo", "photos", "image", "images", "picture", "pictures", "pic", "pics") -> "Photo"
+                lower in setOf("gif", "gifs", "animation") -> "GIF"
+                lower in setOf("raw", "dng", "cr2", "nef", "arw", "orf", "raf") -> "RAW"
+                lower in setOf("panorama", "panoramas", "pano") -> "Panorama"
+                lower in setOf("slowmo", "slow-mo", "slow motion") -> "Slow-mo"
+                lower in setOf("screenshot", "screenshots") -> "Screenshot"
+                else -> ext.uppercase()
+            }
+            return SearchMediaResult(entity, SearchMatchType.FORMAT, formatLabel)
+        }
+
+        // Camera default naming prefix detection (e.g. IMG_20240101_123456.jpg)
+        val isGenericCameraName = nameWithoutExt.matches(Regex("""^(IMG|PXL|DSC|VID|PANO|SAM|WP|AUD)[_\-].*""", RegexOption.IGNORE_CASE))
+
+        // 2. OCR MATCH (if generic camera filename or OCR matched text)
+        if (entity.id in ftsMap && isGenericCameraName) {
+            val ocrText = ftsMap[entity.id]
+            val snippet = if (!ocrText.isNullOrBlank()) extractOcrSnippet(ocrText, cleanQuery) else "Recognized text"
+            return SearchMediaResult(entity, SearchMatchType.OCR, snippet)
+        }
+
+        // 3. FILE NAME MATCH
+        if (nameWithoutExt.contains(cleanQuery, ignoreCase = true) || name.contains(cleanQuery, ignoreCase = true)) {
+            return SearchMediaResult(entity, SearchMatchType.FILE_NAME, name)
+        }
+
+        // 4. OCR MATCH (non-generic filename)
+        if (entity.id in ftsMap) {
+            val ocrText = ftsMap[entity.id]
+            val snippet = if (!ocrText.isNullOrBlank()) extractOcrSnippet(ocrText, cleanQuery) else "Recognized text"
+            return SearchMediaResult(entity, SearchMatchType.OCR, snippet)
+        }
+
+        // 5. ALBUM / FOLDER MATCH
+        if (entity.bucketName.contains(cleanQuery, ignoreCase = true)) {
+            return SearchMediaResult(entity, SearchMatchType.ALBUM, entity.bucketName)
+        }
+
+        // 6. LOCATION MATCH
+        if (entity.id in locationMap) {
+            return SearchMediaResult(entity, SearchMatchType.LOCATION, locationMap[entity.id])
+        }
+
+        // 7. DATE MATCH
+        val yearMatch = Regex("""\b(19\d\d|20\d\d)\b""").find(lower)?.value
+        val monthMatch = monthMap.entries.firstOrNull { Regex("""\b${it.key}\b""").containsMatchIn(lower) }?.key
+        if (yearMatch != null || monthMatch != null) {
+            val sdf = SimpleDateFormat("MMM yyyy", Locale.getDefault())
+            val dateStr = sdf.format(Date(entity.dateAdded * 1000L))
+            return SearchMediaResult(entity, SearchMatchType.DATE, dateStr)
+        }
+
+        // 8. Token-based fallback check:
+        val tokens = cleanQuery.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
+        if (tokens.any { lowerName.contains(it.lowercase()) }) {
+            return SearchMediaResult(entity, SearchMatchType.FILE_NAME, name)
+        }
+        if (tokens.any { entity.bucketName.contains(it, ignoreCase = true) }) {
+            return SearchMediaResult(entity, SearchMatchType.ALBUM, entity.bucketName)
+        }
+
+        // Fallback
+        return SearchMediaResult(entity, SearchMatchType.FILE_NAME, name)
+    }
+
+    private fun parseCoreMediaEntity(c: Cursor): CoreMediaEntity {
+        val idIdx            = c.getColumnIndexOrThrow("id")
+        val uriIdx           = c.getColumnIndexOrThrow("uriString")
+        val fileIdx          = c.getColumnIndexOrThrow("filePath")
+        val bucketIdx        = c.getColumnIndexOrThrow("bucketName")
+        val addedIdx         = c.getColumnIndexOrThrow("dateAdded")
+        val modIdx           = c.getColumnIndexOrThrow("dateModified")
+        val sizeIdx          = c.getColumnIndexOrThrow("size")
+        val nameIdx          = c.getColumnIndexOrThrow("name")
+        val mimeIdx          = c.getColumnIndexOrThrow("mimeType")
+        val videoIdx         = c.getColumnIndexOrThrow("isVideo")
+        val durIdx           = c.getColumnIndexOrThrow("durationMs")
+        val ocrIdx           = c.getColumnIndex("is_indexed_ocr")
+        val latIdx           = c.getColumnIndex("latitude")
+        val lonIdx           = c.getColumnIndex("longitude")
+        val hashIdx          = c.getColumnIndex("fileHash")
+        return CoreMediaEntity(
+            id              = c.getLong(idIdx),
+            uriString       = c.getString(uriIdx),
+            filePath        = c.getString(fileIdx),
+            bucketName      = c.getString(bucketIdx),
+            dateAdded       = c.getLong(addedIdx),
+            dateModified    = c.getLong(modIdx),
+            size            = c.getLong(sizeIdx),
+            name            = c.getString(nameIdx),
+            mimeType        = if (c.isNull(mimeIdx)) null else c.getString(mimeIdx),
+            isVideo         = c.getInt(videoIdx) != 0,
+            durationMs      = if (c.isNull(durIdx)) null else c.getLong(durIdx),
+            isIndexedOcr    = if (ocrIdx >= 0) c.getInt(ocrIdx) != 0 else false,
+            latitude        = if (latIdx >= 0 && !c.isNull(latIdx)) c.getDouble(latIdx) else null,
+            longitude       = if (lonIdx >= 0 && !c.isNull(lonIdx)) c.getDouble(lonIdx) else null,
+            fileHash        = if (hashIdx >= 0 && !c.isNull(hashIdx)) c.getString(hashIdx) else null,
+        )
+    }
+
+    /**
+     * Legacy FTS5 full-text search wrapper.
+     * Maintained for backward compatibility.
+     */
+    suspend fun searchFts(
+        db: GalleryDatabase,
+        query: String,
+        excluded: Set<String> = emptySet()
+    ): List<CoreMediaEntity> = withContext(Dispatchers.IO) {
+        val rawDb = db.openHelper.readableDatabase
+        searchFtsInternal(rawDb, query, excluded).map { it.first }
     }
 }

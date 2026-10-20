@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Photo Frame Surface -->
+        <path
+            android:pathData="M34,28 h40 c4.42,0 8,3.58 8,8 v36 c0,4.42 -3.58,8 -8,8 h-40 c-4.42,0 -8,-3.58 -8,-8 v-36 c0,-4.42 3.58,-8 8,-8 z"
+            android:fillColor="#FFFFFF" />
+        <!-- Inner Photo Canvas (Blue Sky) -->
+        <path
+            android:pathData="M36,32 h36 c2.76,0 5,2.24 5,5 v30 c0,2.76 -2.24,5 -5,5 h-36 c-2.76,0 -5,-2.24 -5,-5 v-30 c0,-2.76 2.24,-5 5,-5 z"
+            android:fillColor="#64B5F6" />
+        <!-- Sun -->
+        <path
+            android:pathData="M44,43 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0"
+            android:fillColor="#FFA000" />
+        <!-- Rear Mountain Hill -->
+        <path
+            android:pathData="M52,72 L62,54 L75,72 Z"
+            android:fillColor="#81C784" />
+        <!-- Front Mountain Hill -->
+        <path
+            android:pathData="M31,72 L46,49 L64,72 Z"
+            android:fillColor="#388E3C" />
+    </group>
+</vector>

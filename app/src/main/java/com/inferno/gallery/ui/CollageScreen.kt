@@ -240,7 +240,7 @@ fun CollageScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // ── Collage Canvas Area ──────────────────────────────────────
@@ -642,8 +642,14 @@ fun CollageScreen(
 
                                 CollageEditTab.BACKGROUND -> {
                                     val bgColors = listOf(
-                                        Color.White, Color.Black, Color(0xFF1E1E1E), Color(0xFFE0E0E0),
-                                        Color(0xFFEEDC82), Color(0xFFFFB6C1), Color(0xFFADD8E6), Color(0xFF90EE90)
+                                        Color.White,
+                                        Color.Black,
+                                        MaterialTheme.colorScheme.surfaceContainer,
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                        MaterialTheme.colorScheme.errorContainer
                                     )
                                     LazyRow(
                                         modifier = Modifier.fillMaxSize(),
@@ -669,10 +675,11 @@ fun CollageScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) {
+                                                    val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
                                                     Icon(
                                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
                                                         contentDescription = null,
-                                                        tint = if (color == Color.White || color == Color(0xFFE0E0E0) || color == Color(0xFFEEDC82) || color == Color(0xFFFFB6C1) || color == Color(0xFFADD8E6) || color == Color(0xFF90EE90)) Color.Black else Color.White,
+                                                        tint = if (isLight) Color.Black else Color.White,
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 }

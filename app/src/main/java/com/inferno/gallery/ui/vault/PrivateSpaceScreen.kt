@@ -41,10 +41,13 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.inferno.gallery.data.db.VaultMediaEntity
 import com.inferno.gallery.ui.GalleryViewModel
+import com.inferno.gallery.ui.components.PhotonEmptyState
+import com.inferno.gallery.ui.theme.ExpressiveShapes
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
+import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.ShapeSmall
 import kotlinx.coroutines.delay
@@ -86,7 +89,7 @@ fun PrivateSpaceScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -317,6 +320,8 @@ fun PrivateSpaceScreen(
                         ExpressiveVaultKeypad(
                             title = headerTitle,
                             subtitle = headerSubtitle,
+                            isSetup = isSetup,
+                            setupStage = setupStage,
                             enteredPin = enteredPin,
                             showBiometricKey = !isSetup,
                             shakeOffset = shakeOffset.value,
@@ -397,47 +402,16 @@ fun PrivateSpaceScreen(
                             }
                         )
                     } else if (vaultItems.isEmpty()) {
-                        // ── Empty State ──────────────────────────────────────
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        // ── Unified Expressive Empty State ────────────────────
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(96.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(44.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            Text(
-                                text = "Private Space is Empty",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = "Select photos in your gallery and tap \"Hide\" to move them to this encrypted space.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 24.dp)
+                            PhotonEmptyState(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
+                                title = "Private Space is Empty",
+                                subtitle = "Select photos in your gallery and tap \"Hide\" to move them to this encrypted space.",
+                                shape = ExpressiveShapes.Clover8Leaf
                             )
                         }
                     } else {
@@ -517,20 +491,32 @@ fun PrivateSpaceScreen(
                                         }
                                     }
 
-                                    // Video Duration Pill
+                                    // Video Duration Badge (no background, outlined icon + text)
                                     if (item.isVideo && item.durationMs != null) {
-                                        Surface(
+                                        Row(
                                             modifier = Modifier
                                                 .align(Alignment.BottomEnd)
                                                 .padding(6.dp),
-                                            shape = ShapeFull,
-                                            color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f),
-                                            contentColor = Color.White
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
                                         ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_videocam),
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(12.dp)
+                                            )
                                             Text(
                                                 text = formatVaultDuration(item.durationMs),
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                                        color = Color.Black.copy(alpha = 0.85f),
+                                                        offset = androidx.compose.ui.geometry.Offset(0f, 1f),
+                                                        blurRadius = 4f
+                                                    )
+                                                ),
+                                                color = Color.White,
                                                 maxLines = 1,
                                                 softWrap = false
                                             )
@@ -552,6 +538,8 @@ fun PrivateSpaceScreen(
 private fun ExpressiveVaultKeypad(
     title: String,
     subtitle: String,
+    isSetup: Boolean,
+    setupStage: PinSetupStage,
     enteredPin: String,
     showBiometricKey: Boolean,
     shakeOffset: Float,
@@ -566,23 +554,26 @@ private fun ExpressiveVaultKeypad(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Shield Icon Header
+        // CookieShape header icon container
         Surface(
-            shape = ShapeFull,
+            shape = ExpressiveShapes.Cookie12Sided,
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.size(80.dp)
+            modifier = Modifier.size(88.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_lock),
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
                     contentDescription = null,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(40.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
             text = title,
@@ -592,7 +583,7 @@ private fun ExpressiveVaultKeypad(
             softWrap = false
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = subtitle,
@@ -603,7 +594,22 @@ private fun ExpressiveVaultKeypad(
             softWrap = true
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        if (isSetup) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Text(
+                    text = if (setupStage == PinSetupStage.ENTER_NEW_PIN) "Step 1 of 2: Create Master PIN" else "Step 2 of 2: Confirm Master PIN",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(26.dp))
 
         // PIN Indicator Dots with spring animation & shake
         Row(
@@ -635,34 +641,33 @@ private fun ExpressiveVaultKeypad(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
-        // 3x4 Keypad Grid
+        // 3x4 numeric keypad grid with ShapeLargeIncreased items
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                KeypadButton(digit = "1", onClick = { onDigitPress("1") })
-                KeypadButton(digit = "2", onClick = { onDigitPress("2") })
-                KeypadButton(digit = "3", onClick = { onDigitPress("3") })
+                KeypadButton(digit = "1", letters = "", onClick = { onDigitPress("1") })
+                KeypadButton(digit = "2", letters = "ABC", onClick = { onDigitPress("2") })
+                KeypadButton(digit = "3", letters = "DEF", onClick = { onDigitPress("3") })
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                KeypadButton(digit = "4", onClick = { onDigitPress("4") })
-                KeypadButton(digit = "5", onClick = { onDigitPress("5") })
-                KeypadButton(digit = "6", onClick = { onDigitPress("6") })
+                KeypadButton(digit = "4", letters = "GHI", onClick = { onDigitPress("4") })
+                KeypadButton(digit = "5", letters = "JKL", onClick = { onDigitPress("5") })
+                KeypadButton(digit = "6", letters = "MNO", onClick = { onDigitPress("6") })
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                KeypadButton(digit = "7", onClick = { onDigitPress("7") })
-                KeypadButton(digit = "8", onClick = { onDigitPress("8") })
-                KeypadButton(digit = "9", onClick = { onDigitPress("9") })
+                KeypadButton(digit = "7", letters = "PQRS", onClick = { onDigitPress("7") })
+                KeypadButton(digit = "8", letters = "TUV", onClick = { onDigitPress("8") })
+                KeypadButton(digit = "9", letters = "WXYZ", onClick = { onDigitPress("9") })
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 if (showBiometricKey) {
-                    // Biometrics Action
                     KeypadActionButton(
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_fingerprint),
                         contentDescription = "Biometric Auth",
@@ -672,9 +677,8 @@ private fun ExpressiveVaultKeypad(
                     Box(modifier = Modifier.size(72.dp))
                 }
 
-                KeypadButton(digit = "0", onClick = { onDigitPress("0") })
+                KeypadButton(digit = "0", letters = "+", onClick = { onDigitPress("0") })
 
-                // Backspace Action
                 KeypadActionButton(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_backspace),
                     contentDescription = "Backspace",
@@ -688,33 +692,47 @@ private fun ExpressiveVaultKeypad(
 @Composable
 private fun KeypadButton(
     digit: String,
+    letters: String = "",
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     Surface(
-        shape = ShapeLarge,
+        shape = ShapeLargeIncreased,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
         shadowElevation = 0.dp,
         modifier = Modifier
             .size(72.dp)
             .scale(if (isPressed) 0.92f else 1f)
-            .clip(ShapeLarge)
+            .clip(ShapeLargeIncreased)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(
                 text = digit,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
                 softWrap = false
             )
+            if (letters.isNotEmpty()) {
+                Text(
+                    text = letters,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
     }
 }
@@ -729,21 +747,24 @@ private fun KeypadActionButton(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     Surface(
-        shape = ShapeLarge,
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ShapeLargeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
         contentColor = MaterialTheme.colorScheme.primary,
         shadowElevation = 0.dp,
         modifier = Modifier
             .size(72.dp)
             .scale(if (isPressed) 0.92f else 1f)
-            .clip(ShapeLarge)
+            .clip(ShapeLargeIncreased)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,

@@ -35,7 +35,7 @@ fun Modifier.pressScale(
 
     val targetScale = when {
         isSelected -> selectedScale
-        isPressed -> pressedScale
+        isPressed && !MotionTokens.isStandardMotion -> pressedScale
         else -> 1f
     }
 

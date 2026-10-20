@@ -1,3 +1,106 @@
 <resources>
+    <!-- Application Brand -->
     <string name="app_name">Photon Gallery</string>
+    <string name="app_description">An open-source, offline Android gallery designed around privacy, performance, and stunning visuals.</string>
+
+    <!-- Navigation & Tabs -->
+    <string name="nav_photos">Photos</string>
+    <string name="nav_albums">Albums</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Common Actions -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_share">Share</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_details">Details</string>
+    <string name="action_save">Save</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_move">Move</string>
+    <string name="action_select_all">Select All</string>
+    <string name="action_deselect_all">Deselect All</string>
+    <string name="action_close">Close</string>
+    <string name="action_done">Done</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_download">Download</string>
+    <string name="action_set_as">Set as</string>
+    <string name="action_favorite">Favorite</string>
+    <string name="action_unfavorite">Unfavorite</string>
+    <string name="action_restore">Restore</string>
+
+    <!-- Gallery & Media Grid -->
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="empty_gallery_title">No Photos or Videos</string>
+    <string name="empty_gallery_subtitle">Captured moments and downloaded media will appear here</string>
+    <string name="media_count_single">%1$d item</string>
+    <string name="media_count_multiple">%1$d items</string>
+    <string name="selected_count">%1$d selected</string>
+
+    <!-- Albums -->
+    <string name="album_camera">Camera</string>
+    <string name="album_screenshots">Screenshots</string>
+    <string name="album_favorites">Favorites</string>
+    <string name="album_videos">Videos</string>
+    <string name="album_trash">Recycle Bin</string>
+    <string name="album_archive">Archive</string>
+    <string name="album_vault">Private Vault</string>
+    <string name="pinned_albums">Pinned</string>
+    <string name="all_albums">All Albums</string>
+    <string name="media_types">Media Types</string>
+    <string name="new_album">New Album</string>
+    <string name="album_name_hint">Album name</string>
+
+    <!-- Search & AI -->
+    <string name="search_hint">Search photos, places, dates, text...</string>
+    <string name="smart_search">Smart Search</string>
+    <string name="smart_search_description">Natural language on-device search powered by MobileCLIP</string>
+    <string name="recent_searches">Recent Searches</string>
+    <string name="clear_search_history">Clear Search History</string>
+    <string name="no_search_results">No results found</string>
+
+    <!-- Settings Categories -->
+    <string name="settings_title">Settings</string>
+    <string name="category_general">General</string>
+    <string name="category_theme_display">Theme &amp; Display</string>
+    <string name="category_layout_navigation">Layout &amp; Navigation</string>
+    <string name="category_security_privacy">Security &amp; Privacy</string>
+    <string name="category_about">About</string>
+
+    <!-- Theme & Display Settings -->
+    <string name="theme_mode">Theme Mode</string>
+    <string name="theme_mode_system">System</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="material_you">Material You</string>
+    <string name="material_you_desc">Use dynamic colors based on your wallpaper</string>
+    <string name="amoled_black">Deep AMOLED Black</string>
+    <string name="amoled_black_desc">Use pitch black background in dark mode</string>
+    <string name="color_scheme">Color Scheme &amp; Style</string>
+    <string name="app_icon">App Icon</string>
+    <string name="app_icon_desc">Customize the launcher icon appearance</string>
+    <string name="choose_app_icon">Choose App Icon</string>
+    <string name="full_screen_mode">Full Screen Mode</string>
+    <string name="full_screen_mode_desc">Hide status and navigation bars while browsing</string>
+    <string name="motion_style">Motion Style</string>
+    <string name="motion_expressive">Expressive</string>
+    <string name="motion_standard">Standard</string>
+
+    <!-- General Settings -->
+    <string name="default_gallery">Default Gallery App</string>
+    <string name="default_gallery_desc">Set Photon Gallery as the primary photo and video viewer</string>
+    <string name="set_as_default">Set as Default</string>
+    <string name="confirm_delete">Confirm Deletion</string>
+    <string name="confirm_delete_desc">Ask before moving items to the recycle bin</string>
+    <string name="auto_clean_trash">Auto-clean Recycle Bin</string>
+    <string name="auto_clean_trash_desc">Automatically delete old items in the recycle bin</string>
+
+    <!-- About & Community -->
+    <string name="check_updates">Check for Updates</string>
+    <string name="source_code">Source Code on GitHub</string>
+    <string name="report_issue">Report Issue &amp; Feedback</string>
+    <string name="open_source_licenses">Open Source Licenses</string>
+    <string name="privacy_guarantee">Privacy Policy &amp; Guarantee</string>
 </resources>

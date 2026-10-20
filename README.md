@@ -60,8 +60,7 @@
 
 | Layer | Technology |
 |---|---|
-| **Language** | Kotlin 2.2, Coroutines, Flow |
-| **UI** | Jetpack Compose, Material 3 Expressive, MaterialKolor, Material Symbols icons, Google Sans Flex (variable font) |
+| **UI** | Jetpack Compose, Material 3 Expressive, Material Symbols icons, Google Sans Flex / Outfit & Urbanist |
 | **Architecture** | MVVM, ViewModel, Room (SQLite + FTS5) |
 | **Image Loading** | Coil 3 (GIF, WebP, HEIF, SVG, Video thumbnails) |
 | **AI / ML** | ONNX Runtime (MobileCLIP), ML Kit (OCR) |
@@ -110,8 +109,6 @@ Quick start:
 2. **Create a branch**: `git checkout -b feature/your-feature`
 3. **Commit your changes**: `git commit -m "feat: add your feature"`
 4. **Verify tests & lint**: `./gradlew lint testDebugUnitTest`
-5. **Push & Open a Pull Request**: Follow our PR template and [Conventional Commits](https://www.conventionalcommits.org/).
-
 ---
 
 ## 📄 License

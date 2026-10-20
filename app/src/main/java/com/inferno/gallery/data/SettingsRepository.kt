@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 enum class DockStyle { PILL, FULL_WIDTH }
-enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC, STAGGERED_MASONRY }
+enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC }
+enum class AlbumLayoutMode { GRID_2_COL, GRID_3_COL, LIST }
 
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
@@ -32,6 +33,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val TIMELINE_LAYOUT_MODE = stringPreferencesKey("timeline_layout_mode")
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val ALBUM_SORT_ORDER = stringPreferencesKey("album_sort_order")
+        val ALBUM_LAYOUT_MODE = stringPreferencesKey("album_layout_mode")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
         val USE_AMOLED_BLACK = booleanPreferencesKey("use_amoled_black")
@@ -53,7 +55,6 @@ class SettingsRepository private constructor(private val context: Context) {
         val AUTOPLAY_WITH_SOUND_ENABLED = booleanPreferencesKey("autoplay_with_sound_enabled")
         val AUTO_CLEAN_TRASH_ENABLED = booleanPreferencesKey("auto_clean_trash_enabled")
         val AUTO_CLEAN_TRASH_DAYS = androidx.datastore.preferences.core.intPreferencesKey("auto_clean_trash_days")
-        val CACHE_THUMBNAILS_ENABLED = booleanPreferencesKey("cache_thumbnails_enabled")
         val MAX_BRIGHTNESS_ENABLED = booleanPreferencesKey("max_brightness_enabled")
         
 
@@ -64,10 +65,13 @@ class SettingsRepository private constructor(private val context: Context) {
         val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
         val SHOW_HIDDEN_ALBUMS = booleanPreferencesKey("show_hidden_albums")
         val VIEWER_BLUR_EFFECT = booleanPreferencesKey("viewer_blur_effect")
+        val VIEWER_DYNAMIC_COLOR = booleanPreferencesKey("viewer_dynamic_color")
         val ALBUM_CUSTOM_COVERS = stringPreferencesKey("album_custom_covers")
+        val ALBUM_CUSTOM_SHAPES = stringPreferencesKey("album_custom_shapes")
         val SHOW_ALBUM_SIZE = booleanPreferencesKey("show_album_size")
         val OCR_INDEXING_ENABLED = booleanPreferencesKey("ocr_indexing_enabled")
         val STORY_MUSIC_MUTED = booleanPreferencesKey("story_music_muted")
+        val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
         val ALBUMS_EXPANDED_MORE = booleanPreferencesKey("albums_expanded_more")
@@ -87,6 +91,27 @@ class SettingsRepository private constructor(private val context: Context) {
         val TERTIARY_COLOR_OVERRIDE = intPreferencesKey("tertiary_color_override")   // -1 = auto (derived from seed)
         val CONTRAST_PRESET = stringPreferencesKey("contrast_preset")               // "Reduced" | "Default" | "Medium" | "High"
         val ANIMATE_THEME_TRANSITIONS = booleanPreferencesKey("animate_theme_transitions")
+        val MOTION_STYLE = stringPreferencesKey("motion_style")
+        val APP_ICON = stringPreferencesKey("app_icon")
+        val DATE_HEADER_ALIGNMENT = stringPreferencesKey("date_header_alignment")
+
+        // Auto Updates
+        val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
+        val LAST_UPDATE_CHECK_TIMESTAMP = androidx.datastore.preferences.core.longPreferencesKey("last_update_check_timestamp")
+    }
+
+    val autoCheckUpdatesFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[AUTO_CHECK_UPDATES] ?: true }
+
+    suspend fun updateAutoCheckUpdates(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[AUTO_CHECK_UPDATES] = enabled }
+    }
+
+    val lastUpdateCheckTimestampFlow: Flow<Long> = context.dataStore.data
+        .map { preferences -> preferences[LAST_UPDATE_CHECK_TIMESTAMP] ?: 0L }
+
+    suspend fun updateLastUpdateCheckTimestamp(timestamp: Long) {
+        context.dataStore.edit { preferences -> preferences[LAST_UPDATE_CHECK_TIMESTAMP] = timestamp }
     }
 
     val albumsExpandedPinnedFlow: Flow<Boolean> = context.dataStore.data
@@ -145,6 +170,16 @@ class SettingsRepository private constructor(private val context: Context) {
             preferences[ALBUM_SORT_ORDER] ?: "NameAsc"
         }
 
+    val albumLayoutModeFlow: Flow<AlbumLayoutMode> = context.dataStore.data
+        .map { preferences ->
+            when (preferences[ALBUM_LAYOUT_MODE]) {
+                AlbumLayoutMode.GRID_2_COL.name -> AlbumLayoutMode.GRID_2_COL
+                AlbumLayoutMode.GRID_3_COL.name -> AlbumLayoutMode.GRID_3_COL
+                AlbumLayoutMode.LIST.name -> AlbumLayoutMode.LIST
+                else -> AlbumLayoutMode.GRID_2_COL
+            }
+        }
+
     val dockStyleFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[DOCK_STYLE] ?: DockStyle.PILL.name
@@ -157,7 +192,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val useAmoledBlackFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[USE_AMOLED_BLACK] ?: true
+            preferences[USE_AMOLED_BLACK] ?: false
         }
 
     val appSeedColorFlow: Flow<Int> = context.dataStore.data
@@ -167,7 +202,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val themePaletteStyleFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
-            preferences[THEME_PALETTE_STYLE] ?: "TonalSpot"
+            preferences[THEME_PALETTE_STYLE] ?: "Expressive"
         }
 
     val themeContrastLevelFlow: Flow<Float> = context.dataStore.data
@@ -182,7 +217,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     // ── Advanced Theming Flows ──
     val colorPresetNameFlow: Flow<String> = context.dataStore.data
-        .map { it[COLOR_PRESET_NAME] ?: "Material You" }
+        .map { it[COLOR_PRESET_NAME] ?: "default_blue" }
 
     val secondaryColorOverrideFlow: Flow<Int> = context.dataStore.data
         .map { it[SECONDARY_COLOR_OVERRIDE] ?: -1 }
@@ -198,7 +233,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val smartSearchAutoIndexFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[SMART_SEARCH_AUTO_INDEX] ?: false
+            preferences[SMART_SEARCH_AUTO_INDEX] ?: true
         }
 
     val confirmDeleteEnabledFlow: Flow<Boolean> = context.dataStore.data
@@ -221,15 +256,22 @@ class SettingsRepository private constructor(private val context: Context) {
             preferences[AUTO_CLEAN_TRASH_DAYS] ?: 30
         }
 
-    val cacheThumbnailsEnabledFlow: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[CACHE_THUMBNAILS_ENABLED] ?: true
-        }
 
     val maxBrightnessEnabledFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[MAX_BRIGHTNESS_ENABLED] ?: false
         }
+
+    val showMemoriesFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[SHOW_MEMORIES] ?: true
+        }
+
+    suspend fun updateShowMemories(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_MEMORIES] = enabled
+        }
+    }
 
     val typographyStyleFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
@@ -304,7 +346,6 @@ class SettingsRepository private constructor(private val context: Context) {
         .map { preferences ->
             when (preferences[TIMELINE_LAYOUT_MODE]) {
                 TimelineLayoutMode.EDITORIAL_MOSAIC.name -> TimelineLayoutMode.EDITORIAL_MOSAIC
-                TimelineLayoutMode.STAGGERED_MASONRY.name -> TimelineLayoutMode.STAGGERED_MASONRY
                 else -> TimelineLayoutMode.STANDARD_GRID
             }
         }
@@ -327,6 +368,12 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    suspend fun updateAlbumLayoutMode(mode: AlbumLayoutMode) {
+        context.dataStore.edit { preferences ->
+            preferences[ALBUM_LAYOUT_MODE] = mode.name
+        }
+    }
+
     suspend fun updateDockStyle(style: DockStyle) {
         context.dataStore.edit { preferences ->
             preferences[DOCK_STYLE] = style.name
@@ -337,6 +384,11 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateUseMaterialYou(use: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[USE_MATERIAL_YOU] = use
+            if (use) {
+                preferences[COLOR_PRESET_NAME] = "dynamic"
+            } else if (preferences[COLOR_PRESET_NAME] == "dynamic" || preferences[COLOR_PRESET_NAME] == null) {
+                preferences[COLOR_PRESET_NAME] = "default_blue"
+            }
         }
     }
 
@@ -483,11 +535,6 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
-    suspend fun updateCacheThumbnailsEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[CACHE_THUMBNAILS_ENABLED] = enabled
-        }
-    }
 
     suspend fun updateMaxBrightnessEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
@@ -567,6 +614,17 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    val viewerDynamicColorFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[VIEWER_DYNAMIC_COLOR] ?: false
+        }
+
+    suspend fun updateViewerDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[VIEWER_DYNAMIC_COLOR] = enabled
+        }
+    }
+
     // ── Album Custom Covers ──
     // Stored as a comma-separated list of "bucketName=uriString" pairs.
     val albumCustomCoversFlow: Flow<Map<String, String>> = context.dataStore.data
@@ -606,6 +664,49 @@ class SettingsRepository private constructor(private val context: Context) {
                 }.toMutableMap()
             if (current.remove(bucketName) != null) {
                 preferences[ALBUM_CUSTOM_COVERS] = current.entries.joinToString("|||") { (k, v) -> "$k==>$v" }
+            }
+        }
+    }
+
+    // ── Album Custom Shapes ──
+    // Stored as "bucketName==>shapeId|||..."
+    val albumCustomShapesFlow: Flow<Map<String, String>> = context.dataStore.data
+        .map { preferences ->
+            val str = preferences[ALBUM_CUSTOM_SHAPES] ?: ""
+            if (str.isBlank()) emptyMap()
+            else str.split("|||")
+                .filter { it.contains("==>") }
+                .associate { pair ->
+                    val idx = pair.indexOf("==>")
+                    pair.substring(0, idx) to pair.substring(idx + 3)
+                }
+        }
+
+    suspend fun setAlbumCustomShape(bucketName: String, shapeId: String) {
+        context.dataStore.edit { preferences ->
+            val current = (preferences[ALBUM_CUSTOM_SHAPES] ?: "")
+                .split("|||")
+                .filter { it.contains("==>") }
+                .associate { pair ->
+                    val idx = pair.indexOf("==>")
+                    pair.substring(0, idx) to pair.substring(idx + 3)
+                }.toMutableMap()
+            current[bucketName] = shapeId
+            preferences[ALBUM_CUSTOM_SHAPES] = current.entries.joinToString("|||") { (k, v) -> "$k==>$v" }
+        }
+    }
+
+    suspend fun removeAlbumCustomShape(bucketName: String) {
+        context.dataStore.edit { preferences ->
+            val current = (preferences[ALBUM_CUSTOM_SHAPES] ?: "")
+                .split("|||")
+                .filter { it.contains("==>") }
+                .associate { pair ->
+                    val idx = pair.indexOf("==>")
+                    pair.substring(0, idx) to pair.substring(idx + 3)
+                }.toMutableMap()
+            if (current.remove(bucketName) != null) {
+                preferences[ALBUM_CUSTOM_SHAPES] = current.entries.joinToString("|||") { (k, v) -> "$k==>$v" }
             }
         }
     }
@@ -657,7 +758,14 @@ class SettingsRepository private constructor(private val context: Context) {
 
     // ── Advanced Theming Updaters ──
     suspend fun updateColorPresetName(name: String) {
-        context.dataStore.edit { it[COLOR_PRESET_NAME] = name }
+        context.dataStore.edit {
+            it[COLOR_PRESET_NAME] = name
+            if (name == "dynamic") {
+                it[USE_MATERIAL_YOU] = true
+            } else {
+                it[USE_MATERIAL_YOU] = false
+            }
+        }
     }
 
     suspend fun updateSecondaryColorOverride(color: Int) {
@@ -684,5 +792,26 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateAnimateThemeTransitions(animate: Boolean) {
         context.dataStore.edit { it[ANIMATE_THEME_TRANSITIONS] = animate }
+    }
+
+    val motionStyleFlow: Flow<String> = context.dataStore.data
+        .map { it[MOTION_STYLE] ?: "expressive" }
+
+    suspend fun updateMotionStyle(style: String) {
+        context.dataStore.edit { it[MOTION_STYLE] = style }
+    }
+
+    val appIconFlow: Flow<String> = context.dataStore.data
+        .map { it[APP_ICON] ?: "default" }
+
+    suspend fun updateAppIcon(iconId: String) {
+        context.dataStore.edit { it[APP_ICON] = iconId }
+    }
+
+    val dateHeaderAlignmentFlow: Flow<String> = context.dataStore.data
+        .map { it[DATE_HEADER_ALIGNMENT] ?: "CENTER" }
+
+    suspend fun updateDateHeaderAlignment(alignment: String) {
+        context.dataStore.edit { it[DATE_HEADER_ALIGNMENT] = alignment }
     }
 }

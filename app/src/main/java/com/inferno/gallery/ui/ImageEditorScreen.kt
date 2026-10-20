@@ -342,10 +342,28 @@ fun ImageEditorScreen(
     LaunchedEffect(imageUri) {
         originalBitmap = withContext(Dispatchers.IO) {
             try {
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 context.contentResolver.openInputStream(imageUri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
+                    BitmapFactory.decodeStream(stream, null, boundsOpts)
                 }
-            } catch (e: Exception) {
+
+                val maxDim = maxOf(boundsOpts.outWidth, boundsOpts.outHeight)
+                var sampleSize = 1
+                val targetMax = 4096
+                while (maxDim / (sampleSize * 2) >= targetMax) {
+                    sampleSize *= 2
+                }
+
+                val decodeOpts = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, decodeOpts)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 null
             }
         }
@@ -414,7 +432,9 @@ fun ImageEditorScreen(
                     if (crop.flipH) matrix.preScale(-1f, 1f)
                     if (crop.flipV) matrix.preScale(1f, -1f)
                     if (crop.rotation != 0) matrix.postRotate(crop.rotation.toFloat())
-                    workBitmap = Bitmap.createBitmap(workBitmap, 0, 0, workBitmap.width, workBitmap.height, matrix, true)
+                    val rotated = Bitmap.createBitmap(workBitmap, 0, 0, workBitmap.width, workBitmap.height, matrix, true)
+                    if (workBitmap != bmp) workBitmap.recycle()
+                    workBitmap = rotated
                 }
 
                 // Apply crop rect
@@ -424,7 +444,9 @@ fun ImageEditorScreen(
                     val y = (cropRect.top * workBitmap.height).toInt().coerceIn(0, workBitmap.height - 1)
                     val w = ((cropRect.right - cropRect.left) * workBitmap.width).toInt().coerceIn(1, workBitmap.width - x)
                     val h = ((cropRect.bottom - cropRect.top) * workBitmap.height).toInt().coerceIn(1, workBitmap.height - y)
-                    workBitmap = Bitmap.createBitmap(workBitmap, x, y, w, h)
+                    val cropped = Bitmap.createBitmap(workBitmap, x, y, w, h)
+                    if (workBitmap != bmp) workBitmap.recycle()
+                    workBitmap = cropped
                 }
 
                 // Apply color matrix (tune + filter)
@@ -434,6 +456,7 @@ fun ImageEditorScreen(
                     colorFilter = ColorMatrixColorFilter(combinedMatrix)
                 }
                 canvas.drawBitmap(workBitmap, 0f, 0f, paint)
+                if (workBitmap != bmp) workBitmap.recycle()
 
                 // Apply vignette
                 if (currentState.vignetteStrength > 0f) {
@@ -476,6 +499,7 @@ fun ImageEditorScreen(
                         }
                     }
                 }
+                resultBitmap.recycle()
 
                 withContext(Dispatchers.Main) {
                     view.thud()
@@ -484,10 +508,12 @@ fun ImageEditorScreen(
                     onSaved()
                     onBack()
                 }
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error saving: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Error saving: ${e.message ?: "Out of memory"}", Toast.LENGTH_SHORT).show()
                     isSaving = false
                 }
             }
@@ -508,7 +534,7 @@ fun ImageEditorScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceContainerLowest),
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -534,7 +560,7 @@ fun ImageEditorScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // ── Image Preview Area ───────────────────────────────────────

@@ -118,6 +118,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.request.CachePolicy
@@ -136,6 +140,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.offset
@@ -151,11 +157,13 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeMedium
+import com.inferno.gallery.ui.theme.ShapeFull
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -164,6 +172,9 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import androidx.paging.compose.itemContentType
 import com.inferno.gallery.ui.GalleryListItem
+import com.inferno.gallery.data.MemoryDayGroup
+import com.inferno.gallery.ui.components.MemoriesSpotlightCard
+import com.inferno.gallery.ui.components.MemoryReelViewer
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -187,14 +198,17 @@ fun GalleryScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     bucketName: String? = null,
     isMainTab: Boolean = false,
+    topBarCollapseFractionProvider: () -> Float = { 0f },
     onNavigateToSettings: () -> Unit = {}
 ) {
     val selectedFilterIndex by viewModel.selectedFilterIndex.collectAsState()
-    val savedPosition = remember(bucketName) { viewModel.getSavedGridScrollPosition(bucketName) }
-    val lazyGridState = rememberLazyGridState(
-        initialFirstVisibleItemIndex = savedPosition.first,
-        initialFirstVisibleItemScrollOffset = savedPosition.second
-    )
+    val lazyGridState = androidx.compose.runtime.key(bucketName) {
+        val savedPosition = remember(bucketName) { viewModel.getSavedGridScrollPosition(bucketName) }
+        rememberLazyGridState(
+            initialFirstVisibleItemIndex = savedPosition.first,
+            initialFirstVisibleItemScrollOffset = savedPosition.second
+        )
+    }
 
     LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
@@ -219,13 +233,12 @@ fun GalleryScreen(
     LaunchedEffect(lazyGridState, bucketName) {
         snapshotFlow { lazyGridState.isScrollInProgress }
             .distinctUntilChanged()
+            .drop(1)
             .collect { inProgress ->
                 if (!inProgress) {
                     val index = lazyGridState.firstVisibleItemIndex
                     val offset = lazyGridState.firstVisibleItemScrollOffset
-                    if (index > 0 || offset > 0) {
-                        viewModel.saveGridScrollPosition(bucketName, index, offset)
-                    }
+                    viewModel.saveGridScrollPosition(bucketName, index, offset)
                 }
             }
     }
@@ -240,16 +253,38 @@ fun GalleryScreen(
 
     val viewMode by viewModel.viewMode.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
-    val selectedUris by viewModel.selectedUris.collectAsState()
+    val selectedUrisRaw by viewModel.selectedUris.collectAsState()
+    // Re-wrap so the grid receives a stable, content-comparable type. See StableUriSet.
+    val selectedUris = remember(selectedUrisRaw) { StableUriSet(selectedUrisRaw) }
     val gridCellsCount by viewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
-    val cacheThumbnailsEnabled by viewModel.cacheThumbnailsEnabled.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
+    val dateHeaderAlignment by viewModel.dateHeaderAlignment.collectAsState()
+    val favoriteIds by viewModel.favoriteIds.collectAsState()
 
-    val totalItems = pagedMedia.itemCount
+    // ── On This Day Memories ──
+    val onThisDayMemories by viewModel.onThisDayMemories.collectAsState()
+    val isMemoriesDismissed by viewModel.isMemoriesDismissed.collectAsState()
+    val showMemoriesSetting by viewModel.showMemoriesSetting.collectAsState()
+    var activeMemoryReelGroup by remember { mutableStateOf<MemoryDayGroup?>(null) }
+
+    val shouldShowMemoriesHeader = bucketName == null &&
+        isMainTab &&
+        !isSelectionMode &&
+        showMemoriesSetting &&
+        onThisDayMemories.isNotEmpty()
+
+    // NOTE: pagedMedia.itemCount is deliberately NOT read in this composition scope. Reading
+    // it here subscribed the entire GalleryScreen restart scope to the paging snapshot, so
+    // every 120-item page append recomposed the screen (and with it the whole grid). Each
+    // consumer below reads it inside its own scope instead.
     val context = LocalContext.current
 
-    BackHandler(enabled = isSelectionMode) {
+    BackHandler(enabled = activeMemoryReelGroup != null) {
+        activeMemoryReelGroup = null
+    }
+
+    BackHandler(enabled = isSelectionMode && activeMemoryReelGroup == null) {
         viewModel.clearSelection()
     }
 
@@ -265,17 +300,65 @@ fun GalleryScreen(
                     lazyGridState.firstVisibleItemIndex,
                     lazyGridState.firstVisibleItemScrollOffset
                 )
-                viewModel.setInitialDetailItem(item)
+                viewModel.setInitialDetailItem(item, bucketName)
                 val query = if (bucketName == "search_text") viewModel.searchQuery.value else null
                 onPhotoClick(item.id, bucketName, query)
             }
         }
     }
 
-    val onMediaLongClick = remember(viewModel) {
-        { item: GalleryItem ->
-            viewModel.toggleSelection(item.uri.toString())
-        }
+    // Stable callback reference. A bound `viewModel::setGridCellsCount` KFunction is allocated
+    // fresh on every GalleryScreen recomposition and KFunction does not override equals(), so
+    // under strong skipping PhotonGrid could never skip and the whole visible grid was
+    // re-subcomposed whenever any screen-level state changed (including during every fling).
+    val onGridCountChange = remember(viewModel) {
+        { count: Int -> viewModel.setGridCellsCount(count) }
+    }
+
+    var activeDateBadge by remember { mutableStateOf<String?>(null) }
+    var showDateBadge by remember { mutableStateOf(false) }
+
+    // ── Dynamic Date Badge Scroll Observer ───────────────────────────────────
+    // Keyed only on the grid state: keying on pagedMedia.itemCount tore down and rebuilt this
+    // collector (and its SimpleDateFormat) on every 120-item page append. The body reads
+    // itemCount directly, which inside a coroutine is not a composition subscription.
+    LaunchedEffect(lazyGridState) {
+        val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+        var cachedDateSeconds = -1L
+        var cachedDateString = ""
+
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        snapshotFlow { lazyGridState.firstVisibleItemIndex to lazyGridState.isScrollInProgress }
+            .debounce(60L)
+            .collectLatest { (index, inProgress) ->
+                if (index in 0 until pagedMedia.itemCount) {
+                    val listItem = pagedMedia.peek(index)
+                    val dateStr = when (listItem) {
+                        is GalleryListItem.Header -> listItem.title
+                        is GalleryListItem.Item -> {
+                            val seconds = listItem.galleryItem.dateAdded
+                            if (seconds > 0) {
+                                val dayStart = (seconds / 86400) * 86400
+                                if (dayStart != cachedDateSeconds) {
+                                    cachedDateSeconds = dayStart
+                                    cachedDateString = dateFormat.format(Date(seconds * 1000L))
+                                }
+                                cachedDateString
+                            } else null
+                        }
+                        null -> null
+                    }
+                    if (!dateStr.isNullOrBlank()) {
+                        activeDateBadge = dateStr
+                    }
+                }
+                if (inProgress) {
+                    showDateBadge = true
+                } else if (showDateBadge) {
+                    delay(1200)
+                    showDateBadge = false
+                }
+            }
     }
 
 
@@ -320,13 +403,14 @@ fun GalleryScreen(
                 for (i in start..end) {
                     val listItem = pagedMedia.peek(i) as? GalleryListItem.Item ?: continue
                     val galleryItem = listItem.galleryItem
-                    val cacheKey = "t_${galleryItem.id}@$thumbSizePx"
+                    val cacheKey = thumbnailMemoryKey(galleryItem.id, thumbSizePx)
                     if (imageLoader.memoryCache?.get(coil3.memory.MemoryCache.Key(cacheKey)) != null) continue
                     val req = coil3.request.ImageRequest.Builder(context)
-                        .data(galleryItem.uri)
+                        .data(if (galleryItem.isVideo) galleryItem.uri else (if (galleryItem.localExists) galleryItem.resolvedUri else galleryItem.uri))
                         .size(thumbSizePx, thumbSizePx)
                         .precision(coil3.size.Precision.INEXACT)
                         .memoryCacheKey(cacheKey)
+                        .diskCacheKey(cacheKey)
                         .build()
                     imageLoader.enqueue(req)
                 }
@@ -334,48 +418,55 @@ fun GalleryScreen(
     }
     // ──────────────────────────────────────────────────────────────────────────────────────
 
-    val isFilterChanging = pagedMedia.loadState.refresh is androidx.paging.LoadState.Loading
-    val gridAlpha by animateFloatAsState(
-        targetValue = if (isFilterChanging && totalItems > 0) 0.88f else 1f,
-        animationSpec = MotionTokens.snappySpring(),
-        label = "GridFilterAlpha"
-    )
+    val isGridEmpty = remember(pagedMedia) {
+        derivedStateOf { pagedMedia.itemCount == 0 }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    alpha = gridAlpha
+        com.inferno.gallery.ui.components.PhotonGrid(
+            pagedMedia = pagedMedia,
+            lazyGridState = lazyGridState,
+            gridCellsCount = gridCellsCount,
+            onGridCountChange = onGridCountChange,
+            isSelectionMode = isSelectionMode,
+            selectedUris = selectedUris,
+            onMediaClick = onMediaClick,
+            viewMode = viewMode,
+            thumbnailCornerRadius = thumbnailCornerRadius,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            viewModel = viewModel,
+            modifier = modifier,
+            contentPadding = contentPadding,
+            timelineLayoutMode = timelineLayoutMode,
+            dateHeaderAlignment = dateHeaderAlignment,
+            showMatchBadge = (bucketName == "search_text" || bucketName == "search_smart"),
+            headerContent = if (shouldShowMemoriesHeader) {
+                {
+                    MemoriesSpotlightCard(
+                        memoryGroups = onThisDayMemories,
+                        isDismissed = isMemoriesDismissed,
+                        onOpenMemory = { group ->
+                            activeMemoryReelGroup = group
+                        },
+                        onDismiss = {
+                            viewModel.dismissMemories()
+                        },
+                        onRestore = {
+                            viewModel.uncollapseMemories()
+                        }
+                    )
                 }
-        ) {
-            com.inferno.gallery.ui.components.PhotonGrid(
-                pagedMedia = pagedMedia,
-                lazyGridState = lazyGridState,
-                gridCellsCount = gridCellsCount,
-                onGridCountChange = viewModel::setGridCellsCount,
-                isSelectionMode = isSelectionMode,
-                selectedUris = selectedUris,
-                onMediaClick = onMediaClick,
-                onMediaLongClick = onMediaLongClick,
-                viewMode = viewMode,
-                thumbnailCornerRadius = thumbnailCornerRadius,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                viewModel = viewModel,
-                modifier = modifier,
-                contentPadding = contentPadding,
-                timelineLayoutMode = timelineLayoutMode
-            )
-        }
+            } else null
+        )
 
         // ── Initial sync loading ────────────────────────────────────────────
         val isSyncRunning by viewModel.isInitialSyncRunning.collectAsState()
         val isNotLoading = pagedMedia.loadState.refresh is androidx.paging.LoadState.NotLoading
         AnimatedVisibility(
-            visible = totalItems == 0 && isSyncRunning,
+            visible = isGridEmpty.value && isSyncRunning,
             enter = fadeIn(MotionTokens.snappySpring()),
             exit  = fadeOut(MotionTokens.snappySpring()),
             modifier = Modifier
@@ -404,7 +495,7 @@ fun GalleryScreen(
 
         // ── Empty state ────────────────────────────────────────────────────
         AnimatedVisibility(
-            visible = totalItems == 0 && isNotLoading && !isSyncRunning,
+            visible = isGridEmpty.value && isNotLoading && !isSyncRunning,
             enter = fadeIn(MotionTokens.snappySpring()) +
                     scaleIn(MotionTokens.snappySpring(), initialScale = 0.7f),
             exit  = fadeOut(MotionTokens.snappySpring()),
@@ -433,9 +524,60 @@ fun GalleryScreen(
             )
         }
 
+        // ── Top Gradient Scrim (Google Photos Edge-to-Edge Status Bar Vignette) ──
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val scrimHeight = statusBarTop + 36.dp
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(scrimHeight)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to MaterialTheme.colorScheme.surfaceContainerLow,
+                        0.35f to MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.90f),
+                        0.65f to MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.55f),
+                        0.85f to MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.18f),
+                        1.0f to Color.Transparent
+                    )
+                )
+        )
+
+        // ── Dynamic Date Badge ──────────────────────────────────────────────
+        val topBarContentPadding = contentPadding.calculateTopPadding()
+        val density = LocalDensity.current
+        val maxUpwardShiftPx = remember(topBarContentPadding, statusBarTop, density) {
+            with(density) {
+                // Expanded top offset: topBarContentPadding + 12dp.
+                // Collapsed top offset: statusBarTop + 8dp.
+                val expandedTop = topBarContentPadding + 12.dp
+                val collapsedTop = statusBarTop + 8.dp
+                (expandedTop - collapsedTop).coerceAtLeast(0.dp).toPx()
+            }
+        }
+
+        DynamicDateBadge(
+            // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
+            // composition subscribed the whole GalleryScreen to state that is written every
+            // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
+            // happen inside DynamicDateBadge's own (small) restart scope.
+            visible = { showDateBadge },
+            dateText = { activeDateBadge },
+            modifier = Modifier
+                .align(if (dateHeaderAlignment == "CENTER") Alignment.TopCenter else Alignment.TopStart)
+                .padding(
+                    top = topBarContentPadding + 12.dp,
+                    start = if (dateHeaderAlignment == "CENTER") 0.dp else 16.dp
+                )
+                .graphicsLayer {
+                    translationY = -topBarCollapseFractionProvider() * maxUpwardShiftPx
+                }
+        )
+
         FastScroller(
             lazyGridState = lazyGridState,
-            totalItems = totalItems,
+            pagedMedia = pagedMedia,
+            headerOffset = if (shouldShowMemoriesHeader) 1 else 0,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(
@@ -443,6 +585,22 @@ fun GalleryScreen(
                     bottom = contentPadding.calculateBottomPadding() + 56.dp
                 )
         )
+
+        // Full-screen Memory Reel Viewer
+        val activeGroup = activeMemoryReelGroup
+        if (activeGroup != null) {
+            MemoryReelViewer(
+                group = activeGroup,
+                favoriteIds = favoriteIds,
+                onToggleFavorite = { id -> viewModel.toggleFavorite(id) },
+                onOpenPhotoDetail = { mediaId ->
+                    activeMemoryReelGroup = null
+                    onPhotoClick(mediaId, null, null)
+                },
+                onDismiss = { activeMemoryReelGroup = null },
+                stripMetadataFlow = viewModel.settingsRepository.stripMetadataOnShareFlow
+            )
+        }
     }
 }
 
@@ -468,15 +626,70 @@ fun formatDuration(millis: Long?): String {
 @Composable
 fun FastScroller(
     lazyGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
-    totalItems: Int,
-    modifier: Modifier = Modifier
+    pagedMedia: LazyPagingItems<GalleryListItem>,
+    modifier: Modifier = Modifier,
+    headerOffset: Int = 0
 ) {
-    if (totalItems < 50) return
+    // Read here, not in the caller: keeps the paging snapshot subscription out of the
+    // screen's restart scope.
+    if (pagedMedia.itemCount < 50) return
+
+    val monthFormat = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
 
     com.inferno.gallery.ui.components.ExpressiveScrollBar(
         gridState = lazyGridState,
+        dragLabelProvider = { rawIndex ->
+            val index = rawIndex - headerOffset
+            if (index in 0 until pagedMedia.itemCount) {
+                when (val item = pagedMedia.peek(index)) {
+                    is GalleryListItem.Header -> item.title
+                    is GalleryListItem.Item -> {
+                        val sec = item.galleryItem.dateAdded
+                        if (sec > 0) monthFormat.format(Date(sec * 1000L)) else null
+                    }
+                    null -> null
+                }
+            } else null
+        },
         modifier = modifier
     )
+}
+
+@Composable
+private fun DynamicDateBadge(
+    visible: () -> Boolean,
+    dateText: () -> String?,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible() && !dateText().isNullOrBlank(),
+        enter = fadeIn(animationSpec = MotionTokens.snappySpring()) + slideInVertically(
+            initialOffsetY = { -it },
+            animationSpec = MotionTokens.snappySpring()
+        ),
+        exit = fadeOut(animationSpec = MotionTokens.snappySpring()) + slideOutVertically(
+            targetOffsetY = { -it },
+            animationSpec = MotionTokens.snappySpring()
+        ),
+        modifier = modifier
+    ) {
+        Surface(
+            shape = ShapeFull,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+            shadowElevation = 3.dp,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            )
+        ) {
+            Text(
+                text = dateText() ?: "",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+            )
+        }
+    }
 }
 
 

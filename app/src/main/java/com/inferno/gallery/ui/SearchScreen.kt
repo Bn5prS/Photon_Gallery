@@ -17,17 +17,23 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +51,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
@@ -60,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.inferno.gallery.ui.components.PhotonEmptyState
 import com.inferno.gallery.ui.components.PhotonSectionHeader
@@ -87,10 +96,11 @@ fun SearchScreen(
     val recentSearches by viewModel.recentSearches.collectAsState()
     val ftsResults by viewModel.ftsSearchResults.collectAsState()
     val smartResults by viewModel.smartSearchResults.collectAsState()
+    val matchingAlbums by viewModel.matchingAlbums.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val haptic = LocalHapticFeedback.current
 
-    val hasAnyResults = ftsResults.isNotEmpty() || smartResults.isNotEmpty()
+    val hasAnyResults = ftsResults.isNotEmpty() || smartResults.isNotEmpty() || matchingAlbums.isNotEmpty()
 
     Column(
         modifier = modifier
@@ -114,9 +124,11 @@ fun SearchScreen(
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                MagicSearchIcon(
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 androidx.compose.foundation.text.BasicTextField(
@@ -134,7 +146,7 @@ fun SearchScreen(
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (query.isEmpty()) {
                                 Text(
-                                    text = "Search photos, dates, places, text…",
+                                    text = "Search names, types, albums, dates, text…",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -187,6 +199,7 @@ fun SearchScreen(
                 else -> SearchResultsList(
                     ftsResults = ftsResults,
                     smartResults = smartResults,
+                    matchingAlbums = matchingAlbums,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
@@ -297,7 +310,7 @@ private fun EmptySearchState(
                 PhotonEmptyState(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
                     title = "Search photos & videos",
-                    subtitle = "Search by date, place, text inside photos, or describe any scene.",
+                    subtitle = "Search by file name, format, album, date, text inside photos, or describe any scene.",
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 48.dp)
@@ -386,11 +399,19 @@ private fun NoResultsState(query: String, onClear: () -> Unit) {
     }
 }
 
+private data class SearchFilterCategory(
+    val key: String,
+    val title: String,
+    val count: Int,
+    val iconRes: Int
+)
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun SearchResultsList(
     ftsResults: List<GalleryItem>,
     smartResults: List<GalleryItem>,
+    matchingAlbums: List<AlbumBucket>,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onPhotoClick: (String, String?, String?) -> Unit,
@@ -402,12 +423,14 @@ private fun SearchResultsList(
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
 
+    var selectedFilter by remember(query) { mutableStateOf("ALL") }
+
     val onFtsClick = remember(onPhotoClick, query, viewModel, isSelectionMode) {
         { item: GalleryItem ->
             if (isSelectionMode) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
-                viewModel.setInitialDetailItem(item)
+                viewModel.setInitialDetailItem(item, com.inferno.gallery.data.BucketNames.SEARCH_TEXT)
                 onPhotoClick(item.id, "search_text", query)
             }
         }
@@ -417,7 +440,7 @@ private fun SearchResultsList(
             if (isSelectionMode) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
-                viewModel.setInitialDetailItem(item)
+                viewModel.setInitialDetailItem(item, com.inferno.gallery.data.BucketNames.SEARCH_SMART)
                 onPhotoClick(item.id, "search_smart", query)
             }
         }
@@ -433,6 +456,73 @@ private fun SearchResultsList(
 
     val totalMatches = ftsResults.size + smartResults.size
 
+    val ocrCount = remember(ftsResults) { ftsResults.count { it.matchType == "OCR" } }
+    val nameCount = remember(ftsResults) { ftsResults.count { it.matchType == "NAME" } }
+    val formatCount = remember(ftsResults) { ftsResults.count { it.matchType == "FORMAT" } }
+    val semanticCount = remember(smartResults, ftsResults) {
+        smartResults.size + ftsResults.count { it.matchType == "SEMANTIC" }
+    }
+    val albumCount = remember(matchingAlbums, ftsResults) {
+        matchingAlbums.size + ftsResults.count { it.matchType == "ALBUM" }
+    }
+    val locationCount = remember(ftsResults) { ftsResults.count { it.matchType == "LOCATION" } }
+    val dateCount = remember(ftsResults) { ftsResults.count { it.matchType == "DATE" } }
+
+    val ocrItems = remember(ftsResults) { ftsResults.filter { it.matchType == "OCR" } }
+    val nameItems = remember(ftsResults) { ftsResults.filter { it.matchType == "NAME" } }
+    val formatItems = remember(ftsResults) { ftsResults.filter { it.matchType == "FORMAT" } }
+    val allSemanticItems = remember(smartResults, ftsResults) {
+        smartResults + ftsResults.filter { it.matchType == "SEMANTIC" }
+    }
+    val albumMedia = remember(ftsResults) { ftsResults.filter { it.matchType == "ALBUM" } }
+    val locItems = remember(ftsResults) { ftsResults.filter { it.matchType == "LOCATION" } }
+    val dateItems = remember(ftsResults) { ftsResults.filter { it.matchType == "DATE" } }
+
+    val categories = remember(ocrCount, nameCount, formatCount, semanticCount, albumCount, locationCount, dateCount, totalMatches, matchingAlbums.size) {
+        val list = mutableListOf<SearchFilterCategory>()
+        val total = totalMatches + matchingAlbums.size
+        list.add(SearchFilterCategory("ALL", "All", total, R.drawable.ic_ms_search))
+        if (ocrCount > 0) list.add(SearchFilterCategory("OCR", "OCR Text", ocrCount, R.drawable.ic_ms_text_fields))
+        if (nameCount > 0) list.add(SearchFilterCategory("NAME", "File Name", nameCount, R.drawable.ic_ms_description))
+        if (formatCount > 0) list.add(SearchFilterCategory("FORMAT", "Format", formatCount, R.drawable.ic_ms_image))
+        if (semanticCount > 0) list.add(SearchFilterCategory("SEMANTIC", "Semantic", semanticCount, R.drawable.ic_ms_auto_fix_high))
+        if (albumCount > 0) list.add(SearchFilterCategory("ALBUM", "Albums", albumCount, R.drawable.ic_ms_photo_album))
+        if (locationCount > 0) list.add(SearchFilterCategory("LOCATION", "Location", locationCount, R.drawable.ic_ms_location_on))
+        if (dateCount > 0) list.add(SearchFilterCategory("DATE", "Date", dateCount, R.drawable.ic_ms_calendar_month))
+        list
+    }
+
+    val bannerCount = when (selectedFilter) {
+        "ALL" -> if (totalMatches > 0) "$totalMatches" else "${matchingAlbums.size}"
+        "OCR" -> "$ocrCount"
+        "NAME" -> "$nameCount"
+        "FORMAT" -> "$formatCount"
+        "SEMANTIC" -> "$semanticCount"
+        "ALBUM" -> "$albumCount"
+        "LOCATION" -> "$locationCount"
+        "DATE" -> "$dateCount"
+        else -> "$totalMatches"
+    }
+
+    val bannerText = when (selectedFilter) {
+        "ALL" -> when {
+            totalMatches > 0 && matchingAlbums.isNotEmpty() ->
+                "$totalMatches ${if (totalMatches == 1) "result" else "results"} & ${matchingAlbums.size} ${if (matchingAlbums.size == 1) "album" else "albums"} for “$query”"
+            totalMatches > 0 ->
+                if (totalMatches == 1) "Result found for “$query”" else "Results found for “$query”"
+            else ->
+                if (matchingAlbums.size == 1) "1 Album found for “$query”" else "${matchingAlbums.size} Albums found for “$query”"
+        }
+        "OCR" -> "$ocrCount OCR text ${if (ocrCount == 1) "match" else "matches"} found"
+        "NAME" -> "$nameCount File name ${if (nameCount == 1) "match" else "matches"} found"
+        "FORMAT" -> "$formatCount Format ${if (formatCount == 1) "match" else "matches"} found"
+        "SEMANTIC" -> "$semanticCount Semantic AI ${if (semanticCount == 1) "match" else "matches"} found"
+        "ALBUM" -> "$albumCount Album ${if (albumCount == 1) "match" else "matches"} found"
+        "LOCATION" -> "$locationCount Location ${if (locationCount == 1) "match" else "matches"} found"
+        "DATE" -> "$dateCount Date ${if (dateCount == 1) "match" else "matches"} found"
+        else -> "Results for “$query”"
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
         state = lazyGridState,
@@ -441,7 +531,7 @@ private fun SearchResultsList(
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        // Total Matches Header Banner (Single Dominant Count Indicator)
+        // Total Matches Header Banner
         item(span = { GridItemSpan(4) }) {
             Surface(
                 shape = ShapeLarge,
@@ -449,7 +539,7 @@ private fun SearchResultsList(
                 shadowElevation = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -464,14 +554,14 @@ private fun SearchResultsList(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ) {
                         Text(
-                            text = "$totalMatches",
+                            text = bannerCount,
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = if (totalMatches == 1) "Result found for “$query”" else "Results found for “$query”",
+                        text = bannerText,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -481,113 +571,439 @@ private fun SearchResultsList(
             }
         }
 
-        // 1. Text Matches Section (OCR)
-        if (ftsResults.isNotEmpty()) {
+        // Match Category Filter Chips (if more than 1 category exists)
+        if (categories.size > 2) {
             item(span = { GridItemSpan(4) }) {
-                PhotonSectionHeader(
-                    title = "Text matches"
-                )
-            }
-            items(
-                items = ftsResults.take(8),
-                key = { "fts_grid_${it.id}" }
-            ) { item ->
-                val isSelected = selectedUris.contains(item.uri.toString())
-                com.inferno.gallery.ui.components.OptimizedThumbnailCell(
-                    item = item,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    onClick = onFtsClick,
-                    onLongClick = onLongClickItem,
-                    isSelected = isSelected
-                )
-            }
-            if (ftsResults.size > 8) {
-                item(span = { GridItemSpan(4) }) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        FilledTonalButton(
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                ) {
+                    items(categories, key = { it.key }) { cat ->
+                        val isSelected = selectedFilter == cat.key
+                        val containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
+                        val contentColor = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+
+                        Surface(
                             onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onAlbumClick("search_text")
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                selectedFilter = cat.key
                             },
                             shape = ShapeFull,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+                            color = containerColor,
+                            contentColor = contentColor,
+                            shadowElevation = 0.dp
                         ) {
-                            Text(
-                                text = "Show all text matches",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(cat.iconRes),
+                                    contentDescription = null,
+                                    tint = contentColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = cat.title,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = contentColor
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                ) {
+                                    Text(
+                                        text = "${cat.count}",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.5.sp
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Section separator spacer
-        if (ftsResults.isNotEmpty() && smartResults.isNotEmpty()) {
-            item(span = { GridItemSpan(4) }) {
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-
-        // 2. Semantic Matches Section (Smart Search)
-        if (smartResults.isNotEmpty()) {
-            item(span = { GridItemSpan(4) }) {
-                PhotonSectionHeader(
-                    title = "Semantic matches"
-                )
-            }
-            items(
-                items = smartResults.take(8),
-                key = { "smart_grid_${it.id}" }
-            ) { item ->
-                val isSelected = selectedUris.contains(item.uri.toString())
-                com.inferno.gallery.ui.components.OptimizedThumbnailCell(
-                    item = item,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    onClick = onSmartClick,
-                    onLongClick = onLongClickItem,
-                    isSelected = isSelected
-                )
-            }
-            if (smartResults.size > 8) {
-                item(span = { GridItemSpan(4) }) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        FilledTonalButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onAlbumClick("search_smart")
-                            },
-                            shape = ShapeFull,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ),
+        // ── Render Content based on selectedFilter ──
+        when (selectedFilter) {
+            "ALL" -> {
+                // Matching Albums Section
+                if (matchingAlbums.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        PhotonSectionHeader(title = "Albums")
+                    }
+                    item(span = { GridItemSpan(4) }) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "Show all semantic matches",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-                            )
+                            items(matchingAlbums, key = { it.bucketName }) { album ->
+                                AlbumSearchCard(
+                                    album = album,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onAlbumClick(album.bucketName)
+                                    }
+                                )
+                            }
                         }
                     }
+                    item(span = { GridItemSpan(4) }) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+
+                // Photos & Videos (Direct Matches)
+                if (ftsResults.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        PhotonSectionHeader(title = "Photos & videos")
+                    }
+                    items(
+                        items = ftsResults.take(12),
+                        key = { "fts_grid_${it.id}" }
+                    ) { item ->
+                        val isSelected = selectedUris.contains(item.uri.toString())
+                        com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                            item = item,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            onClick = onFtsClick,
+                            onLongClick = onLongClickItem,
+                            isSelected = isSelected,
+                            showMatchBadge = true
+                        )
+                    }
+                    if (ftsResults.size > 12) {
+                        item(span = { GridItemSpan(4) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.setBucket("search_text")
+                                        onAlbumClick("search_text")
+                                    },
+                                    shape = ShapeFull,
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Show all matches (${ftsResults.size})",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Separator
+                if (ftsResults.isNotEmpty() && smartResults.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                // Semantic Matches
+                if (smartResults.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        PhotonSectionHeader(title = "Semantic matches")
+                    }
+                    items(
+                        items = smartResults.take(12),
+                        key = { "smart_grid_${it.id}" }
+                    ) { item ->
+                        val isSelected = selectedUris.contains(item.uri.toString())
+                        com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                            item = item,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            onClick = onSmartClick,
+                            onLongClick = onLongClickItem,
+                            isSelected = isSelected,
+                            showMatchBadge = true
+                        )
+                    }
+                    if (smartResults.size > 12) {
+                        item(span = { GridItemSpan(4) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.setBucket("search_smart")
+                                        onAlbumClick("search_smart")
+                                    },
+                                    shape = ShapeFull,
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Show all semantic matches",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "OCR" -> {
+                items(
+                    items = ocrItems,
+                    key = { "ocr_filter_${it.id}" }
+                ) { item ->
+                    val isSelected = selectedUris.contains(item.uri.toString())
+                    com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                        item = item,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        onClick = onFtsClick,
+                        onLongClick = onLongClickItem,
+                        isSelected = isSelected,
+                        showMatchBadge = true
+                    )
+                }
+            }
+            "NAME" -> {
+                items(
+                    items = nameItems,
+                    key = { "name_filter_${it.id}" }
+                ) { item ->
+                    val isSelected = selectedUris.contains(item.uri.toString())
+                    com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                        item = item,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        onClick = onFtsClick,
+                        onLongClick = onLongClickItem,
+                        isSelected = isSelected,
+                        showMatchBadge = true
+                    )
+                }
+            }
+            "FORMAT" -> {
+                items(
+                    items = formatItems,
+                    key = { "format_filter_${it.id}" }
+                ) { item ->
+                    val isSelected = selectedUris.contains(item.uri.toString())
+                    com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                        item = item,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        onClick = onFtsClick,
+                        onLongClick = onLongClickItem,
+                        isSelected = isSelected,
+                        showMatchBadge = true
+                    )
+                }
+            }
+            "SEMANTIC" -> {
+                items(
+                    items = allSemanticItems,
+                    key = { "semantic_filter_${it.id}" }
+                ) { item ->
+                    val isSelected = selectedUris.contains(item.uri.toString())
+                    com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                        item = item,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        onClick = onSmartClick,
+                        onLongClick = onLongClickItem,
+                        isSelected = isSelected,
+                        showMatchBadge = true
+                    )
+                }
+            }
+            "ALBUM" -> {
+                if (matchingAlbums.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        PhotonSectionHeader(title = "Matching Albums")
+                    }
+                    item(span = { GridItemSpan(4) }) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(matchingAlbums, key = { it.bucketName }) { album ->
+                                AlbumSearchCard(
+                                    album = album,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onAlbumClick(album.bucketName)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                if (albumMedia.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        PhotonSectionHeader(title = "Photos in Albums")
+                    }
+                    items(
+                        items = albumMedia,
+                        key = { "album_media_${it.id}" }
+                    ) { item ->
+                        val isSelected = selectedUris.contains(item.uri.toString())
+                        com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                            item = item,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            onClick = onFtsClick,
+                            onLongClick = onLongClickItem,
+                            isSelected = isSelected,
+                            showMatchBadge = true
+                        )
+                    }
+                }
+            }
+            "LOCATION" -> {
+                items(
+                    items = locItems,
+                    key = { "location_filter_${it.id}" }
+                ) { item ->
+                    val isSelected = selectedUris.contains(item.uri.toString())
+                    com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                        item = item,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        onClick = onFtsClick,
+                        onLongClick = onLongClickItem,
+                        isSelected = isSelected,
+                        showMatchBadge = true
+                    )
+                }
+            }
+            "DATE" -> {
+                items(
+                    items = dateItems,
+                    key = { "date_filter_${it.id}" }
+                ) { item ->
+                    val isSelected = selectedUris.contains(item.uri.toString())
+                    com.inferno.gallery.ui.components.OptimizedThumbnailCell(
+                        item = item,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        onClick = onFtsClick,
+                        onLongClick = onLongClickItem,
+                        isSelected = isSelected,
+                        showMatchBadge = true
+                    )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun AlbumSearchCard(
+    album: AlbumBucket,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = ShapeLarge,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .width(140.dp)
+            .height(110.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (album.coverUri != android.net.Uri.EMPTY) {
+                AsyncImage(
+                    model = album.coverUri,
+                    contentDescription = album.bucketName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            // Scrim overlay at the bottom for readability
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                androidx.compose.ui.graphics.Color.Transparent,
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.75f)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Column {
+                    Text(
+                        text = album.bucketName,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.surface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${album.itemCount} items",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+

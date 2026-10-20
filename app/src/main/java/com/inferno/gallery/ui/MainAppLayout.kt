@@ -1,6 +1,10 @@
 package com.inferno.gallery.ui
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.ButtonDefaults
+import com.inferno.gallery.ui.theme.ShapeEdgeTop
+import com.inferno.gallery.ui.theme.ShapeMedium
+import com.inferno.gallery.ui.theme.ShapeFull
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.AnimatedContent
@@ -20,6 +24,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,12 +67,21 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.animation.core.animate
+import kotlinx.coroutines.Job
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -87,7 +101,6 @@ import androidx.navigation.compose.rememberNavController
 import com.inferno.gallery.data.DockStyle
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButtonDefaults
-import com.inferno.gallery.ui.components.MorphingVariableTabRow
 import com.inferno.gallery.ui.theme.EditorialPunchyHeadline
 
 import androidx.lifecycle.Lifecycle
@@ -156,7 +169,6 @@ fun MainAppLayout(
     val settingsViewModel: SettingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         viewModelStoreOwner = LocalContext.current as androidx.lifecycle.ViewModelStoreOwner
     )
-    val selectedFilter by viewModel.selectedFilterIndex.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
@@ -372,29 +384,148 @@ fun MainAppLayout(
         )
         return
     }
-    val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
 
-    val topBarColor by animateColorAsState(
-        targetValue = when {
-            isSelectionMode -> MaterialTheme.colorScheme.surfaceContainerHigh
-            isTopBarCollapsed -> MaterialTheme.colorScheme.surfaceContainer
-            else -> MaterialTheme.colorScheme.surfaceContainerLow
-        },
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "topBarColor"
-    )
+    val isGalleryRoute = currentRoute == "photos" || currentRoute?.startsWith("album/") == true
+    val isCollapsibleTopBarActive = isGalleryRoute && !isSelectionMode
+
+    var topBarOffsetY by remember { mutableFloatStateOf(0f) }
+    var topBarHeightPx by remember { mutableFloatStateOf(0f) }
+    var topBarAnimationJob by remember { mutableStateOf<Job?>(null) }
+    var lastScrollDelta by remember { mutableFloatStateOf(0f) }
+
+    val nestedScrollConnection = remember(isCollapsibleTopBarActive, topBarHeightPx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (!isCollapsibleTopBarActive || topBarHeightPx <= 0f) return Offset.Zero
+
+                val delta = available.y
+
+                // Only cancel animation and track offset when the user is actively dragging
+                if (source == NestedScrollSource.UserInput) {
+                    topBarAnimationJob?.cancel()
+                    topBarAnimationJob = null
+                    lastScrollDelta = delta
+
+                    val prevOffset = topBarOffsetY
+                    val newOffset = (prevOffset + delta).coerceIn(-topBarHeightPx, 0f)
+                    topBarOffsetY = newOffset
+
+                    // Consume the delta used to collapse or expand the top bar
+                    val consumedY = newOffset - prevOffset
+                    return Offset(0f, consumedY)
+                }
+
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (!isCollapsibleTopBarActive || topBarHeightPx <= 0f) return Offset.Zero
+                // If user drags down when at top of list or overscrolling, expand top bar
+                if (source == NestedScrollSource.UserInput && available.y > 0f) {
+                    lastScrollDelta = available.y
+                    val prevOffset = topBarOffsetY
+                    val newOffset = (prevOffset + available.y).coerceIn(-topBarHeightPx, 0f)
+                    topBarOffsetY = newOffset
+                    return Offset(0f, newOffset - prevOffset)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (!isCollapsibleTopBarActive || topBarHeightPx <= 0f) return Velocity.Zero
+
+                val velocityY = available.y
+                val targetOffset = when {
+                    // Swiping down (positive velocity) -> bring top bar back!
+                    velocityY > 150f -> 0f
+                    // Swiping up (negative velocity) -> hide top bar!
+                    velocityY < -150f -> -topBarHeightPx
+                    // Low velocity release: check user's drag direction
+                    lastScrollDelta > 0f -> 0f // User dragged down -> expand
+                    lastScrollDelta < 0f -> -topBarHeightPx // User dragged up -> collapse
+                    topBarOffsetY > -topBarHeightPx * 0.5f -> 0f
+                    else -> -topBarHeightPx
+                }
+
+                if (topBarOffsetY != targetOffset) {
+                    topBarAnimationJob?.cancel()
+                    topBarAnimationJob = coroutineScope.launch {
+                        animate(
+                            initialValue = topBarOffsetY,
+                            targetValue = targetOffset,
+                            animationSpec = MotionTokens.snappySpring()
+                        ) { value, _ ->
+                            topBarOffsetY = value
+                        }
+                    }
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
+    LaunchedEffect(isCollapsibleTopBarActive) {
+        if (!isCollapsibleTopBarActive && topBarOffsetY != 0f) {
+            topBarAnimationJob?.cancel()
+            topBarOffsetY = 0f
+        }
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.isTopBarCollapsed.collect { collapsed ->
+            if (!collapsed && topBarOffsetY != 0f) {
+                topBarAnimationJob?.cancel()
+                topBarAnimationJob = coroutineScope.launch {
+                    animate(
+                        initialValue = topBarOffsetY,
+                        targetValue = 0f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) { value, _ ->
+                        topBarOffsetY = value
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
-            modifier = modifier.fillMaxSize(),
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(nestedScrollConnection),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
             if (currentRoute != "photo_map" && currentRoute != "duplicate_cleaner" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list") {
+                val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
+                val topBarColor by animateColorAsState(
+                    targetValue = when {
+                        isSelectionMode -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        isTopBarCollapsed -> MaterialTheme.colorScheme.surfaceContainer
+                        else -> MaterialTheme.colorScheme.surfaceContainerLow
+                    },
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "topBarColor"
+                )
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .graphicsLayer {
+                            translationY = if (isCollapsibleTopBarActive) topBarOffsetY else 0f
+                            alpha = if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
+                                (1f + topBarOffsetY / (topBarHeightPx * 0.7f)).coerceIn(0f, 1f)
+                            } else 1f
+                        }
                         .background(topBarColor)
                         .statusBarsPadding()
+                        .onGloballyPositioned { coords ->
+                            if (coords.size.height > 0) {
+                                topBarHeightPx = coords.size.height.toFloat()
+                            }
+                        }
                 ) {
                     if (isSelectionMode) {
                         Surface(
@@ -470,7 +601,7 @@ fun MainAppLayout(
                                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(IconSizeTokens.L))
                                 }
                                 val friendlyTitle = when {
-                                    albumNameArg == "search_text" -> "Text Matches"
+                                    albumNameArg == "search_text" -> "Search Results"
                                     albumNameArg == "search_smart" -> "Semantic Matches"
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_RAW -> "RAW Photos"
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_PANORAMAS -> "Panoramas"
@@ -517,7 +648,7 @@ fun MainAppLayout(
                                 }
                                 Text(
                                     settingsActiveSection ?: "Settings",
-                                    style = if (settingsActiveSection != null) MaterialTheme.typography.headlineMedium else EditorialPunchyHeadline,
+                                    style = MaterialTheme.typography.headlineMedium,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier
@@ -539,29 +670,17 @@ fun MainAppLayout(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                if (currentRoute == "photos") {
-                                    MorphingVariableTabRow(
-                                        tabs = listOf("Camera", "All Photos"),
-                                        selectedTabIndex = if (selectedFilter == 1) 0 else 1,
-                                        onTabSelected = { index ->
-                                            viewModel.setFilterIndex(if (index == 0) 1 else 0)
-                                        },
-                                        modifier = Modifier.padding(start = 4.dp),
-                                        fontSize = 14.sp,
-                                        lineHeight = 20.sp
-                                    )
-                                } else {
-                                    val titleText = when (currentRoute) {
-                                        "albums" -> "Albums"
-                                        "search" -> "Search"
-                                        else -> "Photon Gallery"
-                                    }
-                                    Text(
-                                        titleText,
-                                        style = EditorialPunchyHeadline,
-                                        modifier = Modifier.padding(start = 12.dp)
-                                    )
+                                val titleText = when (currentRoute) {
+                                    "photos" -> "Photos"
+                                    "albums" -> "Albums"
+                                    "search" -> "Search"
+                                    else -> "Photon Gallery"
                                 }
+                                Text(
+                                    titleText,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    modifier = Modifier.padding(start = 12.dp)
+                                )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -645,14 +764,14 @@ fun MainAppLayout(
                                                         }
                                                     }
                                                 )
-                                                DropdownMenuItem(
-                                                    text = { Text("View Mode") },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                    trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                    onClick = { overflowState = "view" }
-                                                )
                                                 if (currentRoute == "photos") {
                                                     androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                    DropdownMenuItem(
+                                                        text = { Text("View Mode") },
+                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
+                                                        onClick = { overflowState = "view" }
+                                                    )
                                                     DropdownMenuItem(
                                                         text = { Text("Sort Order") },
                                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
@@ -706,7 +825,7 @@ fun MainAppLayout(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(bottom = 6.dp),
+                            .padding(bottom = 10.dp),
                         contentAlignment = Alignment.BottomCenter
                     ) {
                         FloatingNavigationPill(
@@ -803,6 +922,11 @@ fun MainAppLayout(
                     viewModel = viewModel,
                     contentPadding = innerPadding,
                     isMainTab = true,
+                    topBarCollapseFractionProvider = {
+                        if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
+                            (-topBarOffsetY / topBarHeightPx).coerceIn(0f, 1f)
+                        } else 0f
+                    },
                     onNavigateToSettings = {
                         nestedNavController.navigate("settings") {
                             popUpTo("photos") { saveState = true }
@@ -862,6 +986,8 @@ fun MainAppLayout(
                     viewModel = viewModel,
                     contentPadding = innerPadding,
                     onAlbumClick = { bucketName -> 
+                        viewModel.resetGridScrollPosition(bucketName)
+                        viewModel.setBucket(bucketName)
                         val encoded = android.net.Uri.encode(bucketName)
                         nestedNavController.navigate("album/$encoded")
                     },
@@ -961,27 +1087,24 @@ fun MainAppLayout(
                     }
                 }
             ) { backStackEntry ->
-                val bucketName = backStackEntry.arguments?.getString("bucketName") ?: ""
-                val boundsModifier = with(sharedTransitionScope) {
-                    Modifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "album_$bucketName"),
-                        animatedVisibilityScope = this@composable,
-                        enter = fadeIn(MotionTokens.fastEffectsSpec()),
-                        exit = fadeOut(MotionTokens.fastEffectsSpec()),
-                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-                        clipInOverlayDuringTransition = OverlayClip(androidx.compose.foundation.shape.RoundedCornerShape(0.dp)),
-                        boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
-                    )
-                }
-                Box(modifier = boundsModifier.fillMaxSize()) {
-                    GalleryScreen(
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        onPhotoClick = onPhotoClick,
-                        viewModel = viewModel,
-                        contentPadding = innerPadding,
-                        bucketName = bucketName
-                    )
+                val rawBucketName = backStackEntry.arguments?.getString("bucketName") ?: ""
+                val bucketName = try { android.net.Uri.decode(rawBucketName) } catch (e: Exception) { rawBucketName }
+                androidx.compose.runtime.key(bucketName) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        GalleryScreen(
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            onPhotoClick = onPhotoClick,
+                            viewModel = viewModel,
+                            contentPadding = innerPadding,
+                            bucketName = bucketName,
+                            topBarCollapseFractionProvider = {
+                                if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
+                                    (-topBarOffsetY / topBarHeightPx).coerceIn(0f, 1f)
+                                } else 0f
+                            }
+                        )
+                    }
                 }
             }
             composable("search") {
@@ -992,6 +1115,8 @@ fun MainAppLayout(
                     viewModel = viewModel,
                     contentPadding = innerPadding,
                     onAlbumClick = { bucketName ->
+                        viewModel.resetGridScrollPosition(bucketName)
+                        viewModel.setBucket(bucketName)
                         val encoded = android.net.Uri.encode(bucketName)
                         nestedNavController.navigate("album/$encoded")
                     }
@@ -1065,6 +1190,8 @@ fun MainAppLayout(
                     galleryViewModel = viewModel,
                     onBackClick = { nestedNavController.popBackStack() },
                     onAlbumClick = { bucketName -> 
+                        viewModel.resetGridScrollPosition(bucketName)
+                        viewModel.setBucket(bucketName)
                         val encoded = android.net.Uri.encode(bucketName)
                         nestedNavController.navigate("album/$encoded")
                     },
@@ -1080,7 +1207,7 @@ fun MainAppLayout(
                 )
             }
         }
-        
+
         // Selection Mode SplitButton Overlay
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             AnimatedVisibility(
@@ -1100,7 +1227,8 @@ fun MainAppLayout(
             if (showMoveSheet) {
                 androidx.compose.material3.ModalBottomSheet(
                     onDismissRequest = { showMoveSheet = false },
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    shape = ShapeEdgeTop,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 ) {
                     var isBrowsingStorage by remember { mutableStateOf(false) }
                     val albums by viewModel.allAlbums.collectAsState()
@@ -1134,7 +1262,7 @@ fun MainAppLayout(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                 ),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                shape = ShapeMedium
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1184,7 +1312,7 @@ fun MainAppLayout(
                                                 .size(40.dp)
                                                 .background(
                                                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                                    shape = ShapeMedium
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -1236,7 +1364,7 @@ fun MainAppLayout(
                                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                             modifier = Modifier
                                                 .size(40.dp)
-                                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                                .clip(ShapeMedium)
                                         )
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
@@ -1435,7 +1563,7 @@ fun MainAppLayout(
                                 androidx.compose.material3.OutlinedButton(
                                     onClick = { isBrowsingStorage = false },
                                     modifier = Modifier.weight(1f),
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                    shape = ShapeMedium
                                 ) {
                                     Text("Cancel")
                                 }
@@ -1445,7 +1573,7 @@ fun MainAppLayout(
                                         viewModel.moveSelectedMediaToPath(currentBrowsingDirectory.absolutePath)
                                     },
                                     modifier = Modifier.weight(1f),
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                    shape = ShapeMedium
                                 ) {
                                     Text("Move Here")
                                 }
@@ -1458,7 +1586,8 @@ fun MainAppLayout(
             if (showCopySheet) {
                 androidx.compose.material3.ModalBottomSheet(
                     onDismissRequest = { showCopySheet = false },
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    shape = ShapeEdgeTop,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 ) {
                     var isBrowsingStorage by remember { mutableStateOf(false) }
                     val albums by viewModel.allAlbums.collectAsState()
@@ -1492,7 +1621,7 @@ fun MainAppLayout(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                 ),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                shape = ShapeMedium
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1532,7 +1661,7 @@ fun MainAppLayout(
                                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                             modifier = Modifier
                                                 .size(40.dp)
-                                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                                .clip(ShapeMedium)
                                         )
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
@@ -1731,7 +1860,7 @@ fun MainAppLayout(
                                 androidx.compose.material3.OutlinedButton(
                                     onClick = { isBrowsingStorage = false },
                                     modifier = Modifier.weight(1f),
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                    shape = ShapeMedium
                                 ) {
                                     Text("Cancel")
                                 }
@@ -1741,7 +1870,7 @@ fun MainAppLayout(
                                         viewModel.copySelectedMediaToPath(currentBrowsingDirectory.absolutePath)
                                     },
                                     modifier = Modifier.weight(1f),
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                    shape = ShapeMedium
                                 ) {
                                     Text("Copy Here")
                                 }
@@ -1878,7 +2007,7 @@ fun MainAppLayout(
                 ) {
                     ExpressiveButton(
                         onClick = { showTrashRestoreConfirmDialog = true },
-                        shape = RoundedCornerShape(50),
+                        shape = ShapeFull,
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -1897,7 +2026,7 @@ fun MainAppLayout(
 
                     ExpressiveButton(
                         onClick = { showTrashDeleteConfirmDialog = true },
-                        shape = RoundedCornerShape(50),
+                        shape = ShapeFull,
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -1921,7 +2050,7 @@ fun MainAppLayout(
                 var moreMenuExpanded by remember { mutableStateOf(false) }
 
                 Surface(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = ShapeExtraLarge,
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     tonalElevation = 6.dp,

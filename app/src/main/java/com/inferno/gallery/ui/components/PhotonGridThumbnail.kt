@@ -32,13 +32,18 @@ import androidx.compose.ui.unit.sp
 import com.inferno.gallery.ui.GalleryItem
 import com.inferno.gallery.ui.formatDuration
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
-import com.inferno.gallery.ui.theme.googleSansFlex
 
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Precision
+
+private val VideoTextShadow = androidx.compose.ui.graphics.Shadow(
+    color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f),
+    offset = androidx.compose.ui.geometry.Offset(0f, 1f),
+    blurRadius = 4f
+)
 
 /**
  * Lightweight, high-performance thumbnail composable for Photon Gallery grids.
@@ -58,12 +63,18 @@ fun BoxScope.PhotonGridThumbnail(
     val context = LocalContext.current
     val targetDimensionPx = remember(gridCellsCount) { thumbnailTargetPx(gridCellsCount) }
 
-    val imageRequest = remember(item.uri, targetDimensionPx) {
+    // Videos use the MediaStore content URI so MediaStoreThumbnailFetcher or VideoFrameDecoder
+    // handles them reliably. Local images use the direct file URI to bypass Binder IPC.
+    val modelUri = if (item.isVideo) item.uri else (if (item.localExists) item.resolvedUri else item.uri)
+
+    val imageRequest = remember(modelUri, targetDimensionPx) {
+        val cacheKey = thumbnailMemoryKey(item.id, targetDimensionPx)
         ImageRequest.Builder(context)
-            .data(item.uri)
+            .data(modelUri)
             .size(targetDimensionPx, targetDimensionPx)
             .precision(Precision.INEXACT)
-            .memoryCacheKey("t_${item.id}@$targetDimensionPx")
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
             .crossfade(false)
@@ -77,114 +88,88 @@ fun BoxScope.PhotonGridThumbnail(
         modifier = Modifier.matchParentSize()
     )
 
-    // Expressive video duration badge — dynamically scaled to grid scale/density
+    // Outlined video icon + duration text without black overlay box
     if (item.isVideo && videoIconVector != null) {
         val durationText = remember(item.durationMs) {
             item.durationMs?.let { formatDuration(it) } ?: "0:00"
         }
-        val condensedBadgeFont = remember {
-            googleSansFlex(weight = 650, width = 80f, opticalSize = 10f, roundness = 0f)
-        }
 
         if (gridCellsCount >= 7) {
-            // Ultra-dense grid (7-8 columns: ~45-50dp cell): micro video icon glyph to preserve thumbnail subject
+            // Ultra-dense grid (7-8 columns: ~45-50dp cell): micro video icon glyph
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(2.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.80f),
-                        ShapeExtraSmall
-                    )
                     .padding(2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = videoIconVector,
                     contentDescription = null,
-                    modifier = Modifier.size(7.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
+                    modifier = Modifier.size(8.dp),
+                    tint = androidx.compose.ui.graphics.Color.White
                 )
             }
         } else if (gridCellsCount == 6) {
-            // Dense grid (6 columns: ~58dp cell): duration only with ultra-compact padding (no icon)
+            // Dense grid (6 columns: ~58dp cell): duration only with shadow
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(2.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.80f),
-                        ShapeExtraSmall
-                    )
-                    .padding(horizontal = 2.5.dp, vertical = 0.5.dp)
+                    .padding(horizontal = 3.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = durationText,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = condensedBadgeFont,
-                    fontSize = 7.5.sp,
-                    fontWeight = FontWeight.Medium
+                    color = androidx.compose.ui.graphics.Color.White,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        shadow = VideoTextShadow
+                    )
                 )
             }
         } else {
-            // Standard / Medium grid (1-5 columns): dynamic icon + duration text
+            // Standard / Medium grid (1-5 columns): outlined icon + duration text
             val fontSize = when {
                 gridCellsCount <= 3 -> 11.sp
-                gridCellsCount == 4 -> 9.sp
-                else -> 8.sp
+                gridCellsCount == 4 -> 9.5.sp
+                else -> 8.5.sp
             }
             val iconSize = when {
-                gridCellsCount <= 3 -> 9.dp
-                gridCellsCount == 4 -> 8.dp
-                else -> 7.dp
+                gridCellsCount <= 3 -> 13.dp
+                gridCellsCount == 4 -> 11.dp
+                else -> 9.5.dp
             }
             val outerPad = when {
-                gridCellsCount <= 3 -> 4.dp
-                gridCellsCount == 4 -> 3.dp
-                else -> 2.5.dp
-            }
-            val hPad = when {
-                gridCellsCount <= 3 -> 4.dp
-                gridCellsCount == 4 -> 3.dp
-                else -> 2.5.dp
-            }
-            val vPad = when {
-                gridCellsCount <= 3 -> 1.5.dp
-                else -> 1.dp
+                gridCellsCount <= 3 -> 5.dp
+                gridCellsCount == 4 -> 4.dp
+                else -> 3.dp
             }
             val iconSpacing = when {
                 gridCellsCount <= 3 -> 3.dp
                 else -> 2.dp
             }
 
-            Box(
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(outerPad)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.80f),
-                        ShapeExtraSmall
-                    )
+                    .padding(outerPad),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(iconSpacing)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = hPad, vertical = vPad),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(iconSpacing)
-                ) {
-                    Icon(
-                        imageVector = videoIconVector,
-                        contentDescription = null,
-                        modifier = Modifier.size(iconSize),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = durationText,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontFamily = condensedBadgeFont,
+                Icon(
+                    imageVector = videoIconVector,
+                    contentDescription = null,
+                    modifier = Modifier.size(iconSize),
+                    tint = androidx.compose.ui.graphics.Color.White
+                )
+                Text(
+                    text = durationText,
+                    color = androidx.compose.ui.graphics.Color.White,
+                    style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = fontSize,
-                        fontWeight = FontWeight.Normal
+                        fontWeight = FontWeight.SemiBold,
+                        shadow = VideoTextShadow
                     )
-                }
+                )
             }
         }
     } else if (!item.isVideo) {
@@ -200,10 +185,21 @@ fun BoxScope.PhotonGridThumbnail(
             }
         }
 
-        if (badgeText != null) {
-            val condensedBadgeFont = remember {
-                googleSansFlex(weight = 700, width = 80f, opticalSize = 10f, roundness = 0f)
+        var isMotionPhoto by remember(item.id) { mutableStateOf(false) }
+
+        LaunchedEffect(item.id) {
+            if (badgeText == null) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    if (com.inferno.gallery.data.MotionPhotoHelper.isMotionPhotoFast(context, item)) {
+                        isMotionPhoto = true
+                    }
+                }
             }
+        }
+
+        val effectiveBadgeText = badgeText ?: if (isMotionPhoto) "MOTION" else null
+
+        if (effectiveBadgeText != null) {
             val badgeFontSize = when {
                 gridCellsCount <= 3 -> 9.5.sp
                 gridCellsCount == 4 -> 8.5.sp
@@ -238,12 +234,13 @@ fun BoxScope.PhotonGridThumbnail(
                     .padding(horizontal = badgeHPad, vertical = badgeVPad)
             ) {
                 Text(
-                    text = badgeText,
+                    text = effectiveBadgeText,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = condensedBadgeFont,
-                    fontSize = badgeFontSize,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.3.sp
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = badgeFontSize,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.3.sp
+                    )
                 )
             }
         }

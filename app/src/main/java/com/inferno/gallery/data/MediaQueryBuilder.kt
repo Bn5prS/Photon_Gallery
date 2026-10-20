@@ -75,6 +75,11 @@ object MediaQueryBuilder {
                 conditions.add("cm.isVideo = 1")
                 conditions.add(NOT_HIDDEN)
             }
+            bucket?.equals(BucketNames.SCREENSHOTS, ignoreCase = true) == true ||
+            bucket?.equals(BucketNames.SCREENSHOT, ignoreCase = true) == true -> {
+                conditions.add("(cm.bucketName = 'Screenshots' OR cm.bucketName = 'Screenshot' OR cm.filePath LIKE '%/Screenshots/%' OR cm.filePath LIKE '%/Screenshot/%')")
+                conditions.add(NOT_HIDDEN)
+            }
             bucket?.startsWith("place:") == true -> {
                 val placeName = bucket.removePrefix("place:")
                 conditions.add("cm.id IN (SELECT mediaId FROM geocoded_locations WHERE placeName = ?)")
@@ -117,6 +122,8 @@ object MediaQueryBuilder {
         val isSpecificAlbum = bucket != null &&
             bucket != BucketNames.ALL &&
             bucket != BucketNames.VIDEOS &&
+            !bucket.equals(BucketNames.SCREENSHOTS, ignoreCase = true) &&
+            !bucket.equals(BucketNames.SCREENSHOT, ignoreCase = true) &&
             bucket != BucketNames.FAVORITES &&
             bucket != BucketNames.SEARCH_TEXT &&
             bucket != BucketNames.SEARCH_SMART &&
@@ -154,7 +161,7 @@ object MediaQueryBuilder {
             if (numericIds.isNotEmpty()) {
                 val cases = numericIds.mapIndexed { index, id -> "WHEN $id THEN $index" }
                     .joinToString(" ")
-                return "ORDER BY CASE cm.id $cases ELSE ${numericIds.size} END"
+                return "ORDER BY CASE cm.id $cases ELSE ${numericIds.size} END, cm.id DESC"
             }
         }
         return buildOrderClause(order)

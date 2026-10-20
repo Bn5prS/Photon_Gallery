@@ -18,6 +18,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import android.graphics.Bitmap
+import coil3.BitmapImage
+import coil3.DrawableImage
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -27,7 +31,10 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.Brush
 import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.components.thumbnailMemoryKey
+import com.inferno.gallery.ui.components.thumbnailTargetPx
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -121,6 +128,7 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.request.allowHardware
 import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -137,10 +145,16 @@ import com.inferno.gallery.ui.components.ExifDetailsSheet
 import com.inferno.gallery.ui.components.extractDetailedExif
 import com.inferno.gallery.ui.components.AlbumPickerSheet
 import com.inferno.gallery.ui.theme.ShapeLargeIncreased
-import com.inferno.gallery.ui.theme.ShapeNone
+import com.inferno.gallery.ui.theme.ShapeLarge
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import com.inferno.gallery.ui.theme.ShapeFull
+import com.inferno.gallery.ui.theme.SpacingTokens
+import com.inferno.gallery.data.MotionPhotoHelper
+import com.inferno.gallery.data.MotionPhotoInfo
+import com.inferno.gallery.ui.components.MotionPhotoPlayerOverlay
 
 
 
@@ -157,7 +171,8 @@ fun DetailScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: GalleryViewModel = viewModel(),
     onBack: () -> Unit,
-    onNavigateToEditor: (android.net.Uri) -> Unit = {}
+    onNavigateToEditor: (android.net.Uri) -> Unit = {},
+    onNavigateToFrameExtractor: (android.net.Uri) -> Unit = {}
 ) {
     androidx.compose.runtime.LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
@@ -165,6 +180,12 @@ fun DetailScreen(
 
     val context = LocalContext.current
     val settingsRepo = viewModel.settingsRepository
+    // Matches the size bucket the grid used for this item, so the placeholder key resolves.
+    val placeholderSizePx = remember(viewModel) {
+        androidx.compose.runtime.derivedStateOf {
+            thumbnailTargetPx(viewModel.gridCellsCount.value)
+        }
+    }.value
     val confirmDeleteEnabled by settingsRepo.confirmDeleteEnabledFlow.collectAsState(initial = true)
     val activity = context as? android.app.Activity
     val window = activity?.window
@@ -175,10 +196,12 @@ fun DetailScreen(
     val favoriteIds by viewModel.favoriteIds.collectAsState()
 
     val galleryItems = remember(rawGalleryItems, initialDetailItem, mediaId) {
-        if (rawGalleryItems.isNotEmpty()) {
+        if (rawGalleryItems.isNotEmpty() && rawGalleryItems.any { it.id == mediaId || it.uri.toString() == mediaId }) {
             rawGalleryItems
-        } else if (initialDetailItem != null && initialDetailItem?.id == mediaId) {
+        } else if (initialDetailItem != null && (initialDetailItem?.id == mediaId || initialDetailItem?.uri?.toString() == mediaId)) {
             listOf(initialDetailItem!!)
+        } else if (rawGalleryItems.isNotEmpty()) {
+            rawGalleryItems
         } else {
             emptyList()
         }
@@ -186,6 +209,7 @@ fun DetailScreen(
 
     val maxBrightnessEnabled by settingsRepo.maxBrightnessEnabledFlow.collectAsState(initial = false)
     val viewerBlurEffect by settingsRepo.viewerBlurEffectFlow.collectAsState(initial = false)
+    val viewerDynamicColor by settingsRepo.viewerDynamicColorFlow.collectAsState(initial = false)
 
     // Overrides screen brightness to maximum in fullscreen and restores it when leaving
     androidx.compose.runtime.DisposableEffect(maxBrightnessEnabled) {
@@ -213,12 +237,12 @@ fun DetailScreen(
 
     // Ensure we don't crash if items is empty
     if (galleryItems.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest))
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow))
         return
     }
 
     val initialPage = remember(mediaId, galleryItems) {
-        val index = galleryItems.indexOfFirst { it.id == mediaId }
+        val index = galleryItems.indexOfFirst { it.id == mediaId || it.uri.toString() == mediaId }
         if (index >= 0) index else 0
     }
 
@@ -257,6 +281,50 @@ fun DetailScreen(
     val resolvedCurrentUri by produceState<Uri?>(initialValue = currentItem?.uri, key1 = currentItem) {
         val uri = currentItem?.uri
         value = uri
+    }
+
+    val ambientColorCache = remember { android.util.LruCache<String, Color>(64) }
+    var extractedAmbientColor by remember { mutableStateOf<Color?>(null) }
+
+    LaunchedEffect(currentItem?.uri, viewerDynamicColor) {
+        if (!viewerDynamicColor || currentItem == null) {
+            extractedAmbientColor = null
+            return@LaunchedEffect
+        }
+        val cacheKey = currentItem.uri.toString()
+        val cached = ambientColorCache.get(cacheKey)
+        if (cached != null) {
+            extractedAmbientColor = cached
+            return@LaunchedEffect
+        }
+
+        val color = withContext(Dispatchers.IO) {
+            try {
+                val req = ImageRequest.Builder(context)
+                    .data(currentItem.uri)
+                    .size(48, 48)
+                    .precision(coil3.size.Precision.INEXACT)
+                    .allowHardware(false)
+                    .build()
+                val result = context.imageLoader.execute(req)
+                val image = (result as? coil3.request.SuccessResult)?.image
+                val bitmap = when (image) {
+                    is BitmapImage -> image.bitmap
+                    is DrawableImage -> drawableToBitmap(image.drawable)
+                    else -> null
+                }
+                if (bitmap != null) {
+                    val extracted = extractAmbientMoodColor(bitmap)
+                    if (extracted != Color.Unspecified) extracted else null
+                } else null
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (color != null) {
+            ambientColorCache.put(cacheKey, color)
+        }
+        extractedAmbientColor = color
     }
 
 
@@ -514,6 +582,24 @@ fun DetailScreen(
     var showInfoCard by remember { mutableStateOf(false) }
     var currentExif by remember { mutableStateOf<DetailedExifData?>(null) }
     
+    var motionPhotoInfo by remember { mutableStateOf<MotionPhotoInfo?>(null) }
+    var extractedMotionVideo by remember { mutableStateOf<java.io.File?>(null) }
+    var isMotionPlaying by remember { mutableStateOf(false) }
+    var isMotionLooping by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(currentItem) {
+        isMotionPlaying = false
+        isMotionLooping = false
+        extractedMotionVideo = null
+        motionPhotoInfo = null
+        if (currentItem != null && !currentItem.isVideo) {
+            val info = MotionPhotoHelper.getMotionPhotoInfo(context, currentItem)
+            motionPhotoInfo = info
+            if (info.isMotionPhoto) {
+                extractedMotionVideo = MotionPhotoHelper.getOrExtractMotionVideo(context, currentItem, info)
+            }
+        }
+    }
 
     androidx.compose.runtime.LaunchedEffect(currentItem, showInfoCard) {
         if (showInfoCard && currentItem != null) {
@@ -530,12 +616,41 @@ fun DetailScreen(
     val bgAlpha = 1f - dismissProgress          // scrim fades out
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
 
+    val baseCanvasColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val targetBgColor = if (viewerDynamicColor) {
+        extractedAmbientColor ?: baseCanvasColor
+    } else {
+        baseCanvasColor
+    }
+    val animatedBgColor by animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "viewerBgColor"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = bgAlpha)),
+            .background(animatedBgColor.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center
     ) {
+        if (viewerDynamicColor && !viewerBlurEffect && extractedAmbientColor != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                animatedBgColor.copy(alpha = 0.85f * bgAlpha),
+                                animatedBgColor.copy(alpha = 0.40f * bgAlpha),
+                                Color.Black.copy(alpha = 0.95f * bgAlpha)
+                            ),
+                            radius = 1400f
+                        )
+                    )
+            )
+        }
+
         if (viewerBlurEffect && currentItem != null) {
             val blurRequest = remember(currentItem.uri) {
                 ImageRequest.Builder(context)
@@ -552,13 +667,19 @@ fun DetailScreen(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .blur(20.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                        .alpha(0.4f * bgAlpha)
+                        .blur(24.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                        .alpha(if (viewerDynamicColor) 0.50f * bgAlpha else 0.40f * bgAlpha)
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f * bgAlpha))
+                        .background(
+                            if (viewerDynamicColor) {
+                                animatedBgColor.copy(alpha = 0.55f * bgAlpha)
+                            } else {
+                                Color.Black.copy(alpha = 0.45f * bgAlpha)
+                            }
+                        )
                 )
             }
         }
@@ -621,21 +742,27 @@ fun DetailScreen(
                         }
                     }
                 },
-            key = { page -> galleryItems.getOrNull(page)?.uri?.toString() ?: page.toString() }
+            key = { page -> galleryItems.getOrNull(page)?.id ?: page.toString() }
         ) { page ->
-            val item = galleryItems.getOrNull(page) ?: return@HorizontalPager
+            val item = if (galleryItems.size > 1 && pagerState.currentPage == 0 && initialDetailItem != null && galleryItems.getOrNull(0)?.id != mediaId) {
+                initialDetailItem
+            } else {
+                galleryItems.getOrNull(page)
+            } ?: return@HorizontalPager
             val resolvedUri by produceState(initialValue = item.uri, key1 = item) {
                 value = item.uri
             }
 
-            val request: coil3.request.ImageRequest = remember(resolvedUri) {
+            val request: coil3.request.ImageRequest = remember(resolvedUri, item.id, placeholderSizePx) {
                 ImageRequest.Builder(context)
                     .data(resolvedUri)
                     .size(coil3.size.Size.ORIGINAL)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
-                    .placeholderMemoryCacheKey("photo_${item.resolvedUri}_384")
-                    .crossfade(true)
+                    // Reuse the exact thumbnail the grid already has cached for this column
+                    // count, so the tap-to-detail hand-off shows the image immediately.
+                    .placeholderMemoryCacheKey(thumbnailMemoryKey(item.id, placeholderSizePx))
+                    .crossfade(false)
                     .build()
             }
             
@@ -652,6 +779,7 @@ fun DetailScreen(
                     scale.floatValue = 1f
                     offsetX.floatValue = 0f
                     offsetY.floatValue = 0f
+                    isMotionPlaying = false
                 } else {
                     currentScale = scale.floatValue
                     viewModel.recordMediaView(item.id)
@@ -667,21 +795,35 @@ fun DetailScreen(
                 val parentWidth = constraints.maxWidth.toFloat()
                 val parentHeight = constraints.maxHeight.toFloat()
                 if (item.isVideo) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        VideoPlayerItem(
-                            uri = resolvedUri,
-                            isCurrentPage = page == pagerState.currentPage,
-                            showControls = showUi,
-                            modifier = Modifier.fillMaxSize(),
-                            onTap = {
-                                if (showInfoCard || showUi) {
-                                    showInfoCard = false
-                                    showUi = false
-                                } else {
-                                    showUi = true
+                    with(sharedTransitionScope) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                                    exit = fadeOut(MotionTokens.fastEffectsSpec()),
+                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                                    clipInOverlayDuringTransition = OverlayClip(ShapeLarge),
+                                    boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
+                                )
+                        ) {
+                            VideoPlayerItem(
+                                uri = resolvedUri,
+                                isCurrentPage = page == pagerState.currentPage,
+                                showControls = showUi,
+                                modifier = Modifier.fillMaxSize(),
+                                onTap = {
+                                    if (showInfoCard || showUi) {
+                                        showInfoCard = false
+                                        showUi = false
+                                    } else {
+                                        showUi = true
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 } else {
                     androidx.compose.runtime.LaunchedEffect(activeHighlight, page, pagerState.currentPage, resolvedUri) {
@@ -736,10 +878,10 @@ fun DetailScreen(
                                 .sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
                                     animatedVisibilityScope = animatedVisibilityScope,
-                                    enter = fadeIn(),
-                                    exit = fadeOut(),
+                                    enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                                    exit = fadeOut(MotionTokens.fastEffectsSpec()),
                                     resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-                                    clipInOverlayDuringTransition = OverlayClip(ShapeNone),
+                                    clipInOverlayDuringTransition = OverlayClip(ShapeLarge),
                                     boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
                                 )
                                 // IMPORTANT: pointerInput MUST be before graphicsLayer.
@@ -749,8 +891,28 @@ fun DetailScreen(
                                 // calculatePan() return 1/5 of the actual finger delta, causing
                                 // pan to be 5x slower than the finger. With pointerInput first
                                 // (outer), events arrive in screen/layout space — 1:1 with finger.
-                                .pointerInput(Unit) {
+                                .pointerInput(page, motionPhotoInfo, extractedMotionVideo, isMotionLooping) {
                                     detectTapGestures(
+                                        onPress = {
+                                            val isMotion = page == pagerState.currentPage && motionPhotoInfo?.isMotionPhoto == true && (extractedMotionVideo != null || motionPhotoInfo?.pairedVideoUri != null)
+                                            if (isMotion) {
+                                                var isHeld = false
+                                                try {
+                                                    val released = kotlinx.coroutines.withTimeoutOrNull(260) {
+                                                        tryAwaitRelease()
+                                                    }
+                                                    if (released == null) {
+                                                        isHeld = true
+                                                        isMotionPlaying = true
+                                                        tryAwaitRelease()
+                                                    }
+                                                } finally {
+                                                    if (isHeld && !isMotionLooping) {
+                                                        isMotionPlaying = false
+                                                    }
+                                                }
+                                            }
+                                        },
                                         onTap = {
                                             activeHighlight = null
                                             highlightOverlayVisible = false
@@ -935,6 +1097,39 @@ fun DetailScreen(
                                     translationY = offsetY.floatValue
                                 }
                         )
+
+                        if (page == pagerState.currentPage && motionPhotoInfo?.isMotionPhoto == true) {
+                            MotionPhotoPlayerOverlay(
+                                videoFile = extractedMotionVideo,
+                                videoUri = motionPhotoInfo?.pairedVideoUri,
+                                isPlaying = isMotionPlaying,
+                                isLooping = isMotionLooping,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = scale.floatValue * pagerScale
+                                        scaleY = scale.floatValue * pagerScale
+                                        alpha = pagerAlpha
+                                        translationX = offsetX.floatValue
+                                        translationY = offsetY.floatValue
+                                    },
+                                onPlaybackEnded = {
+                                    if (!isMotionLooping) isMotionPlaying = false
+                                }
+                            )
+                        }
+
+                        if (page == pagerState.currentPage && !item.isVideo && scale.floatValue > 1.25f && !isMotionPlaying) {
+                            com.inferno.gallery.ui.components.TileBasedDeepZoomOverlay(
+                                item = item,
+                                scale = scale.floatValue,
+                                offsetX = offsetX.floatValue,
+                                offsetY = offsetY.floatValue,
+                                pagerScale = pagerScale,
+                                pagerAlpha = pagerAlpha,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                         
                         if (activeHighlight != null) {
                             val highlightColor = MaterialTheme.colorScheme.primary
@@ -1077,47 +1272,7 @@ fun DetailScreen(
         }
         }
 
-        // ── Photo counter pill (e.g. "23 / 487") ──────────────────────────────
-        // Appears on page change, auto-hides after 2 seconds.
-        var showCounter by remember { mutableStateOf(true) }
-        LaunchedEffect(pagerState.currentPage) {
-            showCounter = true
-            kotlinx.coroutines.delay(2000)
-            showCounter = false
-        }
-        AnimatedVisibility(
-            visible = showCounter && galleryItems.size > 1,
-            enter = fadeIn(MotionTokens.gentleSpring()) +
-                    scaleIn(MotionTokens.bouncySpring(), initialScale = 0.8f),
-            exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    scaleOut(MotionTokens.gentleSpring(), targetScale = 0.8f),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-        ) {
-            Box(
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ) {
-                    Text(
-                        text = "${pagerState.currentPage + 1} / ${galleryItems.size}",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-
-
-
-        // UI Overlay — Top bar: back button (left) + info button (right)
+        // ── Unified Top App Bar with Directional Gradient Scrim ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
@@ -1127,66 +1282,153 @@ fun DetailScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.70f),
+                                Color.Black.copy(alpha = 0.35f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
-                ExpressiveFilledIconButton(
-                    onClick = onBack,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    )
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
-                        contentDescription = "Go back"
-                    )
-                }
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ExpressiveFilledIconButton(
-                        onClick = { showInfoCard = !showInfoCard },
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = if (showInfoCard) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainer,
-                            contentColor = MaterialTheme.colorScheme.onSurface
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
+                            contentDescription = "Go back",
+                            tint = Color.White
                         )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (currentItem != null) {
+                            val timestamp = remember(currentItem) {
+                                val raw = if (currentItem.dateModified > 0) currentItem.dateModified else currentItem.dateAdded
+                                if (raw > 1_000_000_000_000L) raw else raw * 1000L
+                            }
+                            val formattedDate = remember(timestamp) {
+                                java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+                                    .format(java.util.Date(timestamp))
+                            }
+                            Text(
+                                text = formattedDate,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = currentItem.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.75f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (motionPhotoInfo?.isMotionPhoto == true) {
+                        Surface(
+                            onClick = {
+                                isMotionLooping = !isMotionLooping
+                                isMotionPlaying = isMotionLooping
+                            },
+                            shape = ShapeFull,
+                            color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.45f),
+                            contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                            modifier = Modifier
+                                .padding(end = 6.dp)
+                                .height(34.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
+                                    contentDescription = "Motion Photo",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "LIVE",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { showInfoCard = true },
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                            contentDescription = "Info"
+                            contentDescription = "Info",
+                            tint = Color.White
                         )
                     }
 
                     Box {
-                        ExpressiveFilledIconButton(
+                        IconButton(
                             onClick = { showMoreMenu = true },
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = if (showMoreMenu) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                contentDescription = "More options"
+                                contentDescription = "More options",
+                                tint = Color.White
                             )
                         }
 
-                        androidx.compose.material3.DropdownMenu(
-                            expanded = showMoreMenu,
-                            onDismissRequest = { showMoreMenu = false },
-                            shape = MaterialTheme.shapes.large,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            if (currentItem != null) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Open with") },
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = showMoreMenu,
+                        onDismissRequest = { showMoreMenu = false },
+                        shape = MaterialTheme.shapes.large,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        if (currentItem != null && motionPhotoInfo?.isMotionPhoto == true) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Export Motion Video (MP4)") },
+                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_movie), contentDescription = null) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    coroutineScope.launch {
+                                        val exported = MotionPhotoHelper.exportMotionVideo(context, currentItem, motionPhotoInfo!!)
+                                        if (exported != null) {
+                                            Toast.makeText(context, "Motion video saved to Movies/Photon_Motion", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Failed to export motion video", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        if (currentItem != null) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Open with") },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_open_in_new), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1258,6 +1500,18 @@ fun DetailScreen(
                                     }
                                 )
                             }
+                            if (currentItem != null && currentItem.isVideo) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Extract frame") },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val uri = resolvedCurrentUri ?: currentItem.uri
+                                        onNavigateToFrameExtractor(uri)
+                                    }
+                                )
+                            }
                             // Hide (Private Space)
                             if (currentItem != null) {
                                 androidx.compose.material3.DropdownMenuItem(
@@ -1293,6 +1547,48 @@ fun DetailScreen(
             exifData = currentExif
         )
 
+        // ── Floating Deep Zoom Pill ──
+        AnimatedVisibility(
+            visible = currentScale > 1.25f,
+            enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
+            exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.bouncySpring()),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = if (showUi) 72.dp else 24.dp)
+        ) {
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 6.dp,
+                modifier = Modifier.height(32.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = String.format(java.util.Locale.US, "%.1f×", currentScale),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    if (currentScale >= 3.0f) {
+                        Text(
+                            text = "• DEEP ZOOM",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Unified Bottom Controls Bar with Directional Gradient Scrim ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
@@ -1301,169 +1597,187 @@ fun DetailScreen(
                     slideOutVertically(MotionTokens.gentleSpring()) { it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 4.dp)
+                .fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Black.copy(alpha = 0.80f)
+                            )
+                        )
+                    )
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 val currentItem = galleryItems.getOrNull(pagerState.currentPage)
-
-                HorizontalFloatingToolbar(
-                    expanded = true,
-                    colors = androidx.compose.material3.FloatingToolbarDefaults.standardFloatingToolbarColors(
-                        toolbarContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        toolbarContentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
-                    modifier = Modifier.height(48.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (bucketName == "Trash") {
-                            IconButton(
-                                onClick = {
-                                    if (currentItem != null) {
-                                        val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                                        if (isMediaStoreUri) {
-                                            pendingDeleteItem = currentItem
-                                            pendingDeletePage = pagerState.currentPage
-                                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
-                                            restoreLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build())
-                                        }
+                    if (bucketName == "Trash") {
+                        IconButton(
+                            onClick = {
+                                if (currentItem != null) {
+                                    val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                                    if (isMediaStoreUri) {
+                                        pendingDeleteItem = currentItem
+                                        pendingDeletePage = pagerState.currentPage
+                                        val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
+                                        restoreLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build())
                                     }
                                 }
-                            ) { 
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Restore") 
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (currentItem != null) {
-                                        val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                                        if (isMediaStoreUri) {
-                                            pendingDeleteItem = currentItem
-                                            pendingDeletePage = pagerState.currentPage
-                                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
-                                            launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build())
-                                        }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Restore", tint = Color.White)
+                        }
+                        IconButton(
+                            onClick = {
+                                if (currentItem != null) {
+                                    val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                                    if (isMediaStoreUri) {
+                                        pendingDeleteItem = currentItem
+                                        pendingDeletePage = pagerState.currentPage
+                                        val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
+                                        launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build())
                                     }
                                 }
-                            ) { 
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Permanently Delete", tint = MaterialTheme.colorScheme.error) 
-                            }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Permanently Delete", tint = MaterialTheme.colorScheme.error)
+                        }
+                    } else {
+                        // Share
+                        IconButton(
+                            onClick = {
+                                val item = currentItem
+                                if (item != null) {
+                                    coroutineScope.launch {
+                                        val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                                        com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
+                                    }
+                                }
+                            },
+                            enabled = currentItem?.localExists == true,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = Color.White)
+                        }
 
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    val item = currentItem
-                                    if (item != null) {
-                                        coroutineScope.launch {
-                                            val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
-                                            com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
+                        // Edit / Frame extractor
+                        IconButton(
+                            enabled = currentItem?.localExists == true,
+                            onClick = {
+                                if (currentItem != null) {
+                                    val uri = resolvedCurrentUri ?: currentItem.uri
+                                    if (!currentItem.isVideo) {
+                                        onNavigateToEditor(uri)
+                                    } else {
+                                        val editIntent = Intent(Intent.ACTION_EDIT).apply {
+                                            setDataAndType(uri, "video/*")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                                        }
+                                        try {
+                                            context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
                                         }
                                     }
-                                },
-                                enabled = currentItem?.localExists == true
-                            ) { 
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share") 
-                            }
-                            val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
-                            // Heart pop: triggers a scale bounce when toggling to favorite
-                            var heartBounce by remember { mutableStateOf(false) }
-                            val heartScale by animateFloatAsState(
-                                targetValue = if (heartBounce) 1.45f else 1f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                ),
-                                label = "heartScale",
-                                finishedListener = { if (heartBounce) heartBounce = false }
+                                }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
+                                contentDescription = if (currentItem?.isVideo == true) "Extract frame" else "Edit",
+                                tint = Color.White
                             )
-                            val heartView = androidx.compose.ui.platform.LocalView.current
-                            IconButton(
-                                onClick = {
-                                    if (currentItem != null) {
-                                        heartBounce = true
-                                        heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                                        viewModel.toggleFavorite(currentItem.id)
-                                    }
+                        }
+
+                        // Favorite
+                        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
+                        var heartBounce by remember { mutableStateOf(false) }
+                        val heartScale by animateFloatAsState(
+                            targetValue = if (heartBounce) 1.45f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "heartScale",
+                            finishedListener = { if (heartBounce) heartBounce = false }
+                        )
+                        val heartView = androidx.compose.ui.platform.LocalView.current
+                        IconButton(
+                            onClick = {
+                                if (currentItem != null) {
+                                    heartBounce = true
+                                    heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                    viewModel.toggleFavorite(currentItem.id)
                                 }
-                            ) {
-                                Icon(
-                                    imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                                    contentDescription = "Favorite",
-                                    tint = if (isFavorite) com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error else MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.graphicsLayer {
-                                        scaleX = heartScale
-                                        scaleY = heartScale
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite) com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error else Color.White,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = heartScale
+                                    scaleY = heartScale
+                                }
+                            )
+                        }
+
+                        // Delete
+                        IconButton(
+                            onClick = {
+                                if (currentItem != null) {
+                                    val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                                    if (!isMediaStoreUri) {
+                                        android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@IconButton
                                     }
-                                )
-                            }
-                            IconButton(
-                                enabled = currentItem?.localExists == true,
-                                onClick = {
-                                    if (currentItem != null) {
-                                        val uri = resolvedCurrentUri ?: currentItem.uri
-                                        if (!currentItem.isVideo) {
-                                            onNavigateToEditor(uri)
-                                        } else {
-                                            val editIntent = Intent(Intent.ACTION_EDIT).apply {
-                                                setDataAndType(uri, "video/*")
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                                            }
-                                            try {
-                                                context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
-                                            } catch (e: Exception) {
-                                                android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
-                                            }
+                                    pendingDeleteItem = currentItem
+                                    pendingDeletePage = pagerState.currentPage
+                                    if (confirmDeleteEnabled) {
+                                        showDeleteConfirmDialog = true
+                                    } else {
+                                        try {
+                                            val trashIntent = MediaStore.createTrashRequest(
+                                                context.contentResolver,
+                                                listOf(currentItem.uri),
+                                                true
+                                            )
+                                            val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                            launcher.launch(request)
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Unable to trash this item: ${e.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 }
-                            ) { 
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = "Edit") 
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (currentItem != null) {
-                                            val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                                            if (!isMediaStoreUri) {
-                                                android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
-                                                return@IconButton
-                                            }
-                                            pendingDeleteItem = currentItem
-                                            pendingDeletePage = pagerState.currentPage
-                                            if (confirmDeleteEnabled) {
-                                                showDeleteConfirmDialog = true
-                                            } else {
-                                                try {
-                                                    val trashIntent = MediaStore.createTrashRequest(
-                                                        context.contentResolver, 
-                                                        listOf(currentItem.uri), 
-                                                        true
-                                                    )
-                                                    val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                                    launcher.launch(request)
-                                                } catch (e: Exception) {
-                                                    e.printStackTrace()
-                                                    android.widget.Toast.makeText(
-                                                        context, 
-                                                        "Unable to trash this item: ${e.message}", 
-                                                        android.widget.Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }
-                                        }
-                                    }
-                            ) { 
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete") 
-                            }
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = Color.White)
                         }
                     }
                 }
-        }
+            }
         }
 
     }
@@ -1597,4 +1911,69 @@ private fun InfoBlock(label: String, value: String, modifier: Modifier = Modifie
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
+    if (drawable is android.graphics.drawable.BitmapDrawable && drawable.bitmap != null) {
+        return drawable.bitmap
+    }
+    val width = if (drawable.intrinsicWidth <= 0) 1 else drawable.intrinsicWidth
+    val height = if (drawable.intrinsicHeight <= 0) 1 else drawable.intrinsicHeight
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap
+}
+
+private fun extractAmbientMoodColor(bitmap: Bitmap): Color {
+    val width = bitmap.width
+    val height = bitmap.height
+    if (width <= 0 || height <= 0) return Color.Unspecified
+
+    val pixels = IntArray(width * height)
+    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+    var totalWeight = 0f
+    var sumR = 0f
+    var sumG = 0f
+    var sumB = 0f
+    val hsv = FloatArray(3)
+
+    for (pixel in pixels) {
+        val a = (pixel shr 24) and 0xff
+        if (a < 128) continue
+
+        android.graphics.Color.colorToHSV(pixel, hsv)
+        val s = hsv[1]
+        val v = hsv[2]
+
+        // Skip near-black voids or blown highlights
+        if (v < 0.08f || (v > 0.94f && s < 0.12f)) continue
+
+        val weight = 1f + (s * 3.5f)
+        val r = (pixel shr 16) and 0xff
+        val g = (pixel shr 8) and 0xff
+        val b = pixel and 0xff
+
+        sumR += r * weight
+        sumG += g * weight
+        sumB += b * weight
+        totalWeight += weight
+    }
+
+    if (totalWeight <= 0f) return Color.Unspecified
+
+    val avgR = (sumR / totalWeight).toInt().coerceIn(0, 255)
+    val avgG = (sumG / totalWeight).toInt().coerceIn(0, 255)
+    val avgB = (sumB / totalWeight).toInt().coerceIn(0, 255)
+
+    android.graphics.Color.colorToHSV(android.graphics.Color.rgb(avgR, avgG, avgB), hsv)
+
+    if (hsv[1] < 0.08f) return Color.Unspecified
+
+    hsv[1] = hsv[1].coerceIn(0.40f, 0.75f)
+    hsv[2] = 0.13f
+
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }

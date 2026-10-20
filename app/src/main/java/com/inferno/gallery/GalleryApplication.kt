@@ -42,21 +42,21 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
 
         val settingsRepo = SettingsRepository.getInstance(this)
         kotlinx.coroutines.MainScope().launch {
-            val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
+            // Always run media sync immediately to keep database SSOT fresh
+            WorkManager.getInstance(this@GalleryApplication)
+                .enqueueUniqueWork("MediaSyncWorker", androidx.work.ExistingWorkPolicy.KEEP, syncWorkRequest)
 
+            val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
             if (ocrEnabled) {
-                val ocrIndexRequest = androidx.work.OneTimeWorkRequestBuilder<OcrIndexWorker>()
-                    .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                val ocrConstraints = androidx.work.Constraints.Builder()
+                    .setRequiresBatteryNotLow(true)
+                    .setRequiresDeviceIdle(true)
                     .build()
-                // Chain: sync first, then OCR — prevents OCR from seeing an empty DB
+                val ocrIndexRequest = androidx.work.OneTimeWorkRequestBuilder<OcrIndexWorker>()
+                    .setConstraints(ocrConstraints)
+                    .build()
                 WorkManager.getInstance(this@GalleryApplication)
-                    .beginUniqueWork("MediaSyncWorker", androidx.work.ExistingWorkPolicy.KEEP, syncWorkRequest)
-                    .then(ocrIndexRequest)
-                    .enqueue()
-            } else {
-                // No OCR needed, just run sync alone
-                WorkManager.getInstance(this@GalleryApplication)
-                    .enqueueUniqueWork("MediaSyncWorker", androidx.work.ExistingWorkPolicy.KEEP, syncWorkRequest)
+                    .enqueueUniqueWork("OcrIndexWorkerIdle", androidx.work.ExistingWorkPolicy.KEEP, ocrIndexRequest)
             }
 
             // Periodic sync every 6 hours
@@ -101,6 +101,11 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
                     workRequest
                 )
             }
+
+            val autoCheckUpdates = settingsRepo.autoCheckUpdatesFlow.first()
+            if (autoCheckUpdates) {
+                com.inferno.gallery.workers.UpdateCheckWorker.schedulePeriodic(this@GalleryApplication)
+            }
         }
     }
 
@@ -110,6 +115,11 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
                 // Support high-performance system thumbnails for local MediaStore items
                 add(MediaStoreThumbnailFetcher.Factory(context))
                 add(MediaStoreThumbnailFetcher.AndroidUriFactory(context))
+                // Support camera RAW formats (DNG, CR2, CR3, NEF, ARW, ORF, RAF, RW2)
+                add(com.inferno.gallery.data.decoder.RawImageFetcher.Factory(context))
+                add(com.inferno.gallery.data.decoder.RawImageFetcher.AndroidUriFactory(context))
+                // Support video frames
+                add(VideoFrameDecoder.Factory())
                 // Support SVGs
                 add(SvgDecoder.Factory())
             }

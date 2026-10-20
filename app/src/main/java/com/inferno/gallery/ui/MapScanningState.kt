@@ -57,6 +57,10 @@ import com.inferno.gallery.R
 import androidx.compose.ui.graphics.vector.ImageVector
 
 
+import androidx.compose.material3.Surface
+import com.inferno.gallery.ui.components.PhotonEmptyState
+import com.inferno.gallery.ui.theme.ExpressiveShapes
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GpsScanningAnimation(
@@ -73,10 +77,11 @@ fun GpsScanningAnimation(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) { paddingValues ->
         val state = scanState as? GalleryViewModel.GpsScanState.Scanning
         val total = state?.total ?: 0
@@ -88,57 +93,37 @@ fun GpsScanningAnimation(
             label = "gpsProgress"
         )
 
-        val infiniteTransition = rememberInfiniteTransition(label = "gpsScan")
-        val morphProgress by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "morph"
-        )
-        val rotation by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "rotation"
-        )
-        val breathScale by infiniteTransition.animateFloat(
-            initialValue = 0.85f,
-            targetValue = 1.05f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1500, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "breathe"
-        )
-
-        val tertiaryindicatorColor = MaterialTheme.colorScheme.tertiary
-        val surfaceVariant = MaterialTheme.colorScheme.surfaceContainerHighest
-
         Box(
             modifier = Modifier.fillMaxSize().padding(paddingValues),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
             ) {
-                androidx.compose.material3.ContainedLoadingIndicator(
-                    modifier = Modifier.size(72.dp),
-                    indicatorColor = MaterialTheme.colorScheme.tertiary
-                )
+                // Scanning progress indicator container
+                Surface(
+                    shape = ExpressiveShapes.Clover8Leaf,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.size(96.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        androidx.compose.material3.ContainedLoadingIndicator(
+                            modifier = Modifier.size(60.dp),
+                            indicatorColor = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(24.dp))
 
                 Text(
                     "Scanning GPS data",
-                    style = MaterialTheme.typography.titleMedium,
-
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
@@ -147,21 +132,21 @@ fun GpsScanningAnimation(
                 if (total > 0) {
                     Text(
                         "$processed / $total photos",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(20.dp))
                     LinearWavyProgressIndicator(
                         progress = { animatedProgress },
                         modifier = Modifier
-                            .fillMaxWidth(0.5f)
+                            .fillMaxWidth(0.6f)
                             .height(10.dp),
                         trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     )
                 } else {
                     Text(
-                        "Preparing…",
-                        style = MaterialTheme.typography.bodySmall,
+                        "Preparing photo location index…",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -183,54 +168,22 @@ fun NoGeotaggedPhotosState(onBackClick: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) { paddingValues ->
         Box(
             modifier = Modifier.fillMaxSize().padding(paddingValues),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(horizontal = 48.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(88.dp)
-                        .clip(ShapeExtraLarge)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.tertiaryContainer,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        ImageVector.vectorResource(R.drawable.ic_ms_location_on),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                Text(
-                    "No location data",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    "None of your photos have GPS coordinates embedded. Photos taken with location enabled will appear here.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
+            PhotonEmptyState(
+                icon = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
+                title = "No location data",
+                subtitle = "None of your photos have GPS coordinates embedded. Photos taken with location enabled will appear here.",
+                shape = ExpressiveShapes.Cookie12Sided
+            )
         }
     }
 }

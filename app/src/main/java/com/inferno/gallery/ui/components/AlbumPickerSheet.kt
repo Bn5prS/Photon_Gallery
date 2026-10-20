@@ -48,6 +48,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+import com.inferno.gallery.ui.theme.ShapeEdgeTop
+import com.inferno.gallery.ui.theme.ShapeMedium
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumPickerSheet(
@@ -63,7 +66,8 @@ fun AlbumPickerSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        shape = ShapeEdgeTop,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
         var isBrowsingStorage by remember { mutableStateOf(false) }
 
@@ -96,7 +100,7 @@ fun AlbumPickerSheet(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = ShapeMedium
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -132,7 +136,7 @@ fun AlbumPickerSheet(
                                         .size(40.dp)
                                         .background(
                                             color = MaterialTheme.colorScheme.tertiaryContainer,
-                                            shape = RoundedCornerShape(12.dp)
+                                            shape = ShapeMedium
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -183,7 +187,7 @@ fun AlbumPickerSheet(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(ShapeMedium)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -386,7 +390,7 @@ fun AlbumPickerSheet(
                     OutlinedButton(
                         onClick = { isBrowsingStorage = false },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = ShapeMedium
                     ) {
                         Text("Cancel")
                     }
@@ -395,7 +399,7 @@ fun AlbumPickerSheet(
                             onSelectPath(currentBrowsingDirectory.absolutePath)
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = ShapeMedium
                     ) {
                         Text(confirmPathButtonText)
                     }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -56,6 +57,18 @@ fun NavigationGraph(
     }
 
     val galleryViewModel: GalleryViewModel = viewModel()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val mainActivity = context as? com.inferno.gallery.MainActivity
+    val viewIntentUri by mainActivity?.viewIntentUri?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
+
+    LaunchedEffect(viewIntentUri, isLoading) {
+        val uri = viewIntentUri
+        if (uri != null && !isLoading) {
+            val encoded = android.net.Uri.encode(uri.toString())
+            mainActivity?.consumeViewIntentUri()
+            navController.navigate("detail/$encoded")
+        }
+    }
 
     SharedTransitionLayout(modifier = modifier) {
         NavHost(
@@ -63,49 +76,85 @@ fun NavigationGraph(
             startDestination = startDest,
             // ── Forward navigation: slide in from right ──
             enterTransition = {
-                slideInHorizontally(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
-                    initialOffsetX = { (it * 0.25f).toInt() }
-                ) + fadeIn(
-                    animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                ) + scaleIn(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                    initialScale = 0.94f
-                )
+                if (MotionTokens.isStandardMotion) {
+                    slideInHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.StandardEasing),
+                        initialOffsetX = { it }
+                    ) + fadeIn(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.StandardEasing)
+                    )
+                } else {
+                    slideInHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                        initialOffsetX = { (it * 0.25f).toInt() }
+                    ) + fadeIn(
+                        animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                    ) + scaleIn(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        initialScale = 0.94f
+                    )
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
-                    targetOffsetX = { -(it * 0.12f).toInt() }
-                ) + fadeOut(
-                    animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                ) + scaleOut(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                    targetScale = 0.94f
-                )
+                if (MotionTokens.isStandardMotion) {
+                    slideOutHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.StandardEasing),
+                        targetOffsetX = { -(it * 0.33f).toInt() }
+                    ) + fadeOut(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.StandardEasing)
+                    )
+                } else {
+                    slideOutHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                        targetOffsetX = { -(it * 0.12f).toInt() }
+                    ) + fadeOut(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                    ) + scaleOut(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        targetScale = 0.94f
+                    )
+                }
             },
             // ── Back navigation: slide in from left ──
             popEnterTransition = {
-                slideInHorizontally(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
-                    initialOffsetX = { -(it * 0.12f).toInt() }
-                ) + fadeIn(
-                    animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                ) + scaleIn(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                    initialScale = 0.94f
-                )
+                if (MotionTokens.isStandardMotion) {
+                    slideInHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.StandardEasing),
+                        initialOffsetX = { -(it * 0.33f).toInt() }
+                    ) + fadeIn(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.StandardEasing)
+                    )
+                } else {
+                    slideInHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                        initialOffsetX = { -(it * 0.12f).toInt() }
+                    ) + fadeIn(
+                        animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                    ) + scaleIn(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        initialScale = 0.94f
+                    )
+                }
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
-                    targetOffsetX = { (it * 0.25f).toInt() }
-                ) + fadeOut(
-                    animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                ) + scaleOut(
-                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                    targetScale = 0.94f
-                )
+                if (MotionTokens.isStandardMotion) {
+                    slideOutHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.StandardEasing),
+                        targetOffsetX = { it }
+                    ) + fadeOut(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.StandardEasing)
+                    )
+                } else {
+                    slideOutHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                        targetOffsetX = { (it * 0.25f).toInt() }
+                    ) + fadeOut(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                    ) + scaleOut(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        targetScale = 0.94f
+                    )
+                }
             }
         ) {
 
@@ -164,7 +213,8 @@ fun NavigationGraph(
                 popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
             ) { backStackEntry ->
-                val mediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
+                val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
+                val mediaId = try { android.net.Uri.decode(rawMediaId) } catch (e: Exception) { rawMediaId }
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
                 val highlightText = backStackEntry.arguments?.getString("highlightText")
                 
@@ -184,6 +234,10 @@ fun NavigationGraph(
                     onNavigateToEditor = { editUri ->
                         val encoded = android.net.Uri.encode(editUri.toString())
                         navController.navigate("editor?uri=$encoded")
+                    },
+                    onNavigateToFrameExtractor = { videoUri ->
+                        val encoded = android.net.Uri.encode(videoUri.toString())
+                        navController.navigate("frame_extractor?uri=$encoded")
                     },
                     viewModel = galleryViewModel
                 )
@@ -259,6 +313,39 @@ fun NavigationGraph(
                     imageUri = uri,
                     onBack = { navController.popBackStack() },
                     onSaved = { }
+                )
+            }
+
+            composable(
+                route = "frame_extractor?uri={uri}",
+                arguments = listOf(
+                    navArgument("uri") { type = NavType.StringType }
+                ),
+                enterTransition = {
+                    slideInVertically(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                        initialOffsetY = { (it * 0.3f).toInt() }
+                    ) + fadeIn(MotionTokens.fastEffectsSpec())
+                },
+                exitTransition = {
+                    slideOutVertically(
+                        animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
+                        targetOffsetY = { (it * 0.3f).toInt() }
+                    ) + fadeOut(MotionTokens.fastEffectsSpec())
+                },
+                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                popExitTransition = {
+                    slideOutVertically(
+                        animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
+                        targetOffsetY = { (it * 0.3f).toInt() }
+                    ) + fadeOut(MotionTokens.fastEffectsSpec())
+                }
+            ) { backStackEntry ->
+                val uriString = backStackEntry.arguments?.getString("uri") ?: ""
+                val uri = android.net.Uri.parse(android.net.Uri.decode(uriString))
+                VideoFrameExtractorScreen(
+                    videoUri = uri,
+                    onBack = { navController.popBackStack() }
                 )
             }
 

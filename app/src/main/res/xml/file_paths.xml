@@ -6,4 +6,6 @@
     <files-path name="vault_files" path="vault/" />
     <!-- Crash log files for sharing -->
     <files-path name="crash_logs" path="crash_logs/" />
+    <!-- Downloaded APK updates for installation -->
+    <cache-path name="apk_updates" path="updates/" />
 </paths>

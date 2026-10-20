@@ -19,11 +19,11 @@ import androidx.compose.ui.platform.LocalView
 /**
  * Photon Gallery haptic feedback utilities.
  *
- * Provides crash-proof, multi-tiered tactile feedback across all Android
- * devices (API 31+ down to legacy) with robust fail-soft guarantees.
+ * Provides vibration and haptic feedback across Android SDK versions
+ * (API 31+ down to legacy) with fail-soft guarantees.
  */
 
-// ── Premium Haptic Manager ────────────────────────────────────────
+// ── Haptic Configuration Manager ────────────────────────────────────
 
 object PremiumHapticsManager {
     @Volatile

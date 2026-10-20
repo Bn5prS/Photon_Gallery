@@ -1,11 +1,18 @@
 package com.inferno.gallery.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,11 +33,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.inferno.gallery.ui.components.FourQuadrantColorSwatch
+import com.inferno.gallery.ui.theme.ThemePalettes
+import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +49,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
@@ -54,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,19 +93,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
+import com.inferno.gallery.BuildConfig
 import com.inferno.gallery.R
-import com.inferno.gallery.ui.components.ColorSchemeBottomSheet
+import com.inferno.gallery.ui.components.AboutScreenContent
 import com.inferno.gallery.ui.components.ExpressiveButton
+import com.inferno.gallery.ui.theme.ExpressiveShapes
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
+import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.photonColors
+import com.inferno.gallery.ui.utils.AppIconManager
+import com.inferno.gallery.ui.utils.AppIconOption
 import com.inferno.gallery.ui.utils.pressScale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -108,10 +129,11 @@ fun SettingsScreen(
 ) {
     val themeMode by viewModel.themeMode.collectAsState()
     val useMaterialYou by viewModel.useMaterialYou.collectAsState()
+    val colorPresetName by viewModel.colorPresetName.collectAsState()
     val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
-    val useFullScreen by viewModel.useFullScreen.collectAsState()
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val showHiddenAlbums by viewModel.showHiddenAlbums.collectAsState()
+    val showMemories by viewModel.showMemories.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
@@ -123,18 +145,21 @@ fun SettingsScreen(
     val totalImagesCount by viewModel.totalImagesCount.collectAsState()
     val unindexedOcrImagesCount by viewModel.unindexedOcrImagesCount.collectAsState()
     val stripMetadataOnShare by viewModel.stripMetadataOnShare.collectAsState()
-    val cacheThumbnailsEnabled by viewModel.cacheThumbnailsEnabled.collectAsState()
     val maxBrightnessEnabled by viewModel.maxBrightnessEnabled.collectAsState()
     val useSystemFont by viewModel.useSystemFont.collectAsState()
     val secureRecentsEnabled by viewModel.secureRecentsEnabled.collectAsState()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val hapticsStrength by viewModel.hapticsStrength.collectAsState()
-    val colorPresetName by viewModel.colorPresetName.collectAsState()
     val viewerBlurEffect by viewModel.viewerBlurEffect.collectAsState()
+    val viewerDynamicColor by viewModel.viewerDynamicColor.collectAsState()
     val confirmDelete by viewModel.confirmDeleteEnabled.collectAsState()
     val autoCleanTrash by viewModel.autoCleanTrashEnabled.collectAsState()
     val autoCleanDays by viewModel.autoCleanTrashDays.collectAsState()
     val autoplayWithSound by viewModel.autoplayWithSoundEnabled.collectAsState()
+    val autoCheckUpdates by viewModel.autoCheckUpdates.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val appIcon by viewModel.appIcon.collectAsState()
+    val dateHeaderAlignment by viewModel.dateHeaderAlignment.collectAsState()
 
     val smartSearchModelDownloaded by viewModel.smartSearchModelDownloaded.collectAsState()
     val unindexedSmartSearchCount by viewModel.unindexedSmartSearchCount.collectAsState()
@@ -142,12 +167,35 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var isDefaultGallery by remember {
+        mutableStateOf(isPhotonDefaultViewer(context))
+    }
+
+    val defaultAppsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        isDefaultGallery = isPhotonDefaultViewer(context)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isDefaultGallery = isPhotonDefaultViewer(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     var showClearIndexConfirm by remember { mutableStateOf(false) }
     var showDeleteModelConfirm by remember { mutableStateOf(false) }
-    var showColorSchemeSheet by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showAppIconDialog by remember { mutableStateOf(false) }
 
     val isCurrentlyDark = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemDark
@@ -201,13 +249,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showColorSchemeSheet) {
-        ColorSchemeBottomSheet(
-            viewModel = viewModel,
-            onDismissRequest = { showColorSchemeSheet = false }
-        )
-    }
-
     if (showLicensesDialog) {
         OpenSourceLicensesDialog(onDismiss = { showLicensesDialog = false })
     }
@@ -233,6 +274,19 @@ fun SettingsScreen(
         )
     }
 
+    if (showAppIconDialog) {
+        AppIconDialog(
+            currentIconId = appIcon,
+            onSelectIcon = { option ->
+                viewModel.setAppIcon(option.id)
+                AppIconManager.applyAppIcon(context, option)
+                Toast.makeText(context, "App icon updated to ${option.title}", Toast.LENGTH_SHORT).show()
+                showAppIconDialog = false
+            },
+            onDismiss = { showAppIconDialog = false }
+        )
+    }
+
     androidx.activity.compose.BackHandler(enabled = activeSection != null) {
         onActiveSectionChange(null)
     }
@@ -252,115 +306,108 @@ fun SettingsScreen(
             label = "SettingsSectionContent"
         ) { section ->
             if (section == null) {
-                // ── Main Settings Categories View ──────────────────────────────
+                // ── Main Settings Categories View (Grouped Cards) ──────────────
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Connected Segmented Category Card
-                    val categories = listOf(
-                        CategoryItem(
-                            title = "Look & Feel",
-                            subtitle = "Theme, colors, and display preferences",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            section = "Look & Feel"
-                        ),
-                        CategoryItem(
-                            title = "Layout & Navigation",
-                            subtitle = "Grid size, dock style, and shapes",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            iconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            section = "Layout & Navigation"
-                        ),
-                        CategoryItem(
-                            title = "General",
-                            subtitle = "Haptics, thumbnail caching, and video playback",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_settings),
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            iconColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            section = "General"
-                        ),
-                        CategoryItem(
-                            title = "Smart Search & OCR",
-                            subtitle = "AI-powered semantic search and text recognition",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            iconColor = MaterialTheme.colorScheme.primary,
-                            section = "Smart Search & OCR"
-                        ),
-                        CategoryItem(
-                            title = "Privacy & Security",
-                            subtitle = "Metadata stripping, deletion, and data control",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_shield),
-                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
-                            iconColor = MaterialTheme.colorScheme.onErrorContainer,
-                            section = "Privacy & Security"
-                        ),
-                        CategoryItem(
-                            title = "Excluded Folders",
-                            subtitle = "Hide folders from the main gallery",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_off),
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            section = "Excluded Folders"
-                        ),
-                        CategoryItem(
-                            title = "About",
-                            subtitle = "App information, maintainer, updates, and licenses",
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            section = "About"
+                    SettingsGroupCard(
+                        title = "Appearance & Interface",
+                        items = listOf(
+                            {
+                                SettingsCategoryRow(
+                                    title = "Look & Feel",
+                                    subtitle = "Theme, colors, AMOLED black, and display preferences",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                                    iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    onClick = { onActiveSectionChange("Look & Feel") }
+                                )
+                            },
+                            {
+                                SettingsCategoryRow(
+                                    title = "Layout & Navigation",
+                                    subtitle = "Grid columns, dock style, and album shapes",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                    iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    onClick = { onActiveSectionChange("Layout & Navigation") }
+                                )
+                            }
                         )
                     )
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        categories.forEachIndexed { index, cat ->
-                            val shape = when {
-                                categories.size == 1 -> ShapeLarge
-                                index == 0 -> RoundedCornerShape(
-                                    topStart = 16.dp,
-                                    topEnd = 16.dp,
-                                    bottomStart = 4.dp,
-                                    bottomEnd = 4.dp
-                                )
-                                index == categories.size - 1 -> RoundedCornerShape(
-                                    topStart = 4.dp,
-                                    topEnd = 4.dp,
-                                    bottomStart = 16.dp,
-                                    bottomEnd = 16.dp
-                                )
-                                else -> RoundedCornerShape(4.dp)
-                            }
-                            Surface(
-                                shape = shape,
-                                color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                    SettingsGroupCard(
+                        title = "General & Search",
+                        items = listOf(
+                            {
                                 SettingsCategoryRow(
-                                    title = cat.title,
-                                    subtitle = cat.subtitle,
-                                    icon = cat.icon,
-                                    iconContainerColor = cat.containerColor,
-                                    iconColor = cat.iconColor,
-                                    onClick = { onActiveSectionChange(cat.section) }
+                                    title = "General",
+                                    subtitle = "Haptics, video autoplay, and delete confirmations",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_settings),
+                                    iconContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    onClick = { onActiveSectionChange("General") }
+                                )
+                            },
+                            {
+                                SettingsCategoryRow(
+                                    title = "Smart Search & OCR",
+                                    subtitle = "AI-powered semantic search and text recognition",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                    iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    onClick = { onActiveSectionChange("Smart Search & OCR") }
                                 )
                             }
-                        }
-                    }
+                        )
+                    )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    SettingsGroupCard(
+                        title = "Security & Storage",
+                        items = listOf(
+                            {
+                                SettingsCategoryRow(
+                                    title = "Privacy & Security",
+                                    subtitle = "Metadata stripping, deletion rules, and data control",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_shield),
+                                    iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    onClick = { onActiveSectionChange("Privacy & Security") }
+                                )
+                            },
+                            {
+                                SettingsCategoryRow(
+                                    title = "Excluded Folders",
+                                    subtitle = "Hide specific folders from the main gallery",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_off),
+                                    iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    onClick = { onActiveSectionChange("Excluded Folders") }
+                                )
+                            }
+                        )
+                    )
+
+                    SettingsGroupCard(
+                        title = "System",
+                        items = listOf(
+                            {
+                                SettingsCategoryRow(
+                                    title = "About",
+                                    subtitle = "App info, updates, maintainer, and open-source licenses",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                                    iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    onClick = { onActiveSectionChange("About") }
+                                )
+                            }
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
                 }
             } else {
                 // ── Sub-Screens (Connected Segmented Cards) ────────────────────
@@ -415,6 +462,51 @@ fun SettingsScreen(
                                         )
                                     },
                                     {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Color Palette",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = if (useMaterialYou) "Select any preset to switch from system wallpaper" else "Curated 4-color Material 3 combinations",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+
+                                            LazyRow(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                                            ) {
+                                                items(ThemePalettes.allPalettes) { palette ->
+                                                    FourQuadrantColorSwatch(
+                                                        palette = palette,
+                                                        isSelected = !useMaterialYou && (colorPresetName == palette.id),
+                                                        onClick = {
+                                                            viewModel.setColorPresetName(palette.id)
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    {
                                         SwitchSettingItem(
                                             title = "Deep AMOLED Black",
                                             subtitle = "Use pitch black background in dark mode",
@@ -428,19 +520,15 @@ fun SettingsScreen(
                             )
 
                             SettingsGroupCard(
-                                title = "Theme Colors",
+                                title = "App Icon",
                                 items = listOf(
                                     {
-                                        val styleSubtitle = if (useMaterialYou) {
-                                            "Dynamic Wallpaper Palette"
-                                        } else {
-                                            "$colorPresetName Tone Palette"
-                                        }
+                                        val currentOption = AppIconOption.fromId(appIcon)
                                         ClickableSettingItem(
-                                            title = "Color Scheme & Style",
-                                            subtitle = styleSubtitle,
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                                            onClick = { showColorSchemeSheet = true }
+                                            title = "Launcher Icon",
+                                            subtitle = currentOption.title,
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                            onClick = { showAppIconDialog = true }
                                         )
                                     }
                                 )
@@ -451,11 +539,11 @@ fun SettingsScreen(
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = "Full Screen Mode",
-                                            subtitle = "Hide status bar and navigation bar to maximize content area",
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_open_in_full),
-                                            checked = useFullScreen,
-                                            onCheckedChange = { viewModel.setUseFullScreen(it) }
+                                            title = "Dynamic Ambient Color",
+                                            subtitle = "Tint the viewer background with colors extracted from the current photo",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                                            checked = viewerDynamicColor,
+                                            onCheckedChange = { viewModel.setViewerDynamicColor(it) }
                                         )
                                     },
                                     {
@@ -496,66 +584,188 @@ fun SettingsScreen(
                                     }
                                 )
                             )
-                        }
 
-                        "Layout & Navigation" -> {
                             SettingsGroupCard(
                                 title = "Timeline Layout",
                                 items = listOf(
                                     {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text(
-                                                text = "Main Gallery Grid Style",
+                                                text = "Date Header Alignment",
                                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
-                                                text = "Choose how photos and videos are arranged in your main timeline",
+                                                text = if (dateHeaderAlignment == "LEFT") {
+                                                    "Left-aligned timeline date headers and floating scroll badge"
+                                                } else {
+                                                    "Center-aligned timeline date headers and floating scroll badge (Google Photos style)"
+                                                },
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             Spacer(modifier = Modifier.height(12.dp))
-
                                             SingleChoiceSegmentedButtonRow(
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
                                                 SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                                                    onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID) },
-                                                    selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID,
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                    label = { Text("Standard", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
+                                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                                    onClick = { viewModel.setDateHeaderAlignment("LEFT") },
+                                                    selected = dateHeaderAlignment == "LEFT",
+                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_left), contentDescription = null) },
+                                                    label = { Text("Left", style = MaterialTheme.typography.labelMedium) }
                                                 )
                                                 SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                                                    onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC) },
-                                                    selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC,
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_dashboard), contentDescription = null) },
-                                                    label = { Text("Editorial", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
-                                                )
-                                                SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                                                    onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.STAGGERED_MASONRY) },
-                                                    selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.STAGGERED_MASONRY,
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_view_column), contentDescription = null) },
-                                                    label = { Text("Masonry", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
+                                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                                    onClick = { viewModel.setDateHeaderAlignment("CENTER") },
+                                                    selected = dateHeaderAlignment == "CENTER",
+                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_center), contentDescription = null) },
+                                                    label = { Text("Center", style = MaterialTheme.typography.labelMedium) }
                                                 )
                                             }
                                         }
-                                    },
+                                    }
+                                )
+                            )
+                        }
+
+                        "Layout & Navigation" -> {
+                            SettingsGroupCard(
+                                title = "Timeline Layout & Grid",
+                                items = listOf(
                                     {
-                                        TimelineLayoutPreviewCard(
-                                            layoutMode = timelineLayoutMode,
-                                            columns = gridCellsCount,
-                                            cornerRadius = thumbnailCornerRadius
-                                        )
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            // 1. Grid Style Selector
+                                            Column {
+                                                Text(
+                                                    text = "Main Gallery Grid Style",
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Choose how photos and videos are arranged in your main timeline",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Spacer(modifier = Modifier.height(12.dp))
+
+                                                SingleChoiceSegmentedButtonRow(
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    SegmentedButton(
+                                                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                                        onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID) },
+                                                        selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID,
+                                                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                                        label = { Text("Standard", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
+                                                    )
+                                                    SegmentedButton(
+                                                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                                        onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC) },
+                                                        selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC,
+                                                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_dashboard), contentDescription = null) },
+                                                        label = { Text("Editorial Mosaic", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
+                                                    )
+                                                }
+                                            }
+
+                                            // 2. Live Layout Preview
+                                            TimelineLayoutPreviewCard(
+                                                layoutMode = timelineLayoutMode,
+                                                columns = gridCellsCount,
+                                                cornerRadius = thumbnailCornerRadius
+                                            )
+
+                                            // 3. Grid Items per Row Slider
+                                            Column {
+                                                Row(
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Column {
+                                                        Text(text = "Grid Items per Row", style = MaterialTheme.typography.bodyLarge)
+                                                        Text(
+                                                            text = "Number of columns across the timeline",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    Surface(
+                                                        shape = ShapeFull,
+                                                        color = MaterialTheme.colorScheme.secondaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = "$gridCellsCount columns",
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                Slider(
+                                                    value = gridCellsCount.toFloat().coerceIn(2f, 6f),
+                                                    onValueChange = { galleryViewModel.setGridCellsCount(it.toInt()) },
+                                                    valueRange = 2f..6f,
+                                                    steps = 3
+                                                )
+                                            }
+
+                                            HorizontalDivider(
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                                            )
+
+                                            // 4. Thumbnail Corner Radius Slider
+                                            Column {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column {
+                                                        Text(text = "Thumbnail Corner Radius", style = MaterialTheme.typography.bodyLarge)
+                                                        Text(
+                                                            text = "${thumbnailCornerRadius.toInt()} dp",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    Surface(
+                                                        modifier = Modifier.size(44.dp),
+                                                        shape = RoundedCornerShape(thumbnailCornerRadius.dp),
+                                                        color = MaterialTheme.colorScheme.primaryContainer
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(
+                                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                                                contentDescription = null,
+                                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Slider(
+                                                    value = thumbnailCornerRadius,
+                                                    onValueChange = { viewModel.setThumbnailCornerRadius(it) },
+                                                    valueRange = 0f..24f
+                                                )
+                                            }
+                                        }
                                     }
                                 )
                             )
 
                             SettingsGroupCard(
-                                title = "Dock & Display",
+                                title = "Dock & Navigation",
                                 items = listOf(
                                     {
                                         val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
@@ -579,76 +789,74 @@ fun SettingsScreen(
                                         )
                                     },
                                     {
-                                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                            Row(
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(text = "Grid Items per Row", style = MaterialTheme.typography.bodyLarge)
-                                                Surface(
-                                                    shape = CircleShape,
-                                                    color = MaterialTheme.colorScheme.secondaryContainer
-                                                ) {
-                                                    Text(
-                                                        text = "$gridCellsCount columns",
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                    )
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Slider(
-                                                value = gridCellsCount.toFloat(),
-                                                onValueChange = { galleryViewModel.setGridCellsCount(it.toInt()) },
-                                                valueRange = 2f..8f,
-                                                steps = 5
-                                            )
-                                        }
-                                    },
-                                    {
-                                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Column {
-                                                    Text(text = "Thumbnail Corner Radius", style = MaterialTheme.typography.bodyLarge)
-                                                    Text(
-                                                        text = "${thumbnailCornerRadius.toInt()} dp",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                Surface(
-                                                    modifier = Modifier.size(44.dp),
-                                                    shape = RoundedCornerShape(thumbnailCornerRadius.dp),
-                                                    color = MaterialTheme.colorScheme.primaryContainer
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Icon(
-                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            Slider(
-                                                value = thumbnailCornerRadius,
-                                                onValueChange = { viewModel.setThumbnailCornerRadius(it) },
-                                                valueRange = 0f..24f
-                                            )
-                                        }
+                                        SwitchSettingItem(
+                                            title = "On This Day Memories",
+                                            subtitle = "Spotlight nostalgic memories from this day in past years",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
+                                            checked = showMemories,
+                                            onCheckedChange = { viewModel.setShowMemories(it) }
+                                        )
                                     }
                                 )
                             )
                         }
 
                         "General" -> {
+                            SettingsGroupCard(
+                                title = "Default Apps",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Set as Default Gallery",
+                                            subtitle = if (isDefaultGallery) {
+                                                "Photon Gallery is currently your default gallery app"
+                                            } else {
+                                                "Set Photon Gallery as the default app to view photos and videos"
+                                            },
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                            trailing = {
+                                                if (isDefaultGallery) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                try {
+                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                        defaultAppsLauncher.launch(Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS).apply {
+                                                            data = Uri.parse("package:${context.packageName}")
+                                                        })
+                                                    } else {
+                                                        defaultAppsLauncher.launch(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                                                    }
+                                                } catch (_: Exception) {
+                                                    try {
+                                                        defaultAppsLauncher.launch(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                                                    } catch (_: Exception) {
+                                                        try {
+                                                            defaultAppsLauncher.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                                data = Uri.fromParts("package", context.packageName, null)
+                                                            })
+                                                        } catch (_: Exception) {}
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                )
+                            )
+
                             val hapticsItems = mutableListOf<@Composable () -> Unit>(
                                 {
                                     SwitchSettingItem(
@@ -698,20 +906,6 @@ fun SettingsScreen(
                                 items = hapticsItems
                             )
 
-                            SettingsGroupCard(
-                                title = "Performance",
-                                items = listOf(
-                                    {
-                                        SwitchSettingItem(
-                                            title = "Cache Grid Thumbnails",
-                                            subtitle = "Pre-cache grid thumbnails for instant, super-smooth scrolling (uses device storage)",
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
-                                            checked = cacheThumbnailsEnabled,
-                                            onCheckedChange = { viewModel.setCacheThumbnailsEnabled(it) }
-                                        )
-                                    }
-                                )
-                            )
 
                             SettingsGroupCard(
                                 title = "Media Playback",
@@ -907,27 +1101,35 @@ fun SettingsScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Surface(
+                                                shape = ExpressiveShapes.Clover4Leaf,
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(44.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             Text(
                                                 text = "Smart Search (Semantic AI)",
-                                                style = MaterialTheme.typography.titleMedium,
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                 modifier = Modifier.weight(1f)
                                             )
                                             Surface(
-                                                color = if (isDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                                shape = MaterialTheme.shapes.extraSmall
+                                                color = if (isDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                shape = ShapeFull
                                             ) {
                                                 Text(
                                                     text = if (isDownloading) "Downloading" else "No Model",
-                                                    style = MaterialTheme.typography.labelSmall,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                                     color = if (isDownloading) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                                 )
                                             }
                                         }
@@ -1005,10 +1207,10 @@ fun SettingsScreen(
                                             Surface(
                                                 color = badgeColor,
                                                 contentColor = badgeTextColor,
-                                                shape = MaterialTheme.shapes.extraSmall
+                                                shape = ShapeFull
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
@@ -1302,282 +1504,14 @@ fun SettingsScreen(
                         }
 
                         "About" -> {
-                            val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                // 1. Hero App Identity Banner
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    shape = ShapeExtraLarge,
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                                    ),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(20.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(80.dp)
-                                                .background(
-                                                    brush = Brush.linearGradient(
-                                                        listOf(
-                                                            MaterialTheme.colorScheme.primary,
-                                                            MaterialTheme.colorScheme.tertiary
-                                                        )
-                                                    ),
-                                                    shape = cookieShape
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            androidx.compose.foundation.Image(
-                                                painter = painterResource(id = R.drawable.launcher_icon_fg),
-                                                contentDescription = "Photon Gallery Logo",
-                                                modifier = Modifier
-                                                    .size(68.dp)
-                                                    .clip(cookieShape)
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(14.dp))
-
-                                        Text(
-                                            text = "Photon Gallery",
-                                            style = MaterialTheme.typography.displaySmall,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = FontWeight.Bold
-                                        )
-
-                                        Spacer(modifier = Modifier.height(6.dp))
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.secondaryContainer
-                                            ) {
-                                                Text(
-                                                    text = "v1.0.0 (Build 1)",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                                )
-                                            }
-
-                                            val upToDateGreen = MaterialTheme.photonColors.success
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = upToDateGreen.copy(alpha = 0.15f)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(6.dp)
-                                                            .background(upToDateGreen, CircleShape)
-                                                    )
-                                                    Text(
-                                                        text = "Up to date",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = upToDateGreen,
-                                                        fontWeight = FontWeight.SemiBold
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        Text(
-                                            text = "Privacy-First • On-Device AI Gallery",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    }
-                                }
-
-                                // 2. Developer Profile Card (Bn5prS)
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    shape = ShapeLarge,
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                                    )
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp)
-                                    ) {
-                                        Text(
-                                            text = "Developer & Creator",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(68.dp)
-                                                    .background(
-                                                        brush = Brush.linearGradient(
-                                                            listOf(
-                                                                MaterialTheme.colorScheme.primary,
-                                                                MaterialTheme.colorScheme.secondary
-                                                            )
-                                                        ),
-                                                        shape = cookieShape
-                                                    )
-                                                    .padding(3.dp)
-                                            ) {
-                                                SubcomposeAsyncImage(
-                                                    model = "https://github.com/Bn5prS.png",
-                                                    contentDescription = "Bn5prS GitHub Profile Picture",
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .clip(cookieShape),
-                                                    loading = {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                        )
-                                                    },
-                                                    error = {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .background(MaterialTheme.colorScheme.primaryContainer),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                                                contentDescription = null,
-                                                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                                            )
-                                                        }
-                                                    }
-                                                )
-                                            }
-
-                                            Spacer(modifier = Modifier.width(16.dp))
-
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "Bn5prS",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = "Creator & Lead Architect",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Spacer(modifier = Modifier.height(6.dp))
-                                                Surface(
-                                                    shape = CircleShape,
-                                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                                    onClick = { uriHandler.openUri("https://github.com/Bn5prS") }
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_code),
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.size(14.dp)
-                                                        )
-                                                        Text(
-                                                            text = "@Bn5prS on GitHub",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 3. Application Options (Connected Segmented Card)
-                                SettingsGroupCard(
-                                    title = "Application Options",
-                                    items = listOf(
-                                        {
-                                            ClickableSettingItem(
-                                                title = "Report Issue & Feedback",
-                                                subtitle = "Submit bug reports or suggest features",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_bug_report),
-                                                onClick = { uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery/issues") }
-                                            )
-                                        },
-                                        {
-                                            ClickableSettingItem(
-                                                title = "Source Code on GitHub",
-                                                subtitle = "Inspect or contribute to Photon Gallery",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_code),
-                                                onClick = { uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery") }
-                                            )
-                                        },
-                                        {
-                                            ClickableSettingItem(
-                                                title = "Check for Updates",
-                                                subtitle = "Photon Gallery v1.0.0 (Build 1) is up to date",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                                                onClick = {
-                                                    Toast.makeText(context, "Photon Gallery is up to date!", Toast.LENGTH_SHORT).show()
-                                                }
-                                            )
-                                        },
-                                        {
-                                            ClickableSettingItem(
-                                                title = "Open Source Licenses",
-                                                subtitle = "View third-party software attributions",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_description),
-                                                onClick = { showLicensesDialog = true }
-                                            )
-                                        },
-                                        {
-                                            ClickableSettingItem(
-                                                title = "Privacy Notice",
-                                                subtitle = "View on-device data processing policy",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_shield),
-                                                onClick = { showPrivacyDialog = true }
-                                            )
-                                        }
-                                    )
-                                )
-                            }
+                            AboutScreenContent(
+                                autoCheckUpdates = autoCheckUpdates,
+                                updateState = updateState,
+                                onAutoCheckUpdatesChange = { viewModel.setAutoCheckUpdates(it) },
+                                onCheckForUpdates = { viewModel.checkForUpdates() },
+                                onOpenLicenses = { showLicensesDialog = true },
+                                onOpenPrivacy = { showPrivacyDialog = true }
+                            )
                         }
                     }
 
@@ -1644,11 +1578,11 @@ fun SettingsGroupCard(
                         bottomStart = 16.dp,
                         bottomEnd = 16.dp
                     )
-                    else -> RoundedCornerShape(4.dp)
+                    else -> ShapeExtraSmall
                 }
                 Surface(
                     shape = shape,
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     itemContent()
@@ -1899,17 +1833,19 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
 fun TimelineLayoutPreviewCard(
     layoutMode: com.inferno.gallery.data.TimelineLayoutMode,
     columns: Int,
-    cornerRadius: Float
+    cornerRadius: Float,
+    modifier: Modifier = Modifier
 ) {
+    val cols = columns.coerceIn(2, 6)
+    val effectiveRadius = cornerRadius.coerceIn(0f, 24f)
+
     Surface(
-        shape = ShapeLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+        shape = ShapeMedium,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -1917,11 +1853,27 @@ fun TimelineLayoutPreviewCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Live Layout Preview",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Live Layout Preview",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = "$cols col · ${effectiveRadius.toInt()}dp",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                        )
+                    }
+                }
                 Surface(
                     shape = ShapeFull,
                     color = MaterialTheme.colorScheme.primaryContainer,
@@ -1931,7 +1883,6 @@ fun TimelineLayoutPreviewCard(
                         text = when (layoutMode) {
                             com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID -> "Standard Square"
                             com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC -> "Editorial Mosaic"
-                            com.inferno.gallery.data.TimelineLayoutMode.STAGGERED_MASONRY -> "Staggered Masonry"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -1945,7 +1896,7 @@ fun TimelineLayoutPreviewCard(
                     .height(180.dp)
                     .clip(ShapeMedium)
                     .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .padding(6.dp)
+                    .padding(8.dp)
             ) {
                 AnimatedContent(
                     targetState = layoutMode,
@@ -1956,22 +1907,47 @@ fun TimelineLayoutPreviewCard(
                 ) { mode ->
                     when (mode) {
                         com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID -> {
-                            val cols = minOf(4, maxOf(2, columns))
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 repeat(3) { row ->
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         repeat(cols) { col ->
                                             val seed = row * cols + col
                                             Surface(
                                                 modifier = Modifier
                                                     .weight(1f)
-                                                    .aspectRatio(1f),
-                                                shape = RoundedCornerShape(cornerRadius.dp),
-                                                color = getSampleColor(seed)
-                                            ) {}
+                                                    .fillMaxHeight(),
+                                                shape = RoundedCornerShape(effectiveRadius.dp),
+                                                color = getSampleColor(seed),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                                            ) {
+                                                if (seed == 1) {
+                                                    Box(contentAlignment = Alignment.TopEnd, modifier = Modifier.padding(4.dp)) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                    }
+                                                } else if (seed == 3) {
+                                                    Box(contentAlignment = Alignment.BottomEnd, modifier = Modifier.padding(4.dp)) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                                                            modifier = Modifier.size(11.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1979,131 +1955,199 @@ fun TimelineLayoutPreviewCard(
                         }
 
                         com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // Row 1: Hero card (2 spans) + standard (1 span)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(2f)
-                                            .height(84.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (cols == 2) {
+                                    // Row 1: 2 items
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Box(contentAlignment = Alignment.BottomStart, modifier = Modifier.padding(6.dp)) {
-                                            Surface(
-                                                shape = ShapeFull,
-                                                color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.7f),
-                                                contentColor = MaterialTheme.colorScheme.onSurface
-                                            ) {
-                                                Text(
-                                                    "Hero",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                )
-                                            }
+                                        PreviewMosaicTile(modifier = Modifier.weight(1f).fillMaxHeight(), cornerRadius = effectiveRadius, seed = 0)
+                                        PreviewMosaicTile(modifier = Modifier.weight(1f).fillMaxHeight(), cornerRadius = effectiveRadius, seed = 1, isVideo = true)
+                                    }
+                                    // Row 2: Full-width hero story tile
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().weight(1.35f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        PreviewHeroTile(modifier = Modifier.fillMaxSize(), cornerRadius = effectiveRadius, seed = 2, cols = cols)
+                                    }
+                                    // Row 3: 2 items
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        PreviewMosaicTile(modifier = Modifier.weight(1f).fillMaxHeight(), cornerRadius = effectiveRadius, seed = 3, isFavorite = true)
+                                        PreviewMosaicTile(modifier = Modifier.weight(1f).fillMaxHeight(), cornerRadius = effectiveRadius, seed = 4)
+                                    }
+                                } else {
+                                    // Row 1: Hero (weight 2f) + (cols - 2) standard items (weight 1f each)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().weight(1.35f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        PreviewHeroTile(modifier = Modifier.weight(2f).fillMaxHeight(), cornerRadius = effectiveRadius, seed = 0, cols = cols)
+                                        repeat(cols - 2) { idx ->
+                                            PreviewMosaicTile(
+                                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                                cornerRadius = effectiveRadius,
+                                                seed = idx + 1,
+                                                isVideo = (idx == 0)
+                                            )
                                         }
                                     }
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(84.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer
-                                    ) {}
-                                }
-                                // Row 2: 3 standard cards
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(52.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.tertiaryContainer
-                                    ) {}
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(52.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {}
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(52.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                    ) {}
-                                }
-                            }
-                        }
 
-                        com.inferno.gallery.data.TimelineLayoutMode.STAGGERED_MASONRY -> {
-                            val cols = minOf(3, maxOf(2, columns))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                // Column 1: Tall portrait + square
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().height(92.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer
-                                    ) {}
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {}
-                                }
-                                // Column 2: Landscape + tall portrait
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer
-                                    ) {}
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().height(94.dp),
-                                        shape = RoundedCornerShape(cornerRadius.dp),
-                                        color = MaterialTheme.colorScheme.tertiaryContainer
-                                    ) {}
-                                }
-                                if (cols >= 3) {
-                                    // Column 3
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    // Row 2: cols standard items (weight 1f each)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth().height(72.dp),
-                                            shape = RoundedCornerShape(cornerRadius.dp),
-                                            color = MaterialTheme.colorScheme.surfaceContainerHighest
-                                        ) {}
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth().height(72.dp),
-                                            shape = RoundedCornerShape(cornerRadius.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                                        ) {}
+                                        repeat(cols) { idx ->
+                                            val seed = cols + idx
+                                            PreviewMosaicTile(
+                                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                                cornerRadius = effectiveRadius,
+                                                seed = seed,
+                                                isFavorite = (idx == cols - 1)
+                                            )
+                                        }
+                                    }
+
+                                    // Row 3: (cols - 2) standard items (weight 1f each) + Hero (weight 2f)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().weight(1.35f),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        repeat(cols - 2) { idx ->
+                                            val seed = cols * 2 + idx
+                                            PreviewMosaicTile(
+                                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                                cornerRadius = effectiveRadius,
+                                                seed = seed
+                                            )
+                                        }
+                                        PreviewHeroTile(
+                                            modifier = Modifier.weight(2f).fillMaxHeight(),
+                                            cornerRadius = effectiveRadius,
+                                            seed = cols * 2 + (cols - 2),
+                                            cols = cols,
+                                            label = "Story"
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewHeroTile(
+    modifier: Modifier = Modifier,
+    cornerRadius: Float,
+    seed: Int,
+    cols: Int = 3,
+    label: String = "Story"
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(cornerRadius.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+                        )
+                    )
+                )
+                .padding(4.dp)
+        ) {
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f),
+                modifier = Modifier
+                    .size(if (cols >= 5) 20.dp else 28.dp)
+                    .align(Alignment.Center)
+            )
+
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.85f),
+                contentColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.TopStart)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                        contentDescription = null,
+                        modifier = Modifier.size(9.dp)
+                    )
+                    Text(
+                        text = if (cols >= 4) "Hero" else label,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewMosaicTile(
+    modifier: Modifier = Modifier,
+    cornerRadius: Float,
+    seed: Int,
+    isVideo: Boolean = false,
+    isFavorite: Boolean = false
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(cornerRadius.dp),
+        color = getSampleColor(seed),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+    ) {
+        Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+            if (isVideo) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.85f),
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(13.dp)
+                            .padding(2.dp)
+                    )
+                }
+            } else if (isFavorite) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .size(11.dp)
+                        .align(Alignment.BottomEnd)
+                )
             }
         }
     }
@@ -2119,3 +2163,128 @@ private fun getSampleColor(seed: Int): Color {
         else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
     }
 }
+
+@Composable
+fun AppIconDialog(
+    currentIconId: String,
+    onSelectIcon: (AppIconOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Choose App Icon",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AppIconOption.entries.forEach { option ->
+                    val isSelected = option.id == currentIconId
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onSelectIcon(option)
+                            },
+                        shape = ShapeLarge,
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = ShapeMedium,
+                                modifier = Modifier.size(48.dp),
+                                shadowElevation = 2.dp,
+                                color = androidx.compose.ui.graphics.Color.White
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (option.bgRes != null) {
+                                        Image(
+                                            painter = painterResource(option.bgRes),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Image(
+                                        painter = painterResource(option.fgRes),
+                                        contentDescription = option.title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = option.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = option.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+        shape = ShapeExtraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    )
+}
+
+private fun isPhotonDefaultViewer(context: android.content.Context): Boolean {
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(Uri.parse("content://media/external/images/media/1"), "image/*")
+    }
+    val resolveInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.ResolveInfoFlags.of(android.content.pm.PackageManager.MATCH_DEFAULT_ONLY.toLong()))
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+    }
+    return resolveInfo?.activityInfo?.packageName == context.packageName
+}
+

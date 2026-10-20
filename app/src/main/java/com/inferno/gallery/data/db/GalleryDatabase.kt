@@ -60,6 +60,10 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMedia(): List<CoreMediaEntity>
 
+    /** Row count only — avoids materialising the whole table just to test emptiness. */
+    @Query("SELECT COUNT(*) FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
+    suspend fun getAllMediaCount(): Int
+
     @Query("SELECT * FROM core_media WHERE id = :id LIMIT 1")
     suspend fun getMediaById(id: Long): CoreMediaEntity?
 
@@ -136,6 +140,23 @@ interface MediaDao {
         FROM core_media WHERE isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observeVideoStats(): Flow<MediaAggregateStats>
+
+    @Query("""
+        SELECT * FROM core_media cm
+        WHERE strftime('%m', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) = :month
+          AND strftime('%d', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) = :day
+          AND strftime('%Y', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) != :excludeYear
+          AND cm.bucketName != 'Trash'
+          AND cm.bucketName NOT IN ('Screenshots', 'Screenshot', 'Download', 'Downloads')
+          AND cm.filePath NOT LIKE '%/Screenshots/%'
+          AND cm.filePath NOT LIKE '%/Screenshot/%'
+          AND cm.size >= 50000
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ORDER BY cm.dateAdded DESC
+    """)
+    suspend fun getOnThisDayMedia(month: String, day: String, excludeYear: String): List<CoreMediaEntity>
+
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,

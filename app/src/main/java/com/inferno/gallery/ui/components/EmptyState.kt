@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,10 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.inferno.gallery.ui.theme.ExpressiveShapes
 import com.inferno.gallery.ui.theme.MotionTokens
 
 /**
@@ -41,6 +45,7 @@ import com.inferno.gallery.ui.theme.MotionTokens
  * @param icon      Icon to display above the title.
  * @param title     Primary headline.
  * @param subtitle  Secondary descriptive text.
+ * @param shape     Creative Material 3 Expressive shape for the backdrop.
  * @param modifier  Modifier for the outer column.
  * @param action    Optional CTA slot (e.g. a Button or TextButton).
  */
@@ -49,6 +54,7 @@ fun PhotonEmptyState(
     icon: ImageVector,
     title: String,
     subtitle: String,
+    shape: Shape = ExpressiveShapes.Clover8Leaf,
     modifier: Modifier = Modifier,
     action: @Composable (() -> Unit)? = null
 ) {
@@ -74,18 +80,25 @@ fun PhotonEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
+        Surface(
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .size(80.dp)
-                .scale(iconScale),
-            contentAlignment = Alignment.Center
+                .size(96.dp)
+                .scale(iconScale)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp)
-            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
         }
 
         Spacer(Modifier.height(20.dp))

@@ -30,12 +30,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,9 +59,7 @@ import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 
 /**
- * Material 3 Expressive Floating Navigation Pill
- * Features a single accented indicator pill that smoothly slides across the tabs
- * with graceful non-bouncy physics and zero performance overhead.
+ * Floating navigation bar with sliding active indicator pill animated via MotionScheme spatial spring.
  */
 @Composable
 fun FloatingNavigationPill(
@@ -77,21 +78,25 @@ fun FloatingNavigationPill(
 
     Surface(
         modifier = modifier
-            .fillMaxWidth(0.82f)
-            .height(52.dp)
+            .fillMaxWidth(0.78f)
+            .widthIn(min = 280.dp, max = 320.dp)
+            .height(56.dp)
             .pointerInput(Unit) {},
         shape = ShapeFull,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 0.dp
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp
     ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 5.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp, vertical = 7.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val totalWidth = maxWidth
             val tabWidth = totalWidth / 3
+            val pillHorizontalInset = 2.dp
+            val pillWidth = tabWidth - (pillHorizontalInset * 2)
 
             // Smooth non-bouncy sliding animation (Material 3 Emphasized / DampingRatioNoBouncy)
             val animatedFraction by animateFloatAsState(
@@ -103,16 +108,20 @@ fun FloatingNavigationPill(
                 label = "slidingPillFraction"
             )
 
+            val density = LocalDensity.current
+            val pillInsetPx = with(density) { pillHorizontalInset.toPx() }
+            val tabWidthPx = with(density) { tabWidth.toPx() }
+
             // ── Single Accented Sliding Pill (GPU Translated via graphicsLayer) ──
             Box(
                 modifier = Modifier
-                    .width(tabWidth)
+                    .width(pillWidth)
                     .fillMaxHeight()
                     .graphicsLayer {
-                        translationX = animatedFraction * tabWidth.toPx()
+                        translationX = pillInsetPx + (animatedFraction * tabWidthPx)
                     }
                     .clip(ShapeFull)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .background(MaterialTheme.colorScheme.primary)
             )
 
             // ── The 3 Interactive Tabs ──
@@ -122,7 +131,7 @@ fun FloatingNavigationPill(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SlidingPillTabItem(
-                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(20.dp)) },
+                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(22.dp)) },
                     label = "Photos",
                     isSelected = selectedIndex == 0,
                     modifier = Modifier.weight(1f),
@@ -134,7 +143,7 @@ fun FloatingNavigationPill(
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
                             contentDescription = "Albums",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     },
                     label = "Albums",
@@ -144,7 +153,7 @@ fun FloatingNavigationPill(
                 )
 
                 SlidingPillTabItem(
-                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(20.dp)) },
+                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(22.dp)) },
                     label = "Search",
                     isSelected = selectedIndex == 2,
                     modifier = Modifier.weight(1f),
@@ -178,9 +187,9 @@ fun SlidingPillTabItem(
 
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
+            MaterialTheme.colorScheme.onPrimary
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
         },
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -188,6 +197,12 @@ fun SlidingPillTabItem(
         ),
         label = "tabItemContentColor"
     )
+
+    val rippleColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
 
     Box(
         modifier = modifier
@@ -199,7 +214,10 @@ fun SlidingPillTabItem(
             .clip(ShapeFull)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null,
+                indication = ripple(
+                    bounded = true,
+                    color = rippleColor
+                ),
                 onClick = {
                     view.tick()
                     onClick()
@@ -210,7 +228,7 @@ fun SlidingPillTabItem(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 4.dp)
         ) {
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 AnimatedVisibility(
@@ -240,7 +258,7 @@ fun SlidingPillTabItem(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         icon()
-                        Spacer(modifier = Modifier.width(5.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                     }
                 }
 
@@ -301,6 +319,12 @@ fun DockItem(
         label = "contentColor"
     )
 
+    val rippleColor = if (isSelected) {
+        if (isTertiary) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+
     Box(
         modifier = Modifier
             .graphicsLayer {
@@ -311,7 +335,10 @@ fun DockItem(
             .background(pillColor)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null,
+                indication = ripple(
+                    bounded = true,
+                    color = rippleColor
+                ),
                 onClick = {
                     view.tick()
                     onClick()
@@ -394,7 +421,7 @@ fun getTabRouteIndex(route: String?): Int {
 fun getEnterTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.EnterTransition {
     return fadeIn(
         animationSpec = androidx.compose.animation.core.tween(
-            durationMillis = 180,
+            durationMillis = MotionTokens.Durations.Short,
             easing = MotionTokens.EmphasizedDecelerateEasing
         )
     )
@@ -403,7 +430,7 @@ fun getEnterTransition(initialRoute: String?, targetRoute: String?): androidx.co
 fun getExitTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.ExitTransition {
     return fadeOut(
         animationSpec = androidx.compose.animation.core.tween(
-            durationMillis = 120,
+            durationMillis = MotionTokens.Durations.Short,
             easing = MotionTokens.EmphasizedAccelerateEasing
         )
     )

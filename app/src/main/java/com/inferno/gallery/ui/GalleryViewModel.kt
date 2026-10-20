@@ -4,6 +4,7 @@ package com.inferno.gallery.ui
 
 import android.app.Application
 import android.net.Uri
+import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.db.DatabaseProvider
@@ -14,6 +15,7 @@ import com.inferno.gallery.data.DockStyle
 import com.inferno.gallery.data.FavoritesManager
 import com.inferno.gallery.data.VaultAuthManager
 import com.inferno.gallery.data.BucketNames
+import com.inferno.gallery.data.AlbumLayoutMode
 import com.inferno.gallery.data.MediaQueryBuilder
 import android.util.Log
 
@@ -76,7 +78,9 @@ data class GalleryItem(
     val pHash: Long? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val fileHash: String? = null
+    val fileHash: String? = null,
+    val matchType: String? = null,
+    val matchSnippet: String? = null
 )
 
 @Immutable
@@ -92,12 +96,33 @@ sealed class GalleryListItem {
     data class Header(val title: String, val id: String = title) : GalleryListItem()
 }
 
+/**
+ * Stable wrapper around the current selection set.
+ *
+ * `kotlin.collections.Set` is an unstable Compose type, so passing a raw `Set<String>` into
+ * the grid made [com.inferno.gallery.ui.components.PhotonGrid] permanently unskippable under
+ * strong skipping: every selection tick rebuilt the set, so all ~100 visible cells
+ * re-subcomposed — 60x/second during drag-select. Instances are replaced (never mutated) on
+ * each selection change, so equality is content-based and skipping is correct.
+ */
+@Immutable
+data class StableUriSet(val uris: Set<String>) {
+    val isEmpty: Boolean get() = uris.isEmpty()
+    operator fun contains(uri: String): Boolean = uris.contains(uri)
+    companion object {
+        val Empty = StableUriSet(emptySet())
+    }
+}
+
 enum class SortOrder {
     NewToOld,
     OldToNew,
     SmallToBig,
     BigToSmall,
-    NameAsc
+    NameAsc,
+    NameDesc,
+    CountDesc,
+    CountAsc
 }
 
 enum class ViewMode {
@@ -112,7 +137,8 @@ data class AlbumBucket(
     val itemCount: Int,
     val totalSizeBytes: Long = 0L,
     val maxDate: Long = 0L,
-    val coverUris: List<Uri> = emptyList()
+    val coverUris: List<Uri> = emptyList(),
+    val defaultCoverUri: Uri = coverUri
 )
 
 @Immutable
@@ -134,6 +160,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val repository = LocalMediaRepository(application.contentResolver)
     val settingsRepository = SettingsRepository.getInstance(application)
     private val favoritesManager = FavoritesManager(application)
+    val favoriteIds: StateFlow<Set<String>> = favoritesManager.favoritesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptySet()
+    )
     private val database = DatabaseProvider.getDatabase(application)
     
 
@@ -163,6 +194,44 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun setTopBarCollapsed(collapsed: Boolean) {
         if (_isTopBarCollapsed.value != collapsed) {
             _isTopBarCollapsed.value = collapsed
+        }
+    }
+
+    // ── On This Day Memories State ──
+    private val _onThisDayMemories = MutableStateFlow<List<com.inferno.gallery.data.MemoryDayGroup>>(emptyList())
+    val onThisDayMemories: StateFlow<List<com.inferno.gallery.data.MemoryDayGroup>> = _onThisDayMemories.asStateFlow()
+
+    private val _isMemoriesDismissed = MutableStateFlow(false)
+    val isMemoriesDismissed: StateFlow<Boolean> = _isMemoriesDismissed.asStateFlow()
+
+    val showMemoriesSetting: StateFlow<Boolean> = settingsRepository.showMemoriesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun dismissMemories() {
+        _isMemoriesDismissed.value = true
+    }
+
+    fun uncollapseMemories() {
+        _isMemoriesDismissed.value = false
+    }
+
+    fun refreshMemories() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val excluded = settingsRepository.excludedFoldersFlow.first()
+                val favs = favoritesManager.favoritesFlow.first()
+                val groups = com.inferno.gallery.data.MemoriesManager.loadOnThisDayMemories(
+                    mediaDao = database.mediaDao(),
+                    excludedFolders = excluded,
+                    favoriteIds = favs
+                )
+                _onThisDayMemories.value = groups
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "Failed to load On This Day memories", e)
+            }
         }
     }
 
@@ -242,6 +311,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
+        // Ensure default filter is 0 (All Photos)
+        viewModelScope.launch {
+            settingsRepository.updateSelectedFilterIndex(0)
+        }
+
         // Collect place clusters
         viewModelScope.launch(Dispatchers.IO) {
             database.placesDao().observePlaceClusters().collect { clusters ->
@@ -254,7 +328,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // ~10s for WorkManager to schedule and execute MediaSyncWorker.
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val count = database.mediaDao().getAllMedia().size
+                val count = database.mediaDao().getAllMediaCount()
                 if (count == 0) {
                     _isInitialSyncRunning.value = true
                     Log.d("GalleryViewModel", "Room empty — running fast initial sync")
@@ -291,6 +365,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         Log.d("GalleryViewModel", "Fast sync complete: ${entities.size} items inserted")
                     }
                     _isInitialSyncRunning.value = false
+                    refreshMemories()
                 }
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")
@@ -319,6 +394,27 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         // Silently scan for duplicates in the background on startup
         scanForDuplicates()
+
+        // Collect & observe memories whenever excluded folders or favorites change
+        viewModelScope.launch(Dispatchers.IO) {
+            combine(
+                settingsRepository.excludedFoldersFlow,
+                favoritesManager.favoritesFlow
+            ) { excluded, favs ->
+                excluded to favs
+            }.collectLatest { (excluded, favs) ->
+                try {
+                    val groups = com.inferno.gallery.data.MemoriesManager.loadOnThisDayMemories(
+                        mediaDao = database.mediaDao(),
+                        excludedFolders = excluded,
+                        favoriteIds = favs
+                    )
+                    _onThisDayMemories.value = groups
+                } catch (e: Exception) {
+                    Log.e("GalleryViewModel", "Error loading memories in collector", e)
+                }
+            }
+        }
 
     }
 
@@ -433,12 +529,110 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         _isScrollDockVisible.value = visible
     }
 
-
-    val favoriteIds: StateFlow<Set<String>> = favoritesManager.favoritesFlow.stateIn(
+    val sortOrder: StateFlow<SortOrder> = settingsRepository.sortOrderFlow.map {
+        try {
+            SortOrder.valueOf(it)
+        } catch (e: Exception) {
+            SortOrder.NewToOld
+        }
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptySet()
+        initialValue = SortOrder.NewToOld
     )
+
+    val albumSortOrder: StateFlow<SortOrder> = settingsRepository.albumSortOrderFlow.map {
+        try {
+            SortOrder.valueOf(it)
+        } catch (e: Exception) {
+            SortOrder.NameAsc
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = SortOrder.NameAsc
+    )
+
+    val albumLayoutMode: StateFlow<AlbumLayoutMode> = settingsRepository.albumLayoutModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AlbumLayoutMode.GRID_2_COL
+        )
+
+    fun setAlbumLayoutMode(mode: AlbumLayoutMode) {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumLayoutMode(mode)
+        }
+    }
+
+    val viewMode: StateFlow<ViewMode> = settingsRepository.viewModeFlow.map {
+        try {
+            ViewMode.valueOf(it)
+        } catch (e: Exception) {
+            ViewMode.Immersive
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ViewMode.Immersive
+    )
+
+    val dockStyle: StateFlow<DockStyle> = settingsRepository.dockStyleFlow.map {
+        try {
+            DockStyle.valueOf(it)
+        } catch (e: Exception) {
+            DockStyle.PILL
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DockStyle.PILL
+    )
+
+    val timelineLayoutMode: StateFlow<com.inferno.gallery.data.TimelineLayoutMode> = settingsRepository.timelineLayoutModeFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID
+    )
+
+    fun setTimelineLayoutMode(mode: com.inferno.gallery.data.TimelineLayoutMode) {
+        viewModelScope.launch {
+            settingsRepository.updateTimelineLayoutMode(mode)
+        }
+    }
+
+    val dateHeaderAlignment: StateFlow<String> = settingsRepository.dateHeaderAlignmentFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "CENTER"
+    )
+
+    fun setDateHeaderAlignment(alignment: String) {
+        viewModelScope.launch {
+            settingsRepository.updateDateHeaderAlignment(alignment)
+        }
+    }
+
+    private val _currentBucket = MutableStateFlow<String?>(null)
+
+    fun setBucket(bucket: String?) {
+        if (_currentBucket.value != bucket) {
+            _currentBucket.value = bucket
+        }
+    }
+
+    val selectedFilterIndex: StateFlow<Int> = settingsRepository.selectedFilterIndexFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    fun setFilterIndex(index: Int) {
+        viewModelScope.launch {
+            settingsRepository.updateSelectedFilterIndex(index)
+        }
+    }
 
 
 
@@ -463,6 +657,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
     )
+
+    val videoCount: StateFlow<Int> = database.mediaDao().observeVideoStats()
+        .map { it.itemCount }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
 
     val showAlbumSize: StateFlow<Boolean> = settingsRepository.showAlbumSizeFlow.stateIn(
         scope = viewModelScope,
@@ -508,20 +710,59 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _geotaggedMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val geotaggedMedia: StateFlow<List<GalleryItem>> = _geotaggedMedia.asStateFlow()
+
+    private val _ftsSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val ftsSearchResults: StateFlow<List<GalleryItem>> = _ftsSearchResults.asStateFlow()
+
+    private val _smartSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val smartSearchResults: StateFlow<List<GalleryItem>> = _smartSearchResults.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
     private val _detailMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
     val detailMedia: StateFlow<List<GalleryItem>> = _detailMedia.asStateFlow()
 
     private val _initialDetailItem = MutableStateFlow<GalleryItem?>(null)
     val initialDetailItem: StateFlow<GalleryItem?> = _initialDetailItem.asStateFlow()
 
-    fun setInitialDetailItem(item: GalleryItem) {
+    fun setInitialDetailItem(item: GalleryItem, bucketName: String? = null) {
         _initialDetailItem.value = item
-        if (_detailMedia.value.none { it.id == item.id }) {
-            _detailMedia.value = listOf(item)
+        if (_detailMedia.value.any { it.id == item.id }) {
+            return
         }
+        when (bucketName) {
+            BucketNames.SEARCH_TEXT -> {
+                if (_ftsSearchResults.value.isNotEmpty()) {
+                    _detailMedia.value = _ftsSearchResults.value
+                    return
+                }
+            }
+            BucketNames.SEARCH_SMART -> {
+                if (_smartSearchResults.value.isNotEmpty()) {
+                    _detailMedia.value = _smartSearchResults.value
+                    return
+                }
+            }
+            BucketNames.FAVORITES -> {
+                if (favoriteMedia.value.isNotEmpty()) {
+                    _detailMedia.value = favoriteMedia.value
+                    return
+                }
+            }
+            "geotagged" -> {
+                if (_geotaggedMedia.value.isNotEmpty()) {
+                    _detailMedia.value = _geotaggedMedia.value
+                    return
+                }
+            }
+        }
+        _detailMedia.value = listOf(item)
     }
 
-    fun loadDetailMedia(mediaId: String, bucketName: String?) {
+    fun loadDetailMedia(mediaId: String? = null, bucketName: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             if (bucketName == BucketNames.SEARCH_TEXT) {
                 _detailMedia.value = _ftsSearchResults.value
@@ -615,13 +856,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
             val finalItems = items
 
-            val containsTarget = finalItems.any { it.id == mediaId }
+            val containsTarget = if (mediaId != null) finalItems.any { it.id == mediaId || it.uri.toString() == mediaId } else true
             if (finalItems.isNotEmpty() && containsTarget) {
                 _detailMedia.value = finalItems
-            } else {
+            } else if (mediaId != null) {
                 // Fetch the clicked item as a fallback
                 val idLong = mediaId.toLongOrNull()
                 val entity = idLong?.let { database.mediaDao().getMediaById(it) }
+                    ?: database.mediaDao().getMediaByUri(mediaId)
                 if (entity != null) {
                     val uri = Uri.parse(entity.uriString)
                     val (exists, resolved) = resolveItemFields(uri, entity.filePath)
@@ -641,8 +883,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     )
                     _detailMedia.value = listOf(fallbackItem)
                 } else {
-                    _detailMedia.value = emptyList()
+                    val parsedUri = runCatching { Uri.parse(mediaId) }.getOrNull()
+                    if (parsedUri != null && (parsedUri.scheme == "content" || parsedUri.scheme == "file")) {
+                        val isVideo = getApplication<android.app.Application>().contentResolver.getType(parsedUri)?.startsWith("video/") == true
+                        val fallbackItem = GalleryItem(
+                            id = mediaId,
+                            uri = parsedUri,
+                            bucketName = "Camera",
+                            dateAdded = System.currentTimeMillis() / 1000L,
+                            size = 0L,
+                            name = parsedUri.lastPathSegment ?: "Media",
+                            dateModified = System.currentTimeMillis() / 1000L,
+                            path = parsedUri.path ?: "",
+                            isVideo = isVideo,
+                            durationMs = null,
+                            localExists = true,
+                            resolvedUri = parsedUri
+                        )
+                        _detailMedia.value = listOf(fallbackItem)
+                    } else {
+                        _detailMedia.value = emptyList()
+                    }
                 }
+            } else if (finalItems.isNotEmpty()) {
+                _detailMedia.value = finalItems
             }
         }
     }
@@ -708,83 +972,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val sortOrder: StateFlow<SortOrder> = settingsRepository.sortOrderFlow.map {
-        try {
-            SortOrder.valueOf(it)
-        } catch (e: Exception) {
-            SortOrder.NewToOld
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = SortOrder.NewToOld
-    )
-
-    val albumSortOrder: StateFlow<SortOrder> = settingsRepository.albumSortOrderFlow.map {
-        try {
-            SortOrder.valueOf(it)
-        } catch (e: Exception) {
-            SortOrder.NameAsc
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = SortOrder.NameAsc
-    )
-
-    val viewMode: StateFlow<ViewMode> = settingsRepository.viewModeFlow.map {
-        try {
-            ViewMode.valueOf(it)
-        } catch (e: Exception) {
-            ViewMode.Immersive
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ViewMode.Immersive
-    )
-
-    val dockStyle: StateFlow<DockStyle> = settingsRepository.dockStyleFlow.map {
-        try {
-            DockStyle.valueOf(it)
-        } catch (e: Exception) {
-            DockStyle.PILL
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DockStyle.PILL
-    )
-
-    val timelineLayoutMode: StateFlow<com.inferno.gallery.data.TimelineLayoutMode> = settingsRepository.timelineLayoutModeFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID
-    )
-
-    fun setTimelineLayoutMode(mode: com.inferno.gallery.data.TimelineLayoutMode) {
-        viewModelScope.launch {
-            settingsRepository.updateTimelineLayoutMode(mode)
-        }
-    }
-
-    private val _currentBucket = MutableStateFlow<String?>(null)
-
-    fun setBucket(bucket: String?) {
-        _currentBucket.value = bucket
-    }
-
-    val selectedFilterIndex: StateFlow<Int> = settingsRepository.selectedFilterIndexFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0
-    )
-
-    fun setFilterIndex(index: Int) {
-        viewModelScope.launch {
-            settingsRepository.updateSelectedFilterIndex(index)
-        }
-    }
 
     private val _gridCellsCount = MutableStateFlow(4)
     val gridCellsCount: StateFlow<Int> = _gridCellsCount.asStateFlow()
@@ -793,7 +980,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            _gridCellsCount.value = settingsRepository.gridCellsCountFlow.first()
+            _gridCellsCount.value = settingsRepository.gridCellsCountFlow.first().coerceIn(2, 6)
         }
         viewModelScope.launch(Dispatchers.Default) {
             try {
@@ -815,11 +1002,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = 0f
     )
 
-    val cacheThumbnailsEnabled: StateFlow<Boolean> = settingsRepository.cacheThumbnailsEnabledFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
 
     fun setThumbnailCornerRadius(radius: Float) {
         viewModelScope.launch {
@@ -930,18 +1112,87 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // Not supported in Paging3 without memory indexing.
     }
 
+    fun isCoverValid(uriString: String?): Boolean {
+        if (uriString.isNullOrBlank()) return false
+        val uri = Uri.parse(uriString)
+        return try {
+            when (uri.scheme) {
+                "file" -> {
+                    val path = uri.path ?: return false
+                    File(path).exists()
+                }
+                "content" -> {
+                    getApplication<Application>().contentResolver.openAssetFileDescriptor(uri, "r")?.use { true } ?: false
+                }
+                else -> false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     val albumCustomCovers: StateFlow<Map<String, String>> = settingsRepository.albumCustomCoversFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun setAlbumCustomCover(bucketName: String, uriString: String) {
-        viewModelScope.launch {
-            settingsRepository.setAlbumCustomCover(bucketName, uriString)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val uri = Uri.parse(uriString)
+                val finalUriString = if (uri.scheme == "file") {
+                    uriString
+                } else {
+                    val coversDir = File(getApplication<Application>().filesDir, "album_covers").apply { mkdirs() }
+                    val safeBucket = bucketName.filter { it.isLetterOrDigit() }.take(20)
+                    val targetFile = File(coversDir, "cover_${safeBucket}_${bucketName.hashCode()}.jpg")
+
+                    val copied = getApplication<Application>().contentResolver.openInputStream(uri)?.use { inputStream ->
+                        targetFile.outputStream().use { outputStream ->
+                            inputStream.copyTo(outputStream) > 0
+                        }
+                    } ?: false
+
+                    if (copied && targetFile.exists() && targetFile.length() > 0) {
+                        Uri.fromFile(targetFile).toString()
+                    } else {
+                        uriString
+                    }
+                }
+                settingsRepository.setAlbumCustomCover(bucketName, finalUriString)
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "Failed to save custom album cover for $bucketName", e)
+                settingsRepository.setAlbumCustomCover(bucketName, uriString)
+            }
         }
     }
 
     fun removeAlbumCustomCover(bucketName: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val coversDir = File(getApplication<Application>().filesDir, "album_covers")
+                val safeBucket = bucketName.filter { it.isLetterOrDigit() }.take(20)
+                val targetFile = File(coversDir, "cover_${safeBucket}_${bucketName.hashCode()}.jpg")
+                if (targetFile.exists()) {
+                    targetFile.delete()
+                }
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "Error deleting album cover file", e)
+            }
             settingsRepository.removeAlbumCustomCover(bucketName)
+        }
+    }
+
+    val albumCustomShapes: StateFlow<Map<String, String>> = settingsRepository.albumCustomShapesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    fun setAlbumCustomShape(bucketName: String, shapeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setAlbumCustomShape(bucketName, shapeId)
+        }
+    }
+
+    fun removeAlbumCustomShape(bucketName: String) {
+        viewModelScope.launch {
+            settingsRepository.removeAlbumCustomShape(bucketName)
         }
     }
 
@@ -952,25 +1203,32 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         settingsRepository.showHiddenAlbumsFlow,
         settingsRepository.albumCustomCoversFlow
     ) { buckets, order, excluded, showHidden, customCovers ->
-        val excludedKeywords = setOf(BucketNames.CAMERA, BucketNames.SCREENSHOTS, BucketNames.TRASH, BucketNames.ALL, BucketNames.VIDEOS)
+        val excludedKeywords = setOf(BucketNames.TRASH, BucketNames.ALL, BucketNames.FAVORITES)
 
         val filtered = buckets.filter { bucket ->
             !excludedKeywords.contains(bucket.bucketName) &&
-            !bucket.bucketName.contains(BucketNames.SCREENRECORDINGS, ignoreCase = true) &&
-            !bucket.bucketName.contains(BucketNames.SCREEN_RECORDS, ignoreCase = true) &&
-            !bucket.bucketName.contains(BucketNames.SCREEN_RECORDS_NO_SPACE, ignoreCase = true) &&
-            !bucket.bucketName.contains(BucketNames.SCREEN_RECORD, ignoreCase = true) &&
-            !bucket.bucketName.contains(BucketNames.SCREENSHOT, ignoreCase = true) &&
             !excluded.contains(bucket.bucketName) &&
             (showHidden || !bucket.bucketName.startsWith("."))
         }.map { b ->
-            val customUri = customCovers[b.bucketName]?.let { Uri.parse(it) }
+            val defaultUri = if (b.coverUriString != null) Uri.parse(b.coverUriString) else Uri.EMPTY
+            val customUriString = customCovers[b.bucketName]
+            val customUri = if (customUriString != null && isCoverValid(customUriString)) {
+                Uri.parse(customUriString)
+            } else {
+                if (customUriString != null) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        settingsRepository.removeAlbumCustomCover(b.bucketName)
+                    }
+                }
+                null
+            }
             AlbumBucket(
                 bucketName = b.bucketName,
-                coverUri = customUri ?: (if (b.coverUriString != null) Uri.parse(b.coverUriString) else Uri.EMPTY),
+                coverUri = customUri ?: defaultUri,
                 itemCount = b.itemCount,
                 totalSizeBytes = b.totalSizeBytes,
-                maxDate = b.maxDate
+                maxDate = b.maxDate,
+                defaultCoverUri = defaultUri
             )
         }
 
@@ -979,7 +1237,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             SortOrder.OldToNew -> filtered.sortedBy { it.maxDate }
             SortOrder.SmallToBig -> filtered.sortedBy { it.totalSizeBytes }
             SortOrder.BigToSmall -> filtered.sortedByDescending { it.totalSizeBytes }
-            SortOrder.NameAsc -> filtered.sortedBy { it.bucketName }
+            SortOrder.NameAsc -> filtered.sortedBy { it.bucketName.lowercase() }
+            SortOrder.NameDesc -> filtered.sortedByDescending { it.bucketName.lowercase() }
+            SortOrder.CountDesc -> filtered.sortedByDescending { it.itemCount }
+            SortOrder.CountAsc -> filtered.sortedBy { it.itemCount }
         }
 
         sortedBuckets
@@ -1045,7 +1306,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 val app = getApplication<Application>()
-                val batchSize = 20
+                // The grid's PagingSource observes core_media, so every insertAll drops all
+                // loaded pages and re-runs the query. Batching at 20 meant hundreds of full
+                // grid reloads during startup on a large library; larger batches cut that by
+                // an order of magnitude while keeping individual transactions short.
+                val batchSize = 200
                 var processed = 0
 
                 for (batch in needsHash.chunked(batchSize)) {
@@ -1087,8 +1352,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _gpsScanState = MutableStateFlow<GpsScanState>(GpsScanState.Idle)
     val gpsScanState: StateFlow<GpsScanState> = _gpsScanState.asStateFlow()
 
-    private val _geotaggedMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
-    val geotaggedMedia: StateFlow<List<GalleryItem>> = _geotaggedMedia.asStateFlow()
 
     fun scanGpsMetadata() {
         if (_gpsScanState.value is GpsScanState.Scanning) return
@@ -1175,36 +1438,43 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     val pinnedAlbums: StateFlow<List<AlbumBucket>> = combine(
         database.mediaDao().observeBuckets(),
-        database.mediaDao().observeAllMediaStats(),
-        database.mediaDao().observeTopCoverUris(),
         excludedFolders
-    ) { buckets, allStats, topCoverUris, excluded ->
-        val allBucket = AlbumBucket(
-            bucketName = "All",
-            coverUri = allStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-            itemCount = allStats.itemCount,
-            totalSizeBytes = allStats.totalSizeBytes,
-            maxDate = allStats.maxDate,
-            coverUris = topCoverUris.map { Uri.parse(it) }
-        )
-
+    ) { buckets, excluded ->
         val cameraItems = buckets.filter { it.bucketName.equals(BucketNames.CAMERA, ignoreCase = true) }
-        val cameraBucket = AlbumBucket(
-            bucketName = cameraItems.firstOrNull()?.bucketName ?: BucketNames.CAMERA,
-            coverUri = cameraItems.maxByOrNull { it.maxDate }?.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-            itemCount = cameraItems.sumOf { it.itemCount },
-            totalSizeBytes = cameraItems.sumOf { it.totalSizeBytes },
-            maxDate = cameraItems.maxOfOrNull { it.maxDate } ?: 0L
-        )
+        val cameraBucket = if (cameraItems.isNotEmpty()) {
+            val totalCount = cameraItems.sumOf { it.itemCount }
+            if (totalCount > 0) {
+                AlbumBucket(
+                    bucketName = cameraItems.first().bucketName,
+                    coverUri = cameraItems.maxByOrNull { it.maxDate }?.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
+                    itemCount = totalCount,
+                    totalSizeBytes = cameraItems.sumOf { it.totalSizeBytes },
+                    maxDate = cameraItems.maxOfOrNull { it.maxDate } ?: 0L
+                )
+            } else null
+        } else null
 
         listOfNotNull(
-            allBucket,
-            if (!excluded.contains(cameraBucket.bucketName)) cameraBucket else null
-        ).filter { it.itemCount > 0 || it.bucketName == BucketNames.ALL || it.bucketName == BucketNames.CAMERA }
+            if (cameraBucket != null && !excluded.contains(cameraBucket.bucketName) && cameraBucket.itemCount > 0) cameraBucket else null
+        )
     }.combine(settingsRepository.albumCustomCoversFlow) { buckets, customCovers ->
         buckets.map { bucket ->
-            val customUri = customCovers[bucket.bucketName]?.let { Uri.parse(it) }
-            if (customUri != null) bucket.copy(coverUri = customUri) else bucket
+            val customUriString = customCovers[bucket.bucketName]
+            val customUri = if (customUriString != null && isCoverValid(customUriString)) {
+                Uri.parse(customUriString)
+            } else {
+                if (customUriString != null) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        settingsRepository.removeAlbumCustomCover(bucket.bucketName)
+                    }
+                }
+                null
+            }
+            if (customUri != null) {
+                bucket.copy(coverUri = customUri, defaultCoverUri = bucket.coverUri)
+            } else {
+                bucket.copy(defaultCoverUri = bucket.coverUri)
+            }
         }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -1297,6 +1567,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    /** Albums whose name matches the current search query. */
+    val matchingAlbums: StateFlow<List<AlbumBucket>> = combine(
+        searchQuery,
+        allAlbums
+    ) { query, albums ->
+        val trimmed = query.trim()
+        if (trimmed.length < 2) {
+            emptyList()
+        } else {
+            albums.filter { it.bucketName.contains(trimmed, ignoreCase = true) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val recentSearches: StateFlow<List<String>> = settingsRepository.recentSearchesFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -1336,14 +1619,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private val _ftsSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
-    val ftsSearchResults: StateFlow<List<GalleryItem>> = _ftsSearchResults.asStateFlow()
-
-    private val _smartSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
-    val smartSearchResults: StateFlow<List<GalleryItem>> = _smartSearchResults.asStateFlow()
-
-    private val _isSearching = MutableStateFlow(false)
-    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
     val smartSearchStatus: StateFlow<SmartSearchStatus> = combine(
         database.mediaDao().observeTotalImageCount(),
@@ -1364,6 +1639,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         .map { it.modelDownloaded }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val searchMatchMap = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String?>>()
+
     private suspend fun performUnifiedSearch(query: String) {
         _isSearching.value = true
         val currentExcluded = excludedFolders.value
@@ -1372,11 +1649,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val ftsDeferred = async(Dispatchers.IO) {
                         try {
                             val ftsEntities = if (query.isNotBlank()) {
-                                DatabaseProvider.searchFts(database, query, currentExcluded)
+                                DatabaseProvider.searchMedia(database, query, currentExcluded)
                             } else {
                                 emptyList()
                             }
-                            ftsEntities.map { entity ->
+                            ftsEntities.map { searchRes ->
+                                val entity = searchRes.entity
                                 val uri = Uri.parse(entity.uriString)
                                 val (exists, resolved) = resolveItemFields(uri, entity.filePath)
                                 GalleryItem(
@@ -1391,7 +1669,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                     isVideo = entity.isVideo,
                                     durationMs = entity.durationMs,
                                     localExists = exists,
-                                    resolvedUri = resolved
+                                    resolvedUri = resolved,
+                                    matchType = searchRes.matchType,
+                                    matchSnippet = searchRes.matchSnippet
                                 )
                             }
                         } catch (e: Exception) {
@@ -1438,6 +1718,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                         orderedEntities.map { entity ->
                                             val uri = Uri.parse(entity.uriString)
                                             val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                                            val score = scoreMap[entity.id]
+                                            val snippet = score?.let { "${(it * 100).toInt()}% match" }
                                             GalleryItem(
                                                 id = entity.id.toString(),
                                                 uri = uri,
@@ -1449,9 +1731,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                                 path = entity.filePath,
                                                 isVideo = entity.isVideo,
                                                 durationMs = entity.durationMs,
-                                                searchScore = scoreMap[entity.id],
+                                                searchScore = score,
                                                 localExists = exists,
-                                                resolvedUri = resolved
+                                                resolvedUri = resolved,
+                                                matchType = "SEMANTIC",
+                                                matchSnippet = snippet
                                             )
                                         }
                                     }
@@ -1472,6 +1756,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val smartResults = smartDeferred.await().distinctBy { it.id }
                     val ftsIds = ftsResults.map { it.id }.toSet()
                     val filteredSmartResults = smartResults.filterNot { it.id in ftsIds }
+
+                    searchMatchMap.clear()
+                    ftsResults.forEach { item ->
+                        item.matchType?.let { type ->
+                            searchMatchMap[item.id] = type to item.matchSnippet
+                        }
+                    }
+                    filteredSmartResults.forEach { item ->
+                        item.matchType?.let { type ->
+                            searchMatchMap[item.id] = type to item.matchSnippet
+                        }
+                    }
 
                     if (query == _searchQuery.value) {
                         _ftsSearchResults.value = ftsResults
@@ -1514,11 +1810,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setGridCellsCount(count: Int) {
-        _gridCellsCount.value = count
+        val clamped = count.coerceIn(2, 6)
+        _gridCellsCount.value = clamped
         saveGridCellsJob?.cancel()
         saveGridCellsJob = viewModelScope.launch {
             kotlinx.coroutines.delay(500)
-            settingsRepository.updateGridCellsCount(count)
+            settingsRepository.updateGridCellsCount(clamped)
         }
     }
 
@@ -2004,7 +2301,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             buildWhereClause(qc) + buildOrderClause(order, bucket, smartIds)
         val query = androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
         Pager(
-            config = PagingConfig(pageSize = 120, prefetchDistance = 180, enablePlaceholders = true)
+            // enablePlaceholders = false: the grid's `span` lambda runs during the MEASURE pass,
+            // so a placeholder resolving into a date Header flipped GridItemSpan(1) ->
+            // maxLineSpan mid-fling and forced a row re-measure (a dropped frame). Disabling
+            // placeholders also drops a COUNT(*) over the predicate from every generation.
+            config = PagingConfig(pageSize = 120, prefetchDistance = 180, enablePlaceholders = false)
         ) {
             database.mediaDao().observeMediaPagingRaw(query)
         }.flow
@@ -2019,6 +2320,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val pagedMediaRaw: Flow<PagingData<GalleryItem>> = rawPagerFlow.map { pagingData ->
         pagingData.map { entity ->
             val uri = Uri.parse(entity.uriString)
+            val matchInfo = searchMatchMap[entity.id.toString()]
             GalleryItem(
                 id = entity.id.toString(),
                 uri = uri,
@@ -2033,14 +2335,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 localExists = true,
                 resolvedUri = resolveFileUri(uri, entity.filePath),
                 latitude = entity.latitude,
-                longitude = entity.longitude
+                longitude = entity.longitude,
+                matchType = matchInfo?.first,
+                matchSnippet = matchInfo?.second
             )
         }
     }.cachedIn(viewModelScope)
 
     companion object {
-        private val headerFormatterCurrentYear = java.time.format.DateTimeFormatter.ofPattern("MMMM d", java.util.Locale.getDefault())
-        private val headerFormatterOtherYear = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
+        private val headerFormatterWithYear = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
         private val headerCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
     }
 
@@ -2055,15 +2358,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val yesterday = today.minusDays(1)
 
             when (itemDate) {
-                today -> "Today"
-                yesterday -> "Yesterday"
-                else -> {
-                    if (itemDate.year == today.year) {
-                        itemDate.format(headerFormatterCurrentYear)
-                    } else {
-                        itemDate.format(headerFormatterOtherYear)
-                    }
-                }
+                today -> "Today, ${today.year}"
+                yesterday -> "Yesterday, ${yesterday.year}"
+                else -> itemDate.format(headerFormatterWithYear)
             }
         }
     }

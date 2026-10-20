@@ -51,12 +51,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridItemInfo
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
-import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -95,9 +89,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.itemKey
+import androidx.paging.compose.itemContentType
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -108,10 +107,12 @@ import com.inferno.gallery.data.TimelineLayoutMode
 import com.inferno.gallery.ui.GalleryItem
 import com.inferno.gallery.ui.GalleryListItem
 import com.inferno.gallery.ui.GalleryViewModel
+import com.inferno.gallery.ui.StableUriSet
 import com.inferno.gallery.ui.ViewMode
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeFull
+import com.inferno.gallery.ui.theme.ShapeNone
 import com.inferno.gallery.ui.theme.TimelineDateHeaderStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -120,51 +121,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 
-/**
- * Expressive, buttery-smooth fling behavior for Photon Gallery grids.
- *
- * Employs standard Android spline-based decay for natural tactile momentum,
- * but cleanly cuts off when velocity drops below the subpixel crawl threshold (~36 px/s).
- * This eliminates the 0px/1px alternating quantisation judder that occurs during the tail
- * end of Compose fling deceleration, ensuring a crisp, smooth landing.
- */
-@Composable
-fun rememberExpressiveGridFlingBehavior(): FlingBehavior {
-    val density = LocalDensity.current
-    val splineDecay = remember(density) { splineBasedDecay<Float>(density) }
-
-    return remember(splineDecay) {
-        object : FlingBehavior {
-            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
-                if (kotlin.math.abs(initialVelocity) <= 16f) return 0f
-
-                var lastValue = 0f
-                var velocityLeft = initialVelocity
-
-                AnimationState(
-                    initialValue = 0f,
-                    initialVelocity = initialVelocity
-                ).animateDecay(splineDecay) {
-                    val delta = value - lastValue
-                    val consumed = scrollBy(delta)
-                    lastValue = value
-                    velocityLeft = this.velocity
-
-                    if (kotlin.math.abs(delta - consumed) > 0.5f) {
-                        this.cancelAnimation()
-                    }
-
-                    // Clean deceleration cutoff: avoids subpixel integer quantisation
-                    // crawl (< 36 px/s = 0.3 px/frame at 120Hz) which causes stutter.
-                    if (kotlin.math.abs(this.velocity) < 36f) {
-                        this.cancelAnimation()
-                    }
-                }
-                return velocityLeft
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -174,9 +130,8 @@ fun PhotonGrid(
     gridCellsCount: Int,
     onGridCountChange: (Int) -> Unit,
     isSelectionMode: Boolean,
-    selectedUris: Set<String>,
+    selectedUris: StableUriSet,
     onMediaClick: (GalleryItem) -> Unit,
-    onMediaLongClick: (GalleryItem) -> Unit = {},
     viewMode: ViewMode,
     thumbnailCornerRadius: Float,
     sharedTransitionScope: SharedTransitionScope,
@@ -184,11 +139,13 @@ fun PhotonGrid(
     viewModel: GalleryViewModel,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    timelineLayoutMode: TimelineLayoutMode = TimelineLayoutMode.STANDARD_GRID
+    timelineLayoutMode: TimelineLayoutMode = TimelineLayoutMode.STANDARD_GRID,
+    dateHeaderAlignment: String = "CENTER",
+    showMatchBadge: Boolean = false,
+    headerContent: (@Composable () -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
-    val gridFlingBehavior = rememberExpressiveGridFlingBehavior()
 
     // Hoisted static image vectors resolved once per grid, avoiding per-cell recomposition lookups
     val videoIconVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow)
@@ -232,129 +189,24 @@ fun PhotonGrid(
             transformOrigin = TransformOrigin.Center
         }
 
-    val staggeredState = rememberLazyStaggeredGridState()
-    val isScrolled by remember(timelineLayoutMode) {
-        derivedStateOf {
-            if (timelineLayoutMode == TimelineLayoutMode.STAGGERED_MASONRY) {
-                staggeredState.firstVisibleItemIndex > 0 || staggeredState.firstVisibleItemScrollOffset > 8
-            } else {
-                lazyGridState.firstVisibleItemIndex > 0 || lazyGridState.firstVisibleItemScrollOffset > 8
-            }
+    LaunchedEffect(lazyGridState) {
+        snapshotFlow {
+            lazyGridState.firstVisibleItemIndex > 0 || lazyGridState.firstVisibleItemScrollOffset > 32
         }
-    }
-
-    LaunchedEffect(isScrolled) {
-        viewModel.setTopBarCollapsed(isScrolled)
+            .distinctUntilChanged()
+            .collect { isScrolled ->
+                viewModel.setTopBarCollapsed(isScrolled)
+            }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = basePinchModifier) {
             when (timelineLayoutMode) {
-                TimelineLayoutMode.STAGGERED_MASONRY -> {
-                    // ── Staggered Masonry Layout (True Aspect Ratio Columns) ──────
-                    LazyVerticalStaggeredGrid(
-                        columns = StaggeredGridCells.Fixed(gridCellsCount),
-                        state = staggeredState,
-                        flingBehavior = gridFlingBehavior,
-                        contentPadding = contentPadding,
-                        verticalItemSpacing = 2.dp,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .staggeredGridDragSelectGesture(
-                                staggeredState = staggeredState,
-                                pagedMedia = pagedMedia,
-                                viewModel = viewModel,
-                                hapticFeedback = haptic,
-                                coroutineScope = coroutineScope
-                            )
-                    ) {
-                    items(
-                        count = pagedMedia.itemCount,
-                        key = { index ->
-                            val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
-                            when (item) {
-                                is GalleryListItem.Header -> "header_${item.id}"
-                                is GalleryListItem.Item -> item.galleryItem.id
-                                null -> "placeholder_$index"
-                            }
-                        },
-                        contentType = { index ->
-                            val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
-                            if (item is GalleryListItem.Header) "header" else "media"
-                        },
-                        span = { index ->
-                            val listItem = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
-                            if (listItem is GalleryListItem.Header) StaggeredGridItemSpan.FullLine
-                            else StaggeredGridItemSpan.SingleLane
-                        }
-                    ) { index ->
-                        val listItem = pagedMedia[index]
-                        if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(
-                                title = listItem.title,
-                                modifier = Modifier.animateItem(
-                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                )
-                            )
-                        } else if (listItem is GalleryListItem.Item) {
-                            val item = listItem.galleryItem
-                            val uriString = remember(item.id) { item.uri.toString() }
-                            val masonryRatio = remember(item.id) {
-                                val hash = (item.id.hashCode() and 0x7FFFFFFF) % 5
-                                when (hash) {
-                                    0 -> 0.75f  // 3:4 portrait
-                                    1 -> 0.67f  // 2:3 tall portrait
-                                    2 -> 1.33f  // 4:3 landscape
-                                    3 -> 1.0f   // 1:1 square
-                                    else -> 0.85f
-                                }
-                            }
-                            // derivedStateOf: only recompose this cell when its own selection changes
-                            val isSelected by remember(uriString, selectedUris) {
-                                derivedStateOf { selectedUris.contains(uriString) }
-                            }
-
-                            OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(
-                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                ),
-                                item = item,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                onClick = onMediaClick,
-                                isSelected = isSelected,
-                                gridCellsCount = gridCellsCount,
-                                thumbnailCornerRadius = thumbnailCornerRadius,
-                                aspectRatio = masonryRatio,
-                                videoIconVector = videoIconVector,
-                                checkIconVector = checkIconVector
-                            )
-                        } else {
-                            val placeholderShape = remember(thumbnailCornerRadius) {
-                                if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp)
-                                else RoundedCornerShape(0.dp)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .animateItem(
-                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                    )
-                                    .aspectRatio(1.0f)
-                                    .clip(placeholderShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            )
-                        }
-                    }
-                }
-            }
-
-            TimelineLayoutMode.EDITORIAL_MOSAIC -> {
+                TimelineLayoutMode.EDITORIAL_MOSAIC -> {
                 // ── Editorial Mosaic Layout (Smart Hero & Grid) ───────────────
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(maxOf(3, gridCellsCount)),
+                    columns = GridCells.Fixed(gridCellsCount.coerceIn(2, 6)),
                     state = lazyGridState,
-                    flingBehavior = gridFlingBehavior,
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -365,21 +217,28 @@ fun PhotonGrid(
                             pagedMedia = pagedMedia,
                             viewModel = viewModel,
                             hapticFeedback = haptic,
-                            coroutineScope = coroutineScope
+                            coroutineScope = coroutineScope,
+                            headerOffset = if (headerContent != null) 1 else 0
                         )
                 ) {
+                    if (headerContent != null) {
+                        item(
+                            key = "grid_top_header_content",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = "header_content"
+                        ) {
+                            headerContent()
+                        }
+                    }
                     items(
                         count = pagedMedia.itemCount,
-                        key = { index ->
-                            val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
+                        key = pagedMedia.itemKey { item ->
                             when (item) {
                                 is GalleryListItem.Header -> "header_${item.id}"
                                 is GalleryListItem.Item -> item.galleryItem.id
-                                null -> "placeholder_$index"
                             }
                         },
-                        contentType = { index ->
-                            val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
+                        contentType = pagedMedia.itemContentType { item ->
                             if (item is GalleryListItem.Header) "header" else "media"
                         },
                         span = { index ->
@@ -388,32 +247,21 @@ fun PhotonGrid(
                                 GridItemSpan(maxLineSpan)
                             } else {
                                 val isHero = (index % 7 == 1) || (index % 13 == 4)
-                                if (isHero && gridCellsCount >= 3) GridItemSpan(2) else GridItemSpan(1)
+                                if (isHero) GridItemSpan(minOf(2, gridCellsCount)) else GridItemSpan(1)
                             }
                         }
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(
-                                title = listItem.title,
-                                modifier = Modifier.animateItem(
-                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                )
-                            )
+                            TimelineSectionHeader(title = listItem.title, alignment = dateHeaderAlignment)
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
-                            val uriString = remember(item.id) { item.uri.toString() }
                             val isHero = (index % 7 == 1) || (index % 13 == 4)
-                            val mosaicRatio = if (isHero && gridCellsCount >= 3) 1.4f else 1.0f
-                            // derivedStateOf: only recompose this cell when its own selection changes
-                            val isSelected by remember(uriString, selectedUris) {
-                                derivedStateOf { selectedUris.contains(uriString) }
-                            }
+                            val mosaicRatio = if (isHero) 1.35f else 1.0f
+                            val isSelected = selectedUris.contains(item.uri.toString())
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(
-                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                ),
+                                modifier = Modifier,
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -423,23 +271,20 @@ fun PhotonGrid(
                                 thumbnailCornerRadius = thumbnailCornerRadius,
                                 aspectRatio = mosaicRatio,
                                 videoIconVector = videoIconVector,
-                                checkIconVector = checkIconVector
+                                checkIconVector = checkIconVector,
+                                showMatchBadge = showMatchBadge
                             )
                         } else {
                             val isHero = (index % 7 == 1) || (index % 13 == 4)
                             val mosaicRatio = if (isHero && gridCellsCount >= 3) 1.4f else 1.0f
                             val placeholderShape = remember(thumbnailCornerRadius) {
-                                if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp)
-                                else RoundedCornerShape(0.dp)
+                                if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp) else null
                             }
                             Box(
                                 modifier = Modifier
-                                    .animateItem(
-                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                    )
                                     .aspectRatio(mosaicRatio)
-                                    .clip(placeholderShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .run { if (placeholderShape != null) clip(placeholderShape) else this }
+                                    .background(MaterialTheme.colorScheme.surfaceContainer)
                             )
                         }
                     }
@@ -451,7 +296,6 @@ fun PhotonGrid(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(gridCellsCount),
                     state = lazyGridState,
-                    flingBehavior = gridFlingBehavior,
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -462,21 +306,28 @@ fun PhotonGrid(
                             pagedMedia = pagedMedia,
                             viewModel = viewModel,
                             hapticFeedback = haptic,
-                            coroutineScope = coroutineScope
+                            coroutineScope = coroutineScope,
+                            headerOffset = if (headerContent != null) 1 else 0
                         )
                 ) {
+                    if (headerContent != null) {
+                        item(
+                            key = "grid_top_header_content",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = "header_content"
+                        ) {
+                            headerContent()
+                        }
+                    }
                     items(
                         count = pagedMedia.itemCount,
-                        key = { index ->
-                            val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
+                        key = pagedMedia.itemKey { item ->
                             when (item) {
                                 is GalleryListItem.Header -> "header_${item.id}"
                                 is GalleryListItem.Item -> item.galleryItem.id
-                                null -> "placeholder_$index"
                             }
                         },
-                        contentType = { index ->
-                            val item = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
+                        contentType = pagedMedia.itemContentType { item ->
                             if (item is GalleryListItem.Header) "header" else "media"
                         },
                         span = { index ->
@@ -487,25 +338,13 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(
-                                title = listItem.title,
-                                modifier = Modifier.animateItem(
-                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                )
-                            )
+                            TimelineSectionHeader(title = listItem.title, alignment = dateHeaderAlignment)
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
-                            val uriString = remember(item.id) { item.uri.toString() }
-                            // derivedStateOf: this cell only recomposes when ITS OWN selection state changes,
-                            // not when any other URI is toggled. Eliminates N-cell cascade recompositions.
-                            val isSelected by remember(uriString, selectedUris) {
-                                derivedStateOf { selectedUris.contains(uriString) }
-                            }
+                            val isSelected = selectedUris.contains(item.uri.toString())
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(
-                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                ),
+                                modifier = Modifier,
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -515,21 +354,18 @@ fun PhotonGrid(
                                 thumbnailCornerRadius = thumbnailCornerRadius,
                                 aspectRatio = 1.0f,
                                 videoIconVector = videoIconVector,
-                                checkIconVector = checkIconVector
+                                checkIconVector = checkIconVector,
+                                showMatchBadge = showMatchBadge
                             )
                         } else {
                             val placeholderShape = remember(thumbnailCornerRadius) {
-                                if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp)
-                                else RoundedCornerShape(0.dp)
+                                if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp) else null
                             }
                             Box(
                                 modifier = Modifier
-                                    .animateItem(
-                                        placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                    )
                                     .aspectRatio(1.0f)
-                                    .clip(placeholderShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .run { if (placeholderShape != null) clip(placeholderShape) else this }
+                                    .background(MaterialTheme.colorScheme.surfaceContainer)
                             )
                         }
                     }
@@ -578,24 +414,26 @@ fun PhotonGrid(
 }
 
 /**
- * Editorial Leica-style date section header featuring a condensed Google Sans Flex date
- * and an ultra-subtle horizontal gradient hairline accent rule.
+ * Timeline section date group header composable.
  */
 @Composable
 fun TimelineSectionHeader(
     title: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    alignment: String = "CENTER"
 ) {
+    val isCenter = alignment == "CENTER"
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 16.dp, top = 26.dp, bottom = 8.dp),
-        contentAlignment = Alignment.CenterStart
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+        contentAlignment = if (isCenter) Alignment.Center else Alignment.CenterStart
     ) {
         Text(
-            text = title.uppercase(),
+            text = title,
             style = TimelineDateHeaderStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = if (isCenter) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
         )
     }
 }
@@ -615,13 +453,16 @@ fun OptimizedThumbnailCell(
     gridCellsCount: Int = 3,
     thumbnailCornerRadius: Float = 0f,
     aspectRatio: Float = 1.0f,
-    videoIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-    checkIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_check)
+    videoIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_videocam),
+    checkIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+    showMatchBadge: Boolean = false
 ) {
-    val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
-    // Hoisted click handlers
+    // Hoisted click handlers. PhotonGrid passes no onLongClick (long-press there is owned by
+    // gridDragSelectGesture on the grid itself, so cells stay on plain clickable and don't add
+    // a second long-press detector competing for the pointer stream). SearchScreen, which has
+    // no grid-level drag-select, does supply one.
     val clickHandler = remember(item, onClick) { { onClick(item) } }
     val longClickHandler = remember(item, onLongClick) {
         if (onLongClick != null) {
@@ -632,81 +473,102 @@ fun OptimizedThumbnailCell(
         } else null
     }
 
-    // Only allocate and tick selection animation when item is selected
-    val cellModifier = if (isSelected) {
-        val selectionScale by animateFloatAsState(
-            targetValue = 0.88f,
-            animationSpec = MotionTokens.bouncySpring(),
-            label = "cellSelectionScale"
-        )
-        modifier.graphicsLayer {
-            scaleX = selectionScale
-            scaleY = selectionScale
-        }
-    } else {
-        modifier
-    }
-
     val cellShape = remember(thumbnailCornerRadius) {
-        if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp)
-        else RoundedCornerShape(0.dp)
+        if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp) else null
     }
+    val sharedContentKey = remember(item.uri) { "photo_${item.uri}" }
 
-    val contentModifier = remember(thumbnailCornerRadius, aspectRatio) {
-        if (thumbnailCornerRadius > 0f) {
-            Modifier
-                .aspectRatio(aspectRatio)
-                .clip(cellShape)
-        } else {
-            Modifier.aspectRatio(aspectRatio)
-        }
-    }
-
-    // Shared bounds transition is active for standard grid densities (1-4 columns).
-    // For dense grids (5-8 columns: 70-120+ visible tiles), bypassing sharedBounds
-    // eliminates ApproachLayoutModifierNode evaluation overhead on every scroll tick.
-    val sharedTransitionModifier = if (gridCellsCount <= 4) {
+    // Shared bounds transition is active for standard grid densities (1-6 columns)
+    val sharedTransitionModifier = if (gridCellsCount <= 6) {
         with(sharedTransitionScope) {
+            val overlayClip = remember(cellShape) { OverlayClip(cellShape ?: ShapeNone) }
             Modifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(key = "photo_${item.uri}"),
+                sharedContentState = rememberSharedContentState(key = sharedContentKey),
                 animatedVisibilityScope = animatedVisibilityScope,
                 enter = CellEnterFade,
                 exit = CellExitFade,
                 resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-                clipInOverlayDuringTransition = OverlayClip(cellShape),
-                boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
+                clipInOverlayDuringTransition = overlayClip,
+                boundsTransform = SharedBoundsTransform
             )
         }
     } else {
         Modifier
     }
 
-    Box(modifier = cellModifier) {
-        val clickModifier = if (onLongClick != null) {
-            Modifier.combinedClickable(
-                indication = null,
-                interactionSource = null,
-                onClick = clickHandler,
-                onLongClick = longClickHandler
-            )
-        } else {
-            Modifier.clickable(
-                indication = null,
-                interactionSource = null,
-                onClick = clickHandler
-            )
-        }
+    val clickModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(
+            onClick = clickHandler,
+            onLongClick = longClickHandler
+        )
+    } else {
+        Modifier.clickable(
+            onClick = clickHandler
+        )
+    }
 
-        Box(
-            modifier = contentModifier
-                .then(sharedTransitionModifier)
-                .then(clickModifier)
-        ) {
-            PhotonGridThumbnail(
-                item = item,
-                gridCellsCount = gridCellsCount,
-                videoIconVector = videoIconVector
+    val selectionModifier = if (isSelected) {
+        // Read inside the graphicsLayer block (draw phase) rather than via `by`. Delegating to
+        // a State read in composition made every selected cell RECOMPOSE on each frame of the
+        // spring; reading it here drives only the layer. Identical visuals, no per-frame
+        // recomposition — which is what made drag-select across many cells look "gittery".
+        val selectionScale = animateFloatAsState(
+            targetValue = 0.88f,
+            animationSpec = MotionTokens.bouncySpring(),
+            label = "cellSelectionScale"
+        )
+        Modifier.graphicsLayer {
+            val scale = selectionScale.value
+            scaleX = scale
+            scaleY = scale
+        }
+    } else {
+        Modifier
+    }
+
+    // Single unified Box — provides the M3 surfaceContainer skeleton canvas tile
+    // ensuring the grid cell skeleton is always visible before and during thumbnail loading.
+    Box(
+        modifier = modifier
+            .aspectRatio(aspectRatio)
+            .then(selectionModifier)
+            .then(sharedTransitionModifier)
+            .run { if (cellShape != null) clip(cellShape) else this }
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .then(clickModifier)
+    ) {
+        PhotonGridThumbnail(
+            item = item,
+            gridCellsCount = gridCellsCount,
+            videoIconVector = videoIconVector
+        )
+
+        // ── Search Match Reason Badge & Snippet Overlay ───────────────────────
+        if (showMatchBadge && item.matchType != null) {
+            SearchMatchBadge(
+                matchType = item.matchType,
+                matchSnippet = item.matchSnippet,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
             )
+
+            if (!item.matchSnippet.isNullOrBlank() && item.matchType in setOf("OCR", "NAME", "SEMANTIC", "LOCATION")) {
+                val snippetModifier = if (item.isVideo) {
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(bottom = 2.dp, start = 3.dp)
+                        .fillMaxWidth(0.6f)
+                } else {
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                }
+                SearchSnippetOverlay(
+                    snippet = item.matchSnippet,
+                    modifier = snippetModifier
+                )
+            }
         }
 
         // Selection overlay checkmark badge with solid white contrast border
@@ -731,13 +593,159 @@ fun OptimizedThumbnailCell(
     }
 }
 
+private data class MatchBadgeConfig(
+    val iconRes: Int,
+    val label: String,
+    val containerColor: Color,
+    val contentColor: Color
+)
+
+@Composable
+fun SearchMatchBadge(
+    matchType: String,
+    matchSnippet: String? = null,
+    modifier: Modifier = Modifier
+) {
+    val config = when (matchType) {
+        "OCR" -> MatchBadgeConfig(
+            R.drawable.ic_ms_text_fields,
+            "OCR",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer
+        )
+        "NAME" -> MatchBadgeConfig(
+            R.drawable.ic_ms_description,
+            "Name",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer
+        )
+        "FORMAT" -> MatchBadgeConfig(
+            R.drawable.ic_ms_image,
+            matchSnippet?.take(8) ?: "Format",
+            MaterialTheme.colorScheme.surfaceContainerHighest,
+            MaterialTheme.colorScheme.onSurface
+        )
+        "SEMANTIC" -> MatchBadgeConfig(
+            R.drawable.ic_ms_auto_fix_high,
+            "Semantic",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        "ALBUM" -> MatchBadgeConfig(
+            R.drawable.ic_ms_photo_album,
+            "Album",
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        "LOCATION" -> MatchBadgeConfig(
+            R.drawable.ic_ms_location_on,
+            "Location",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer
+        )
+        "DATE" -> MatchBadgeConfig(
+            R.drawable.ic_ms_calendar_month,
+            "Date",
+            MaterialTheme.colorScheme.surfaceContainerHigh,
+            MaterialTheme.colorScheme.onSurface
+        )
+        else -> MatchBadgeConfig(
+            R.drawable.ic_ms_search,
+            matchType,
+            MaterialTheme.colorScheme.surfaceContainerHigh,
+            MaterialTheme.colorScheme.onSurface
+        )
+    }
+
+    Surface(
+        shape = ShapeFull,
+        color = config.containerColor.copy(alpha = 0.92f),
+        contentColor = config.contentColor,
+        shadowElevation = 1.dp,
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+        ) {
+            Icon(
+                imageVector = ImageVector.vectorResource(config.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(10.dp),
+                tint = config.contentColor
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = config.label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.sp
+                ),
+                color = config.contentColor,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun SearchSnippetOverlay(
+    snippet: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.scrim.copy(alpha = 0f),
+                        MaterialTheme.colorScheme.scrim.copy(alpha = 0.75f)
+                    )
+                )
+            )
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = snippet,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.surface
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 // ── Shared thumbnail cache key ────────────────────────────────────────────────
 
-internal fun thumbnailMemoryKey(id: String): String = "t_$id"
+/**
+ * Size-qualified on purpose. An unqualified key lets a bitmap decoded for one column count
+ * satisfy a request for another, and because the key matched Coil would not re-request — the
+ * cell stays permanently soft at the larger size. Qualifying also stops screens that do not
+ * pass a column count (e.g. SearchScreen) from poisoning the main grid's entries.
+ */
+fun thumbnailMemoryKey(id: String, sizePx: Int): String = "t_${id}@$sizePx"
 
-// Shared-element fade specs — hoisted so cells don't allocate them per composition
+/**
+ * Shared thumbnail resolution buckets, derived from column count. Used by the grid cells, the
+ * scroll-ahead prefetcher and the detail-screen placeholder so their cache keys always agree.
+ */
+fun thumbnailTargetPx(gridCellsCount: Int): Int = when {
+    gridCellsCount <= 2 -> 512
+    gridCellsCount == 3 -> 320
+    gridCellsCount == 4 -> 240
+    gridCellsCount <= 6 -> 160
+    else -> 128
+}
+
+// Shared-element fade specs & springs — hoisted so cells don't allocate them per composition
 private val CellEnterFade = fadeIn(animationSpec = MotionTokens.fastEffectsSpec())
 private val CellExitFade = fadeOut(animationSpec = MotionTokens.fastEffectsSpec())
+private val SharedElementSpringSpec = MotionTokens.sharedElementSpring<androidx.compose.ui.geometry.Rect>()
+private val SharedBoundsTransform = androidx.compose.animation.BoundsTransform { _, _ -> SharedElementSpringSpec }
 
 // ── Gestures ──────────────────────────────────────────────────────────────────
 
@@ -778,11 +786,26 @@ private fun Modifier.smoothGridPinchZoom(
             try {
                 do {
                     val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                    val pressed = event.changes.filter { it.pressed }
+                    val changes = event.changes
 
-                    if (pressed.size >= 2) {
-                        val p1 = pressed[0].position
-                        val p2 = pressed[1].position
+                    // Ultra-fast path for 1-finger scrolls/flings when pinch was never active
+                    if (changes.size < 2 && !pinchEverActivated) {
+                        continue
+                    }
+                    var p1: Offset? = null
+                    var p2: Offset? = null
+                    var pressedCount = 0
+
+                    for (i in changes.indices) {
+                        val c = changes[i]
+                        if (c.pressed) {
+                            if (pressedCount == 0) p1 = c.position
+                            else if (pressedCount == 1) p2 = c.position
+                            pressedCount++
+                        }
+                    }
+
+                    if (pressedCount >= 2 && p1 != null && p2 != null) {
                         val currentDistance = kotlin.math.hypot(p1.x - p2.x, p1.y - p2.y)
                         val currentCentroid = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
 
@@ -818,7 +841,7 @@ private fun Modifier.smoothGridPinchZoom(
                                 // Zoom OUT: pinching fingers -> more columns (e.g. 3 -> 4)
                                 else if (rawScale < 0.82f && now - lastChangeTime > 260L) {
                                     val currentCols = currentGridCount
-                                    if (currentCols < 8) {
+                                    if (currentCols < 6) {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         currentOnGridCountChange(currentCols + 1)
                                         lastChangeTime = now
@@ -857,7 +880,8 @@ private fun Modifier.gridDragSelectGesture(
     pagedMedia: LazyPagingItems<GalleryListItem>,
     viewModel: GalleryViewModel,
     hapticFeedback: HapticFeedback,
-    coroutineScope: CoroutineScope
+    coroutineScope: CoroutineScope,
+    headerOffset: Int = 0
 ): Modifier = this.pointerInput(lazyGridState) {
     var dragStartIndex = -1
     var lastHitIndex = -1
@@ -869,8 +893,11 @@ private fun Modifier.gridDragSelectGesture(
 
     fun updateSelectionForIndex(targetIndex: Int) {
         if (dragStartIndex == -1 || targetIndex == -1) return
-        val start = minOf(dragStartIndex, targetIndex)
-        val end = maxOf(dragStartIndex, targetIndex)
+        val adjustedStart = dragStartIndex - headerOffset
+        val adjustedTarget = targetIndex - headerOffset
+        if (adjustedStart < 0 || adjustedTarget < 0) return
+        val start = minOf(adjustedStart, adjustedTarget)
+        val end = maxOf(adjustedStart, adjustedTarget)
         val count = pagedMedia.itemCount
         if (count == 0) return
 
@@ -924,16 +951,17 @@ private fun Modifier.gridDragSelectGesture(
 
     detectDragGesturesAfterLongPress(
         onDragStart = { offset ->
-            val hitItem = findItemAtOffset(lazyGridState, offset)
-            if (hitItem != null && hitItem < pagedMedia.itemCount) {
+            val rawHit = findItemAtOffset(lazyGridState, offset) ?: return@detectDragGesturesAfterLongPress
+            val hitItem = rawHit - headerOffset
+            if (hitItem >= 0 && hitItem < pagedMedia.itemCount) {
                 val listItem = pagedMedia.peek(hitItem)
                 if (listItem is GalleryListItem.Item) {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     val uri = listItem.galleryItem.uri.toString()
                     val isSelecting = !viewModel.selectedUris.value.contains(uri)
                     viewModel.startDragSelection(uri, isSelecting)
-                    dragStartIndex = hitItem
-                    lastHitIndex = hitItem
+                    dragStartIndex = rawHit
+                    lastHitIndex = rawHit
                     currentDragPosition = offset
                     startAutoScrollIfNeeded()
                 }
@@ -945,9 +973,12 @@ private fun Modifier.gridDragSelectGesture(
             currentDragPosition = pos
             val currentHit = findItemAtOffset(lazyGridState, pos)
             if (currentHit != null && currentHit != lastHitIndex && dragStartIndex != -1) {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                lastHitIndex = currentHit
-                updateSelectionForIndex(currentHit)
+                val adjustedHit = currentHit - headerOffset
+                if (adjustedHit >= 0) {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    lastHitIndex = currentHit
+                    updateSelectionForIndex(currentHit)
+                }
             }
             startAutoScrollIfNeeded()
         },
@@ -969,128 +1000,6 @@ private fun Modifier.gridDragSelectGesture(
         }
     )
 }
-
-/**
- * Unified Press-and-Hold & Drag-to-Select gesture detector for LazyVerticalStaggeredGrid.
- */
-private fun Modifier.staggeredGridDragSelectGesture(
-    staggeredState: LazyStaggeredGridState,
-    pagedMedia: LazyPagingItems<GalleryListItem>,
-    viewModel: GalleryViewModel,
-    hapticFeedback: HapticFeedback,
-    coroutineScope: CoroutineScope
-): Modifier = this.pointerInput(staggeredState) {
-    var dragStartIndex = -1
-    var lastHitIndex = -1
-    var currentDragPosition: Offset? = null // Plain var — never observed by Composable, no snapshot overhead
-    var autoScrollJob: Job? = null
-
-    val autoScrollThresholdPx = with(density) { 72.dp.toPx() }
-    val maxScrollSpeedPx = with(density) { 24.dp.toPx() }
-
-    fun updateSelectionForIndex(targetIndex: Int) {
-        if (dragStartIndex == -1 || targetIndex == -1) return
-        val start = minOf(dragStartIndex, targetIndex)
-        val end = maxOf(dragStartIndex, targetIndex)
-        val count = pagedMedia.itemCount
-        if (count == 0) return
-
-        val uris = mutableSetOf<String>()
-        val clampedStart = start.coerceIn(0, count - 1)
-        val clampedEnd = end.coerceIn(0, count - 1)
-        for (i in clampedStart..clampedEnd) {
-            val item = pagedMedia.peek(i)
-            if (item is GalleryListItem.Item) {
-                uris.add(item.galleryItem.uri.toString())
-            }
-        }
-        viewModel.updateDragSelection(uris)
-    }
-
-    fun startAutoScrollIfNeeded() {
-        if (autoScrollJob?.isActive == true) return
-        autoScrollJob = coroutineScope.launch {
-            while (isActive && dragStartIndex != -1) {
-                val pos = currentDragPosition ?: break
-                val viewportHeight = staggeredState.layoutInfo.viewportSize.height.toFloat()
-                if (viewportHeight <= 0f) break
-
-                val scrollDelta = when {
-                    pos.y < autoScrollThresholdPx -> {
-                        val factor = ((autoScrollThresholdPx - pos.y) / autoScrollThresholdPx).coerceIn(0f, 1f)
-                        -maxScrollSpeedPx * factor
-                    }
-                    pos.y > (viewportHeight - autoScrollThresholdPx) -> {
-                        val factor = ((pos.y - (viewportHeight - autoScrollThresholdPx)) / autoScrollThresholdPx).coerceIn(0f, 1f)
-                        maxScrollSpeedPx * factor
-                    }
-                    else -> 0f
-                }
-
-                if (scrollDelta != 0f) {
-                    staggeredState.scrollBy(scrollDelta)
-                    val newHit = findStaggeredItemAtOffset(staggeredState, pos)
-                    if (newHit != null && newHit != lastHitIndex) {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        lastHitIndex = newHit
-                        updateSelectionForIndex(newHit)
-                    }
-                    delay(16L) // Only poll at 60fps when actively scrolling the edge
-                } else {
-                    delay(32L) // Idle: check at 30fps to avoid wasting coroutine wake-ups
-                }
-            }
-        }
-    }
-
-    detectDragGesturesAfterLongPress(
-        onDragStart = { offset ->
-            val hitItem = findStaggeredItemAtOffset(staggeredState, offset)
-            if (hitItem != null && hitItem < pagedMedia.itemCount) {
-                val listItem = pagedMedia.peek(hitItem)
-                if (listItem is GalleryListItem.Item) {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    val uri = listItem.galleryItem.uri.toString()
-                    val isSelecting = !viewModel.selectedUris.value.contains(uri)
-                    viewModel.startDragSelection(uri, isSelecting)
-                    dragStartIndex = hitItem
-                    lastHitIndex = hitItem
-                    currentDragPosition = offset
-                    startAutoScrollIfNeeded()
-                }
-            }
-        },
-        onDrag = { change, _ ->
-            change.consume()
-            val pos = change.position
-            currentDragPosition = pos
-            val currentHit = findStaggeredItemAtOffset(staggeredState, pos)
-            if (currentHit != null && currentHit != lastHitIndex && dragStartIndex != -1) {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                lastHitIndex = currentHit
-                updateSelectionForIndex(currentHit)
-            }
-            startAutoScrollIfNeeded()
-        },
-        onDragEnd = {
-            autoScrollJob?.cancel()
-            autoScrollJob = null
-            currentDragPosition = null
-            dragStartIndex = -1
-            lastHitIndex = -1
-            viewModel.endDragSelection()
-        },
-        onDragCancel = {
-            autoScrollJob?.cancel()
-            autoScrollJob = null
-            currentDragPosition = null
-            dragStartIndex = -1
-            lastHitIndex = -1
-            viewModel.endDragSelection()
-        }
-    )
-}
-
 private fun findItemAtOffset(lazyGridState: LazyGridState, offset: Offset): Int? {
     val layoutInfo = lazyGridState.layoutInfo
     val visibleItems = layoutInfo.visibleItemsInfo
@@ -1116,39 +1025,6 @@ private fun findItemAtOffset(lazyGridState: LazyGridState, offset: Offset): Int?
     }
     if (matchingRow.isNotEmpty()) {
         return matchingRow.minByOrNull { item ->
-            val centerX = item.offset.x + item.size.width / 2f
-            kotlin.math.abs(adjustedX - centerX)
-        }?.index
-    }
-
-    return null
-}
-
-private fun findStaggeredItemAtOffset(staggeredState: LazyStaggeredGridState, offset: Offset): Int? {
-    val layoutInfo = staggeredState.layoutInfo
-    val visibleItems = layoutInfo.visibleItemsInfo
-    if (visibleItems.isEmpty()) return null
-
-    val adjustedY = offset.y - layoutInfo.beforeContentPadding
-    val adjustedX = offset.x
-
-    // Exact bounding box test
-    for (item in visibleItems) {
-        val itemOffset = item.offset
-        val itemSize = item.size
-        if (adjustedX >= itemOffset.x && adjustedX <= itemOffset.x + itemSize.width &&
-            adjustedY >= itemOffset.y && adjustedY <= itemOffset.y + itemSize.height
-        ) {
-            return item.index
-        }
-    }
-
-    // Band-aligned fallback test
-    val matchingBand = visibleItems.filter { item ->
-        adjustedY >= item.offset.y && adjustedY <= item.offset.y + item.size.height
-    }
-    if (matchingBand.isNotEmpty()) {
-        return matchingBand.minByOrNull { item ->
             val centerX = item.offset.x + item.size.width / 2f
             kotlin.math.abs(adjustedX - centerX)
         }?.index

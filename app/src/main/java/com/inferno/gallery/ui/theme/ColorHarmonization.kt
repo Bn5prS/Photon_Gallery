@@ -4,7 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
@@ -57,7 +57,7 @@ data class HarmonizedColors(
     val infoContainer: Color,
 )
 
-val LocalHarmonizedColors = staticCompositionLocalOf {
+val LocalHarmonizedColors = compositionLocalOf {
     HarmonizedColors(
         error = Color(0xFFBA1A1A),
         errorContainer = Color(0xFFFFDAD6),
@@ -86,18 +86,20 @@ fun harmonizedColors(): HarmonizedColors {
     val themeErrorContainer = MaterialTheme.colorScheme.errorContainer
     val themeOnErrorContainer = MaterialTheme.colorScheme.onErrorContainer
 
-    val successColor = if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
-    val successContainerColor = if (isDark) Color(0xFF1B3B22) else Color(0xFFC8E6C9)
-    val infoColor = if (isDark) Color(0xFF64B5F6) else Color(0xFF1565C0)
-    val infoContainerColor = if (isDark) Color(0xFF0D325E) else Color(0xFFBBDEFB)
+    return androidx.compose.runtime.remember(primary, isDark, themeError, themeErrorContainer, themeOnErrorContainer) {
+        val successColor = if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
+        val successContainerColor = if (isDark) Color(0xFF1B3B22) else Color(0xFFC8E6C9)
+        val infoColor = if (isDark) Color(0xFF64B5F6) else Color(0xFF1565C0)
+        val infoContainerColor = if (isDark) Color(0xFF0D325E) else Color(0xFFBBDEFB)
 
-    return HarmonizedColors(
-        error = themeError.harmonizeWith(primary, 0.12f),
-        errorContainer = themeErrorContainer.harmonizeWith(primary, 0.10f),
-        onErrorContainer = themeOnErrorContainer.harmonizeWith(primary, 0.08f),
-        success = successColor.harmonizeWith(primary, 0.20f),
-        successContainer = successContainerColor.harmonizeWith(primary, 0.15f),
-        info = infoColor.harmonizeWith(primary, 0.20f),
-        infoContainer = infoContainerColor.harmonizeWith(primary, 0.15f),
-    )
+        HarmonizedColors(
+            error = themeError.harmonizeWith(primary, 0.12f),
+            errorContainer = themeErrorContainer.harmonizeWith(primary, 0.10f),
+            onErrorContainer = themeOnErrorContainer.harmonizeWith(primary, 0.08f),
+            success = successColor.harmonizeWith(primary, 0.20f),
+            successContainer = successContainerColor.harmonizeWith(primary, 0.15f),
+            info = infoColor.harmonizeWith(primary, 0.20f),
+            infoContainer = infoContainerColor.harmonizeWith(primary, 0.15f),
+        )
+    }
 }

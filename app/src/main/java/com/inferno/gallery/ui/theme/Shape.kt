@@ -24,7 +24,8 @@ import androidx.compose.ui.unit.dp
  */
 
 // ── Family: None (0dp — fully square, edge-to-edge media) ────────────────────
-val ShapeNone: Shape = RoundedCornerShape(0.dp)
+val ShapeNone: Shape = androidx.compose.ui.graphics.RectangleShape
+
 
 // ── Family: Extra small (4dp — badges, compact tags) ─────────────────────────
 val ShapeExtraSmall = RoundedCornerShape(4.dp)
