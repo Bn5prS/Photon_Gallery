@@ -195,13 +195,11 @@ fun DetailScreen(
     val initialDetailItem by viewModel.initialDetailItem.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
 
-    val galleryItems = remember(rawGalleryItems, initialDetailItem, mediaId) {
-        if (rawGalleryItems.isNotEmpty() && rawGalleryItems.any { it.id == mediaId || it.uri.toString() == mediaId }) {
+    val galleryItems = remember(rawGalleryItems, initialDetailItem) {
+        if (rawGalleryItems.isNotEmpty()) {
             rawGalleryItems
-        } else if (initialDetailItem != null && (initialDetailItem?.id == mediaId || initialDetailItem?.uri?.toString() == mediaId)) {
+        } else if (initialDetailItem != null) {
             listOf(initialDetailItem!!)
-        } else if (rawGalleryItems.isNotEmpty()) {
-            rawGalleryItems
         } else {
             emptyList()
         }
@@ -333,11 +331,16 @@ fun DetailScreen(
     var highlightImageSize by remember { mutableStateOf<androidx.compose.ui.geometry.Size?>(null) }
     var highlightOverlayVisible by remember { mutableStateOf(highlightText != null) }
 
-    androidx.compose.runtime.LaunchedEffect(galleryItems, mediaId) {
-        if (galleryItems.isNotEmpty()) {
-            val targetIndex = galleryItems.indexOfFirst { it.id == mediaId }
-            if (targetIndex >= 0 && pagerState.currentPage != targetIndex) {
-                pagerState.scrollToPage(targetIndex)
+    var hasInitialScrolled by remember(mediaId) { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(galleryItems) {
+        if (!hasInitialScrolled && galleryItems.isNotEmpty()) {
+            val targetIndex = galleryItems.indexOfFirst { it.id == mediaId || it.uri.toString() == mediaId }
+            if (targetIndex >= 0) {
+                if (pagerState.currentPage != targetIndex) {
+                    pagerState.scrollToPage(targetIndex)
+                }
+                hasInitialScrolled = true
             }
         }
     }
@@ -365,24 +368,36 @@ fun DetailScreen(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            viewModel.removeMediaOptimistically(pendingDeleteItem?.uri?.toString() ?: return@rememberLauncherForActivityResult)
+            val itemToDelete = pendingDeleteItem
+            val deletedUri = itemToDelete?.uri?.toString()
+            if (deletedUri != null) {
+                viewModel.removeMediaOptimistically(deletedUri)
+            }
         }
         pendingDeletePage = null
+        pendingDeleteItem = null
     }
 
     val restoreLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            viewModel.removeMediaOptimistically(pendingDeleteItem?.uri?.toString() ?: return@rememberLauncherForActivityResult)
+            val itemToRestore = pendingDeleteItem
+            val restoredUri = itemToRestore?.uri?.toString()
+            if (restoredUri != null) {
+                viewModel.restoreMediaOptimistically(restoredUri)
+            }
         }
         pendingDeletePage = null
+        pendingDeleteItem = null
     }
 
-    // Auto-navigate after delete: if list becomes empty, go back
+    // Auto-navigate after delete: if list becomes empty, go back; clamp if at the end
     LaunchedEffect(galleryItems.size) {
-        if (galleryItems.isEmpty() && pendingDeleteItem != null) {
+        if (galleryItems.isEmpty()) {
             onBack()
+        } else if (pagerState.currentPage >= galleryItems.size) {
+            pagerState.scrollToPage(galleryItems.size - 1)
         }
     }
 
@@ -744,11 +759,7 @@ fun DetailScreen(
                 },
             key = { page -> galleryItems.getOrNull(page)?.id ?: page.toString() }
         ) { page ->
-            val item = if (galleryItems.size > 1 && pagerState.currentPage == 0 && initialDetailItem != null && galleryItems.getOrNull(0)?.id != mediaId) {
-                initialDetailItem
-            } else {
-                galleryItems.getOrNull(page)
-            } ?: return@HorizontalPager
+            val item = galleryItems.getOrNull(page) ?: return@HorizontalPager
             val resolvedUri by produceState(initialValue = item.uri, key1 = item) {
                 value = item.uri
             }
@@ -769,12 +780,12 @@ fun DetailScreen(
 
             
             var imageAspectRatio by remember(item) { mutableStateOf(1f) }
-            val scale = remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
-            val offsetX = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-            val offsetY = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-            val animJob = remember { androidx.compose.runtime.mutableStateOf<kotlinx.coroutines.Job?>(null) }
+            val scale = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+            val offsetX = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            val offsetY = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            val animJob = remember(item.id) { androidx.compose.runtime.mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
-            androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
+            androidx.compose.runtime.LaunchedEffect(pagerState.currentPage, item.id) {
                 if (pagerState.currentPage != page) {
                     scale.floatValue = 1f
                     offsetX.floatValue = 0f
@@ -930,19 +941,38 @@ fun DetailScreen(
                                                 val composableH = size.height.toFloat()
                                                 if (scale.floatValue > 1f) {
                                                     // Zoom out to fit
-                                                    currentScale = 1f
-                                                    launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = MotionTokens.gentleSpring()) { v, _ -> scale.floatValue = v } }
+                                                    launch {
+                                                        androidx.compose.animation.core.animate(
+                                                            initialValue = scale.floatValue,
+                                                            targetValue = 1f,
+                                                            animationSpec = MotionTokens.gentleSpring()
+                                                        ) { v, _ ->
+                                                            scale.floatValue = v
+                                                            currentScale = v
+                                                        }
+                                                    }
                                                     launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetX.floatValue = v } }
                                                     launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetY.floatValue = v } }
                                                 } else {
                                                     // Zoom in to tapped point
-                                                    val targetScale = 3.5f
-                                                    currentScale = targetScale
+                                                    val targetScale = 3.0f
+                                                    val imageW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
+                                                    val imageH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imageW / imageAspectRatio else composableH
+                                                    val maxX = maxOf(0f, (imageW * targetScale - composableW) / 2f)
+                                                    val maxY = maxOf(0f, (imageH * targetScale - composableH) / 2f)
+
                                                     val targetX = -(centroid.x - composableW / 2f) * (targetScale - 1)
                                                     val targetY = -(centroid.y - composableH / 2f) * (targetScale - 1)
-                                                    val maxX = (composableW * (targetScale - 1)) / 2f
-                                                    val maxY = (composableH * (targetScale - 1)) / 2f
-                                                    launch { androidx.compose.animation.core.animate(scale.floatValue, targetScale, animationSpec = MotionTokens.gentleSpring()) { v, _ -> scale.floatValue = v } }
+                                                    launch {
+                                                        androidx.compose.animation.core.animate(
+                                                            initialValue = scale.floatValue,
+                                                            targetValue = targetScale,
+                                                            animationSpec = MotionTokens.gentleSpring()
+                                                        ) { v, _ ->
+                                                            scale.floatValue = v
+                                                            currentScale = v
+                                                        }
+                                                    }
                                                     launch { androidx.compose.animation.core.animate(offsetX.floatValue, targetX.coerceIn(-maxX, maxX), animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetX.floatValue = v } }
                                                     launch { androidx.compose.animation.core.animate(offsetY.floatValue, targetY.coerceIn(-maxY, maxY), animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetY.floatValue = v } }
                                                 }
@@ -950,141 +980,122 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                .pointerInput(Unit) {
+                                .pointerInput(item.id) {
                                     // Unified gesture handler: pinch-zoom, pan
                                     awaitEachGesture {
                                         val firstDown = awaitFirstDown(requireUnconsumed = false)
-                                        val downTime = System.currentTimeMillis()
-                                        val downPosition = firstDown.position
-                                        
-                                        var shouldStartZoomPan = scale.floatValue > 1f
-                                        if (!shouldStartZoomPan) {
-                                            // Wait to see if a second finger is placed down (pinch-to-zoom)
-                                            while (true) {
-                                                val event = awaitPointerEvent()
-                                                if (event.changes.any { it.isConsumed }) break
-                                                if (event.changes.size > 1) {
-                                                    shouldStartZoomPan = true
-                                                    break
-                                                }
-                                                if (!event.changes.any { it.pressed }) break
-                                            }
-                                        }
-                                        
-                                        if (shouldStartZoomPan) {
-                                            var accumulatedZoom = 1f
-                                            var accumulatedPan = Offset.Zero
-                                            var pastTouchSlop = false
-                                            val touchSlop = viewConfiguration.touchSlop
-                                            val composableW = size.width.toFloat()
-                                            val composableH = size.height.toFloat()
-                                            val velocityTracker = VelocityTracker()
-                                            var maxPointerCount = 0
+                                        var accumulatedZoom = 1f
+                                        var accumulatedPan = Offset.Zero
+                                        var pastTouchSlop = false
+                                        val touchSlop = viewConfiguration.touchSlop
+                                        val composableW = size.width.toFloat()
+                                        val composableH = size.height.toFloat()
+                                        val velocityTracker = VelocityTracker()
+                                        var maxPointerCount = 0
 
-                                            while (true) {
-                                                val event = awaitPointerEvent()
-                                                if (event.changes.any { it.isConsumed }) break
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val pressedCount = event.changes.count { it.pressed }
+                                            maxPointerCount = maxOf(maxPointerCount, pressedCount)
 
-                                                val pressedCount = event.changes.count { it.pressed }
-                                                maxPointerCount = maxOf(maxPointerCount, pressedCount)
-
-                                                if (pressedCount == 1) {
-                                                    event.changes.firstOrNull { it.pressed }
-                                                        ?.let { velocityTracker.addPointerInputChange(it) }
-                                                }
-
-                                                val zoomChange = event.calculateZoom()
-                                                val panChange = event.calculatePan()
-
-                                                if (!pastTouchSlop) {
-                                                    accumulatedZoom *= zoomChange
-                                                    accumulatedPan += panChange
-                                                    val centroidSize = event.calculateCentroidSize(useCurrent = false)
-                                                    val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
-                                                    val panMotion = accumulatedPan.getDistance()
-                                                    if (zoomMotion > touchSlop || panMotion > touchSlop) {
-                                                        pastTouchSlop = true
-                                                    }
-                                                }
-
-                                                if (pastTouchSlop && scale.floatValue <= 1.05f && maxPointerCount == 1) {
-                                                    break
-                                                }
-
-                                                if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero)) {
-                                                    val centroid = event.calculateCentroid(useCurrent = false)
-                                                    animJob.value?.cancel()
-                                                    val newScale = (scale.floatValue * zoomChange).coerceIn(1f, 20f)
-
-                                                    if (newScale > 1.02f) showUi = false
-                                                    if (newScale > 1.05f && currentScale <= 1.05f) {
-                                                        currentScale = newScale
-                                                    } else if (newScale <= 1.05f && currentScale > 1.05f) {
-                                                        currentScale = newScale
-                                                    }
-
-                                                    val maxX = (composableW * (newScale - 1)) / 2f
-                                                    val maxY = (composableH * (newScale - 1)) / 2f
-
-                                                    val focalX = centroid.x - composableW / 2f
-                                                    val focalY = centroid.y - composableH / 2f
-                                                    val effectiveZoom = newScale / scale.floatValue
-                                                    var newOffsetX = (offsetX.floatValue - focalX) * effectiveZoom + focalX + panChange.x
-                                                    var newOffsetY = (offsetY.floatValue - focalY) * effectiveZoom + focalY + panChange.y
-
-                                                    newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
-                                                    newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
-
-                                                    scale.floatValue = newScale
-                                                    offsetX.floatValue = newOffsetX
-                                                    offsetY.floatValue = newOffsetY
-
-                                                    if (newScale > 1f) {
-                                                        val hittingLeft = newOffsetX >= maxX && panChange.x > 0
-                                                        val hittingRight = newOffsetX <= -maxX && panChange.x < 0
-                                                        if (!hittingLeft && !hittingRight) {
-                                                            event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                                        }
-                                                    }
-                                                }
-
-                                                if (!event.changes.any { it.pressed }) break
+                                            if (pressedCount == 1) {
+                                                event.changes.firstOrNull { it.pressed }?.let { velocityTracker.addPointerInputChange(it) }
                                             }
 
-                                            if (pastTouchSlop && scale.floatValue > 1.05f && maxPointerCount == 1) {
-                                                val velocity = velocityTracker.calculateVelocity()
-                                                val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
-                                                val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
-                                                val flingFactor = 0.4f
-                                                val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
-                                                    .coerceIn(-currentMaxX, currentMaxX)
-                                                val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
-                                                    .coerceIn(-currentMaxY, currentMaxY)
+                                            val isZoomed = scale.floatValue > 1.02f
+                                            val isMultiTouch = pressedCount >= 2
+
+                                            val zoomChange = event.calculateZoom()
+                                            val panChange = event.calculatePan()
+
+                                            if (!pastTouchSlop) {
+                                                accumulatedZoom *= zoomChange
+                                                accumulatedPan += panChange
+                                                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                                                val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
+                                                val panMotion = accumulatedPan.getDistance()
+                                                if (zoomMotion > touchSlop || (isZoomed && panMotion > touchSlop) || isMultiTouch) {
+                                                    pastTouchSlop = true
+                                                }
+                                            }
+
+                                            if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero || isMultiTouch)) {
+                                                val centroid = event.calculateCentroid(useCurrent = false)
                                                 animJob.value?.cancel()
-                                                animJob.value = coroutineScope.launch {
-                                                    launch {
-                                                        androidx.compose.animation.core.animate(
-                                                            initialValue = offsetX.floatValue,
-                                                            targetValue = targetFlingX,
-                                                            initialVelocity = velocity.x,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                                                stiffness = Spring.StiffnessVeryLow
-                                                            )
-                                                        ) { v, _ -> offsetX.floatValue = v }
-                                                    }
-                                                    launch {
-                                                        androidx.compose.animation.core.animate(
-                                                            initialValue = offsetY.floatValue,
-                                                            targetValue = targetFlingY,
-                                                            initialVelocity = velocity.y,
-                                                            animationSpec = spring(
-                                                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                                                stiffness = Spring.StiffnessVeryLow
-                                                            )
-                                                        ) { v, _ -> offsetY.floatValue = v }
-                                                    }
+                                                val oldScale = scale.floatValue
+                                                val newScale = (oldScale * zoomChange).coerceIn(1f, 20f)
+
+                                                if (newScale > 1.02f) showUi = false
+
+                                                val imageW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
+                                                val imageH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imageW / imageAspectRatio else composableH
+                                                val maxX = maxOf(0f, (imageW * newScale - composableW) / 2f)
+                                                val maxY = maxOf(0f, (imageH * newScale - composableH) / 2f)
+
+                                                val focalX = centroid.x - composableW / 2f
+                                                val focalY = centroid.y - composableH / 2f
+                                                val effectiveZoom = if (oldScale > 0f) newScale / oldScale else 1f
+                                                var newOffsetX = (offsetX.floatValue - focalX) * effectiveZoom + focalX + panChange.x
+                                                var newOffsetY = (offsetY.floatValue - focalY) * effectiveZoom + focalY + panChange.y
+
+                                                newOffsetX = newOffsetX.coerceIn(-maxX, maxX)
+                                                newOffsetY = newOffsetY.coerceIn(-maxY, maxY)
+
+                                                scale.floatValue = newScale
+                                                offsetX.floatValue = newOffsetX
+                                                offsetY.floatValue = newOffsetY
+                                                currentScale = newScale
+
+                                                val isAtLeftBoundary = newOffsetX >= maxX && panChange.x > 0
+                                                val isAtRightBoundary = newOffsetX <= -maxX && panChange.x < 0
+                                                val allowPagerSwipe = !isMultiTouch && (isAtLeftBoundary || isAtRightBoundary)
+
+                                                if (!allowPagerSwipe) {
+                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
                                                 }
+                                            }
+                                        } while (event.changes.any { it.pressed })
+
+                                        if (pastTouchSlop && scale.floatValue > 1.05f && maxPointerCount == 1) {
+                                            val velocity = velocityTracker.calculateVelocity()
+                                            val imageW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
+                                            val imageH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imageW / imageAspectRatio else composableH
+                                            val currentMaxX = maxOf(0f, (imageW * scale.floatValue - composableW) / 2f)
+                                            val currentMaxY = maxOf(0f, (imageH * scale.floatValue - composableH) / 2f)
+                                            val flingFactor = 0.35f
+                                            val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor).coerceIn(-currentMaxX, currentMaxX)
+                                            val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor).coerceIn(-currentMaxY, currentMaxY)
+                                            animJob.value?.cancel()
+                                            animJob.value = coroutineScope.launch {
+                                                launch {
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = offsetX.floatValue,
+                                                        targetValue = targetFlingX,
+                                                        initialVelocity = velocity.x,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            stiffness = Spring.StiffnessVeryLow
+                                                        )
+                                                    ) { v, _ -> offsetX.floatValue = v }
+                                                }
+                                                launch {
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = offsetY.floatValue,
+                                                        targetValue = targetFlingY,
+                                                        initialVelocity = velocity.y,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            stiffness = Spring.StiffnessVeryLow
+                                                        )
+                                                    ) { v, _ -> offsetY.floatValue = v }
+                                                }
+                                            }
+                                        } else if (scale.floatValue in 1.0f..1.05f && (offsetX.floatValue != 0f || offsetY.floatValue != 0f || scale.floatValue != 1f)) {
+                                            animJob.value?.cancel()
+                                            animJob.value = coroutineScope.launch {
+                                                launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = MotionTokens.snappySpring()) { v, _ -> scale.floatValue = v; currentScale = v } }
+                                                launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = MotionTokens.snappySpring()) { v, _ -> offsetX.floatValue = v } }
+                                                launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = MotionTokens.snappySpring()) { v, _ -> offsetY.floatValue = v } }
                                             }
                                         }
                                     }
@@ -1119,7 +1130,7 @@ fun DetailScreen(
                             )
                         }
 
-                        if (page == pagerState.currentPage && !item.isVideo && scale.floatValue > 1.25f && !isMotionPlaying) {
+                        if (page == pagerState.currentPage && !item.isVideo && scale.floatValue >= 3.0f && !isMotionPlaying) {
                             com.inferno.gallery.ui.components.TileBasedDeepZoomOverlay(
                                 item = item,
                                 scale = scale.floatValue,

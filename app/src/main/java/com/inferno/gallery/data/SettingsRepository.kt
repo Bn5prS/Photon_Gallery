@@ -72,6 +72,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val OCR_INDEXING_ENABLED = booleanPreferencesKey("ocr_indexing_enabled")
         val STORY_MUSIC_MUTED = booleanPreferencesKey("story_music_muted")
         val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
+        val MEMORIES_DISMISSED = booleanPreferencesKey("memories_dismissed")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
         val ALBUMS_EXPANDED_MORE = booleanPreferencesKey("albums_expanded_more")
@@ -268,6 +269,20 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateShowMemories(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_MEMORIES] = enabled
+            if (enabled) {
+                preferences[MEMORIES_DISMISSED] = false
+            }
+        }
+    }
+
+    val memoriesDismissedFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[MEMORIES_DISMISSED] ?: false
+        }
+
+    suspend fun updateMemoriesDismissed(dismissed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[MEMORIES_DISMISSED] = dismissed
         }
     }
 

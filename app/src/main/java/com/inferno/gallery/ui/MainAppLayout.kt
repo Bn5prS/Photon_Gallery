@@ -102,6 +102,7 @@ import com.inferno.gallery.data.DockStyle
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButtonDefaults
 import com.inferno.gallery.ui.theme.EditorialPunchyHeadline
+import com.inferno.gallery.ui.theme.mainScreenTitleStyle
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -678,7 +679,7 @@ fun MainAppLayout(
                                 }
                                 Text(
                                     titleText,
-                                    style = MaterialTheme.typography.headlineMedium,
+                                    style = mainScreenTitleStyle(),
                                     modifier = Modifier.padding(start = 12.dp)
                                 )
                                 Row(

@@ -63,9 +63,12 @@ class DeepZoomController(
     var isEligible: Boolean = false
         private set
 
+    var rotationDegrees: Int = 0
+        private set
+
     private val decoderLock = Any()
     val tileCache = TileCache()
-    private val activeJobs = mutableMapOf<String, Job>()
+    val activeJobKeys = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         if (item.isVideo) return@withContext false
@@ -90,13 +93,39 @@ class DeepZoomController(
                 }
             }
 
+            val exifOrientation = try {
+                if (file != null && file.exists()) {
+                    val exif = androidx.exifinterface.media.ExifInterface(file.absolutePath)
+                    exif.getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL)
+                } else {
+                    context.contentResolver.openInputStream(item.uri)?.use { stream ->
+                        val exif = androidx.exifinterface.media.ExifInterface(stream)
+                        exif.getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL)
+                    } ?: androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                }
+            } catch (e: Exception) {
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+            }
+
+            rotationDegrees = when (exifOrientation) {
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+
             if (createdDecoder != null) {
                 decoder = createdDecoder
-                imageWidth = createdDecoder.width
-                imageHeight = createdDecoder.height
+                if (rotationDegrees == 90 || rotationDegrees == 270) {
+                    imageWidth = createdDecoder.height
+                    imageHeight = createdDecoder.width
+                } else {
+                    imageWidth = createdDecoder.width
+                    imageHeight = createdDecoder.height
+                }
                 val totalPixels = imageWidth.toLong() * imageHeight.toLong()
-                // Activate for photos larger than 2048px in either dimension or > 6 megapixels
-                isEligible = (imageWidth > 2048 || imageHeight > 2048 || totalPixels > 6_000_000L)
+                // Activate for photos larger than 2048px in either dimension or > 6 megapixels with 0 rotation
+                isEligible = (imageWidth > 2048 || imageHeight > 2048 || totalPixels > 6_000_000L) && rotationDegrees == 0
                 return@withContext isEligible
             }
         } catch (e: Exception) {
@@ -138,6 +167,7 @@ class DeepZoomController(
     }
 
     fun release() {
+        activeJobKeys.clear()
         synchronized(decoderLock) {
             decoder?.recycle()
             decoder = null
@@ -271,12 +301,18 @@ fun TileBasedDeepZoomOverlay(
                         )
                     }
                 } else {
-                    // Queue tile for background decoding
-                    coroutineScope.launch(Dispatchers.IO) {
-                        val rect = Rect(tileLeft, tileTop, tileRight, tileBottom)
-                        controller.decodeTile(tileKey, rect, sampleSize) { bitmap ->
-                            loadedTiles[tileKey] = bitmap
-                            redrawTrigger++
+                    // Queue tile for background decoding (deduplicated)
+                    if (controller.activeJobKeys.add(tileKey)) {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            try {
+                                val rect = Rect(tileLeft, tileTop, tileRight, tileBottom)
+                                controller.decodeTile(tileKey, rect, sampleSize) { bitmap ->
+                                    loadedTiles[tileKey] = bitmap
+                                    redrawTrigger++
+                                }
+                            } finally {
+                                controller.activeJobKeys.remove(tileKey)
+                            }
                         }
                     }
                 }

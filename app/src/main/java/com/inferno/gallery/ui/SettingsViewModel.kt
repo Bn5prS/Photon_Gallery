@@ -313,6 +313,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val memoriesDismissed: StateFlow<Boolean> = repository.memoriesDismissedFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun restoreMemoriesBanner() {
+        viewModelScope.launch {
+            repository.updateMemoriesDismissed(false)
+        }
+    }
+
 
 
     val dockStyle: StateFlow<DockStyle> = repository.dockStyleFlow.map { modeString ->

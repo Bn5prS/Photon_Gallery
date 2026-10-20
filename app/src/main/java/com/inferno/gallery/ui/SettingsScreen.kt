@@ -134,6 +134,7 @@ fun SettingsScreen(
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val showHiddenAlbums by viewModel.showHiddenAlbums.collectAsState()
     val showMemories by viewModel.showMemories.collectAsState()
+    val memoriesDismissed by viewModel.memoriesDismissed.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
@@ -766,8 +767,8 @@ fun SettingsScreen(
 
                             SettingsGroupCard(
                                 title = "Dock & Navigation",
-                                items = listOf(
-                                    {
+                                items = buildList<@Composable () -> Unit> {
+                                    add {
                                         val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
                                         SwitchSettingItem(
                                             title = "Full-Width Dock",
@@ -778,8 +779,8 @@ fun SettingsScreen(
                                                 viewModel.setDockStyle(if (isChecked) com.inferno.gallery.data.DockStyle.FULL_WIDTH else com.inferno.gallery.data.DockStyle.PILL)
                                             }
                                         )
-                                    },
-                                    {
+                                    }
+                                    add {
                                         SwitchSettingItem(
                                             title = "Show Hidden Albums",
                                             subtitle = "Show albums that start with a dot (e.g., .nomedia folders)",
@@ -787,8 +788,8 @@ fun SettingsScreen(
                                             checked = showHiddenAlbums,
                                             onCheckedChange = { viewModel.setShowHiddenAlbums(it) }
                                         )
-                                    },
-                                    {
+                                    }
+                                    add {
                                         SwitchSettingItem(
                                             title = "Memories Spotlight",
                                             subtitle = "Spotlight nostalgic throwbacks and recent highlights",
@@ -797,7 +798,17 @@ fun SettingsScreen(
                                             onCheckedChange = { viewModel.setShowMemories(it) }
                                         )
                                     }
-                                )
+                                    if (showMemories && memoriesDismissed) {
+                                        add {
+                                            ClickableSettingItem(
+                                                title = "Restore Spotlight Banner",
+                                                subtitle = "Re-display the dismissed memories banner on the main feed",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                                onClick = { viewModel.restoreMemoriesBanner() }
+                                            )
+                                        }
+                                    }
+                                }
                             )
                         }
 

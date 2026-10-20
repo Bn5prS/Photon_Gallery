@@ -201,8 +201,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _onThisDayMemories = MutableStateFlow<List<com.inferno.gallery.data.MemoryDayGroup>>(emptyList())
     val onThisDayMemories: StateFlow<List<com.inferno.gallery.data.MemoryDayGroup>> = _onThisDayMemories.asStateFlow()
 
-    private val _isMemoriesDismissed = MutableStateFlow(false)
-    val isMemoriesDismissed: StateFlow<Boolean> = _isMemoriesDismissed.asStateFlow()
+    val isMemoriesDismissed: StateFlow<Boolean> = settingsRepository.memoriesDismissedFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = false
+    )
 
     val showMemoriesSetting: StateFlow<Boolean> = settingsRepository.showMemoriesFlow.stateIn(
         scope = viewModelScope,
@@ -211,11 +214,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     )
 
     fun dismissMemories() {
-        _isMemoriesDismissed.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updateMemoriesDismissed(true)
+        }
     }
 
     fun uncollapseMemories() {
-        _isMemoriesDismissed.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updateMemoriesDismissed(false)
+        }
     }
 
     fun refreshMemories() {
@@ -1787,6 +1794,24 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             database.mediaDao().updateBucketByUri(uriString, "Trash")
             // Also remove from the detail pager list immediately
             _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+            if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                _initialDetailItem.value = null
+            }
+            _uiEvents.send(UiEvent.DeleteSuccess)
+        }
+    }
+
+    fun restoreMediaOptimistically(uriString: String) {
+        viewModelScope.launch {
+            // Remove from the detail pager list immediately
+            _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+            if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                _initialDetailItem.value = null
+            }
+            val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>()
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            androidx.work.WorkManager.getInstance(getApplication()).enqueue(syncRequest)
             _uiEvents.send(UiEvent.DeleteSuccess)
         }
     }

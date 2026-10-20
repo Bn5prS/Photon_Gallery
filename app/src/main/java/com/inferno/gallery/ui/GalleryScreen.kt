@@ -272,7 +272,8 @@ fun GalleryScreen(
         isMainTab &&
         !isSelectionMode &&
         showMemoriesSetting &&
-        onThisDayMemories.isNotEmpty()
+        onThisDayMemories.isNotEmpty() &&
+        !isMemoriesDismissed
 
     // NOTE: pagedMedia.itemCount is deliberately NOT read in this composition scope. Reading
     // it here subscribed the entire GalleryScreen restart scope to the paging snapshot, so
@@ -453,9 +454,6 @@ fun GalleryScreen(
                         },
                         onDismiss = {
                             viewModel.dismissMemories()
-                        },
-                        onRestore = {
-                            viewModel.uncollapseMemories()
                         }
                     )
                 }

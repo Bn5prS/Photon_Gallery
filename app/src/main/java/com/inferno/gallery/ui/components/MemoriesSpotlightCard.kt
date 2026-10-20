@@ -1,12 +1,15 @@
 package com.inferno.gallery.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -36,7 +39,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,25 +89,46 @@ fun MemoriesSpotlightCard(
     isDismissed: Boolean,
     onOpenMemory: (MemoryDayGroup) -> Unit,
     onDismiss: () -> Unit,
-    onRestore: () -> Unit,
+    onRestore: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (memoryGroups.isEmpty()) return
 
     val haptic = LocalHapticFeedback.current
+    var isClosing by remember { mutableStateOf(false) }
+    val visibleState = remember { MutableTransitionState(!isDismissed) }
+
+    LaunchedEffect(isDismissed) {
+        if (!isDismissed) {
+            isClosing = false
+            visibleState.targetState = true
+        }
+    }
+
+    LaunchedEffect(isClosing, visibleState.isIdle, visibleState.currentState) {
+        if (isClosing && visibleState.isIdle && !visibleState.currentState) {
+            onDismiss()
+        }
+    }
 
     AnimatedVisibility(
-        visible = !isDismissed,
-        enter = fadeIn(MotionTokens.snappySpring()) + slideInVertically(MotionTokens.gentleSpring()) { -it / 2 },
-        exit = fadeOut(MotionTokens.snappySpring()) + slideOutVertically(MotionTokens.gentleSpring()) { -it / 2 },
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S)
+        visibleState = visibleState,
+        enter = fadeIn(MotionTokens.snappySpring()) + expandVertically(
+            animationSpec = MotionTokens.gentleSpring(),
+            expandFrom = Alignment.Top
+        ),
+        exit = fadeOut(animationSpec = MotionTokens.fastEffectsSpec()) + shrinkVertically(
+            animationSpec = MotionTokens.gentleSpring(),
+            shrinkTowards = Alignment.Top
+        ),
+        modifier = modifier.fillMaxWidth()
     ) {
         val pagerState = rememberPagerState(pageCount = { memoryGroups.size })
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
             verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
         ) {
             HorizontalPager(
@@ -131,7 +160,7 @@ fun MemoriesSpotlightCard(
                         .fillMaxSize()
                         .pressScale(pressedScale = 0.98f)
                         .clip(ShapeLargeIncreased)
-                        .clickable {
+                        .clickable(enabled = !isClosing) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onOpenMemory(group)
                         }
@@ -224,8 +253,10 @@ fun MemoriesSpotlightCard(
                                 IconButton(
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onDismiss()
+                                        isClosing = true
+                                        visibleState.targetState = false
                                     },
+                                    enabled = !isClosing,
                                     modifier = Modifier.size(48.dp)
                                 ) {
                                     Surface(
@@ -290,7 +321,7 @@ fun MemoriesSpotlightCard(
                                 shadowElevation = 2.dp,
                                 modifier = Modifier
                                     .pressScale(pressedScale = 0.94f)
-                                    .clickable {
+                                    .clickable(enabled = !isClosing) {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onOpenMemory(group)
                                     }
@@ -316,65 +347,6 @@ fun MemoriesSpotlightCard(
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Ambient Collapsed Pill (displayed when the user dismissed the card for clean browsing)
-    AnimatedVisibility(
-        visible = isDismissed,
-        enter = fadeIn(MotionTokens.snappySpring()) + scaleIn(MotionTokens.snappySpring()),
-        exit = fadeOut(MotionTokens.snappySpring()) + scaleOut(MotionTokens.snappySpring()),
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
-    ) {
-        val firstGroup = memoryGroups.first()
-        Surface(
-            shape = ShapeFull,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 1.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .pressScale(pressedScale = 0.98f)
-                .clickable {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onRestore()
-                }
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_history),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "${firstGroup.title} • ${firstGroup.items.size} moments",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Text(
-                    text = "Show",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
         }
     }

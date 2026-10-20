@@ -2,7 +2,10 @@
 
 package com.inferno.gallery.ui.theme
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -47,6 +50,30 @@ fun googleSansFlex(
 
 // Global references to bundled Google Fonts
 val GoogleSansFlexFont = googleSansFlex()
+
+/**
+ * Main Screen Title Style for the primary screens (Photos, Albums, Search).
+ * Scaled up by 20% from baseline headlineMedium (26sp -> 31.2sp, lineHeight 34sp -> 40.8sp).
+ */
+val MainScreenTitleStyle = TextStyle(
+    fontFamily = googleSansFlex(weight = 700, width = 100f, opticalSize = 32f, roundness = 100f),
+    fontWeight = FontWeight.Bold,
+    fontSize = 31.2.sp,
+    lineHeight = 40.8.sp,
+    letterSpacing = (-0.2).sp
+)
+
+@Composable
+fun mainScreenTitleStyle(): TextStyle {
+    val base = MaterialTheme.typography.headlineMedium
+    return remember(base) {
+        base.copy(
+            fontSize = (base.fontSize.value * 1.2f).sp,
+            lineHeight = (base.lineHeight.value * 1.2f).sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
 
 /**
  * Headline style configured with font weight 700 and 28sp font size.
