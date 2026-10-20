@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,6 +32,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -70,6 +72,8 @@ fun AllAlbumsScreen(
     onDeleteCover: (String) -> Unit
 ) {
     val albums by galleryViewModel.allAlbums.collectAsState()
+    val pinnedAlbums by galleryViewModel.pinnedAlbums.collectAsState()
+    val userPinnedAlbums by galleryViewModel.userPinnedAlbums.collectAsState()
     val userPinnedNames by galleryViewModel.userPinnedFolderNames.collectAsState()
     val albumSortOrder by galleryViewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by galleryViewModel.albumLayoutMode.collectAsState()
@@ -79,20 +83,51 @@ fun AllAlbumsScreen(
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
     val haptic = LocalHapticFeedback.current
 
-    var showSortMenu by remember { mutableStateOf(false) }
+    // Merge system pinned + user pinned, followed by unpinned device albums
+    val systemPinned = remember(pinnedAlbums) {
+        pinnedAlbums.filter {
+            it.bucketName != "Trash" && it.bucketName != "Favorites" && it.bucketName != "All" && it.itemCount > 0
+        }
+    }
 
-    // Display albums (excluding Favorites, Trash, and All, and excluding empty albums)
-    val allDisplayAlbums = albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.itemCount > 0 }
+    val unpinnedAlbums = remember(albums, userPinnedNames) {
+        albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && it.itemCount > 0 }
+    }
+
+    // Unified albums: system pinned ("Camera") + user pinned folders first, then all other albums
+    val allDisplayAlbums = remember(systemPinned, userPinnedAlbums, unpinnedAlbums) {
+        (systemPinned + userPinnedAlbums + unpinnedAlbums)
+            .filter { it.itemCount > 0 }
+            .distinctBy { it.bucketName }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "All Albums",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                    ) {
+                        Text(
+                            text = "All Albums",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        if (allDisplayAlbums.isNotEmpty()) {
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest
+                            ) {
+                                Text(
+                                    text = allDisplayAlbums.size.toString(),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 },
                 navigationIcon = {
                     ExpressiveFilledIconButton(
@@ -109,179 +144,6 @@ fun AllAlbumsScreen(
                         )
                     }
                 },
-                actions = {
-                    Surface(
-                        shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    galleryViewModel.setAlbumLayoutMode(AlbumLayoutMode.GRID_2_COL)
-                                },
-                                shape = ShapeFull,
-                                color = if (albumLayoutMode == AlbumLayoutMode.GRID_2_COL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = if (albumLayoutMode == AlbumLayoutMode.GRID_2_COL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
-                                        contentDescription = "2 Columns",
-                                        modifier = Modifier.size(IconSizeTokens.S)
-                                    )
-                                }
-                            }
-                            Surface(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    galleryViewModel.setAlbumLayoutMode(AlbumLayoutMode.GRID_3_COL)
-                                },
-                                shape = ShapeFull,
-                                color = if (albumLayoutMode == AlbumLayoutMode.GRID_3_COL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = if (albumLayoutMode == AlbumLayoutMode.GRID_3_COL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                                        contentDescription = "3 Columns Compact",
-                                        modifier = Modifier.size(IconSizeTokens.S)
-                                    )
-                                }
-                            }
-                            Surface(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    galleryViewModel.setAlbumLayoutMode(AlbumLayoutMode.LIST)
-                                },
-                                shape = ShapeFull,
-                                color = if (albumLayoutMode == AlbumLayoutMode.LIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = if (albumLayoutMode == AlbumLayoutMode.LIST) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_list),
-                                        contentDescription = "List View",
-                                        modifier = Modifier.size(IconSizeTokens.S)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(SpacingTokens.XS))
-
-                    Box {
-                        ExpressiveFilledIconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showSortMenu = true
-                            },
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
-                                contentDescription = "Sort",
-                                modifier = Modifier.size(IconSizeTokens.L)
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false },
-                            shape = ShapeExtraLarge,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Name (A to Z)", style = MaterialTheme.typography.bodyMedium) },
-                                trailingIcon = {
-                                    RadioButton(
-                                        selected = albumSortOrder == SortOrder.NameAsc,
-                                        onClick = null
-                                    )
-                                },
-                                onClick = {
-                                    galleryViewModel.setAlbumSortOrder(SortOrder.NameAsc)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Name (Z to A)", style = MaterialTheme.typography.bodyMedium) },
-                                trailingIcon = {
-                                    RadioButton(
-                                        selected = albumSortOrder == SortOrder.NameDesc,
-                                        onClick = null
-                                    )
-                                },
-                                onClick = {
-                                    galleryViewModel.setAlbumSortOrder(SortOrder.NameDesc)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Date Modified (Newest)", style = MaterialTheme.typography.bodyMedium) },
-                                trailingIcon = {
-                                    RadioButton(
-                                        selected = albumSortOrder == SortOrder.NewToOld,
-                                        onClick = null
-                                    )
-                                },
-                                onClick = {
-                                    galleryViewModel.setAlbumSortOrder(SortOrder.NewToOld)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Date Modified (Oldest)", style = MaterialTheme.typography.bodyMedium) },
-                                trailingIcon = {
-                                    RadioButton(
-                                        selected = albumSortOrder == SortOrder.OldToNew,
-                                        onClick = null
-                                    )
-                                },
-                                onClick = {
-                                    galleryViewModel.setAlbumSortOrder(SortOrder.OldToNew)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Item Count (Most items)", style = MaterialTheme.typography.bodyMedium) },
-                                trailingIcon = {
-                                    RadioButton(
-                                        selected = albumSortOrder == SortOrder.CountDesc,
-                                        onClick = null
-                                    )
-                                },
-                                onClick = {
-                                    galleryViewModel.setAlbumSortOrder(SortOrder.CountDesc)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Item Count (Least items)", style = MaterialTheme.typography.bodyMedium) },
-                                trailingIcon = {
-                                    RadioButton(
-                                        selected = albumSortOrder == SortOrder.CountAsc,
-                                        onClick = null
-                                    )
-                                },
-                                onClick = {
-                                    galleryViewModel.setAlbumSortOrder(SortOrder.CountAsc)
-                                    showSortMenu = false
-                                }
-                            )
-                        }
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
@@ -289,33 +151,44 @@ fun AllAlbumsScreen(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(12),
-                contentPadding = PaddingValues(
-                    start = SpacingTokens.L,
-                    end = SpacingTokens.L,
-                    top = paddingValues.calculateTopPadding() + SpacingTokens.M,
-                    bottom = paddingValues.calculateBottomPadding() + SpacingTokens.XXL
-                ),
-                verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
-                    Arrangement.spacedBy(SpacingTokens.S)
-                } else {
-                    Arrangement.spacedBy(SpacingTokens.L)
-                },
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
-                modifier = Modifier.fillMaxSize()
-            ) {
-            items(
-                items = allDisplayAlbums,
-                key = { "all_folder_${albumLayoutMode.name}_${it.bucketName}" },
-                span = {
-                    when (albumLayoutMode) {
-                        AlbumLayoutMode.GRID_2_COL -> GridItemSpan(6)
-                        AlbumLayoutMode.GRID_3_COL -> GridItemSpan(4)
-                        AlbumLayoutMode.LIST -> GridItemSpan(12)
+            key(albumLayoutMode) {
+                val gridState = rememberLazyGridState()
+                LazyVerticalGrid(
+                    columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
+                    state = gridState,
+                    contentPadding = PaddingValues(
+                        start = SpacingTokens.L,
+                        end = SpacingTokens.L,
+                        top = paddingValues.calculateTopPadding() + SpacingTokens.M,
+                        bottom = paddingValues.calculateBottomPadding() + SpacingTokens.XXL
+                    ),
+                    verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                        Arrangement.spacedBy(SpacingTokens.S)
+                    } else {
+                        Arrangement.spacedBy(SpacingTokens.L)
+                    },
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item(key = "all_albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
+                        AlbumsControlBar(
+                            currentLayout = albumLayoutMode,
+                            onLayoutChange = { newLayout ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                galleryViewModel.setAlbumLayoutMode(newLayout)
+                            },
+                            currentSort = albumSortOrder,
+                            onSortChange = { newSort ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                galleryViewModel.setAlbumSortOrder(newSort)
+                            }
+                        )
                     }
-                }
-            ) { bucket ->
+
+                    items(
+                        items = allDisplayAlbums,
+                        key = { "all_folder_${it.bucketName}" }
+                    ) { bucket ->
                 val isPinned = bucket.bucketName in userPinnedNames || bucket.bucketName == "Camera"
                 val displayBucketName = when (bucket.bucketName) {
                     "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
@@ -345,7 +218,7 @@ fun AllAlbumsScreen(
                             bucket = bucket.copy(bucketName = displayBucketName),
                             showAlbumSize = showAlbumSize,
                             customShape = albumShape,
-                            isCompact = (albumLayoutMode == AlbumLayoutMode.GRID_3_COL),
+                            isCompact = true,
                             onClick = { onAlbumClick(bucket.bucketName) },
                             onLongPress = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -462,6 +335,7 @@ fun AllAlbumsScreen(
                     }
                 }
             }
+        }
         }
         }
     }

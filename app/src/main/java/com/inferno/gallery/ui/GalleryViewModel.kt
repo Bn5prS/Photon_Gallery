@@ -557,7 +557,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AlbumLayoutMode.GRID_2_COL
+            initialValue = AlbumLayoutMode.GRID
         )
 
     fun setAlbumLayoutMode(mode: AlbumLayoutMode) {

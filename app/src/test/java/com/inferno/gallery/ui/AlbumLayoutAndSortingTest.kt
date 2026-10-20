@@ -22,26 +22,24 @@ class AlbumLayoutAndSortingTest {
     @Test
     fun testAlbumLayoutModeEnumValues() {
         val modes = AlbumLayoutMode.values()
-        assertEquals(3, modes.size)
-        assertTrue(modes.contains(AlbumLayoutMode.GRID_2_COL))
-        assertTrue(modes.contains(AlbumLayoutMode.GRID_3_COL))
+        assertEquals(2, modes.size)
+        assertTrue(modes.contains(AlbumLayoutMode.GRID))
         assertTrue(modes.contains(AlbumLayoutMode.LIST))
     }
 
     @Test
     fun testAlbumLayoutModeResolution() {
         fun resolveLayout(name: String?): AlbumLayoutMode = when (name) {
-            AlbumLayoutMode.GRID_2_COL.name -> AlbumLayoutMode.GRID_2_COL
-            AlbumLayoutMode.GRID_3_COL.name -> AlbumLayoutMode.GRID_3_COL
             AlbumLayoutMode.LIST.name -> AlbumLayoutMode.LIST
-            else -> AlbumLayoutMode.GRID_2_COL
+            else -> AlbumLayoutMode.GRID
         }
 
-        assertEquals(AlbumLayoutMode.GRID_2_COL, resolveLayout("GRID_2_COL"))
-        assertEquals(AlbumLayoutMode.GRID_3_COL, resolveLayout("GRID_3_COL"))
+        assertEquals(AlbumLayoutMode.GRID, resolveLayout("GRID"))
+        assertEquals(AlbumLayoutMode.GRID, resolveLayout("GRID_2_COL"))
+        assertEquals(AlbumLayoutMode.GRID, resolveLayout("GRID_3_COL"))
         assertEquals(AlbumLayoutMode.LIST, resolveLayout("LIST"))
-        assertEquals(AlbumLayoutMode.GRID_2_COL, resolveLayout(null))
-        assertEquals(AlbumLayoutMode.GRID_2_COL, resolveLayout("UNKNOWN"))
+        assertEquals(AlbumLayoutMode.GRID, resolveLayout(null))
+        assertEquals(AlbumLayoutMode.GRID, resolveLayout("UNKNOWN"))
     }
 
     @Test

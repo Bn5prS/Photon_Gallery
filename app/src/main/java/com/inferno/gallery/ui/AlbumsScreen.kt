@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import com.inferno.gallery.data.AlbumLayoutMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -166,43 +167,40 @@ fun AlbumsScreen(
             .distinctBy { it.bucketName }
     }
 
-    val visibleAlbums = remember(allUnifiedAlbums, albumLayoutMode) {
-        when (albumLayoutMode) {
-            AlbumLayoutMode.LIST -> allUnifiedAlbums // Full list view shows all albums without truncation
-            AlbumLayoutMode.GRID_3_COL -> allUnifiedAlbums.take(9)
-            AlbumLayoutMode.GRID_2_COL -> allUnifiedAlbums.take(6)
-        }
+    val visibleAlbums = remember(allUnifiedAlbums) {
+        allUnifiedAlbums.take(9)
     }
-    val hasMoreAlbums = allUnifiedAlbums.size > visibleAlbums.size
+    val hasMoreAlbums = allUnifiedAlbums.size > 9
 
     // Persistent expand states for sections
     val albumsExpanded by viewModel.albumsExpandedPinned.collectAsState()
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
-    val lazyGridState = rememberLazyGridState()
-
     LaunchedEffect(Unit) {
         viewModel.setTopBarCollapsed(false)
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(12),
-        state = lazyGridState,
-        contentPadding = PaddingValues(
-            start = SpacingTokens.L,
-            end = SpacingTokens.L,
-            top = contentPadding.calculateTopPadding() + SpacingTokens.M,
-            bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
-        ),
-        verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
-            Arrangement.spacedBy(SpacingTokens.S)
-        } else {
-            Arrangement.spacedBy(SpacingTokens.L)
-        },
-        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
-        modifier = modifier.fillMaxSize()
-    ) {
+    key(albumLayoutMode) {
+        val lazyGridState = rememberLazyGridState()
+
+        LazyVerticalGrid(
+            columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
+            state = lazyGridState,
+            contentPadding = PaddingValues(
+                start = SpacingTokens.L,
+                end = SpacingTokens.L,
+                top = contentPadding.calculateTopPadding() + SpacingTokens.M,
+                bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
+            ),
+            verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                Arrangement.spacedBy(SpacingTokens.S)
+            } else {
+                Arrangement.spacedBy(SpacingTokens.L)
+            },
+            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+            modifier = modifier.fillMaxSize()
+        ) {
 
         // ── 1. Albums (Switchable 2-col cards, 3-col compact cards, or list view) ──
         if (visibleAlbums.isNotEmpty()) {
@@ -213,7 +211,7 @@ fun AlbumsScreen(
                     isExpanded = albumsExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedPinned() },
                     seeAllText = "Show all",
-                    onSeeAll = if (albumLayoutMode == AlbumLayoutMode.LIST) null else if (hasMoreAlbums) onNavigateToAllAlbums else null
+                    onSeeAll = if (hasMoreAlbums) onNavigateToAllAlbums else null
                 )
             }
 
@@ -236,14 +234,7 @@ fun AlbumsScreen(
 
                 items(
                     items = visibleAlbums,
-                    key = { "album_${albumLayoutMode.name}_${it.bucketName}" },
-                    span = {
-                        when (albumLayoutMode) {
-                            AlbumLayoutMode.GRID_2_COL -> GridItemSpan(6)
-                            AlbumLayoutMode.GRID_3_COL -> GridItemSpan(4)
-                            AlbumLayoutMode.LIST -> GridItemSpan(12)
-                        }
-                    }
+                    key = { "album_${it.bucketName}" }
                 ) { bucket ->
                     val displayBucketName = when (bucket.bucketName) {
                         "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
@@ -276,7 +267,7 @@ fun AlbumsScreen(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
-                                isCompact = (albumLayoutMode == AlbumLayoutMode.GRID_3_COL),
+                                isCompact = true,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -692,7 +683,7 @@ fun AlbumsScreen(
                                 Spacer(modifier = Modifier.height(SpacingTokens.XS))
                                 Text(
                                     text = item.title,
-                                    style = MaterialTheme.typography.titleSmall.copy(
+                                    style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.SemiBold
                                     ),
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -749,6 +740,7 @@ fun AlbumsScreen(
             )
         }
     }
+}
 
     val pickerBucket = shapePickerBucket
     if (pickerBucket != null) {
@@ -913,7 +905,7 @@ fun AlbumCard(
 
             Text(
                 text = countText,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -928,7 +920,7 @@ fun AlbumCard(
                 )
                 Text(
                     text = Formatter.formatShortFileSize(context, bucket.totalSizeBytes),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                     maxLines = 1
                 )
@@ -1070,7 +1062,7 @@ fun AlbumListRow(
                     }
                     Text(
                         text = countText,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
@@ -1082,7 +1074,7 @@ fun AlbumListRow(
                         )
                         Text(
                             text = Formatter.formatShortFileSize(context, bucket.totalSizeBytes),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                         )
                     }
@@ -1356,20 +1348,12 @@ fun AlbumsControlBar(
                 modifier = Modifier.padding(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 2-Col Button
+                // Grid Button (3 Columns)
                 LayoutPillOption(
-                    isSelected = currentLayout == AlbumLayoutMode.GRID_2_COL,
+                    isSelected = currentLayout == AlbumLayoutMode.GRID,
                     iconRes = R.drawable.ic_ms_grid_view,
-                    description = "2 Columns",
-                    onClick = { onLayoutChange(AlbumLayoutMode.GRID_2_COL) }
-                )
-
-                // 3-Col Button
-                LayoutPillOption(
-                    isSelected = currentLayout == AlbumLayoutMode.GRID_3_COL,
-                    iconRes = R.drawable.ic_ms_dashboard,
-                    description = "3 Columns Compact",
-                    onClick = { onLayoutChange(AlbumLayoutMode.GRID_3_COL) }
+                    description = "Grid View",
+                    onClick = { onLayoutChange(AlbumLayoutMode.GRID) }
                 )
 
                 // List Button

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
 
 enum class DockStyle { PILL, FULL_WIDTH }
 enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC }
-enum class AlbumLayoutMode { GRID_2_COL, GRID_3_COL, LIST }
+enum class AlbumLayoutMode { GRID, LIST }
 
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
@@ -173,10 +173,8 @@ class SettingsRepository private constructor(private val context: Context) {
     val albumLayoutModeFlow: Flow<AlbumLayoutMode> = context.dataStore.data
         .map { preferences ->
             when (preferences[ALBUM_LAYOUT_MODE]) {
-                AlbumLayoutMode.GRID_2_COL.name -> AlbumLayoutMode.GRID_2_COL
-                AlbumLayoutMode.GRID_3_COL.name -> AlbumLayoutMode.GRID_3_COL
                 AlbumLayoutMode.LIST.name -> AlbumLayoutMode.LIST
-                else -> AlbumLayoutMode.GRID_2_COL
+                else -> AlbumLayoutMode.GRID
             }
         }
 
