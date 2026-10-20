@@ -395,12 +395,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // Silently scan for duplicates in the background on startup
         scanForDuplicates()
 
-        // Collect & observe memories whenever excluded folders or favorites change
+        // Collect & observe memories whenever excluded folders, favorites, or media count changes
         viewModelScope.launch(Dispatchers.IO) {
             combine(
                 settingsRepository.excludedFoldersFlow,
-                favoritesManager.favoritesFlow
-            ) { excluded, favs ->
+                favoritesManager.favoritesFlow,
+                database.mediaDao().observeTotalImageCount()
+            ) { excluded, favs, _ ->
                 excluded to favs
             }.collectLatest { (excluded, favs) ->
                 try {

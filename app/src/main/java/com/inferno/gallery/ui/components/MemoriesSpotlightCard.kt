@@ -186,8 +186,13 @@ fun MemoriesSpotlightCard(
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(15.dp)
                                     )
+                                    val badgeText = when {
+                                        group.yearsAgo == 0 -> "HIGHLIGHTS"
+                                        group.isExactDay -> "ON THIS DAY"
+                                        else -> "FLASHBACK"
+                                    }
                                     Text(
-                                        text = if (group.isExactDay) "ON THIS DAY" else "FLASHBACK",
+                                        text = badgeText,
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
                                             letterSpacing = 0.8.sp

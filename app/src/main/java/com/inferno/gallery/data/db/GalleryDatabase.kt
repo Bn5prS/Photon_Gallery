@@ -157,6 +157,30 @@ interface MediaDao {
     """)
     suspend fun getOnThisDayMedia(month: String, day: String, excludeYear: String): List<CoreMediaEntity>
 
+    @Query("""
+        SELECT * FROM core_media cm
+        WHERE cm.bucketName != 'Trash'
+          AND cm.bucketName NOT IN ('Trash', 'Screenshots', 'Screenshot')
+          AND cm.filePath NOT LIKE '%/Screenshots/%'
+          AND cm.filePath NOT LIKE '%/Screenshot/%'
+          AND cm.size >= 30000
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ORDER BY cm.dateAdded DESC
+        LIMIT :limit
+    """)
+    suspend fun getRecentHighlightMedia(limit: Int = 120): List<CoreMediaEntity>
+
+    @Query("""
+        SELECT * FROM core_media cm
+        WHERE cm.bucketName != 'Trash'
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ORDER BY cm.dateAdded DESC
+        LIMIT :limit
+    """)
+    suspend fun getAnyRecentMedia(limit: Int = 60): List<CoreMediaEntity>
+
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,

@@ -790,8 +790,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "On This Day Memories",
-                                            subtitle = "Spotlight nostalgic memories from this day in past years",
+                                            title = "Memories Spotlight",
+                                            subtitle = "Spotlight nostalgic throwbacks and recent highlights",
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
                                             checked = showMemories,
                                             onCheckedChange = { viewModel.setShowMemories(it) }

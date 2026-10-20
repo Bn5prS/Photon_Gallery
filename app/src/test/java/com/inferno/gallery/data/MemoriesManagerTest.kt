@@ -102,6 +102,8 @@ class MemoriesManagerTest {
         override fun observeExactDuplicates(): Flow<List<CoreMediaEntity>> = emptyFlow()
         override suspend fun getGeotaggedMedia(): List<CoreMediaEntity> = emptyList()
         override suspend fun getMediaNeedingGps(): List<CoreMediaEntity> = emptyList()
+        override suspend fun getRecentHighlightMedia(limit: Int): List<CoreMediaEntity> = mediaList.filter { it.bucketName != "Screenshots" }.take(limit)
+        override suspend fun getAnyRecentMedia(limit: Int): List<CoreMediaEntity> = mediaList.take(limit)
         override suspend fun getGeotaggedCount(): Int = 0
     }
 
@@ -134,6 +136,31 @@ class MemoriesManagerTest {
         assertEquals("5 Years Ago Today", memories[2].title)
         assertEquals(1, memories[2].items.size)
         assertEquals(5, memories[2].yearsAgo)
+    }
+
+    @Test
+    fun testSmartFallbackWhenNoPastYearMemories() = runBlocking {
+        // Photos only from the current year (yearsAgo = 0)
+        val fakeEntities = listOf(
+            createEntity(id = 100L, yearsAgo = 0, bucketName = "Camera"),
+            createEntity(id = 101L, yearsAgo = 0, bucketName = "Camera"),
+            createEntity(id = 102L, yearsAgo = 0, bucketName = "WhatsApp Images")
+        )
+        val dao = FakeMediaDao(fakeEntities)
+
+        val memories = MemoriesManager.loadOnThisDayMemories(
+            mediaDao = dao,
+            excludedFolders = emptySet(),
+            favoriteIds = emptySet(),
+            uriResolver = { uriStr, _ -> FakeUri(uriStr) }
+        )
+
+        // Must produce at least 1 smart fallback highlight card
+        assertTrue(memories.isNotEmpty())
+        assertEquals("Recent Highlights", memories[0].title)
+        assertEquals(0, memories[0].yearsAgo)
+        assertFalse(memories[0].isExactDay)
+        assertEquals(3, memories[0].items.size)
     }
 
     @Test
