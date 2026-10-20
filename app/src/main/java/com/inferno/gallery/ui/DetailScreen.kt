@@ -360,6 +360,17 @@ fun DetailScreen(
     }
 
     var currentScale by remember { mutableStateOf(1f) }
+    var isZoomBadgeVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentScale) {
+        if (currentScale > 1.05f) {
+            isZoomBadgeVisible = true
+            kotlinx.coroutines.delay(700L)
+            isZoomBadgeVisible = false
+        } else {
+            isZoomBadgeVisible = false
+        }
+    }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var pendingDeleteItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingDeletePage by remember { mutableStateOf<Int?>(null) }
@@ -1023,7 +1034,7 @@ fun DetailScreen(
                                                 val centroid = event.calculateCentroid(useCurrent = false)
                                                 animJob.value?.cancel()
                                                 val oldScale = scale.floatValue
-                                                val newScale = (oldScale * zoomChange).coerceIn(1f, 20f)
+                                                val newScale = (oldScale * zoomChange).coerceIn(1f, 25f)
 
                                                 if (newScale > 1.02f) showUi = false
 
@@ -1560,7 +1571,7 @@ fun DetailScreen(
 
         // ── Floating Deep Zoom Pill ──
         AnimatedVisibility(
-            visible = currentScale > 1.25f,
+            visible = isZoomBadgeVisible && currentScale > 1.05f,
             enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
             exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.bouncySpring()),
             modifier = Modifier
