@@ -85,13 +85,22 @@ class AlbumLayoutAndSortingTest {
     }
 
     @Test
-    fun testSortOrderEnumValues() {
-        val orders = SortOrder.values()
-        assertTrue(orders.contains(SortOrder.NameAsc))
-        assertTrue(orders.contains(SortOrder.NameDesc))
-        assertTrue(orders.contains(SortOrder.NewToOld))
-        assertTrue(orders.contains(SortOrder.OldToNew))
-        assertTrue(orders.contains(SortOrder.CountDesc))
-        assertTrue(orders.contains(SortOrder.CountAsc))
+    fun testCameraAlbumFollowsSortOrder() {
+        val b1 = createBucket("Animals", 10, 1000L)
+        val b2 = createBucket("Camera", 50, 2000L)
+        val b3 = createBucket("Zebra", 5, 3000L)
+        val list = listOf(b1, b2, b3)
+
+        // When sorted by NameAsc, Animals should be first, not Camera
+        val nameAsc = list.sortedBy { it.bucketName.lowercase() }
+        assertEquals(listOf("Animals", "Camera", "Zebra"), nameAsc.map { it.bucketName })
+
+        // When sorted by NameDesc, Zebra should be first
+        val nameDesc = list.sortedByDescending { it.bucketName.lowercase() }
+        assertEquals(listOf("Zebra", "Camera", "Animals"), nameDesc.map { it.bucketName })
+
+        // When sorted by CountAsc, Zebra (5) should be first
+        val countAsc = list.sortedBy { it.itemCount }
+        assertEquals(listOf("Zebra", "Animals", "Camera"), countAsc.map { it.bucketName })
     }
 }

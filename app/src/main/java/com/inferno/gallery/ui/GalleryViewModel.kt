@@ -1436,48 +1436,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val pinnedAlbums: StateFlow<List<AlbumBucket>> = combine(
-        database.mediaDao().observeBuckets(),
-        excludedFolders
-    ) { buckets, excluded ->
-        val cameraItems = buckets.filter { it.bucketName.equals(BucketNames.CAMERA, ignoreCase = true) }
-        val cameraBucket = if (cameraItems.isNotEmpty()) {
-            val totalCount = cameraItems.sumOf { it.itemCount }
-            if (totalCount > 0) {
-                AlbumBucket(
-                    bucketName = cameraItems.first().bucketName,
-                    coverUri = cameraItems.maxByOrNull { it.maxDate }?.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-                    itemCount = totalCount,
-                    totalSizeBytes = cameraItems.sumOf { it.totalSizeBytes },
-                    maxDate = cameraItems.maxOfOrNull { it.maxDate } ?: 0L
-                )
-            } else null
-        } else null
-
-        listOfNotNull(
-            if (cameraBucket != null && !excluded.contains(cameraBucket.bucketName) && cameraBucket.itemCount > 0) cameraBucket else null
-        )
-    }.combine(settingsRepository.albumCustomCoversFlow) { buckets, customCovers ->
-        buckets.map { bucket ->
-            val customUriString = customCovers[bucket.bucketName]
-            val customUri = if (customUriString != null && isCoverValid(customUriString)) {
-                Uri.parse(customUriString)
-            } else {
-                if (customUriString != null) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        settingsRepository.removeAlbumCustomCover(bucket.bucketName)
-                    }
-                }
-                null
-            }
-            if (customUri != null) {
-                bucket.copy(coverUri = customUri, defaultCoverUri = bucket.coverUri)
-            } else {
-                bucket.copy(defaultCoverUri = bucket.coverUri)
-            }
-        }
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     val mediaTypeBuckets: StateFlow<List<AlbumBucket>> = combine(
         database.mediaDao().observeRawStats(),
         database.mediaDao().observePanoramaStats(),

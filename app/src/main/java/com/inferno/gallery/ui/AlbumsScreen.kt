@@ -127,7 +127,6 @@ fun AlbumsScreen(
     onDeleteCover: (String) -> Unit = {}
 ) {
     val albums by viewModel.allAlbums.collectAsState()
-    val pinnedAlbums by viewModel.pinnedAlbums.collectAsState()
     val userPinnedAlbums by viewModel.userPinnedAlbums.collectAsState()
     val userPinnedNames by viewModel.userPinnedFolderNames.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
@@ -149,20 +148,13 @@ fun AlbumsScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
-    // Merge system pinned + user pinned, followed by unpinned device albums
-    val systemPinned = remember(pinnedAlbums) {
-        pinnedAlbums.filter {
-            it.bucketName != "Trash" && it.bucketName != "Favorites" && it.bucketName != "All" && it.itemCount > 0
-        }
-    }
-
     val unpinnedAlbums = remember(albums, userPinnedNames) {
         albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && it.itemCount > 0 }
     }
 
-    // Unified albums: system pinned ("Camera") + user pinned folders first, then all other albums
-    val allUnifiedAlbums = remember(systemPinned, userPinnedAlbums, unpinnedAlbums) {
-        (systemPinned + userPinnedAlbums + unpinnedAlbums)
+    // Unified albums: user pinned folders first (if any), then all other albums sorted according to selected sort order
+    val allUnifiedAlbums = remember(userPinnedAlbums, unpinnedAlbums) {
+        (userPinnedAlbums + unpinnedAlbums)
             .filter { it.itemCount > 0 }
             .distinctBy { it.bucketName }
     }
@@ -253,7 +245,7 @@ fun AlbumsScreen(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
-                                isPinned = isUserPinned || bucket.bucketName == "Camera",
+                                isPinned = isUserPinned,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1121,7 +1113,7 @@ fun AlbumDropdownMenu(
         shape = ShapeExtraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
-        if (bucketName != "All" && bucketName != "Camera") {
+        if (bucketName != "All") {
             DropdownMenuItem(
                 text = { Text(if (isUserPinned) "Unpin Album" else "Pin Album", style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = {
