@@ -240,7 +240,9 @@ fun DetailScreen(
     }
 
     val initialPage = remember(mediaId, galleryItems) {
-        val index = galleryItems.indexOfFirst { it.id == mediaId || it.uri.toString() == mediaId }
+        val index = galleryItems.indexOfFirst { 
+            it.id == mediaId || it.uri.toString() == mediaId || it.path == mediaId 
+        }
         if (index >= 0) index else 0
     }
 
@@ -333,14 +335,18 @@ fun DetailScreen(
 
     var hasInitialScrolled by remember(mediaId) { mutableStateOf(false) }
 
-    androidx.compose.runtime.LaunchedEffect(galleryItems) {
+    androidx.compose.runtime.LaunchedEffect(galleryItems, mediaId) {
         if (!hasInitialScrolled && galleryItems.isNotEmpty()) {
-            val targetIndex = galleryItems.indexOfFirst { it.id == mediaId || it.uri.toString() == mediaId }
+            val targetIndex = galleryItems.indexOfFirst { 
+                it.id == mediaId || it.uri.toString() == mediaId || it.path == mediaId 
+            }
             if (targetIndex >= 0) {
-                if (pagerState.currentPage != targetIndex) {
-                    pagerState.scrollToPage(targetIndex)
+                if (rawGalleryItems.isNotEmpty() || galleryItems.size > 1) {
+                    if (pagerState.currentPage != targetIndex) {
+                        pagerState.scrollToPage(targetIndex)
+                    }
+                    hasInitialScrolled = true
                 }
-                hasInitialScrolled = true
             }
         }
     }

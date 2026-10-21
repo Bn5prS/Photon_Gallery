@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -82,7 +83,7 @@ fun AboutScreenContent(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ── 1. Hero Brand Presentation (Gradient Card, No Outlines) ─────────
+        // ── 1. Hero Brand Presentation (Pure Gradient Card, No Outlines) ─────────
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -95,51 +96,26 @@ fun AboutScreenContent(
                     .fillMaxWidth()
                     .background(
                         Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.55f else 0.75f),
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.65f else 0.85f),
                                 MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
+                            ),
+                            start = Offset(0f, 0f),
+                            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                         )
                     )
                     .padding(horizontal = 24.dp, vertical = 28.dp)
             ) {
-                // Subtle ambient glow accent
-                Box(
-                    modifier = Modifier
-                        .size(140.dp)
-                        .align(Alignment.TopCenter)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                )
-
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // App icon with rounded container and subtle elevation
-                    Surface(
-                        shape = ShapeMedium,
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.85f),
-                        shadowElevation = 0.dp,
-                        modifier = Modifier.size(80.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Image(
-                                painter = painterResource(id = R.drawable.launcher_icon_fg),
-                                contentDescription = "Photon Gallery Logo",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .clip(ShapeMedium)
-                            )
-                        }
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.launcher_icon_fg),
+                        contentDescription = "Photon Gallery Logo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(76.dp)
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -153,7 +129,7 @@ fun AboutScreenContent(
             }
         }
 
-        // ── 2. Developer Spotlight (Gradient Card, No Outlines) ──────────────
+        // ── 2. Developer Spotlight (Pure Gradient Card, No Outlines) ──────────────
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -166,10 +142,12 @@ fun AboutScreenContent(
                     .fillMaxWidth()
                     .background(
                         Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (isDark) 0.50f else 0.70f),
+                            colors = listOf(
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (isDark) 0.60f else 0.80f),
                                 MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
+                            ),
+                            start = Offset(0f, 0f),
+                            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                         )
                     )
                     .padding(20.dp)
@@ -181,7 +159,6 @@ fun AboutScreenContent(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Developer GitHub Avatar with soft container
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.85f),

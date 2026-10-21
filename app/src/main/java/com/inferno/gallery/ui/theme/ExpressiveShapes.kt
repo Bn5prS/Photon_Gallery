@@ -95,6 +95,11 @@ object OfficialM3Shapes {
     val SemiCircle: Shape = ExpressivePolygonShape(MaterialShapes.SemiCircle)
     val Diamond: Shape = ExpressivePolygonShape(MaterialShapes.Diamond)
     val Pentagon: Shape = ExpressivePolygonShape(MaterialShapes.Pentagon)
+    val Cookie7Sided: Shape = ExpressivePolygonShape(MaterialShapes.Cookie7Sided)
+    val Bun: Shape = ExpressivePolygonShape(MaterialShapes.Bun)
+    val Fan: Shape = ExpressivePolygonShape(MaterialShapes.Fan)
+    val Triangle: Shape = ExpressivePolygonShape(MaterialShapes.Triangle)
+    val Ghostish: Shape = ExpressivePolygonShape(MaterialShapes.Ghostish)
 }
 
 object ExpressiveShapes {

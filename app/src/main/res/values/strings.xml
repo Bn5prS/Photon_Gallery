@@ -79,9 +79,6 @@
     <string name="amoled_black">Deep AMOLED Black</string>
     <string name="amoled_black_desc">Use pitch black background in dark mode</string>
     <string name="color_scheme">Color Scheme &amp; Style</string>
-    <string name="app_icon">App Icon</string>
-    <string name="app_icon_desc">Customize the launcher icon appearance</string>
-    <string name="choose_app_icon">Choose App Icon</string>
     <string name="full_screen_mode">Full Screen Mode</string>
     <string name="full_screen_mode_desc">Hide status and navigation bars while browsing</string>
     <string name="motion_style">Motion Style</string>

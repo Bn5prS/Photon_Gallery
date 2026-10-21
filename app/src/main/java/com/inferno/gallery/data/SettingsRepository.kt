@@ -93,7 +93,6 @@ class SettingsRepository private constructor(private val context: Context) {
         val CONTRAST_PRESET = stringPreferencesKey("contrast_preset")               // "Reduced" | "Default" | "Medium" | "High"
         val ANIMATE_THEME_TRANSITIONS = booleanPreferencesKey("animate_theme_transitions")
         val MOTION_STYLE = stringPreferencesKey("motion_style")
-        val APP_ICON = stringPreferencesKey("app_icon")
         val DATE_HEADER_ALIGNMENT = stringPreferencesKey("date_header_alignment")
 
         // Auto Updates
@@ -814,12 +813,6 @@ class SettingsRepository private constructor(private val context: Context) {
         context.dataStore.edit { it[MOTION_STYLE] = style }
     }
 
-    val appIconFlow: Flow<String> = context.dataStore.data
-        .map { it[APP_ICON] ?: "default" }
-
-    suspend fun updateAppIcon(iconId: String) {
-        context.dataStore.edit { it[APP_ICON] = iconId }
-    }
 
     val dateHeaderAlignmentFlow: Flow<String> = context.dataStore.data
         .map { it[DATE_HEADER_ALIGNMENT] ?: "CENTER" }

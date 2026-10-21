@@ -30,11 +30,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -145,6 +147,18 @@ fun AllAlbumsScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             key(albumLayoutMode) {
                 val gridState = rememberLazyGridState()
+
+                // Ensure clean top alignment when albums populate
+                var initialTopResetDone by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(allDisplayAlbums.isNotEmpty()) {
+                    if (allDisplayAlbums.isNotEmpty() && !initialTopResetDone) {
+                        initialTopResetDone = true
+                        if (!gridState.isScrollInProgress && gridState.firstVisibleItemIndex > 0) {
+                            gridState.scrollToItem(0, 0)
+                        }
+                    }
+                }
+
                 LazyVerticalGrid(
                     columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
                     state = gridState,

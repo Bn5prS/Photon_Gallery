@@ -98,6 +98,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.inferno.gallery.data.DockStyle
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -381,6 +382,7 @@ fun MainAppLayout(
                 viewModel.completeOnboarding()
                 triggerSync()
             },
+            settingsViewModel = settingsViewModel,
             modifier = modifier
         )
         return
@@ -832,22 +834,30 @@ fun MainAppLayout(
                         FloatingNavigationPill(
                             currentRoute = currentRoute,
                             onNavigateToPhotos = {
-                                nestedNavController.navigate("photos") {
-                                    popUpTo("photos") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                                if (nestedNavController.currentDestination?.route == "photos") {
+                                    viewModel.triggerPhotosScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("photos") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             },
                             onNavigateToAlbums = {
-                                nestedNavController.navigate("albums") {
-                                    popUpTo("photos") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                                if (nestedNavController.currentDestination?.route == "albums") {
+                                    viewModel.triggerAlbumsScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("albums") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             },
                             onNavigateToSearch = {
                                 nestedNavController.navigate("search") {
-                                    popUpTo("photos") { saveState = true }
+                                    popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -875,28 +885,40 @@ fun MainAppLayout(
                                 icon = { Icon(if (currentRoute == "photos") ImageVector.vectorResource(R.drawable.ic_ms_image) else ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(24.dp)) },
                                 label = "Photos",
                                 isSelected = currentRoute == "photos",
-                                onClick = { nestedNavController.navigate("photos") {
-                                    popUpTo("photos") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                } }
+                                onClick = { 
+                                    if (nestedNavController.currentDestination?.route == "photos") {
+                                        viewModel.triggerPhotosScrollToTop()
+                                    } else {
+                                        nestedNavController.navigate("photos") {
+                                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                }
                             )
                             DockItem(
                                 icon = { Icon(if (currentRoute?.startsWith("album") == true || currentRoute == "albums") ImageVector.vectorResource(R.drawable.ic_ms_photo_album) else ImageVector.vectorResource(R.drawable.ic_ms_photo_album), contentDescription = "Albums", modifier = Modifier.size(24.dp)) },
                                 label = "Albums",
                                 isSelected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
-                                onClick = { nestedNavController.navigate("albums") {
-                                    popUpTo("photos") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                } }
+                                onClick = { 
+                                    if (nestedNavController.currentDestination?.route == "albums") {
+                                        viewModel.triggerAlbumsScrollToTop()
+                                    } else {
+                                        nestedNavController.navigate("albums") {
+                                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                }
                             )
                             DockItem(
                                 icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(24.dp)) },
                                 label = "Search",
                                 isSelected = currentRoute == "search",
                                 onClick = { nestedNavController.navigate("search") {
-                                    popUpTo("photos") { saveState = true }
+                                    popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 } }
@@ -941,28 +963,28 @@ fun MainAppLayout(
                 route = "albums",
                 enterTransition = {
                     if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums") {
-                        fadeIn(MotionTokens.snappySpring())
+                        fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 exitTransition = {
                     if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums") {
-                        fadeOut(MotionTokens.snappySpring())
+                        fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popEnterTransition = {
                     if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums") {
-                        fadeIn(MotionTokens.snappySpring())
+                        fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popExitTransition = {
                     if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums") {
-                        fadeOut(MotionTokens.snappySpring())
+                        fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }

@@ -50,9 +50,10 @@
             android:label="@string/app_name"
             android:configChanges="uiMode|screenSize|orientation"
             android:theme="@style/Theme.App.Starting">
-            <!-- Qualifies Photon Gallery for RoleManager.ROLE_GALLERY (Default Gallery App) -->
+            <!-- Qualifies Photon Gallery for Launcher and RoleManager.ROLE_GALLERY (Default Gallery App) -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.APP_GALLERY" />
             </intent-filter>
@@ -96,63 +97,6 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
-
-        <!-- App Launcher Icon Aliases (Changeable App Icon) -->
-        <activity-alias
-            android:name=".MainActivityDefault"
-            android:targetActivity=".MainActivity"
-            android:exported="true"
-            android:enabled="true"
-            android:label="@string/app_name"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityClassic"
-            android:targetActivity=".MainActivity"
-            android:exported="true"
-            android:enabled="false"
-            android:label="@string/app_name"
-            android:icon="@mipmap/ic_launcher_classic"
-            android:roundIcon="@mipmap/ic_launcher_classic">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityMinimal"
-            android:targetActivity=".MainActivity"
-            android:exported="true"
-            android:enabled="false"
-            android:label="@string/app_name"
-            android:icon="@mipmap/ic_launcher_minimal"
-            android:roundIcon="@mipmap/ic_launcher_minimal">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityVibrant"
-            android:targetActivity=".MainActivity"
-            android:exported="true"
-            android:enabled="false"
-            android:label="@string/app_name"
-            android:icon="@mipmap/ic_launcher_vibrant"
-            android:roundIcon="@mipmap/ic_launcher_vibrant">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
 
         <activity
             android:name=".crash.CrashActivity"

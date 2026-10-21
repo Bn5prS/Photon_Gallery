@@ -21,9 +21,12 @@ import android.util.Log
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -721,7 +724,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         )
                     }
             }
-    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _geotaggedMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
     val geotaggedMedia: StateFlow<List<GalleryItem>> = _geotaggedMedia.asStateFlow()
@@ -741,52 +744,98 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _initialDetailItem = MutableStateFlow<GalleryItem?>(null)
     val initialDetailItem: StateFlow<GalleryItem?> = _initialDetailItem.asStateFlow()
 
+    private var currentDetailBucket: String? = "\u0000_INIT_"
+    private var currentDetailFilter: Int = -1
+    private var currentDetailOrder: SortOrder? = null
+    private var loadDetailJob: kotlinx.coroutines.Job? = null
+
     fun setInitialDetailItem(item: GalleryItem, bucketName: String? = null) {
         _initialDetailItem.value = item
-        if (_detailMedia.value.any { it.id == item.id }) {
+
+        val filterIndex = selectedFilterIndex.value
+        val order = sortOrder.value
+        val isSameQuery = (currentDetailBucket == bucketName) &&
+                (currentDetailFilter == filterIndex) &&
+                (currentDetailOrder == order)
+
+        if (isSameQuery && _detailMedia.value.any { it.id == item.id || it.uri.toString() == item.id }) {
             return
         }
+
         when (bucketName) {
             BucketNames.SEARCH_TEXT -> {
                 if (_ftsSearchResults.value.isNotEmpty()) {
                     _detailMedia.value = _ftsSearchResults.value
+                    currentDetailBucket = bucketName
+                    currentDetailFilter = filterIndex
+                    currentDetailOrder = order
                     return
                 }
             }
             BucketNames.SEARCH_SMART -> {
                 if (_smartSearchResults.value.isNotEmpty()) {
                     _detailMedia.value = _smartSearchResults.value
+                    currentDetailBucket = bucketName
+                    currentDetailFilter = filterIndex
+                    currentDetailOrder = order
                     return
                 }
             }
             BucketNames.FAVORITES -> {
                 if (favoriteMedia.value.isNotEmpty()) {
                     _detailMedia.value = favoriteMedia.value
+                    currentDetailBucket = bucketName
+                    currentDetailFilter = filterIndex
+                    currentDetailOrder = order
                     return
                 }
             }
             "geotagged" -> {
                 if (_geotaggedMedia.value.isNotEmpty()) {
                     _detailMedia.value = _geotaggedMedia.value
+                    currentDetailBucket = bucketName
+                    currentDetailFilter = filterIndex
+                    currentDetailOrder = order
                     return
                 }
             }
         }
-        _detailMedia.value = listOf(item)
+        _detailMedia.value = emptyList()
+        loadDetailMedia(item.id, bucketName)
     }
 
     fun loadDetailMedia(mediaId: String? = null, bucketName: String? = null) {
-        viewModelScope.launch(Dispatchers.IO) {
+        val filterIndex = selectedFilterIndex.value
+        val order = sortOrder.value
+        val isSameQuery = (currentDetailBucket == bucketName) &&
+                (currentDetailFilter == filterIndex) &&
+                (currentDetailOrder == order)
+
+        if (isSameQuery && _detailMedia.value.isNotEmpty() && (mediaId == null || _detailMedia.value.any { it.id == mediaId || it.uri.toString() == mediaId })) {
+            return
+        }
+
+        loadDetailJob?.cancel()
+        loadDetailJob = viewModelScope.launch(Dispatchers.IO) {
             if (bucketName == BucketNames.SEARCH_TEXT) {
                 _detailMedia.value = _ftsSearchResults.value
+                currentDetailBucket = bucketName
+                currentDetailFilter = filterIndex
+                currentDetailOrder = order
                 return@launch
             }
             if (bucketName == BucketNames.SEARCH_SMART) {
                 _detailMedia.value = _smartSearchResults.value
+                currentDetailBucket = bucketName
+                currentDetailFilter = filterIndex
+                currentDetailOrder = order
                 return@launch
             }
             if (bucketName == BucketNames.FAVORITES) {
                 _detailMedia.value = favoriteMedia.value
+                currentDetailBucket = bucketName
+                currentDetailFilter = filterIndex
+                currentDetailOrder = order
                 return@launch
             }
             if (bucketName == "geotagged") {
@@ -872,6 +921,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val containsTarget = if (mediaId != null) finalItems.any { it.id == mediaId || it.uri.toString() == mediaId } else true
             if (finalItems.isNotEmpty() && containsTarget) {
                 _detailMedia.value = finalItems
+                currentDetailBucket = bucketName
+                currentDetailFilter = filterIndex
+                currentDetailOrder = order
             } else if (mediaId != null) {
                 // Fetch the clicked item as a fallback
                 val idLong = mediaId.toLongOrNull()
@@ -920,6 +972,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
             } else if (finalItems.isNotEmpty()) {
                 _detailMedia.value = finalItems
+                currentDetailBucket = bucketName
+                currentDetailFilter = filterIndex
+                currentDetailOrder = order
             }
         }
     }
@@ -1145,7 +1200,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val albumCustomCovers: StateFlow<Map<String, String>> = settingsRepository.albumCustomCoversFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     fun setAlbumCustomCover(bucketName: String, uriString: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -1195,7 +1250,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val albumCustomShapes: StateFlow<Map<String, String>> = settingsRepository.albumCustomShapesFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     fun setAlbumCustomShape(bucketName: String, shapeId: String) {
         viewModelScope.launch {
@@ -1257,7 +1312,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
 
         sortedBuckets
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // All bucket names for the Settings "Excluded Folders" UI (includes all folders)
     val allBucketNames: StateFlow<List<String>> = combine(
@@ -1268,7 +1323,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             .filter { it != "Trash" && (showHidden || !it.startsWith(".")) }
             .distinct()
             .sorted()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val duplicates: StateFlow<List<DuplicateGroup>> = combine(
         database.mediaDao().observeExactDuplicates(),
@@ -1506,14 +1561,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
 
         list
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // User-pinned folders (from Settings, not the hardcoded system buckets)
     val userPinnedFolderNames: StateFlow<Set<String>> = settingsRepository.pinnedFoldersFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     val pinnedFoldersOrder: StateFlow<List<String>> = settingsRepository.pinnedFoldersOrderFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val userPinnedAlbums: StateFlow<List<AlbumBucket>> = combine(
         allAlbums,
@@ -1521,7 +1576,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     ) { albums, pinnedNames ->
         albums.filter { it.bucketName in pinnedNames }
         // Custom covers already baked into allAlbums items above
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun togglePinAlbum(bucketName: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -2272,6 +2327,23 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
+    val currentMediaCount: StateFlow<Int> = combine(
+        _currentBucket, selectedFilterIndex, favoritesManager.favoritesFlow, excludedFolders
+    ) { bucket, filterIndex, favs, excluded ->
+        val qc = buildMediaConditions(
+            bucket = bucket,
+            filterIndex = filterIndex,
+            excluded = excluded,
+            favIds = favs,
+            ftsIds = ftsSearchResults.value.map { it.id },
+            smartIds = smartSearchResults.value.map { it.id }
+        )
+        val queryString = "SELECT COUNT(*) FROM core_media cm " + buildWhereClause(qc)
+        androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
+    }.flatMapLatest { query ->
+        database.mediaDao().observeCountRaw(query)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
     private val rawPagerFlow: Flow<PagingData<com.inferno.gallery.data.db.CoreMediaProjection>> = combine(
         _currentBucket, selectedFilterIndex, sortOrder, favoritesManager.favoritesFlow, excludedFolders
     ) { bucket, filterIndex, order, favs, excluded ->
@@ -2294,7 +2366,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             // so a placeholder resolving into a date Header flipped GridItemSpan(1) ->
             // maxLineSpan mid-fling and forced a row re-measure (a dropped frame). Disabling
             // placeholders also drops a COUNT(*) over the predicate from every generation.
-            config = PagingConfig(pageSize = 120, prefetchDistance = 180, enablePlaceholders = false)
+            config = PagingConfig(pageSize = 120, prefetchDistance = 240, enablePlaceholders = false)
         ) {
             database.mediaDao().observeMediaPagingRaw(query)
         }.flow
@@ -2401,6 +2473,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun resetGridScrollPosition(bucket: String?) {
         val key = bucket ?: "main_gallery"
         scrollPositions.remove(key)
+    }
+
+    private val _albumsScrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val albumsScrollToTopTrigger: SharedFlow<Unit> = _albumsScrollToTopTrigger.asSharedFlow()
+
+    fun triggerAlbumsScrollToTop() {
+        _albumsScrollToTopTrigger.tryEmit(Unit)
+    }
+
+    private val _photosScrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val photosScrollToTopTrigger: SharedFlow<Unit> = _photosScrollToTopTrigger.asSharedFlow()
+
+    fun triggerPhotosScrollToTop() {
+        _photosScrollToTopTrigger.tryEmit(Unit)
     }
 }
 

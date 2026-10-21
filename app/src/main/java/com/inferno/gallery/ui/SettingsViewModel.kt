@@ -371,6 +371,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     val ocrProgress = com.inferno.gallery.data.IndexingProgressManager.ocrProgress
 
+    val ocrIndexingEnabled: StateFlow<Boolean> = repository.ocrIndexingEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setOcrIndexingEnabled(enabled: Boolean) {
+        if (enabled) {
+            startOcrIndexing()
+        } else {
+            stopOcrIndexing()
+        }
+    }
+
     val ocrIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
         .getWorkInfosForUniqueWorkFlow("OcrIndexWorker")
         .map { it.firstOrNull() }
@@ -682,18 +696,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun checkForUpdates() {
         UpdateManager.checkForUpdates(viewModelScope, manual = true)
-    }
-
-    val appIcon: StateFlow<String> = repository.appIconFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "default"
-    )
-
-    fun setAppIcon(iconId: String) {
-        viewModelScope.launch {
-            repository.updateAppIcon(iconId)
-        }
     }
 }
 

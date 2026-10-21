@@ -130,6 +130,9 @@ class ModelDownloadWorker(
             val totalBytesExpected = downloadTargets.sumOf { it.expectedSize }
             var totalBytesDownloaded = 0L
             var lastReportedPercent = -1
+            var lastSpeedTimestamp = System.currentTimeMillis()
+            var lastSpeedBytes = 0L
+            var currentSpeedBytesPerSec = 0L
 
             for (target in downloadTargets) {
                 if (isStopped) break
@@ -182,10 +185,28 @@ class ModelDownloadWorker(
                                 digest.update(buffer, 0, bytesRead)
                                 totalBytesDownloaded += bytesRead
 
+                                val now = System.currentTimeMillis()
+                                val timeDelta = now - lastSpeedTimestamp
+                                if (timeDelta >= 500L) {
+                                    val bytesDelta = totalBytesDownloaded - lastSpeedBytes
+                                    if (bytesDelta >= 0) {
+                                        currentSpeedBytesPerSec = (bytesDelta * 1000L) / timeDelta
+                                    }
+                                    lastSpeedTimestamp = now
+                                    lastSpeedBytes = totalBytesDownloaded
+                                }
+
                                 val overallPercent = ((totalBytesDownloaded.toFloat() / totalBytesExpected.toFloat()) * 100).toInt().coerceIn(0, 100)
                                 if (overallPercent > lastReportedPercent) {
                                     lastReportedPercent = overallPercent
-                                    setProgress(workDataOf("progress" to overallPercent))
+                                    setProgress(
+                                        workDataOf(
+                                            "progress" to overallPercent,
+                                            "bytesDownloaded" to totalBytesDownloaded,
+                                            "totalBytes" to totalBytesExpected,
+                                            "speedBytesPerSec" to currentSpeedBytesPerSec
+                                        )
+                                    )
                                     try {
                                         setForeground(createForegroundInfo("Downloaded $overallPercent% ($fileName)"))
                                     } catch (e: Exception) {

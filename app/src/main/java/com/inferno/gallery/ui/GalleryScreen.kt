@@ -229,6 +229,12 @@ fun GalleryScreen(
         }
     }
 
+    LaunchedEffect(viewModel) {
+        viewModel.photosScrollToTopTrigger.collect {
+            lazyGridState.animateScrollToItem(0, 0)
+        }
+    }
+
     // Persist scroll position when scrolling settles so returning from detail or navigation preserves exact place
     LaunchedEffect(lazyGridState, bucketName) {
         snapshotFlow { lazyGridState.isScrollInProgress }
@@ -261,6 +267,7 @@ fun GalleryScreen(
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
     val dateHeaderAlignment by viewModel.dateHeaderAlignment.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
+    val totalMediaCount by viewModel.currentMediaCount.collectAsState()
 
     // ── On This Day Memories ──
     val onThisDayMemories by viewModel.onThisDayMemories.collectAsState()
@@ -578,6 +585,8 @@ fun GalleryScreen(
             lazyGridState = lazyGridState,
             pagedMedia = pagedMedia,
             headerOffset = if (shouldShowMemoriesHeader) 1 else 0,
+            gridCellsCount = gridCellsCount,
+            totalMediaCount = totalMediaCount,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(
@@ -628,16 +637,45 @@ fun FastScroller(
     lazyGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     pagedMedia: LazyPagingItems<GalleryListItem>,
     modifier: Modifier = Modifier,
-    headerOffset: Int = 0
+    headerOffset: Int = 0,
+    gridCellsCount: Int = 3,
+    totalMediaCount: Int = 0
 ) {
     // Read here, not in the caller: keeps the paging snapshot subscription out of the
     // screen's restart scope.
-    if (pagedMedia.itemCount < 50) return
+    if (pagedMedia.itemCount < 50 && totalMediaCount < 50) return
 
-    val monthFormat = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
+    val fullDateFormat = remember { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()) }
+
+    // Sample header density once when the first page lands, then lock it so the scrollbar track
+    // denominator NEVER fluctuates or jumps while scrolling or loading subsequent pages.
+    var sampledHeaderRatio by remember { mutableFloatStateOf(0.06f) }
+    var hasSampledHeaders by remember { mutableStateOf(false) }
+
+    val loadedCount = pagedMedia.itemCount
+    if (!hasSampledHeaders && loadedCount >= 40) {
+        val sampleSize = minOf(loadedCount, 150)
+        var headers = 0
+        for (i in 0 until sampleSize) {
+            val item = if (i in 0 until loadedCount) pagedMedia.peek(i) else null
+            if (item is GalleryListItem.Header) headers++
+        }
+        sampledHeaderRatio = (headers.toFloat() / sampleSize.toFloat()).coerceIn(0.02f, 0.25f)
+        hasSampledHeaders = true
+    }
+
+    // Stable upfront total items count derived from Room SQLite count + sampled date headers:
+    // Completely eliminates denominator expansion and jumping during fresh scrolling,
+    // while accurately reflecting the entire gallery without premature bottom-sticking!
+    val totalEstimatedItems = remember(totalMediaCount, sampledHeaderRatio, loadedCount > 0) {
+        val baseCount = if (totalMediaCount > 0) totalMediaCount else maxOf(loadedCount, 1)
+        val estimatedHeaders = (baseCount.toFloat() * sampledHeaderRatio).toInt().coerceAtLeast(0)
+        maxOf(baseCount + estimatedHeaders + headerOffset, loadedCount)
+    }
 
     com.inferno.gallery.ui.components.ExpressiveScrollBar(
         gridState = lazyGridState,
+        totalItemsCount = totalEstimatedItems,
         dragLabelProvider = { rawIndex ->
             val index = rawIndex - headerOffset
             if (index in 0 until pagedMedia.itemCount) {
@@ -645,7 +683,7 @@ fun FastScroller(
                     is GalleryListItem.Header -> item.title
                     is GalleryListItem.Item -> {
                         val sec = item.galleryItem.dateAdded
-                        if (sec > 0) monthFormat.format(Date(sec * 1000L)) else null
+                        if (sec > 0) fullDateFormat.format(Date(sec * 1000L)) else null
                     }
                     null -> null
                 }

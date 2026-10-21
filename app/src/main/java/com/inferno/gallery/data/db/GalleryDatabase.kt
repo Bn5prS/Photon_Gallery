@@ -25,6 +25,9 @@ interface MediaDao {
     suspend fun getMediaRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<CoreMediaProjection>
 
     @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])
+    fun observeCountRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int>
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])
     suspend fun getUrisRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<String>
 
     @Query("SELECT DISTINCT bucketName FROM core_media WHERE bucketName != 'Trash' AND bucketName IS NOT NULL")

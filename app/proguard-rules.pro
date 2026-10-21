@@ -35,6 +35,11 @@
 -keepclassmembers class ai.onnxruntime.** { *; }
 -dontwarn ai.onnxruntime.**
 
+# Keep osmdroid (Photo Map)
+-keep class org.osmdroid.** { *; }
+-dontwarn org.osmdroid.**
+
 # Preserve line numbers for meaningful crash stack traces in release builds
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+

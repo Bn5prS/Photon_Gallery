@@ -478,8 +478,8 @@ fun OptimizedThumbnailCell(
     }
     val sharedContentKey = remember(item.uri) { "photo_${item.uri}" }
 
-    // Shared bounds transition is active for standard grid densities (1-6 columns)
-    val sharedTransitionModifier = if (gridCellsCount <= 6) {
+    // Shared bounds transition is active for standard grid densities (1-5 columns)
+    val sharedTransitionModifier = if (gridCellsCount <= 5) {
         with(sharedTransitionScope) {
             val overlayClip = remember(cellShape) { OverlayClip(cellShape ?: ShapeNone) }
             Modifier.sharedBounds(

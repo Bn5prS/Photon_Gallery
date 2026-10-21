@@ -176,6 +176,23 @@ fun AlbumsScreen(
     key(albumLayoutMode) {
         val lazyGridState = rememberLazyGridState()
 
+        // Ensure clean top alignment when albums populate or if previously pushed up
+        var initialTopResetDone by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(visibleAlbums.isNotEmpty()) {
+            if (visibleAlbums.isNotEmpty() && !initialTopResetDone) {
+                initialTopResetDone = true
+                if (!lazyGridState.isScrollInProgress && lazyGridState.firstVisibleItemIndex > 0) {
+                    lazyGridState.scrollToItem(0, 0)
+                }
+            }
+        }
+
+        LaunchedEffect(viewModel) {
+            viewModel.albumsScrollToTopTrigger.collect {
+                lazyGridState.animateScrollToItem(0, 0)
+            }
+        }
+
         LazyVerticalGrid(
             columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
             state = lazyGridState,
@@ -195,35 +212,35 @@ fun AlbumsScreen(
         ) {
 
         // ── 1. Albums (Switchable 2-col cards, 3-col compact cards, or list view) ──
-        if (visibleAlbums.isNotEmpty()) {
-            item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = "Albums",
-                    count = allUnifiedAlbums.size,
-                    isExpanded = albumsExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedPinned() },
-                    seeAllText = "Show all",
-                    onSeeAll = if (hasMoreAlbums) onNavigateToAllAlbums else null
+        item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
+            SectionHeader(
+                title = "Albums",
+                count = if (allUnifiedAlbums.isNotEmpty()) allUnifiedAlbums.size else null,
+                isExpanded = albumsExpanded,
+                onToggle = { viewModel.toggleAlbumsExpandedPinned() },
+                seeAllText = "Show all",
+                onSeeAll = if (hasMoreAlbums) onNavigateToAllAlbums else null
+            )
+        }
+
+        if (albumsExpanded) {
+            // Layout switcher & sort control bar
+            item(key = "albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
+                AlbumsControlBar(
+                    currentLayout = albumLayoutMode,
+                    onLayoutChange = { newLayout ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.setAlbumLayoutMode(newLayout)
+                    },
+                    currentSort = albumSortOrder,
+                    onSortChange = { newSort ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.setAlbumSortOrder(newSort)
+                    }
                 )
             }
 
-            if (albumsExpanded) {
-                // Layout switcher & sort control bar
-                item(key = "albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
-                    AlbumsControlBar(
-                        currentLayout = albumLayoutMode,
-                        onLayoutChange = { newLayout ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.setAlbumLayoutMode(newLayout)
-                        },
-                        currentSort = albumSortOrder,
-                        onSortChange = { newSort ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.setAlbumSortOrder(newSort)
-                        }
-                    )
-                }
-
+            if (visibleAlbums.isNotEmpty()) {
                 items(
                     items = visibleAlbums,
                     key = { "album_${it.bucketName}" }

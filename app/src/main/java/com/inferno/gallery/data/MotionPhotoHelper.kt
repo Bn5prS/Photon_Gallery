@@ -42,6 +42,11 @@ object MotionPhotoHelper {
     private val SAMSUNG_TRAILER_BYTES = "MotionPhoto_Data".toByteArray(StandardCharsets.US_ASCII)
 
     /**
+     * Non-blocking cache-only check. Returns cached boolean or null if not yet scanned.
+     */
+    fun getCachedFastCheck(id: String): Boolean? = fastCheckCache[id]
+
+    /**
      * Fast non-blocking check for thumbnail badges.
      * Inspects sibling files or scans the first 4-8KB of JPEG header for motion markers.
      */

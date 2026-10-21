@@ -5,8 +5,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -93,9 +91,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import coil3.compose.AsyncImage
@@ -112,8 +107,6 @@ import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.photonColors
-import com.inferno.gallery.ui.utils.AppIconManager
-import com.inferno.gallery.ui.utils.AppIconOption
 import com.inferno.gallery.ui.utils.pressScale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -159,7 +152,6 @@ fun SettingsScreen(
     val autoplayWithSound by viewModel.autoplayWithSoundEnabled.collectAsState()
     val autoCheckUpdates by viewModel.autoCheckUpdates.collectAsState()
     val updateState by viewModel.updateState.collectAsState()
-    val appIcon by viewModel.appIcon.collectAsState()
     val dateHeaderAlignment by viewModel.dateHeaderAlignment.collectAsState()
 
     val smartSearchModelDownloaded by viewModel.smartSearchModelDownloaded.collectAsState()
@@ -168,35 +160,11 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    var isDefaultGallery by remember {
-        mutableStateOf(isPhotonDefaultViewer(context))
-    }
-
-    val defaultAppsLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) {
-        isDefaultGallery = isPhotonDefaultViewer(context)
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                isDefaultGallery = isPhotonDefaultViewer(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
 
     var showClearIndexConfirm by remember { mutableStateOf(false) }
     var showDeleteModelConfirm by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
-    var showAppIconDialog by remember { mutableStateOf(false) }
 
     val isCurrentlyDark = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemDark
@@ -275,18 +243,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showAppIconDialog) {
-        AppIconDialog(
-            currentIconId = appIcon,
-            onSelectIcon = { option ->
-                viewModel.setAppIcon(option.id)
-                AppIconManager.applyAppIcon(context, option)
-                Toast.makeText(context, "App icon updated to ${option.title}", Toast.LENGTH_SHORT).show()
-                showAppIconDialog = false
-            },
-            onDismiss = { showAppIconDialog = false }
-        )
-    }
 
     androidx.activity.compose.BackHandler(enabled = activeSection != null) {
         onActiveSectionChange(null)
@@ -520,20 +476,6 @@ fun SettingsScreen(
                                 )
                             )
 
-                            SettingsGroupCard(
-                                title = "App Icon",
-                                items = listOf(
-                                    {
-                                        val currentOption = AppIconOption.fromId(appIcon)
-                                        ClickableSettingItem(
-                                            title = "Launcher Icon",
-                                            subtitle = currentOption.title,
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                                            onClick = { showAppIconDialog = true }
-                                        )
-                                    }
-                                )
-                            )
 
                             SettingsGroupCard(
                                 title = "Display Preferences",
@@ -782,15 +724,6 @@ fun SettingsScreen(
                                     }
                                     add {
                                         SwitchSettingItem(
-                                            title = "Show Hidden Albums",
-                                            subtitle = "Show albums that start with a dot (e.g., .nomedia folders)",
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility),
-                                            checked = showHiddenAlbums,
-                                            onCheckedChange = { viewModel.setShowHiddenAlbums(it) }
-                                        )
-                                    }
-                                    add {
-                                        SwitchSettingItem(
                                             title = "Memories Spotlight",
                                             subtitle = "Spotlight nostalgic throwbacks and recent highlights",
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
@@ -814,55 +747,15 @@ fun SettingsScreen(
 
                         "General" -> {
                             SettingsGroupCard(
-                                title = "Default Apps",
+                                title = "Albums & Library",
                                 items = listOf(
                                     {
-                                        ClickableSettingItem(
-                                            title = "Set as Default Gallery",
-                                            subtitle = if (isDefaultGallery) {
-                                                "Photon Gallery is currently your default gallery app"
-                                            } else {
-                                                "Set Photon Gallery as the default app to view photos and videos"
-                                            },
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                            trailing = {
-                                                if (isDefaultGallery) {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                } else {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            },
-                                            onClick = {
-                                                try {
-                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                                        defaultAppsLauncher.launch(Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS).apply {
-                                                            data = Uri.parse("package:${context.packageName}")
-                                                        })
-                                                    } else {
-                                                        defaultAppsLauncher.launch(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-                                                    }
-                                                } catch (_: Exception) {
-                                                    try {
-                                                        defaultAppsLauncher.launch(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-                                                    } catch (_: Exception) {
-                                                        try {
-                                                            defaultAppsLauncher.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                                data = Uri.fromParts("package", context.packageName, null)
-                                                            })
-                                                        } catch (_: Exception) {}
-                                                    }
-                                                }
-                                            }
+                                        SwitchSettingItem(
+                                            title = "Show Hidden Albums",
+                                            subtitle = "Show albums that start with a dot (e.g., .nomedia folders)",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility),
+                                            checked = showHiddenAlbums,
+                                            onCheckedChange = { viewModel.setShowHiddenAlbums(it) }
                                         )
                                     }
                                 )
@@ -2175,127 +2068,4 @@ private fun getSampleColor(seed: Int): Color {
     }
 }
 
-@Composable
-fun AppIconDialog(
-    currentIconId: String,
-    onSelectIcon: (AppIconOption) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Choose App Icon",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AppIconOption.entries.forEach { option ->
-                    val isSelected = option.id == currentIconId
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSelectIcon(option)
-                            },
-                        shape = ShapeLarge,
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = ShapeMedium,
-                                modifier = Modifier.size(48.dp),
-                                shadowElevation = 2.dp,
-                                color = androidx.compose.ui.graphics.Color.White
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (option.bgRes != null) {
-                                        Image(
-                                            painter = painterResource(option.bgRes),
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                    Image(
-                                        painter = painterResource(option.fgRes),
-                                        contentDescription = option.title,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(16.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = option.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = option.subtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            if (isSelected) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        },
-        shape = ShapeExtraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    )
-}
-
-private fun isPhotonDefaultViewer(context: android.content.Context): Boolean {
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(Uri.parse("content://media/external/images/media/1"), "image/*")
-    }
-    val resolveInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.ResolveInfoFlags.of(android.content.pm.PackageManager.MATCH_DEFAULT_ONLY.toLong()))
-    } else {
-        @Suppress("DEPRECATION")
-        context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-    }
-    return resolveInfo?.activityInfo?.packageName == context.packageName
-}
 
