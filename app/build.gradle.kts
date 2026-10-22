@@ -35,12 +35,14 @@ android {
         }
     }
 
+    val keyPropertiesFile = rootProject.file("key.properties")
+    val hasReleaseKeystore = keyPropertiesFile.exists()
+
     signingConfigs {
-        create("release") {
-            val propsFile = rootProject.file("key.properties")
-            if (propsFile.exists()) {
+        if (hasReleaseKeystore) {
+            create("release") {
                 val ks = Properties()
-                ks.load(FileInputStream(propsFile))
+                ks.load(FileInputStream(keyPropertiesFile))
                 val keystorePath = ks["storeFile"] as String
                 val rootKsFile = rootProject.file(keystorePath)
                 storeFile = if (rootKsFile.exists()) rootKsFile else file(keystorePath)
@@ -63,7 +65,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

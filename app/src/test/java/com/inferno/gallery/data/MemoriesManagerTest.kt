@@ -62,6 +62,8 @@ class MemoriesManagerTest {
         override fun observeMediaPaging(bucketName: String?): androidx.paging.PagingSource<Int, CoreMediaEntity> = throw NotImplementedError()
         override fun observeMediaPagingRaw(query: androidx.sqlite.db.SupportSQLiteQuery): androidx.paging.PagingSource<Int, com.inferno.gallery.data.db.CoreMediaProjection> = throw NotImplementedError()
         override suspend fun getMediaRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<com.inferno.gallery.data.db.CoreMediaProjection> = emptyList()
+        override fun observeMediaEntitiesRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<List<CoreMediaEntity>> = emptyFlow()
+        override fun observeCountRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int> = kotlinx.coroutines.flow.flowOf(0)
         override suspend fun getUrisRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<String> = emptyList()
         override fun observeAllBucketNames(): Flow<List<String>> = emptyFlow()
         override fun observeBucketInfo(): Flow<List<com.inferno.gallery.data.db.BucketInfo>> = emptyFlow()
