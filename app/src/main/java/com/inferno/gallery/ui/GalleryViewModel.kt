@@ -1638,12 +1638,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    val animationStats: StateFlow<com.inferno.gallery.data.db.MediaAggregateStats> = database.mediaDao().observeAnimationStats()
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.inferno.gallery.data.db.MediaAggregateStats(0, 0L, 0L, null))
+
     val mediaTypeBuckets: StateFlow<List<AlbumBucket>> = combine(
         listOf(
             database.mediaDao().observeRawStats(),
             database.mediaDao().observePanoramaStats(),
             database.mediaDao().observeSlowMoStats(),
-            database.mediaDao().observeAnimationStats(),
             database.mediaDao().observeNightStats(),
             database.mediaDao().observePhotoSphereStats(),
             database.mediaDao().observePortraitStats(),
@@ -1656,7 +1659,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             BucketNames.MEDIA_TYPE_RAW,
             BucketNames.MEDIA_TYPE_PANORAMAS,
             BucketNames.MEDIA_TYPE_SLOW_MO,
-            BucketNames.MEDIA_TYPE_ANIMATIONS,
             BucketNames.MEDIA_TYPE_NIGHT,
             BucketNames.MEDIA_TYPE_PHOTO_SPHERE,
             BucketNames.MEDIA_TYPE_PORTRAIT,

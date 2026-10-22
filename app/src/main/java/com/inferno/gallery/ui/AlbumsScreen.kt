@@ -143,6 +143,7 @@ fun AlbumsScreen(
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val placesClusters by viewModel.placesClusters.collectAsState()
     val mediaTypeBuckets by viewModel.mediaTypeBuckets.collectAsState()
+    val animationStats by viewModel.animationStats.collectAsState()
     val customCovers by viewModel.albumCustomCovers.collectAsState()
     val customShapes by viewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
@@ -538,11 +539,11 @@ fun AlbumsScreen(
             }
         }
 
-        // ── 3.5 Media Types (RAW, Panoramas, Slow-Mo, GIFs) ──
+        // ── 3.5 Capture Modes (RAW, Panoramas, Night, Portraits, Macro, etc.) ──
         if (mediaTypeBuckets.isNotEmpty()) {
             item(key = "header_media_types", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeader(
-                    title = "Media Types",
+                    title = "Capture Modes",
                     count = mediaTypeBuckets.size,
                     isExpanded = mediaTypesExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedMediaTypes() }
@@ -564,7 +565,6 @@ fun AlbumsScreen(
                                 BucketNames.MEDIA_TYPE_RAW -> "RAW" to R.drawable.ic_ms_photo_camera
                                 BucketNames.MEDIA_TYPE_PANORAMAS -> "Panoramas" to R.drawable.ic_ms_aspect_ratio
                                 BucketNames.MEDIA_TYPE_SLOW_MO -> "Slow Motion" to R.drawable.ic_ms_schedule
-                                BucketNames.MEDIA_TYPE_ANIMATIONS -> "GIFs" to R.drawable.ic_ms_auto_fix_high
                                 BucketNames.MEDIA_TYPE_NIGHT -> "Night Shots" to R.drawable.ic_ms_wb_twilight
                                 BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> "Photo Spheres" to R.drawable.ic_ms_vrpano
                                 BucketNames.MEDIA_TYPE_PORTRAIT -> "Portraits" to R.drawable.ic_ms_person
@@ -815,20 +815,34 @@ fun AlbumsScreen(
         }
 
         item(key = "content_more_tools", span = { GridItemSpan(maxLineSpan) }) {
-            val toolItems = remember(trashCount) {
-                listOf(
-                    CollectionBlockItem(
-                        title = "Trash",
-                        iconRes = R.drawable.ic_ms_delete,
-                        count = trashCount,
-                        onClick = { onAlbumClick("Trash") }
-                    ),
-                    CollectionBlockItem(
-                        title = "Clean Up",
-                        iconRes = R.drawable.ic_ms_cleaning_services,
-                        onClick = onNavigateToDuplicateCleaner
+            val toolItems = remember(trashCount, animationStats.itemCount) {
+                buildList {
+                    if (animationStats.itemCount > 0) {
+                        add(
+                            CollectionBlockItem(
+                                title = "Animations",
+                                iconRes = R.drawable.ic_ms_auto_fix_high,
+                                count = animationStats.itemCount,
+                                onClick = { onAlbumClick(BucketNames.MEDIA_TYPE_ANIMATIONS) }
+                            )
+                        )
+                    }
+                    add(
+                        CollectionBlockItem(
+                            title = "Trash",
+                            iconRes = R.drawable.ic_ms_delete,
+                            count = trashCount,
+                            onClick = { onAlbumClick("Trash") }
+                        )
                     )
-                )
+                    add(
+                        CollectionBlockItem(
+                            title = "Clean Up",
+                            iconRes = R.drawable.ic_ms_cleaning_services,
+                            onClick = onNavigateToDuplicateCleaner
+                        )
+                    )
+                }
             }
 
             SegmentedCollectionsGrid(
