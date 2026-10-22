@@ -220,6 +220,46 @@ interface MediaDao {
     """)
     fun observeAnimationStats(): Flow<MediaAggregateStats>
 
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
+        (SELECT uriString FROM core_media WHERE (name LIKE '%_NIGHT%' OR name LIKE '%NIGHT_%' OR name LIKE '%NIGHT.%' OR name LIKE '%NIGHTSIGHT%' OR filePath LIKE '%/Night/%' OR filePath LIKE '%/NightMode/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        FROM core_media
+        WHERE (name LIKE '%_NIGHT%' OR name LIKE '%NIGHT_%' OR name LIKE '%NIGHT.%' OR name LIKE '%NIGHTSIGHT%' OR filePath LIKE '%/Night/%' OR filePath LIKE '%/NightMode/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    fun observeNightStats(): Flow<MediaAggregateStats>
+
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
+        (SELECT uriString FROM core_media WHERE (name LIKE '%PHOTOSPHERE%' OR name LIKE '%_SPHERE%' OR name LIKE '%SPHERE_%' OR name LIKE '%360_PHOTO%' OR name LIKE '%_360.%' OR filePath LIKE '%/PhotoSphere/%' OR filePath LIKE '%/360/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        FROM core_media
+        WHERE (name LIKE '%PHOTOSPHERE%' OR name LIKE '%_SPHERE%' OR name LIKE '%SPHERE_%' OR name LIKE '%360_PHOTO%' OR name LIKE '%_360.%' OR filePath LIKE '%/PhotoSphere/%' OR filePath LIKE '%/360/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    fun observePhotoSphereStats(): Flow<MediaAggregateStats>
+
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
+        (SELECT uriString FROM core_media WHERE (name LIKE '%PORTRAIT%' OR name LIKE '%_BOKEH%' OR name LIKE '%_DEPTH%' OR filePath LIKE '%/Portrait/%' OR filePath LIKE '%/Portraits/%' OR filePath LIKE '%_PORTRAIT/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        FROM core_media
+        WHERE (name LIKE '%PORTRAIT%' OR name LIKE '%_BOKEH%' OR name LIKE '%_DEPTH%' OR filePath LIKE '%/Portrait/%' OR filePath LIKE '%/Portraits/%' OR filePath LIKE '%_PORTRAIT/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    fun observePortraitStats(): Flow<MediaAggregateStats>
+
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
+        (SELECT uriString FROM core_media WHERE (name LIKE '%MACRO%' OR name LIKE '%_MACRO%' OR filePath LIKE '%/Macro/%' OR filePath LIKE '%/SuperMacro/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        FROM core_media
+        WHERE (name LIKE '%MACRO%' OR name LIKE '%_MACRO%' OR filePath LIKE '%/Macro/%' OR filePath LIKE '%/SuperMacro/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    fun observeMacroStats(): Flow<MediaAggregateStats>
+
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
+        (SELECT uriString FROM core_media WHERE (name LIKE '%TIMELAPSE%' OR name LIKE '%HYPERLAPSE%' OR name LIKE '%TIME_LAPSE%' OR name LIKE 'TL_%' OR name LIKE '%_TL.mp4' OR filePath LIKE '%/Timelapse/%' OR filePath LIKE '%/Hyperlapse/%') AND isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        FROM core_media
+        WHERE (name LIKE '%TIMELAPSE%' OR name LIKE '%HYPERLAPSE%' OR name LIKE '%TIME_LAPSE%' OR name LIKE 'TL_%' OR name LIKE '%_TL.mp4' OR filePath LIKE '%/Timelapse/%' OR filePath LIKE '%/Hyperlapse/%') AND isVideo = 1 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    fun observeTimelapseStats(): Flow<MediaAggregateStats>
+
     @Query("SELECT uriString FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 4")
     fun observeTopCoverUris(): Flow<List<String>>
 

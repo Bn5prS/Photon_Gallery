@@ -101,6 +101,26 @@ object MediaQueryBuilder {
                 conditions.add("(cm.mimeType = 'image/gif' OR cm.name LIKE '%.gif') AND cm.isVideo = 0")
                 conditions.add(NOT_HIDDEN)
             }
+            bucket == BucketNames.MEDIA_TYPE_NIGHT -> {
+                conditions.add("(cm.name LIKE '%_NIGHT%' OR cm.name LIKE '%NIGHT_%' OR cm.name LIKE '%NIGHT.%' OR cm.name LIKE '%NIGHTSIGHT%' OR cm.filePath LIKE '%/Night/%' OR cm.filePath LIKE '%/NightMode/%') AND cm.isVideo = 0")
+                conditions.add(NOT_HIDDEN)
+            }
+            bucket == BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> {
+                conditions.add("(cm.name LIKE '%PHOTOSPHERE%' OR cm.name LIKE '%_SPHERE%' OR cm.name LIKE '%SPHERE_%' OR cm.name LIKE '%360_PHOTO%' OR cm.name LIKE '%_360.%' OR cm.filePath LIKE '%/PhotoSphere/%' OR cm.filePath LIKE '%/360/%') AND cm.isVideo = 0")
+                conditions.add(NOT_HIDDEN)
+            }
+            bucket == BucketNames.MEDIA_TYPE_PORTRAIT -> {
+                conditions.add("(cm.name LIKE '%PORTRAIT%' OR cm.name LIKE '%_BOKEH%' OR cm.name LIKE '%_DEPTH%' OR cm.filePath LIKE '%/Portrait/%' OR cm.filePath LIKE '%/Portraits/%' OR cm.filePath LIKE '%_PORTRAIT/%') AND cm.isVideo = 0")
+                conditions.add(NOT_HIDDEN)
+            }
+            bucket == BucketNames.MEDIA_TYPE_MACRO -> {
+                conditions.add("(cm.name LIKE '%MACRO%' OR cm.name LIKE '%_MACRO%' OR cm.filePath LIKE '%/Macro/%' OR cm.filePath LIKE '%/SuperMacro/%') AND cm.isVideo = 0")
+                conditions.add(NOT_HIDDEN)
+            }
+            bucket == BucketNames.MEDIA_TYPE_TIMELAPSE -> {
+                conditions.add("(cm.name LIKE '%TIMELAPSE%' OR cm.name LIKE '%HYPERLAPSE%' OR cm.name LIKE '%TIME_LAPSE%' OR cm.name LIKE 'TL_%' OR cm.name LIKE '%_TL.mp4' OR cm.filePath LIKE '%/Timelapse/%' OR cm.filePath LIKE '%/Hyperlapse/%') AND cm.isVideo = 1")
+                conditions.add(NOT_HIDDEN)
+            }
             bucket != null -> {
                 conditions.add("cm.bucketName = ?")
                 args.add(bucket)
@@ -131,6 +151,11 @@ object MediaQueryBuilder {
             bucket != BucketNames.MEDIA_TYPE_PANORAMAS &&
             bucket != BucketNames.MEDIA_TYPE_SLOW_MO &&
             bucket != BucketNames.MEDIA_TYPE_ANIMATIONS &&
+            bucket != BucketNames.MEDIA_TYPE_NIGHT &&
+            bucket != BucketNames.MEDIA_TYPE_PHOTO_SPHERE &&
+            bucket != BucketNames.MEDIA_TYPE_PORTRAIT &&
+            bucket != BucketNames.MEDIA_TYPE_MACRO &&
+            bucket != BucketNames.MEDIA_TYPE_TIMELAPSE &&
             !bucket.startsWith("place:")
 
         if (!isSpecificAlbum && excluded.isNotEmpty()) {

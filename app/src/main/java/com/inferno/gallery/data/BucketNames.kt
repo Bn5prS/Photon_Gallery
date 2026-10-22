@@ -26,4 +26,9 @@ object BucketNames {
     const val MEDIA_TYPE_PANORAMAS = "mediatype:panoramas"
     const val MEDIA_TYPE_SLOW_MO = "mediatype:slow_mo"
     const val MEDIA_TYPE_ANIMATIONS = "mediatype:animations"
+    const val MEDIA_TYPE_NIGHT = "mediatype:night"
+    const val MEDIA_TYPE_PHOTO_SPHERE = "mediatype:photo_sphere"
+    const val MEDIA_TYPE_PORTRAIT = "mediatype:portrait"
+    const val MEDIA_TYPE_MACRO = "mediatype:macro"
+    const val MEDIA_TYPE_TIMELAPSE = "mediatype:timelapse"
 }

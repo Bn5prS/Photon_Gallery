@@ -565,6 +565,11 @@ fun AlbumsScreen(
                                 BucketNames.MEDIA_TYPE_PANORAMAS -> "Panoramas" to R.drawable.ic_ms_aspect_ratio
                                 BucketNames.MEDIA_TYPE_SLOW_MO -> "Slow Motion" to R.drawable.ic_ms_schedule
                                 BucketNames.MEDIA_TYPE_ANIMATIONS -> "GIFs" to R.drawable.ic_ms_auto_fix_high
+                                BucketNames.MEDIA_TYPE_NIGHT -> "Night Shots" to R.drawable.ic_ms_wb_twilight
+                                BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> "Photo Spheres" to R.drawable.ic_ms_vrpano
+                                BucketNames.MEDIA_TYPE_PORTRAIT -> "Portraits" to R.drawable.ic_ms_person
+                                BucketNames.MEDIA_TYPE_MACRO -> "Macro" to R.drawable.ic_ms_filter_vintage
+                                BucketNames.MEDIA_TYPE_TIMELAPSE -> "Time-Lapses" to R.drawable.ic_ms_timelapse
                                 else -> "Media" to R.drawable.ic_ms_image
                             }
 

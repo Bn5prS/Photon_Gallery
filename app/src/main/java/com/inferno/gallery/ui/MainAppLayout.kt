@@ -619,6 +619,11 @@ fun MainAppLayout(
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_PANORAMAS -> "Panoramas"
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_SLOW_MO -> "Slow Motion"
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_ANIMATIONS -> "GIFs & Animations"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_NIGHT -> "Night Shots"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> "Photo Spheres"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_PORTRAIT -> "Portraits"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_MACRO -> "Macro Shots"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_TIMELAPSE -> "Time-Lapses"
                                     albumNameArg?.startsWith("place:") == true -> albumNameArg.removePrefix("place:")
                                     else -> albumNameArg ?: "Album"
                                 }

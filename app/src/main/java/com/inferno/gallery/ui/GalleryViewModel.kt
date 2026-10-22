@@ -1639,61 +1639,44 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val mediaTypeBuckets: StateFlow<List<AlbumBucket>> = combine(
-        database.mediaDao().observeRawStats(),
-        database.mediaDao().observePanoramaStats(),
-        database.mediaDao().observeSlowMoStats(),
-        database.mediaDao().observeAnimationStats()
-    ) { rawStats, panoStats, slowMoStats, animStats ->
+        listOf(
+            database.mediaDao().observeRawStats(),
+            database.mediaDao().observePanoramaStats(),
+            database.mediaDao().observeSlowMoStats(),
+            database.mediaDao().observeAnimationStats(),
+            database.mediaDao().observeNightStats(),
+            database.mediaDao().observePhotoSphereStats(),
+            database.mediaDao().observePortraitStats(),
+            database.mediaDao().observeMacroStats(),
+            database.mediaDao().observeTimelapseStats()
+        )
+    ) { statsArray ->
         val list = mutableListOf<AlbumBucket>()
-
-        if (rawStats.itemCount > 0) {
-            list.add(
-                AlbumBucket(
-                    bucketName = BucketNames.MEDIA_TYPE_RAW,
-                    coverUri = rawStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-                    itemCount = rawStats.itemCount,
-                    totalSizeBytes = rawStats.totalSizeBytes,
-                    maxDate = rawStats.maxDate
+        val types = listOf(
+            BucketNames.MEDIA_TYPE_RAW,
+            BucketNames.MEDIA_TYPE_PANORAMAS,
+            BucketNames.MEDIA_TYPE_SLOW_MO,
+            BucketNames.MEDIA_TYPE_ANIMATIONS,
+            BucketNames.MEDIA_TYPE_NIGHT,
+            BucketNames.MEDIA_TYPE_PHOTO_SPHERE,
+            BucketNames.MEDIA_TYPE_PORTRAIT,
+            BucketNames.MEDIA_TYPE_MACRO,
+            BucketNames.MEDIA_TYPE_TIMELAPSE
+        )
+        types.forEachIndexed { index, bucketName ->
+            val stats = statsArray[index]
+            if (stats.itemCount > 0) {
+                list.add(
+                    AlbumBucket(
+                        bucketName = bucketName,
+                        coverUri = stats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
+                        itemCount = stats.itemCount,
+                        totalSizeBytes = stats.totalSizeBytes,
+                        maxDate = stats.maxDate
+                    )
                 )
-            )
+            }
         }
-
-        if (panoStats.itemCount > 0) {
-            list.add(
-                AlbumBucket(
-                    bucketName = BucketNames.MEDIA_TYPE_PANORAMAS,
-                    coverUri = panoStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-                    itemCount = panoStats.itemCount,
-                    totalSizeBytes = panoStats.totalSizeBytes,
-                    maxDate = panoStats.maxDate
-                )
-            )
-        }
-
-        if (slowMoStats.itemCount > 0) {
-            list.add(
-                AlbumBucket(
-                    bucketName = BucketNames.MEDIA_TYPE_SLOW_MO,
-                    coverUri = slowMoStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-                    itemCount = slowMoStats.itemCount,
-                    totalSizeBytes = slowMoStats.totalSizeBytes,
-                    maxDate = slowMoStats.maxDate
-                )
-            )
-        }
-
-        if (animStats.itemCount > 0) {
-            list.add(
-                AlbumBucket(
-                    bucketName = BucketNames.MEDIA_TYPE_ANIMATIONS,
-                    coverUri = animStats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-                    itemCount = animStats.itemCount,
-                    totalSizeBytes = animStats.totalSizeBytes,
-                    maxDate = animStats.maxDate
-                )
-            )
-        }
-
         list
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
