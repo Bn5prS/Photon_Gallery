@@ -83,6 +83,18 @@ data class GeocodedLocation(
     val timestampMs: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "photo_spheres")
+data class PhotoSphereEntity(
+    @PrimaryKey val mediaId: Long,
+    val isSphere: Boolean
+)
+
+data class SphereCandidate(
+    val id: Long,
+    val filePath: String,
+    val uriString: String
+)
+
 // CoreMediaProjection: thin projection returned by the paging DAO query (SELECT cm.*).
 // All fields map directly to core_media columns.
 data class CoreMediaProjection(

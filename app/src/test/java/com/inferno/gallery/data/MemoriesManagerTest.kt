@@ -112,6 +112,8 @@ class MemoriesManagerTest {
         override suspend fun getRecentHighlightMedia(limit: Int): List<CoreMediaEntity> = mediaList.filter { it.bucketName != "Screenshots" }.take(limit)
         override suspend fun getAnyRecentMedia(limit: Int): List<CoreMediaEntity> = mediaList.take(limit)
         override suspend fun getGeotaggedCount(): Int = 0
+        override suspend fun insertPhotoSpheres(entities: List<com.inferno.gallery.data.db.PhotoSphereEntity>) {}
+        override suspend fun getUncheckedSphereCandidates(): List<com.inferno.gallery.data.db.SphereCandidate> = emptyList()
     }
 
     @Test

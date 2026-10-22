@@ -198,9 +198,17 @@ interface MediaDao {
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
-        (SELECT uriString FROM core_media WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        (SELECT uriString FROM core_media WHERE (
+            (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%')
+            AND (name NOT LIKE '%PHOTOSPHERE%' AND name NOT LIKE '%_SPHERE%' AND name NOT LIKE '%SPHERE_%' AND name NOT LIKE '%360_PHOTO%' AND name NOT LIKE '%_360.%' AND filePath NOT LIKE '%/PhotoSphere/%' AND filePath NOT LIKE '%/360/%')
+            AND id NOT IN (SELECT mediaId FROM photo_spheres WHERE isSphere = 1)
+        ) AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
         FROM core_media
-        WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+        WHERE (
+            (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%')
+            AND (name NOT LIKE '%PHOTOSPHERE%' AND name NOT LIKE '%_SPHERE%' AND name NOT LIKE '%SPHERE_%' AND name NOT LIKE '%360_PHOTO%' AND name NOT LIKE '%_360.%' AND filePath NOT LIKE '%/PhotoSphere/%' AND filePath NOT LIKE '%/360/%')
+            AND id NOT IN (SELECT mediaId FROM photo_spheres WHERE isSphere = 1)
+        ) AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observePanoramaStats(): Flow<MediaAggregateStats>
 
@@ -230,9 +238,15 @@ interface MediaDao {
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate,
-        (SELECT uriString FROM core_media WHERE (name LIKE '%PHOTOSPHERE%' OR name LIKE '%_SPHERE%' OR name LIKE '%SPHERE_%' OR name LIKE '%360_PHOTO%' OR name LIKE '%_360.%' OR filePath LIKE '%/PhotoSphere/%' OR filePath LIKE '%/360/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
+        (SELECT uriString FROM core_media WHERE (
+            (name LIKE '%PHOTOSPHERE%' OR name LIKE '%_SPHERE%' OR name LIKE '%SPHERE_%' OR name LIKE '%360_PHOTO%' OR name LIKE '%_360.%' OR filePath LIKE '%/PhotoSphere/%' OR filePath LIKE '%/360/%')
+            OR id IN (SELECT mediaId FROM photo_spheres WHERE isSphere = 1)
+        ) AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 1) as coverUriString
         FROM core_media
-        WHERE (name LIKE '%PHOTOSPHERE%' OR name LIKE '%_SPHERE%' OR name LIKE '%SPHERE_%' OR name LIKE '%360_PHOTO%' OR name LIKE '%_360.%' OR filePath LIKE '%/PhotoSphere/%' OR filePath LIKE '%/360/%') AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
+        WHERE (
+            (name LIKE '%PHOTOSPHERE%' OR name LIKE '%_SPHERE%' OR name LIKE '%SPHERE_%' OR name LIKE '%360_PHOTO%' OR name LIKE '%_360.%' OR filePath LIKE '%/PhotoSphere/%' OR filePath LIKE '%/360/%')
+            OR id IN (SELECT mediaId FROM photo_spheres WHERE isSphere = 1)
+        ) AND isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)
     """)
     fun observePhotoSphereStats(): Flow<MediaAggregateStats>
 
@@ -263,6 +277,18 @@ interface MediaDao {
     @Query("SELECT uriString FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT 4")
     fun observeTopCoverUris(): Flow<List<String>>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPhotoSpheres(entities: List<PhotoSphereEntity>)
+
+    @Query("""
+        SELECT id, filePath, uriString FROM core_media
+        WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%')
+          AND isVideo = 0
+          AND id NOT IN (SELECT mediaId FROM photo_spheres)
+        LIMIT 100
+    """)
+    suspend fun getUncheckedSphereCandidates(): List<SphereCandidate>
+
     @Transaction
     @Query("SELECT * FROM core_media WHERE size IN (SELECT size FROM core_media WHERE bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) AND size > 0 GROUP BY size HAVING COUNT(id) > 1) AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     suspend fun getMediaSharingSameSize(): List<CoreMediaEntity>
@@ -287,12 +313,13 @@ interface MediaDao {
         MediaEmbeddingEntity::class,
         MediaEmbeddingStatusEntity::class,
         VaultMediaEntity::class,
-        GeocodedLocation::class
+        GeocodedLocation::class,
+        PhotoSphereEntity::class
         // ImageFtsEntity is intentionally excluded: @Fts5 has a KSP 2.2.x incompatibility.
         // The FTS5 virtual table is instead created manually in DatabaseProvider's
         // RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
     ],
-    version = 25,
+    version = 26,
     exportSchema = true
 )
 @androidx.room.TypeConverters(EmbeddingConverter::class)

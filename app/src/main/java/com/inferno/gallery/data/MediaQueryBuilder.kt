@@ -90,7 +90,10 @@ object MediaQueryBuilder {
                 conditions.add(NOT_HIDDEN)
             }
             bucket == BucketNames.MEDIA_TYPE_PANORAMAS -> {
-                conditions.add("(cm.name LIKE '%PANO%' OR cm.name LIKE '%PANORAMA%' OR cm.filePath LIKE '%PANO%' OR cm.filePath LIKE '%panorama%') AND cm.isVideo = 0")
+                conditions.add("(cm.name LIKE '%PANO%' OR cm.name LIKE '%PANORAMA%' OR cm.filePath LIKE '%PANO%' OR cm.filePath LIKE '%panorama%')")
+                conditions.add("(cm.name NOT LIKE '%PHOTOSPHERE%' AND cm.name NOT LIKE '%_SPHERE%' AND cm.name NOT LIKE '%SPHERE_%' AND cm.name NOT LIKE '%360_PHOTO%' AND cm.name NOT LIKE '%_360.%' AND cm.filePath NOT LIKE '%/PhotoSphere/%' AND cm.filePath NOT LIKE '%/360/%')")
+                conditions.add("cm.id NOT IN (SELECT mediaId FROM photo_spheres WHERE isSphere = 1)")
+                conditions.add("cm.isVideo = 0")
                 conditions.add(NOT_HIDDEN)
             }
             bucket == BucketNames.MEDIA_TYPE_SLOW_MO -> {
@@ -106,7 +109,13 @@ object MediaQueryBuilder {
                 conditions.add(NOT_HIDDEN)
             }
             bucket == BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> {
-                conditions.add("(cm.name LIKE '%PHOTOSPHERE%' OR cm.name LIKE '%_SPHERE%' OR cm.name LIKE '%SPHERE_%' OR cm.name LIKE '%360_PHOTO%' OR cm.name LIKE '%_360.%' OR cm.filePath LIKE '%/PhotoSphere/%' OR cm.filePath LIKE '%/360/%') AND cm.isVideo = 0")
+                conditions.add("""
+                    (
+                        (cm.name LIKE '%PHOTOSPHERE%' OR cm.name LIKE '%_SPHERE%' OR cm.name LIKE '%SPHERE_%' OR cm.name LIKE '%360_PHOTO%' OR cm.name LIKE '%_360.%' OR cm.filePath LIKE '%/PhotoSphere/%' OR cm.filePath LIKE '%/360/%')
+                        OR cm.id IN (SELECT mediaId FROM photo_spheres WHERE isSphere = 1)
+                    )
+                """.trimIndent())
+                conditions.add("cm.isVideo = 0")
                 conditions.add(NOT_HIDDEN)
             }
             bucket == BucketNames.MEDIA_TYPE_PORTRAIT -> {

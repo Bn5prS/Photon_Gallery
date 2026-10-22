@@ -315,6 +315,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     ExistingWorkPolicy.REPLACE,
                     syncRequest
                 )
+                scanPhotoSpheres()
             }
         }
     }
@@ -375,6 +376,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     }
                     _isInitialSyncRunning.value = false
                     refreshMemories()
+                    scanPhotoSpheres()
                 }
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")
@@ -401,8 +403,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             mediaStoreObserver
         )
 
-        // Silently scan for duplicates in the background on startup
+        // Silently scan for duplicates and photo spheres in the background on startup
         scanForDuplicates()
+        scanPhotoSpheres()
 
         // Collect & observe memories whenever excluded folders, favorites, or media count changes
         viewModelScope.launch(Dispatchers.IO) {
@@ -1540,6 +1543,28 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 e.printStackTrace()
                 _duplicateScanState.value = DuplicateScanState.Done
+            }
+        }
+    }
+
+    fun scanPhotoSpheres() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val candidates = database.mediaDao().getUncheckedSphereCandidates()
+                if (candidates.isEmpty()) return@launch
+                val app = getApplication<Application>()
+                val updates = candidates.map { candidate ->
+                    val isSphere = com.inferno.gallery.data.PhotoSphereHelper.isPhotoSphere(
+                        context = app,
+                        filePath = candidate.filePath,
+                        uriString = candidate.uriString
+                    )
+                    com.inferno.gallery.data.db.PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                }
+                database.mediaDao().insertPhotoSpheres(updates)
+                Log.d("GalleryViewModel", "Classified ${updates.size} photo sphere candidates")
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "Failed to scan photo spheres: ${e.message}")
             }
         }
     }

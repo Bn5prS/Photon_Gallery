@@ -341,6 +341,19 @@ object DatabaseProvider {
                 }
             }
 
+            val MIGRATION_25_26 = object : androidx.room.migration.Migration(25, 26) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS photo_spheres (
+                            mediaId INTEGER PRIMARY KEY NOT NULL,
+                            isSphere INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                }
+            }
+
             val instance = Room.databaseBuilder(
                 context.applicationContext,
                 GalleryDatabase::class.java,
@@ -352,7 +365,7 @@ object DatabaseProvider {
                 MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
                 MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                 MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_22_24,
-                MIGRATION_24_25, MIGRATION_23_25, MIGRATION_22_25
+                MIGRATION_24_25, MIGRATION_23_25, MIGRATION_22_25, MIGRATION_25_26
             )
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .fallbackToDestructiveMigration(true)
@@ -385,6 +398,25 @@ object DatabaseProvider {
                         END;
                         """.trimIndent()
                     )
+
+                    // Photo Spheres classification cache table
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS photo_spheres (
+                            mediaId INTEGER PRIMARY KEY,
+                            isSphere INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_spheres_delete
+                        AFTER DELETE ON core_media
+                        BEGIN
+                            DELETE FROM photo_spheres WHERE mediaId = old.id;
+                        END;
+                        """.trimIndent()
+                    )
                 }
 
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -412,12 +444,75 @@ object DatabaseProvider {
                         END;
                         """.trimIndent()
                     )
+
+                    // Ensure photo_spheres table and trigger exist
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS photo_spheres (
+                            mediaId INTEGER PRIMARY KEY,
+                            isSphere INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_spheres_delete
+                        AFTER DELETE ON core_media
+                        BEGIN
+                            DELETE FROM photo_spheres WHERE mediaId = old.id;
+                        END;
+                        """.trimIndent()
+                    )
                 }
             })
             .build()
             INSTANCE = instance
             instance
         }
+    }
+
+    suspend fun getUncheckedSphereCandidates(db: GalleryDatabase): List<Pair<Long, String>> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<Pair<Long, String>>()
+        try {
+            val rawDb = db.openHelper.readableDatabase
+            val cursor = rawDb.query(
+                """
+                SELECT id, filePath, uriString FROM core_media
+                WHERE (name LIKE '%PANO%' OR name LIKE '%PANORAMA%' OR filePath LIKE '%PANO%' OR filePath LIKE '%panorama%')
+                  AND isVideo = 0
+                  AND id NOT IN (SELECT mediaId FROM photo_spheres)
+                LIMIT 100
+                """.trimIndent()
+            )
+            cursor.use {
+                val idCol = it.getColumnIndex("id")
+                val pathCol = it.getColumnIndex("filePath")
+                val uriCol = it.getColumnIndex("uriString")
+                while (it.moveToNext()) {
+                    val id = it.getLong(idCol)
+                    val path = if (pathCol >= 0) it.getString(pathCol) else ""
+                    val uri = if (uriCol >= 0) it.getString(uriCol) else ""
+                    val target = if (path.isNotEmpty()) path else uri
+                    list.add(id to target)
+                }
+            }
+        } catch (_: Exception) {}
+        list
+    }
+
+    suspend fun recordPhotoSphereClassification(
+        db: GalleryDatabase,
+        mediaId: Long,
+        isSphere: Boolean
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val rawDb = db.openHelper.writableDatabase
+            val cv = ContentValues().apply {
+                put("mediaId", mediaId)
+                put("isSphere", if (isSphere) 1 else 0)
+            }
+            rawDb.insert("photo_spheres", android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE, cv)
+        } catch (_: Exception) {}
     }
 
     /**

@@ -123,6 +123,25 @@ class MediaSyncWorker(
                 geocodeRequest
             )
 
+            // Differentiate 360° Photo Spheres from standard Panoramas via XMP GPano metadata
+            try {
+                val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
+                if (sphereCandidates.isNotEmpty()) {
+                    val sphereEntities = sphereCandidates.map { candidate ->
+                        val isSphere = com.inferno.gallery.data.PhotoSphereHelper.isPhotoSphere(
+                            context = applicationContext,
+                            filePath = candidate.filePath,
+                            uriString = candidate.uriString
+                        )
+                        com.inferno.gallery.data.db.PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                    }
+                    database.mediaDao().insertPhotoSpheres(sphereEntities)
+                    Log.d("MediaSyncWorker", "Classified ${sphereEntities.size} photo sphere candidates")
+                }
+            } catch (e: Exception) {
+                Log.e("MediaSyncWorker", "Photo sphere check failed", e)
+            }
+
             val currentGen = try {
                 android.provider.MediaStore.getGeneration(applicationContext, android.provider.MediaStore.VOLUME_EXTERNAL)
             } catch (e: Exception) { 0L }
