@@ -150,7 +150,9 @@ import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.wrapContentWidth
 import com.inferno.gallery.ui.theme.ShapeFull
+import com.inferno.gallery.ui.theme.ShapeNone
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.data.MotionPhotoHelper
 import com.inferno.gallery.data.MotionPhotoInfo
@@ -1300,7 +1302,7 @@ fun DetailScreen(
         }
         }
 
-        // ── Unified Top App Bar with Directional Gradient Scrim ──
+        // ── Unified Solid Top App Bar ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
@@ -1311,40 +1313,39 @@ fun DetailScreen(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.70f),
-                                Color.Black.copy(alpha = 0.35f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 2.dp,
+                shadowElevation = 3.dp,
+                shape = ShapeNone
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = onBack,
-                        modifier = Modifier.size(48.dp)
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
                             contentDescription = "Go back",
-                            tint = Color.White
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 8.dp),
+                            .padding(horizontal = 12.dp),
                         verticalArrangement = Arrangement.Center
                     ) {
                         if (currentItem != null) {
@@ -1359,7 +1360,7 @@ fun DetailScreen(
                             Text(
                                 text = formattedDate,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1367,7 +1368,7 @@ fun DetailScreen(
                             Text(
                                 text = currentItem.name,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.75f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1381,14 +1382,14 @@ fun DetailScreen(
                                 isMotionPlaying = isMotionLooping
                             },
                             shape = ShapeFull,
-                            color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.45f),
-                            contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                            color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
-                                .padding(end = 6.dp)
-                                .height(34.dp)
+                                .padding(end = 8.dp)
+                                .height(36.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -1408,26 +1409,36 @@ fun DetailScreen(
                         }
                     }
 
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = { showInfoCard = true },
-                        modifier = Modifier.size(48.dp)
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
                             contentDescription = "Info",
-                            tint = Color.White
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Box {
-                        IconButton(
+                        FilledTonalIconButton(
                             onClick = { showMoreMenu = true },
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
                                 contentDescription = "More options",
-                                tint = Color.White
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
@@ -1583,11 +1594,11 @@ fun DetailScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = if (showUi) 72.dp else 24.dp)
+                .padding(bottom = if (showUi) 78.dp else 24.dp)
         ) {
             Surface(
                 shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 tonalElevation = 6.dp,
                 modifier = Modifier.height(32.dp)
@@ -1616,43 +1627,40 @@ fun DetailScreen(
             }
         }
 
-        // ── Unified Bottom Controls Bar with Directional Gradient Scrim ──
+        // ── Material 3 Expressive Floating Bottom Action Dock ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
-                    slideInVertically(MotionTokens.gentleSpring()) { it },
+                    slideInVertically(MotionTokens.gentleSpring()) { it } +
+                    scaleIn(MotionTokens.snappySpring()),
             exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    slideOutVertically(MotionTokens.gentleSpring()) { it },
+                    slideOutVertically(MotionTokens.gentleSpring()) { it } +
+                    scaleOut(MotionTokens.gentleSpring()),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
-            Box(
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                tonalElevation = 2.dp,
+                shadowElevation = 6.dp,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.45f),
-                                Color.Black.copy(alpha = 0.80f)
-                            )
-                        )
-                    )
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth(0.82f)
+                    .widthIn(min = 280.dp, max = 340.dp)
+                    .height(54.dp)
             ) {
                 val currentItem = galleryItems.getOrNull(pagerState.currentPage)
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (bucketName == "Trash") {
-                        IconButton(
+                        FilledTonalIconButton(
                             onClick = {
                                 if (currentItem != null) {
                                     val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
@@ -1664,11 +1672,20 @@ fun DetailScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Restore", tint = Color.White)
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                                contentDescription = "Restore",
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
-                        IconButton(
+
+                        FilledTonalIconButton(
                             onClick = {
                                 if (currentItem != null) {
                                     val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
@@ -1680,13 +1697,21 @@ fun DetailScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Permanently Delete", tint = MaterialTheme.colorScheme.error)
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                contentDescription = "Permanently Delete",
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                     } else {
                         // Share
-                        IconButton(
+                        FilledTonalIconButton(
                             onClick = {
                                 val item = currentItem
                                 if (item != null) {
@@ -1697,13 +1722,21 @@ fun DetailScreen(
                                 }
                             },
                             enabled = currentItem?.localExists == true,
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = Color.White)
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                                contentDescription = "Share",
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
 
                         // Edit / Frame extractor
-                        IconButton(
+                        FilledTonalIconButton(
                             enabled = currentItem?.localExists == true,
                             onClick = {
                                 if (currentItem != null) {
@@ -1723,17 +1756,22 @@ fun DetailScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
                                 contentDescription = if (currentItem?.isVideo == true) "Extract frame" else "Edit",
-                                tint = Color.White
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
                         // Favorite
                         val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
+                        val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
                         var heartBounce by remember { mutableStateOf(false) }
                         val heartScale by animateFloatAsState(
                             targetValue = if (heartBounce) 1.45f else 1f,
@@ -1745,7 +1783,7 @@ fun DetailScreen(
                             finishedListener = { if (heartBounce) heartBounce = false }
                         )
                         val heartView = androidx.compose.ui.platform.LocalView.current
-                        IconButton(
+                        FilledTonalIconButton(
                             onClick = {
                                 if (currentItem != null) {
                                     heartBounce = true
@@ -1753,27 +1791,32 @@ fun DetailScreen(
                                     viewModel.toggleFavorite(currentItem.id)
                                 }
                             },
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = if (isFavorite) favoriteHarmonized.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
                                 contentDescription = "Favorite",
-                                tint = if (isFavorite) com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite else Color.White,
-                                modifier = Modifier.graphicsLayer {
-                                    scaleX = heartScale
-                                    scaleY = heartScale
-                                }
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .graphicsLayer {
+                                        scaleX = heartScale
+                                        scaleY = heartScale
+                                    }
                             )
                         }
 
                         // Delete
-                        IconButton(
+                        FilledTonalIconButton(
                             onClick = {
                                 if (currentItem != null) {
                                     val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
                                     if (!isMediaStoreUri) {
                                         android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
-                                        return@IconButton
+                                        return@FilledTonalIconButton
                                     }
                                     pendingDeleteItem = currentItem
                                     pendingDeletePage = pagerState.currentPage
@@ -1799,9 +1842,17 @@ fun DetailScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier.size(48.dp)
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = Color.White)
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                contentDescription = "Delete",
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                     }
                 }
