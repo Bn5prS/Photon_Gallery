@@ -144,6 +144,7 @@ fun SettingsScreen(
     val memoriesDismissed by viewModel.memoriesDismissed.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
+    val showVideosInDock by viewModel.showVideosInDock.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
@@ -743,6 +744,15 @@ fun SettingsScreen(
                                             onCheckedChange = { isChecked ->
                                                 viewModel.setDockStyle(if (isChecked) com.inferno.gallery.data.DockStyle.FULL_WIDTH else com.inferno.gallery.data.DockStyle.PILL)
                                             }
+                                        )
+                                    }
+                                    add {
+                                        SwitchSettingItem(
+                                            title = "Show Videos Tab",
+                                            subtitle = "Add a dedicated Videos button to the navigation dock",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                            checked = showVideosInDock,
+                                            onCheckedChange = { viewModel.setShowVideosInDock(it) }
                                         )
                                     }
                                     add {

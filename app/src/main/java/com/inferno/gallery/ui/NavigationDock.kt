@@ -67,19 +67,32 @@ fun FloatingNavigationPill(
     onNavigateToPhotos: () -> Unit,
     onNavigateToAlbums: () -> Unit,
     onNavigateToSearch: () -> Unit,
+    showVideosTab: Boolean = false,
+    onNavigateToVideos: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val selectedIndex = when {
-        currentRoute == "photos" -> 0
-        currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 1
-        currentRoute == "search" -> 2
-        else -> 0
+    val tabCount = if (showVideosTab) 4 else 3
+    val selectedIndex = if (showVideosTab) {
+        when {
+            currentRoute == "photos" -> 0
+            currentRoute == "videos" -> 1
+            currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 2
+            currentRoute == "search" -> 3
+            else -> 0
+        }
+    } else {
+        when {
+            currentRoute == "photos" -> 0
+            currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 1
+            currentRoute == "search" -> 2
+            else -> 0
+        }
     }
 
     Surface(
         modifier = modifier
-            .fillMaxWidth(0.78f)
-            .widthIn(min = 280.dp, max = 320.dp)
+            .fillMaxWidth(if (showVideosTab) 0.92f else 0.78f)
+            .widthIn(min = if (showVideosTab) 320.dp else 280.dp, max = if (showVideosTab) 364.dp else 320.dp)
             .height(56.dp)
             .pointerInput(Unit) {},
         shape = ShapeFull,
@@ -94,7 +107,7 @@ fun FloatingNavigationPill(
             contentAlignment = Alignment.CenterStart
         ) {
             val totalWidth = maxWidth
-            val tabWidth = totalWidth / 3
+            val tabWidth = totalWidth / tabCount
             val pillHorizontalInset = 2.dp
             val pillWidth = tabWidth - (pillHorizontalInset * 2)
 
@@ -124,7 +137,7 @@ fun FloatingNavigationPill(
                     .background(MaterialTheme.colorScheme.primary)
             )
 
-            // ── The 3 Interactive Tabs ──
+            // ── Interactive Tabs ──
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -138,6 +151,16 @@ fun FloatingNavigationPill(
                     onClick = onNavigateToPhotos
                 )
 
+                if (showVideosTab) {
+                    SlidingPillTabItem(
+                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = "Videos", modifier = Modifier.size(22.dp)) },
+                        label = "Videos",
+                        isSelected = selectedIndex == 1,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToVideos
+                    )
+                }
+
                 SlidingPillTabItem(
                     icon = {
                         Icon(
@@ -147,7 +170,7 @@ fun FloatingNavigationPill(
                         )
                     },
                     label = "Albums",
-                    isSelected = selectedIndex == 1,
+                    isSelected = if (showVideosTab) selectedIndex == 2 else selectedIndex == 1,
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToAlbums
                 )
@@ -155,7 +178,7 @@ fun FloatingNavigationPill(
                 SlidingPillTabItem(
                     icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(22.dp)) },
                     label = "Search",
-                    isSelected = selectedIndex == 2,
+                    isSelected = if (showVideosTab) selectedIndex == 3 else selectedIndex == 2,
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToSearch
                 )

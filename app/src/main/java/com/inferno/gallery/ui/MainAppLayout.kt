@@ -178,6 +178,7 @@ fun MainAppLayout(
     val sortOrder by viewModel.sortOrder.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
     val dockStyle by viewModel.dockStyle.collectAsState()
+    val showVideosInDock by viewModel.showVideosInDock.collectAsState()
     val nestedNavController = rememberNavController()
 
     var showMenu by remember { mutableStateOf(false) }
@@ -397,7 +398,7 @@ fun MainAppLayout(
         return
     }
 
-    val isGalleryRoute = currentRoute == "photos" || currentRoute?.startsWith("album/") == true
+    val isGalleryRoute = currentRoute == "photos" || currentRoute == "videos" || currentRoute?.startsWith("album/") == true
     val isCollapsibleTopBarActive = isGalleryRoute && !isSelectionMode
 
     var topBarOffsetY by remember { mutableFloatStateOf(0f) }
@@ -689,6 +690,7 @@ fun MainAppLayout(
                             ) {
                                 val titleText = when (currentRoute) {
                                     "photos" -> "Photos"
+                                    "videos" -> "Videos"
                                     "albums" -> "Albums"
                                     "search" -> "Search"
                                     else -> "Photon Gallery"
@@ -781,7 +783,7 @@ fun MainAppLayout(
                                                         }
                                                     }
                                                 )
-                                                if (currentRoute == "photos") {
+                                                if (currentRoute == "photos" || currentRoute == "videos") {
                                                     androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                                     DropdownMenuItem(
                                                         text = { Text("View Mode") },
@@ -847,11 +849,23 @@ fun MainAppLayout(
                     ) {
                         FloatingNavigationPill(
                             currentRoute = currentRoute,
+                            showVideosTab = showVideosInDock,
                             onNavigateToPhotos = {
                                 if (nestedNavController.currentDestination?.route == "photos") {
                                     viewModel.triggerPhotosScrollToTop()
                                 } else {
                                     nestedNavController.navigate("photos") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            onNavigateToVideos = {
+                                if (nestedNavController.currentDestination?.route == "videos") {
+                                    viewModel.triggerVideosScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("videos") {
                                         popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
@@ -896,7 +910,7 @@ fun MainAppLayout(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             DockItem(
-                                icon = { Icon(if (currentRoute == "photos") ImageVector.vectorResource(R.drawable.ic_ms_image) else ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(24.dp)) },
+                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(24.dp)) },
                                 label = "Photos",
                                 isSelected = currentRoute == "photos",
                                 onClick = { 
@@ -911,8 +925,26 @@ fun MainAppLayout(
                                     }
                                 }
                             )
+                            if (showVideosInDock) {
+                                DockItem(
+                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = "Videos", modifier = Modifier.size(24.dp)) },
+                                    label = "Videos",
+                                    isSelected = currentRoute == "videos",
+                                    onClick = {
+                                        if (nestedNavController.currentDestination?.route == "videos") {
+                                            viewModel.triggerVideosScrollToTop()
+                                        } else {
+                                            nestedNavController.navigate("videos") {
+                                                popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                             DockItem(
-                                icon = { Icon(if (currentRoute?.startsWith("album") == true || currentRoute == "albums") ImageVector.vectorResource(R.drawable.ic_ms_photo_album) else ImageVector.vectorResource(R.drawable.ic_ms_photo_album), contentDescription = "Albums", modifier = Modifier.size(24.dp)) },
+                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_album), contentDescription = "Albums", modifier = Modifier.size(24.dp)) },
                                 label = "Albums",
                                 isSelected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
                                 onClick = { 
@@ -958,6 +990,29 @@ fun MainAppLayout(
                     onPhotoClick = onPhotoClick,
                     viewModel = viewModel,
                     contentPadding = innerPadding,
+                    isMainTab = true,
+                    topBarCollapseFractionProvider = {
+                        if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
+                            (-topBarOffsetY / topBarHeightPx).coerceIn(0f, 1f)
+                        } else 0f
+                    },
+                    onNavigateToSettings = {
+                        nestedNavController.navigate("settings") {
+                            popUpTo("photos") { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+            composable("videos") {
+                GalleryScreen(
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    onPhotoClick = onPhotoClick,
+                    viewModel = viewModel,
+                    contentPadding = innerPadding,
+                    bucketName = com.inferno.gallery.data.BucketNames.VIDEOS,
                     isMainTab = true,
                     topBarCollapseFractionProvider = {
                         if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {

@@ -36,6 +36,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val ALBUM_SORT_ORDER = stringPreferencesKey("album_sort_order")
         val ALBUM_LAYOUT_MODE = stringPreferencesKey("album_layout_mode")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
+        val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
         val USE_AMOLED_BLACK = booleanPreferencesKey("use_amoled_black")
         val GRID_AUTO_PLAY = booleanPreferencesKey("grid_auto_play")
@@ -190,6 +191,11 @@ class SettingsRepository private constructor(private val context: Context) {
     val dockStyleFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[DOCK_STYLE] ?: DockStyle.PILL.name
+        }
+
+    val showVideosInDockFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[SHOW_VIDEOS_IN_DOCK] ?: false
         }
 
     val useMaterialYouFlow: Flow<Boolean> = context.dataStore.data
@@ -411,6 +417,12 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateDockStyle(style: DockStyle) {
         context.dataStore.edit { preferences ->
             preferences[DOCK_STYLE] = style.name
+        }
+    }
+
+    suspend fun updateShowVideosInDock(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_VIDEOS_IN_DOCK] = show
         }
     }
 

@@ -373,6 +373,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val showVideosInDock: StateFlow<Boolean> = repository.showVideosInDockFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setShowVideosInDock(show: Boolean) {
+        viewModelScope.launch {
+            repository.updateShowVideosInDock(show)
+        }
+    }
+
     val thumbnailCornerRadius: StateFlow<Float> = repository.thumbnailCornerRadiusFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

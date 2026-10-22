@@ -229,9 +229,15 @@ fun GalleryScreen(
         }
     }
 
-    LaunchedEffect(viewModel) {
-        viewModel.photosScrollToTopTrigger.collect {
-            lazyGridState.animateScrollToItem(0, 0)
+    LaunchedEffect(viewModel, bucketName) {
+        if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
+            viewModel.videosScrollToTopTrigger.collect {
+                lazyGridState.animateScrollToItem(0, 0)
+            }
+        } else {
+            viewModel.photosScrollToTopTrigger.collect {
+                lazyGridState.animateScrollToItem(0, 0)
+            }
         }
     }
 

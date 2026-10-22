@@ -609,6 +609,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = DockStyle.PILL
     )
 
+    val showVideosInDock: StateFlow<Boolean> = settingsRepository.showVideosInDockFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setShowVideosInDock(show: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateShowVideosInDock(show)
+        }
+    }
+
     val timelineLayoutMode: StateFlow<com.inferno.gallery.data.TimelineLayoutMode> = settingsRepository.timelineLayoutModeFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -2647,6 +2659,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun triggerPhotosScrollToTop() {
         _photosScrollToTopTrigger.tryEmit(Unit)
+    }
+
+    private val _videosScrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val videosScrollToTopTrigger: SharedFlow<Unit> = _videosScrollToTopTrigger.asSharedFlow()
+
+    fun triggerVideosScrollToTop() {
+        _videosScrollToTopTrigger.tryEmit(Unit)
     }
 }
 
