@@ -621,7 +621,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val dateHeaderAlignment: StateFlow<String> = settingsRepository.dateHeaderAlignmentFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "CENTER"
+        initialValue = "LEFT"
     )
 
     fun setDateHeaderAlignment(alignment: String) {

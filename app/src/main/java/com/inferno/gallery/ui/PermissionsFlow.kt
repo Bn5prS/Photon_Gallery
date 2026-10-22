@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -185,6 +186,11 @@ fun PermissionOnboardingScreen(
     var currentStep by rememberSaveable { mutableIntStateOf(initialStep) }
     var previousStep by rememberSaveable { mutableIntStateOf(initialStep) }
 
+    BackHandler(enabled = currentStep > 0) {
+        previousStep = currentStep
+        currentStep -= 1
+    }
+
     val resolvedSettingsViewModel: SettingsViewModel? = settingsViewModel ?: runCatching {
         val context = LocalContext.current
         if (context is androidx.lifecycle.ViewModelStoreOwner) {
@@ -257,12 +263,10 @@ fun PermissionOnboardingScreen(
                     )
                     1 -> SetupLooksFeelPage(
                         settingsViewModel = resolvedSettingsViewModel,
-                        onBack = if (initialStep == 0) {
-                            {
-                                previousStep = 1
-                                currentStep = 0
-                            }
-                        } else null,
+                        onBack = {
+                            previousStep = 1
+                            currentStep = 0
+                        },
                         onContinue = {
                             previousStep = 1
                             currentStep = 2
@@ -620,7 +624,7 @@ private fun ExpressiveGallerySymbolsCollage(
 @Composable
 private fun SetupLooksFeelPage(
     settingsViewModel: SettingsViewModel?,
-    onBack: (() -> Unit)? = null,
+    onBack: () -> Unit,
     onContinue: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current

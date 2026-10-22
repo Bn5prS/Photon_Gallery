@@ -142,7 +142,7 @@ fun PhotonGrid(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     timelineLayoutMode: TimelineLayoutMode = TimelineLayoutMode.STANDARD_GRID,
-    dateHeaderAlignment: String = "CENTER",
+    dateHeaderAlignment: String = "LEFT",
     showMatchBadge: Boolean = false,
     headerContent: (@Composable () -> Unit)? = null
 ) {
@@ -573,7 +573,7 @@ fun PhotonGrid(
 fun TimelineSectionHeader(
     title: String,
     modifier: Modifier = Modifier,
-    alignment: String = "CENTER"
+    alignment: String = "LEFT"
 ) {
     val isCenter = alignment == "CENTER"
     Box(

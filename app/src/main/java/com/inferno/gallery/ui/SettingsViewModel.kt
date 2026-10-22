@@ -225,7 +225,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val dateHeaderAlignment: StateFlow<String> = repository.dateHeaderAlignmentFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = "CENTER"
+        initialValue = "LEFT"
     )
 
     fun setDateHeaderAlignment(alignment: String) {

@@ -106,6 +106,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
         // Migration flags
         val THEME_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("theme_default_migrated_v210")
+        val DATE_HEADER_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("date_header_default_migrated_v210")
     }
 
     val autoCheckUpdatesFlow: Flow<Boolean> = context.dataStore.data
@@ -839,6 +840,16 @@ class SettingsRepository private constructor(private val context: Context) {
                 }
             }
         }
+
+        context.dataStore.edit { preferences ->
+            val dateHeaderMigrated = preferences[DATE_HEADER_DEFAULT_MIGRATED_V210] ?: false
+            if (!dateHeaderMigrated) {
+                if (preferences[DATE_HEADER_ALIGNMENT] == "CENTER") {
+                    preferences[DATE_HEADER_ALIGNMENT] = "LEFT"
+                }
+                preferences[DATE_HEADER_DEFAULT_MIGRATED_V210] = true
+            }
+        }
     }
 
     suspend fun updateSecondaryColorOverride(color: Int) {
@@ -876,7 +887,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
 
     val dateHeaderAlignmentFlow: Flow<String> = context.dataStore.data
-        .map { it[DATE_HEADER_ALIGNMENT] ?: "CENTER" }
+        .map { it[DATE_HEADER_ALIGNMENT] ?: "LEFT" }
 
     suspend fun updateDateHeaderAlignment(alignment: String) {
         context.dataStore.edit { it[DATE_HEADER_ALIGNMENT] = alignment }
