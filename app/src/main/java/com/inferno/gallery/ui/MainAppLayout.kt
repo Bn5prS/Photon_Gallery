@@ -705,7 +705,7 @@ fun MainAppLayout(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     modifier = Modifier.padding(end = 6.dp)
                                 ) {
-                                    if (currentRoute != "photos" && currentRoute != "search") {
+                                    if (currentRoute != "photos" && currentRoute != "videos" && currentRoute != "search") {
                                         ExpressiveFilledIconButton(
                                             onClick = { nestedNavController.navigate("search") },
                                             modifier = Modifier.size(40.dp),
