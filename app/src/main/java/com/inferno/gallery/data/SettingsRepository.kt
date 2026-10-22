@@ -46,6 +46,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val STRIP_METADATA_ON_SHARE = booleanPreferencesKey("strip_metadata_on_share")
         val SMART_SEARCH_AUTO_INDEX = booleanPreferencesKey("smart_search_auto_index")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
+        val FONT_SCALE = floatPreferencesKey("font_scale")
         val TYPOGRAPHY_STYLE = stringPreferencesKey("typography_style")
         val SECURE_RECENTS_ENABLED = booleanPreferencesKey("secure_recents_enabled")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
@@ -60,10 +61,12 @@ class SettingsRepository private constructor(private val context: Context) {
 
         val EXCLUDED_FOLDERS = stringPreferencesKey("excluded_folders")
         val HDR_DISPLAY_ENABLED = booleanPreferencesKey("hdr_display_enabled")
+        const val MAX_PINNED_FOLDERS = 15
         val PINNED_FOLDERS = stringPreferencesKey("pinned_folders")
         val PINNED_FOLDERS_ORDER = stringPreferencesKey("pinned_folders_order")
         val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
         val SHOW_HIDDEN_ALBUMS = booleanPreferencesKey("show_hidden_albums")
+        val SHOW_EMPTY_ALBUMS = booleanPreferencesKey("show_empty_albums")
         val VIEWER_BLUR_EFFECT = booleanPreferencesKey("viewer_blur_effect")
         val VIEWER_DYNAMIC_COLOR = booleanPreferencesKey("viewer_dynamic_color")
         val ALBUM_CUSTOM_COVERS = stringPreferencesKey("album_custom_covers")
@@ -306,6 +309,17 @@ class SettingsRepository private constructor(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[USE_SYSTEM_FONT] = use
             preferences[TYPOGRAPHY_STYLE] = if (use) "system" else "expressive"
+        }
+    }
+
+    val fontScaleFlow: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[FONT_SCALE] ?: 1.0f
+        }
+
+    suspend fun updateFontScale(scale: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[FONT_SCALE] = scale
         }
     }
 
@@ -579,7 +593,7 @@ class SettingsRepository private constructor(private val context: Context) {
             if (current.contains(folder)) {
                 current.remove(folder)
             } else {
-                if (current.size >= 6) {
+                if (current.size >= MAX_PINNED_FOLDERS) {
                     success = false
                 } else {
                     current.add(folder)
@@ -612,6 +626,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateShowHiddenAlbums(show: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_HIDDEN_ALBUMS] = show
+        }
+    }
+
+    val showEmptyAlbumsFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[SHOW_EMPTY_ALBUMS] ?: false
+        }
+
+    suspend fun updateShowEmptyAlbums(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_EMPTY_ALBUMS] = show
         }
     }
 

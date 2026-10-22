@@ -55,6 +55,8 @@ data class HarmonizedColors(
     val info: Color,
     /** Info container — lighter blue tinted toward primary. */
     val infoContainer: Color,
+    /** Vibrant saturated red specifically for favorite heart icons. */
+    val favorite: Color = Color(0xFFFF2A4B),
 )
 
 val LocalHarmonizedColors = compositionLocalOf {
@@ -66,6 +68,7 @@ val LocalHarmonizedColors = compositionLocalOf {
         successContainer = Color(0xFFC8E6C9),
         info = Color(0xFF1565C0),
         infoContainer = Color(0xFFBBDEFB),
+        favorite = Color(0xFFFF2A4B),
     )
 }
 
@@ -91,6 +94,7 @@ fun harmonizedColors(): HarmonizedColors {
         val successContainerColor = if (isDark) Color(0xFF1B3B22) else Color(0xFFC8E6C9)
         val infoColor = if (isDark) Color(0xFF64B5F6) else Color(0xFF1565C0)
         val infoContainerColor = if (isDark) Color(0xFF0D325E) else Color(0xFFBBDEFB)
+        val favoriteColor = if (isDark) Color(0xFFFF2A4B) else Color(0xFFE53935)
 
         HarmonizedColors(
             error = themeError.harmonizeWith(primary, 0.12f),
@@ -100,6 +104,7 @@ fun harmonizedColors(): HarmonizedColors {
             successContainer = successContainerColor.harmonizeWith(primary, 0.15f),
             info = infoColor.harmonizeWith(primary, 0.20f),
             infoContainer = infoContainerColor.harmonizeWith(primary, 0.15f),
+            favorite = favoriteColor,
         )
     }
 }

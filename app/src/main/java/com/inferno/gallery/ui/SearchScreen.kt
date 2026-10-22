@@ -422,6 +422,8 @@ private fun SearchResultsList(
     val haptic = LocalHapticFeedback.current
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
+    val favoriteIds by viewModel.favoriteIds.collectAsState()
+    val favoriteIconVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled)
 
     var selectedFilter by remember(query) { mutableStateOf("ALL") }
 
@@ -684,6 +686,7 @@ private fun SearchResultsList(
                         key = { "fts_grid_${it.id}" }
                     ) { item ->
                         val isSelected = selectedUris.contains(item.uri.toString())
+                        val isFav = favoriteIds.contains(item.id)
                         com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                             item = item,
                             sharedTransitionScope = sharedTransitionScope,
@@ -691,6 +694,8 @@ private fun SearchResultsList(
                             onClick = onFtsClick,
                             onLongClick = onLongClickItem,
                             isSelected = isSelected,
+                            favoriteIconVector = favoriteIconVector,
+                            isFavorite = isFav,
                             showMatchBadge = true
                         )
                     }
@@ -742,6 +747,7 @@ private fun SearchResultsList(
                         key = { "smart_grid_${it.id}" }
                     ) { item ->
                         val isSelected = selectedUris.contains(item.uri.toString())
+                        val isFav = favoriteIds.contains(item.id)
                         com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                             item = item,
                             sharedTransitionScope = sharedTransitionScope,
@@ -749,6 +755,8 @@ private fun SearchResultsList(
                             onClick = onSmartClick,
                             onLongClick = onLongClickItem,
                             isSelected = isSelected,
+                            favoriteIconVector = favoriteIconVector,
+                            isFavorite = isFav,
                             showMatchBadge = true
                         )
                     }
@@ -789,6 +797,7 @@ private fun SearchResultsList(
                     key = { "ocr_filter_${it.id}" }
                 ) { item ->
                     val isSelected = selectedUris.contains(item.uri.toString())
+                    val isFav = favoriteIds.contains(item.id)
                     com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
@@ -796,6 +805,8 @@ private fun SearchResultsList(
                         onClick = onFtsClick,
                         onLongClick = onLongClickItem,
                         isSelected = isSelected,
+                        favoriteIconVector = favoriteIconVector,
+                        isFavorite = isFav,
                         showMatchBadge = true
                     )
                 }
@@ -806,6 +817,7 @@ private fun SearchResultsList(
                     key = { "name_filter_${it.id}" }
                 ) { item ->
                     val isSelected = selectedUris.contains(item.uri.toString())
+                    val isFav = favoriteIds.contains(item.id)
                     com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
@@ -813,6 +825,8 @@ private fun SearchResultsList(
                         onClick = onFtsClick,
                         onLongClick = onLongClickItem,
                         isSelected = isSelected,
+                        favoriteIconVector = favoriteIconVector,
+                        isFavorite = isFav,
                         showMatchBadge = true
                     )
                 }
@@ -823,6 +837,7 @@ private fun SearchResultsList(
                     key = { "format_filter_${it.id}" }
                 ) { item ->
                     val isSelected = selectedUris.contains(item.uri.toString())
+                    val isFav = favoriteIds.contains(item.id)
                     com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
@@ -830,6 +845,8 @@ private fun SearchResultsList(
                         onClick = onFtsClick,
                         onLongClick = onLongClickItem,
                         isSelected = isSelected,
+                        favoriteIconVector = favoriteIconVector,
+                        isFavorite = isFav,
                         showMatchBadge = true
                     )
                 }
@@ -840,6 +857,7 @@ private fun SearchResultsList(
                     key = { "semantic_filter_${it.id}" }
                 ) { item ->
                     val isSelected = selectedUris.contains(item.uri.toString())
+                    val isFav = favoriteIds.contains(item.id)
                     com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
@@ -847,6 +865,8 @@ private fun SearchResultsList(
                         onClick = onSmartClick,
                         onLongClick = onLongClickItem,
                         isSelected = isSelected,
+                        favoriteIconVector = favoriteIconVector,
+                        isFavorite = isFav,
                         showMatchBadge = true
                     )
                 }
@@ -883,6 +903,7 @@ private fun SearchResultsList(
                         key = { "album_media_${it.id}" }
                     ) { item ->
                         val isSelected = selectedUris.contains(item.uri.toString())
+                        val isFav = favoriteIds.contains(item.id)
                         com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                             item = item,
                             sharedTransitionScope = sharedTransitionScope,
@@ -890,6 +911,8 @@ private fun SearchResultsList(
                             onClick = onFtsClick,
                             onLongClick = onLongClickItem,
                             isSelected = isSelected,
+                            favoriteIconVector = favoriteIconVector,
+                            isFavorite = isFav,
                             showMatchBadge = true
                         )
                     }
@@ -901,6 +924,7 @@ private fun SearchResultsList(
                     key = { "location_filter_${it.id}" }
                 ) { item ->
                     val isSelected = selectedUris.contains(item.uri.toString())
+                    val isFav = favoriteIds.contains(item.id)
                     com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
@@ -908,6 +932,8 @@ private fun SearchResultsList(
                         onClick = onFtsClick,
                         onLongClick = onLongClickItem,
                         isSelected = isSelected,
+                        favoriteIconVector = favoriteIconVector,
+                        isFavorite = isFav,
                         showMatchBadge = true
                     )
                 }
@@ -918,6 +944,7 @@ private fun SearchResultsList(
                     key = { "date_filter_${it.id}" }
                 ) { item ->
                     val isSelected = selectedUris.contains(item.uri.toString())
+                    val isFav = favoriteIds.contains(item.id)
                     com.inferno.gallery.ui.components.OptimizedThumbnailCell(
                         item = item,
                         sharedTransitionScope = sharedTransitionScope,
@@ -925,6 +952,8 @@ private fun SearchResultsList(
                         onClick = onFtsClick,
                         onLongClick = onLongClickItem,
                         isSelected = isSelected,
+                        favoriteIconVector = favoriteIconVector,
+                        isFavorite = isFav,
                         showMatchBadge = true
                     )
                 }

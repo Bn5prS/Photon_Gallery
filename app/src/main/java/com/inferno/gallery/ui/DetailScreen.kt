@@ -1756,9 +1756,9 @@ fun DetailScreen(
                             modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
-                                imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                                imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
                                 contentDescription = "Favorite",
-                                tint = if (isFavorite) com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error else Color.White,
+                                tint = if (isFavorite) com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite else Color.White,
                                 modifier = Modifier.graphicsLayer {
                                     scaleX = heartScale
                                     scaleY = heartScale

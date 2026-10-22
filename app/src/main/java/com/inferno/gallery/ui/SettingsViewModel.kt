@@ -122,6 +122,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val fontScale: StateFlow<Float> = repository.fontScaleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 1.0f
+    )
+
+    fun setFontScale(scale: Float) {
+        viewModelScope.launch {
+            repository.updateFontScale(scale)
+        }
+    }
+
     val secureRecentsEnabled: StateFlow<Boolean> = repository.secureRecentsEnabledFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -298,6 +310,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setShowHiddenAlbums(show: Boolean) {
         viewModelScope.launch {
             repository.updateShowHiddenAlbums(show)
+        }
+    }
+
+    val showEmptyAlbums: StateFlow<Boolean> = repository.showEmptyAlbumsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setShowEmptyAlbums(show: Boolean) {
+        viewModelScope.launch {
+            repository.updateShowEmptyAlbums(show)
         }
     }
 

@@ -66,20 +66,26 @@ class LocalMediaRepository(
             MediaStore.Images.Media.DATA,
             MediaStore.Files.FileColumns.MEDIA_TYPE,
             MediaStore.MediaColumns.DURATION,
-            MediaStore.MediaColumns.IS_TRASHED
+            MediaStore.MediaColumns.IS_TRASHED,
+            MediaStore.MediaColumns.IS_FAVORITE
         )
 
         val baseSelection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
         
         val isTrashRequest = folderName == "Trash"
+        val isFavoritesRequest = folderName == BucketNames.FAVORITES || folderName == "Favorites"
         val isAllRequest = folderName == null
         
-        var selection = if (folderName != null && !isTrashRequest) {
-            "$baseSelection AND ${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
-        } else baseSelection
+        var selection = when {
+            isFavoritesRequest -> "$baseSelection AND ${MediaStore.MediaColumns.IS_FAVORITE} = 1"
+            folderName != null && !isTrashRequest -> "$baseSelection AND ${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
+            else -> baseSelection
+        }
         
         val selectionArgsList = mutableListOf<String>()
-        if (folderName != null && !isTrashRequest) selectionArgsList.add(folderName)
+        if (folderName != null && !isTrashRequest && !isFavoritesRequest) {
+            selectionArgsList.add(folderName)
+        }
 
         if (lastGeneration != null && lastGeneration > 0) {
             selection += " AND (${MediaStore.MediaColumns.GENERATION_ADDED} > ? OR ${MediaStore.MediaColumns.GENERATION_MODIFIED} > ?)"

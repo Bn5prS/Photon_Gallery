@@ -25,6 +25,9 @@ interface MediaDao {
     suspend fun getMediaRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<CoreMediaProjection>
 
     @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])
+    fun observeMediaEntitiesRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<List<CoreMediaEntity>>
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])
     fun observeCountRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int>
 
     @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])

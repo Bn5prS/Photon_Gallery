@@ -466,9 +466,9 @@ fun MemoryReelViewer(
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                            imageVector = ImageVector.vectorResource(if (isFavorite) R.drawable.ic_ms_favorite_filled else R.drawable.ic_ms_favorite),
                             contentDescription = "Favorite",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                            tint = if (isFavorite) com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp)
                         )
                     }

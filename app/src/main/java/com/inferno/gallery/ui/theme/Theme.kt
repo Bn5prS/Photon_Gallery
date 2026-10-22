@@ -43,6 +43,7 @@ fun PhotonGalleryTheme(
     colorPresetName: String = "default_blue",
     useAmoledBlack: Boolean = false,
     useSystemFont: Boolean = false,
+    fontScale: Float = 1.0f,
     animateTransitions: Boolean = true,
     motionStyle: String = "expressive",
     content: @Composable () -> Unit,
@@ -118,18 +119,30 @@ fun PhotonGalleryTheme(
         appTypography(useSystemFont = useSystemFont, isDark = darkTheme)
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = resolvedScheme,
-        shapes = AppShapes,
-        typography = typography,
-        motionScheme = motionScheme,
-    ) {
-        val harmonized = harmonizedColors()
-        CompositionLocalProvider(
-            LocalHarmonizedColors provides harmonized,
-            LocalPhotonColors provides photonColors,
-            content = content,
+    val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+    val scaledDensity = remember(currentDensity.density, currentDensity.fontScale, fontScale) {
+        androidx.compose.ui.unit.Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * fontScale
         )
+    }
+
+    CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides scaledDensity
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = resolvedScheme,
+            shapes = AppShapes,
+            typography = typography,
+            motionScheme = motionScheme,
+        ) {
+            val harmonized = harmonizedColors()
+            CompositionLocalProvider(
+                LocalHarmonizedColors provides harmonized,
+                LocalPhotonColors provides photonColors,
+                content = content,
+            )
+        }
     }
 }
 

@@ -70,6 +70,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -243,10 +244,23 @@ fun MainAppLayout(
     var allFilesGranted by remember { mutableStateOf(checkAllFilesPermission()) }
     var hasRequestedMediaOnce by remember { mutableStateOf(false) }
 
+    val triggerSync = {
+        val syncWorkRequest = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "MediaSyncWorker",
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            syncWorkRequest
+        )
+    }
+
     fun updatePermissionStates() {
+        val wasMediaGranted = photosGranted
         photosGranted = checkPhotosPermission()
         videosGranted = checkVideosPermission()
         allFilesGranted = checkAllFilesPermission()
+        if (!wasMediaGranted && photosGranted) {
+            triggerSync()
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -271,15 +285,6 @@ fun MainAppLayout(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
         updatePermissionStates()
-    }
-
-    val triggerSync = {
-        val syncWorkRequest = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "MediaSyncWorker",
-            androidx.work.ExistingWorkPolicy.REPLACE,
-            syncWorkRequest
-        )
     }
 
     val trashLauncher = rememberLauncherForActivityResult(
@@ -326,11 +331,15 @@ fun MainAppLayout(
         return
     }
 
-    if (onboardingCompleted == false || !hasRequiredPermissions) {
+    var onboardingFinishedLocally by rememberSaveable { mutableStateOf(false) }
+    val showOnboardingFlow = (onboardingCompleted == false && !onboardingFinishedLocally)
+
+    if (showOnboardingFlow || !hasRequiredPermissions) {
         PermissionOnboardingScreen(
             photosGranted = photosGranted,
             videosGranted = videosGranted,
             allFilesGranted = allFilesGranted,
+            initialStep = 0,
             onGrantMediaClick = {
                 val activity = context as? android.app.Activity
                 val showRationale = activity?.let {
@@ -379,6 +388,7 @@ fun MainAppLayout(
                 intentLauncher.launch(intent)
             },
             onContinueClick = {
+                onboardingFinishedLocally = true
                 viewModel.completeOnboarding()
                 triggerSync()
             },

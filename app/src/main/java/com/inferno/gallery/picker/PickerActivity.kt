@@ -42,6 +42,7 @@ class PickerActivity : ComponentActivity() {
             val colorPresetName by settingsViewModel.colorPresetName.collectAsState()
             val useAmoledBlack by settingsViewModel.useAmoledBlack.collectAsState()
             val useSystemFont by settingsViewModel.useSystemFont.collectAsState()
+            val fontScale by settingsViewModel.fontScale.collectAsState()
 
             val isSystemDark = isSystemInDarkTheme()
             val isDark = when (themeMode) {
@@ -56,6 +57,7 @@ class PickerActivity : ComponentActivity() {
                 colorPresetName = colorPresetName,
                 useAmoledBlack = useAmoledBlack,
                 useSystemFont = useSystemFont,
+                fontScale = fontScale,
             ) {
                 PickerScreen(
                     allowMultiple = allowMultiple,

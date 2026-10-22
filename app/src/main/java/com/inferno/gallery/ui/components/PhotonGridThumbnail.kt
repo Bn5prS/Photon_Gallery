@@ -58,7 +58,8 @@ fun BoxScope.PhotonGridThumbnail(
     item: GalleryItem,
     gridCellsCount: Int,
     videoIconVector: ImageVector?,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    isFavorite: Boolean = false
 ) {
     val context = LocalContext.current
     val targetDimensionPx = remember(gridCellsCount) { thumbnailTargetPx(gridCellsCount) }
@@ -93,12 +94,13 @@ fun BoxScope.PhotonGridThumbnail(
         val durationText = remember(item.durationMs) {
             item.durationMs?.let { formatDuration(it) } ?: "0:00"
         }
+        val videoAlignment = if (isFavorite) Alignment.BottomStart else Alignment.BottomEnd
 
         if (gridCellsCount >= 7) {
             // Ultra-dense grid (7-8 columns: ~45-50dp cell): micro video icon glyph
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(videoAlignment)
                     .padding(2.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -113,7 +115,7 @@ fun BoxScope.PhotonGridThumbnail(
             // Dense grid (6 columns: ~58dp cell): duration only with shadow
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(videoAlignment)
                     .padding(horizontal = 3.dp, vertical = 2.dp)
             ) {
                 Text(
@@ -150,7 +152,7 @@ fun BoxScope.PhotonGridThumbnail(
 
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(videoAlignment)
                     .padding(outerPad),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(iconSpacing)

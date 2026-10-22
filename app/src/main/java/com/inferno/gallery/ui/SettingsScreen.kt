@@ -6,8 +6,11 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -40,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import com.inferno.gallery.ui.components.FourQuadrantColorSwatch
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
+import com.inferno.gallery.ui.theme.ShapeMedium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,8 +51,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +64,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -64,12 +72,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -126,6 +139,7 @@ fun SettingsScreen(
     val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val showHiddenAlbums by viewModel.showHiddenAlbums.collectAsState()
+    val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
     val showMemories by viewModel.showMemories.collectAsState()
     val memoriesDismissed by viewModel.memoriesDismissed.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
@@ -141,6 +155,7 @@ fun SettingsScreen(
     val stripMetadataOnShare by viewModel.stripMetadataOnShare.collectAsState()
     val maxBrightnessEnabled by viewModel.maxBrightnessEnabled.collectAsState()
     val useSystemFont by viewModel.useSystemFont.collectAsState()
+    val fontScale by viewModel.fontScale.collectAsState()
     val secureRecentsEnabled by viewModel.secureRecentsEnabled.collectAsState()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val hapticsStrength by viewModel.hapticsStrength.collectAsState()
@@ -303,7 +318,7 @@ fun SettingsScreen(
                             {
                                 SettingsCategoryRow(
                                     title = "General",
-                                    subtitle = "Haptics, video autoplay, and delete confirmations",
+                                    subtitle = "Albums visibility, haptics, video autoplay, and confirmations",
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_settings),
                                     iconContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                                     iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -456,6 +471,7 @@ fun SettingsScreen(
                                                         palette = palette,
                                                         isSelected = !useMaterialYou && (colorPresetName == palette.id),
                                                         onClick = {
+                                                            viewModel.setUseMaterialYou(false)
                                                             viewModel.setColorPresetName(palette.id)
                                                         }
                                                     )
@@ -523,6 +539,13 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
                                             checked = useSystemFont,
                                             onCheckedChange = { viewModel.setUseSystemFont(it) }
+                                        )
+                                    },
+                                    {
+                                        FontScaleSettingItem(
+                                            fontScale = fontScale,
+                                            onFontScaleChange = { viewModel.setFontScale(it) },
+                                            onReset = { viewModel.setFontScale(1.0f) }
                                         )
                                     }
                                 )
@@ -756,6 +779,15 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility),
                                             checked = showHiddenAlbums,
                                             onCheckedChange = { viewModel.setShowHiddenAlbums(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = "Show Empty Albums",
+                                            subtitle = "Display folders that contain no photos or videos",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                            checked = showEmptyAlbums,
+                                            onCheckedChange = { viewModel.setShowEmptyAlbums(it) }
                                         )
                                     }
                                 )
@@ -1661,6 +1693,229 @@ fun SwitchSettingItem(
 }
 
 @Composable
+fun FontScaleSettingItem(
+    fontScale: Float,
+    onFontScaleChange: (Float) -> Unit,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var sliderPosition by remember(fontScale) { mutableFloatStateOf(fontScale) }
+    val percentage = (sliderPosition * 100).roundToInt()
+    val scaleLabel = when {
+        percentage <= 75 -> "Compact"
+        percentage <= 90 -> "Small"
+        percentage <= 105 -> "Default"
+        percentage <= 120 -> "Medium"
+        percentage <= 135 -> "Large"
+        else -> "Extra Large"
+    }
+
+    val haptic = LocalHapticFeedback.current
+    val currentDensity = LocalDensity.current
+    val baseFontScale = if (fontScale > 0.01f) currentDensity.fontScale / fontScale else currentDensity.fontScale
+    val previewDensity = remember(currentDensity.density, baseFontScale, sliderPosition) {
+        Density(
+            density = currentDensity.density,
+            fontScale = baseFontScale * sliderPosition
+        )
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        // 1. Header with Title & Badge / Reset Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Font Scale",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Adjust text size flexibility across the app",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        text = "$percentage% • $scaleLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = percentage != 100,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            sliderPosition = 1.0f
+                            onReset()
+                        },
+                        modifier = Modifier.size(32.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                            contentDescription = "Reset font scale",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 2. Live Preview Card (dynamically reacts to sliderPosition in real time)
+        CompositionLocalProvider(LocalDensity provides previewDensity) {
+            Surface(
+                shape = ShapeMedium,
+                color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Live Typography Preview",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Text dynamically reflows with expressive layout hierarchy and proportional line heights.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Oct 22 • 1,420 photos",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 3. Slider controls with - / + nudge buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    val prev = ((sliderPosition - 0.05f) * 20f).roundToInt() / 20f
+                    val clamped = prev.coerceIn(0.70f, 1.50f)
+                    sliderPosition = clamped
+                    onFontScaleChange(clamped)
+                },
+                enabled = sliderPosition > 0.705f,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_remove),
+                    contentDescription = "Decrease font size",
+                    tint = if (sliderPosition > 0.705f) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Slider(
+                value = sliderPosition.coerceIn(0.70f, 1.50f),
+                onValueChange = { newValue ->
+                    val snapped = ((newValue * 20f).roundToInt() / 20f).coerceIn(0.70f, 1.50f)
+                    sliderPosition = snapped
+                },
+                onValueChangeFinished = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onFontScaleChange(sliderPosition)
+                },
+                valueRange = 0.70f..1.50f,
+                steps = 15,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            )
+
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    val next = ((sliderPosition + 0.05f) * 20f).roundToInt() / 20f
+                    val clamped = next.coerceIn(0.70f, 1.50f)
+                    sliderPosition = clamped
+                    onFontScaleChange(clamped)
+                },
+                enabled = sliderPosition < 1.495f,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                    contentDescription = "Increase font size",
+                    tint = if (sliderPosition < 1.495f) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        // 4. Tick Labels Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 36.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "70% Compact",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "100% Default",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (percentage == 100) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (percentage == 100) FontWeight.Bold else FontWeight.Normal
+            )
+            Text(
+                text = "150% Large",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 fun ClickableSettingItem(
     title: String,
     subtitle: String? = null,
@@ -2045,9 +2300,9 @@ private fun PreviewMosaicTile(
                 }
             } else if (isFavorite) {
                 Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                    tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite,
                     modifier = Modifier
                         .size(11.dp)
                         .align(Alignment.BottomEnd)

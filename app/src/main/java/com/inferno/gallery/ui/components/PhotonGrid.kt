@@ -39,6 +39,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -59,6 +60,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -150,6 +152,8 @@ fun PhotonGrid(
     // Hoisted static image vectors resolved once per grid, avoiding per-cell recomposition lookups
     val videoIconVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow)
     val checkIconVector = ImageVector.vectorResource(R.drawable.ic_ms_check)
+    val favoriteIconVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled)
+    val favoriteIds by viewModel.favoriteIds.collectAsState()
 
     // ── Live Pinch-to-Zoom Spring Animation & Scale State ───────────────────────
     var isPinching by remember { mutableStateOf(false) }
@@ -203,93 +207,239 @@ fun PhotonGrid(
         Box(modifier = basePinchModifier) {
             when (timelineLayoutMode) {
                 TimelineLayoutMode.EDITORIAL_MOSAIC -> {
-                // ── Editorial Mosaic Layout (Smart Hero & Grid) ───────────────
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridCellsCount.coerceIn(2, 6)),
-                    state = lazyGridState,
-                    contentPadding = contentPadding,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .gridDragSelectGesture(
-                            lazyGridState = lazyGridState,
-                            pagedMedia = pagedMedia,
-                            viewModel = viewModel,
-                            hapticFeedback = haptic,
-                            coroutineScope = coroutineScope,
-                            headerOffset = if (headerContent != null) 1 else 0
-                        )
-                ) {
-                    if (headerContent != null) {
-                        item(
-                            key = "grid_top_header_content",
-                            span = { GridItemSpan(maxLineSpan) },
-                            contentType = "header_content"
-                        ) {
-                            headerContent()
-                        }
+                    // ── Editorial Mosaic Layout (Google Photos Multi-Cell Block Architecture) ──
+                    val mosaicCols = gridCellsCount.coerceIn(2, 6)
+                    val mosaicDisplayItems = remember(pagedMedia.itemCount, mosaicCols) {
+                        buildMosaicDisplayItems(pagedMedia, mosaicCols)
                     }
-                    items(
-                        count = pagedMedia.itemCount,
-                        key = pagedMedia.itemKey { item ->
-                            when (item) {
-                                is GalleryListItem.Header -> "header_${item.id}"
-                                is GalleryListItem.Item -> item.galleryItem.id
-                            }
-                        },
-                        contentType = pagedMedia.itemContentType { item ->
-                            if (item is GalleryListItem.Header) "header" else "media"
-                        },
-                        span = { index ->
-                            val listItem = if (index < pagedMedia.itemCount) pagedMedia.peek(index) else null
-                            if (listItem is GalleryListItem.Header) {
-                                GridItemSpan(maxLineSpan)
-                            } else {
-                                val isHero = (index % 7 == 1) || (index % 13 == 4)
-                                if (isHero) GridItemSpan(minOf(2, gridCellsCount)) else GridItemSpan(1)
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(mosaicCols),
+                        state = lazyGridState,
+                        contentPadding = contentPadding,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .gridDragSelectGesture(
+                                lazyGridState = lazyGridState,
+                                pagedMedia = pagedMedia,
+                                viewModel = viewModel,
+                                hapticFeedback = haptic,
+                                coroutineScope = coroutineScope,
+                                headerOffset = if (headerContent != null) 1 else 0,
+                                mosaicDisplayItems = mosaicDisplayItems
+                            )
+                    ) {
+                        if (headerContent != null) {
+                            item(
+                                key = "grid_top_header_content",
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = "header_content"
+                            ) {
+                                headerContent()
                             }
                         }
-                    ) { index ->
-                        val listItem = pagedMedia[index]
-                        if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(title = listItem.title, alignment = dateHeaderAlignment)
-                        } else if (listItem is GalleryListItem.Item) {
-                            val item = listItem.galleryItem
-                            val isHero = (index % 7 == 1) || (index % 13 == 4)
-                            val mosaicRatio = if (isHero) 1.35f else 1.0f
-                            val isSelected = selectedUris.contains(item.uri.toString())
-
-                            OptimizedThumbnailCell(
-                                modifier = Modifier,
-                                item = item,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                onClick = onMediaClick,
-                                isSelected = isSelected,
-                                gridCellsCount = gridCellsCount,
-                                thumbnailCornerRadius = thumbnailCornerRadius,
-                                aspectRatio = mosaicRatio,
-                                videoIconVector = videoIconVector,
-                                checkIconVector = checkIconVector,
-                                showMatchBadge = showMatchBadge
-                            )
-                        } else {
-                            val isHero = (index % 7 == 1) || (index % 13 == 4)
-                            val mosaicRatio = if (isHero && gridCellsCount >= 3) 1.4f else 1.0f
-                            val placeholderShape = remember(thumbnailCornerRadius) {
-                                if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp) else null
+                        items(
+                            count = mosaicDisplayItems.size,
+                            key = { idx -> mosaicDisplayItems[idx].key },
+                            contentType = { idx ->
+                                when (mosaicDisplayItems[idx]) {
+                                    is MosaicDisplayItem.HeaderItem -> "header"
+                                    is MosaicDisplayItem.BigTileItem -> "big"
+                                    is MosaicDisplayItem.QuadTileItem -> "quad"
+                                    is MosaicDisplayItem.PairTileItem -> "pair"
+                                    is MosaicDisplayItem.SingleItem -> "single"
+                                }
+                            },
+                            span = { idx ->
+                                when (val item = mosaicDisplayItems[idx]) {
+                                    is MosaicDisplayItem.HeaderItem -> GridItemSpan(maxLineSpan)
+                                    is MosaicDisplayItem.BigTileItem -> GridItemSpan(item.span.coerceIn(1, mosaicCols))
+                                    is MosaicDisplayItem.QuadTileItem -> GridItemSpan(2.coerceIn(1, mosaicCols))
+                                    is MosaicDisplayItem.PairTileItem -> GridItemSpan(1)
+                                    is MosaicDisplayItem.SingleItem -> GridItemSpan(1)
+                                }
                             }
-                            Box(
-                                modifier = Modifier
-                                    .aspectRatio(mosaicRatio)
-                                    .run { if (placeholderShape != null) clip(placeholderShape) else this }
-                                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                            )
+                        ) { idx ->
+                            when (val item = mosaicDisplayItems[idx]) {
+                                is MosaicDisplayItem.HeaderItem -> {
+                                    if (item.sourceIndex < pagedMedia.itemCount) {
+                                        pagedMedia[item.sourceIndex]
+                                    }
+                                    if (viewMode != ViewMode.Immersive) {
+                                        TimelineSectionHeader(title = item.header.title, alignment = dateHeaderAlignment)
+                                    }
+                                }
+                                is MosaicDisplayItem.BigTileItem -> {
+                                    if (item.sourceIndex < pagedMedia.itemCount) {
+                                        pagedMedia[item.sourceIndex]
+                                    }
+                                    val isSelected = selectedUris.contains(item.item.uri.toString())
+                                    val isFav = favoriteIds.contains(item.item.id)
+                                    OptimizedThumbnailCell(
+                                        modifier = Modifier,
+                                        item = item.item,
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        onClick = onMediaClick,
+                                        isSelected = isSelected,
+                                        gridCellsCount = mosaicCols,
+                                        thumbnailCornerRadius = thumbnailCornerRadius,
+                                        aspectRatio = item.aspectRatio,
+                                        videoIconVector = videoIconVector,
+                                        checkIconVector = checkIconVector,
+                                        favoriteIconVector = favoriteIconVector,
+                                        isFavorite = isFav,
+                                        showMatchBadge = showMatchBadge
+                                    )
+                                }
+                                is MosaicDisplayItem.QuadTileItem -> {
+                                    item.sourceIndices.forEach { srcIdx ->
+                                        if (srcIdx < pagedMedia.itemCount) {
+                                            pagedMedia[srcIdx]
+                                        }
+                                    }
+                                    Box(modifier = Modifier.aspectRatio(1.0f)) {
+                                        Column(
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                for (i in 0..1) {
+                                                    val subItem = item.items.getOrNull(i)
+                                                    if (subItem != null) {
+                                                        val isSubSelected = selectedUris.contains(subItem.uri.toString())
+                                                        val isSubFav = favoriteIds.contains(subItem.id)
+                                                        OptimizedThumbnailCell(
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .aspectRatio(1f),
+                                                            item = subItem,
+                                                            sharedTransitionScope = sharedTransitionScope,
+                                                            animatedVisibilityScope = animatedVisibilityScope,
+                                                            onClick = onMediaClick,
+                                                            isSelected = isSubSelected,
+                                                            gridCellsCount = mosaicCols,
+                                                            thumbnailCornerRadius = thumbnailCornerRadius,
+                                                            aspectRatio = 1.0f,
+                                                            videoIconVector = videoIconVector,
+                                                            checkIconVector = checkIconVector,
+                                                            favoriteIconVector = favoriteIconVector,
+                                                            isFavorite = isSubFav,
+                                                            showMatchBadge = showMatchBadge
+                                                        )
+                                                    } else {
+                                                        Spacer(modifier = Modifier.weight(1f))
+                                                    }
+                                                }
+                                            }
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                for (i in 2..3) {
+                                                    val subItem = item.items.getOrNull(i)
+                                                    if (subItem != null) {
+                                                        val isSubSelected = selectedUris.contains(subItem.uri.toString())
+                                                        val isSubFav = favoriteIds.contains(subItem.id)
+                                                        OptimizedThumbnailCell(
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .aspectRatio(1f),
+                                                            item = subItem,
+                                                            sharedTransitionScope = sharedTransitionScope,
+                                                            animatedVisibilityScope = animatedVisibilityScope,
+                                                            onClick = onMediaClick,
+                                                            isSelected = isSubSelected,
+                                                            gridCellsCount = mosaicCols,
+                                                            thumbnailCornerRadius = thumbnailCornerRadius,
+                                                            aspectRatio = 1.0f,
+                                                            videoIconVector = videoIconVector,
+                                                            checkIconVector = checkIconVector,
+                                                            favoriteIconVector = favoriteIconVector,
+                                                            isFavorite = isSubFav,
+                                                            showMatchBadge = showMatchBadge
+                                                        )
+                                                    } else {
+                                                        Spacer(modifier = Modifier.weight(1f))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                is MosaicDisplayItem.PairTileItem -> {
+                                    item.sourceIndices.forEach { srcIdx ->
+                                        if (srcIdx < pagedMedia.itemCount) {
+                                            pagedMedia[srcIdx]
+                                        }
+                                    }
+                                    Box(modifier = Modifier.aspectRatio(0.5f)) {
+                                        Column(
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            for (i in 0..1) {
+                                                val subItem = item.items.getOrNull(i)
+                                                if (subItem != null) {
+                                                    val isSubSelected = selectedUris.contains(subItem.uri.toString())
+                                                    val isSubFav = favoriteIds.contains(subItem.id)
+                                                    OptimizedThumbnailCell(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .aspectRatio(1f),
+                                                        item = subItem,
+                                                        sharedTransitionScope = sharedTransitionScope,
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        onClick = onMediaClick,
+                                                        isSelected = isSubSelected,
+                                                        gridCellsCount = mosaicCols,
+                                                        thumbnailCornerRadius = thumbnailCornerRadius,
+                                                        aspectRatio = 1.0f,
+                                                        videoIconVector = videoIconVector,
+                                                        checkIconVector = checkIconVector,
+                                                        favoriteIconVector = favoriteIconVector,
+                                                        isFavorite = isSubFav,
+                                                        showMatchBadge = showMatchBadge
+                                                    )
+                                                } else {
+                                                    Spacer(modifier = Modifier.weight(1f))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                is MosaicDisplayItem.SingleItem -> {
+                                    if (item.sourceIndex < pagedMedia.itemCount) {
+                                        pagedMedia[item.sourceIndex]
+                                    }
+                                    val isSelected = selectedUris.contains(item.item.uri.toString())
+                                    val isFav = favoriteIds.contains(item.item.id)
+                                    OptimizedThumbnailCell(
+                                        modifier = Modifier,
+                                        item = item.item,
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        onClick = onMediaClick,
+                                        isSelected = isSelected,
+                                        gridCellsCount = mosaicCols,
+                                        thumbnailCornerRadius = thumbnailCornerRadius,
+                                        aspectRatio = 1.0f,
+                                        videoIconVector = videoIconVector,
+                                        checkIconVector = checkIconVector,
+                                        favoriteIconVector = favoriteIconVector,
+                                        isFavorite = isFav,
+                                        showMatchBadge = showMatchBadge
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-            }
 
             TimelineLayoutMode.STANDARD_GRID -> {
                 // ── Standard Uniform Square Grid ──────────────────────────────
@@ -342,6 +492,7 @@ fun PhotonGrid(
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val isSelected = selectedUris.contains(item.uri.toString())
+                            val isFav = favoriteIds.contains(item.id)
 
                             OptimizedThumbnailCell(
                                 modifier = Modifier,
@@ -355,6 +506,8 @@ fun PhotonGrid(
                                 aspectRatio = 1.0f,
                                 videoIconVector = videoIconVector,
                                 checkIconVector = checkIconVector,
+                                favoriteIconVector = favoriteIconVector,
+                                isFavorite = isFav,
                                 showMatchBadge = showMatchBadge
                             )
                         } else {
@@ -455,6 +608,8 @@ fun OptimizedThumbnailCell(
     aspectRatio: Float = 1.0f,
     videoIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_videocam),
     checkIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+    favoriteIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled),
+    isFavorite: Boolean = false,
     showMatchBadge: Boolean = false
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -540,7 +695,8 @@ fun OptimizedThumbnailCell(
         PhotonGridThumbnail(
             item = item,
             gridCellsCount = gridCellsCount,
-            videoIconVector = videoIconVector
+            videoIconVector = videoIconVector,
+            isFavorite = isFavorite
         )
 
         // ── Search Match Reason Badge & Snippet Overlay ───────────────────────
@@ -587,6 +743,45 @@ fun OptimizedThumbnailCell(
                     contentDescription = "Selected",
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(15.dp)
+                )
+            }
+        }
+
+        // Favorite red heart badge in subtle translucent contrast circle
+        if (isFavorite) {
+            val badgePadding = when {
+                gridCellsCount <= 3 -> 6.dp
+                gridCellsCount <= 5 -> 4.dp
+                else -> 2.dp
+            }
+            val badgeSize = when {
+                gridCellsCount <= 3 -> 22.dp
+                gridCellsCount <= 5 -> 18.dp
+                gridCellsCount == 6 -> 15.dp
+                else -> 12.dp
+            }
+            val heartSize = when {
+                gridCellsCount <= 3 -> 14.dp
+                gridCellsCount <= 5 -> 11.dp
+                gridCellsCount == 6 -> 9.dp
+                else -> 8.dp
+            }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(badgePadding)
+                    .size(badgeSize)
+                    .background(
+                        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.38f),
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = favoriteIconVector,
+                    contentDescription = "Favorite",
+                    tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite,
+                    modifier = Modifier.size(heartSize)
                 )
             }
         }
@@ -881,8 +1076,9 @@ private fun Modifier.gridDragSelectGesture(
     viewModel: GalleryViewModel,
     hapticFeedback: HapticFeedback,
     coroutineScope: CoroutineScope,
-    headerOffset: Int = 0
-): Modifier = this.pointerInput(lazyGridState) {
+    headerOffset: Int = 0,
+    mosaicDisplayItems: List<MosaicDisplayItem>? = null
+): Modifier = this.pointerInput(lazyGridState, mosaicDisplayItems) {
     var dragStartIndex = -1
     var lastHitIndex = -1
     var currentDragPosition: Offset? = null // Plain var — never observed by Composable, no snapshot overhead
@@ -898,16 +1094,26 @@ private fun Modifier.gridDragSelectGesture(
         if (adjustedStart < 0 || adjustedTarget < 0) return
         val start = minOf(adjustedStart, adjustedTarget)
         val end = maxOf(adjustedStart, adjustedTarget)
-        val count = pagedMedia.itemCount
-        if (count == 0) return
 
         val uris = mutableSetOf<String>()
-        val clampedStart = start.coerceIn(0, count - 1)
-        val clampedEnd = end.coerceIn(0, count - 1)
-        for (i in clampedStart..clampedEnd) {
-            val item = pagedMedia.peek(i)
-            if (item is GalleryListItem.Item) {
-                uris.add(item.galleryItem.uri.toString())
+        if (mosaicDisplayItems != null) {
+            val count = mosaicDisplayItems.size
+            if (count == 0) return
+            val clampedStart = start.coerceIn(0, count - 1)
+            val clampedEnd = end.coerceIn(0, count - 1)
+            for (i in clampedStart..clampedEnd) {
+                uris.addAll(mosaicDisplayItems[i].uris)
+            }
+        } else {
+            val count = pagedMedia.itemCount
+            if (count == 0) return
+            val clampedStart = start.coerceIn(0, count - 1)
+            val clampedEnd = end.coerceIn(0, count - 1)
+            for (i in clampedStart..clampedEnd) {
+                val item = pagedMedia.peek(i)
+                if (item is GalleryListItem.Item) {
+                    uris.add(item.galleryItem.uri.toString())
+                }
             }
         }
         viewModel.updateDragSelection(uris)
@@ -953,17 +1159,33 @@ private fun Modifier.gridDragSelectGesture(
         onDragStart = { offset ->
             val rawHit = findItemAtOffset(lazyGridState, offset) ?: return@detectDragGesturesAfterLongPress
             val hitItem = rawHit - headerOffset
-            if (hitItem >= 0 && hitItem < pagedMedia.itemCount) {
-                val listItem = pagedMedia.peek(hitItem)
-                if (listItem is GalleryListItem.Item) {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    val uri = listItem.galleryItem.uri.toString()
-                    val isSelecting = !viewModel.selectedUris.value.contains(uri)
-                    viewModel.startDragSelection(uri, isSelecting)
-                    dragStartIndex = rawHit
-                    lastHitIndex = rawHit
-                    currentDragPosition = offset
-                    startAutoScrollIfNeeded()
+            if (mosaicDisplayItems != null) {
+                if (hitItem >= 0 && hitItem < mosaicDisplayItems.size) {
+                    val displayItem = mosaicDisplayItems[hitItem]
+                    val firstUri = displayItem.uris.firstOrNull()
+                    if (firstUri != null) {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val isSelecting = !viewModel.selectedUris.value.contains(firstUri)
+                        viewModel.startDragSelection(firstUri, isSelecting)
+                        dragStartIndex = rawHit
+                        lastHitIndex = rawHit
+                        currentDragPosition = offset
+                        startAutoScrollIfNeeded()
+                    }
+                }
+            } else {
+                if (hitItem >= 0 && hitItem < pagedMedia.itemCount) {
+                    val listItem = pagedMedia.peek(hitItem)
+                    if (listItem is GalleryListItem.Item) {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val uri = listItem.galleryItem.uri.toString()
+                        val isSelecting = !viewModel.selectedUris.value.contains(uri)
+                        viewModel.startDragSelection(uri, isSelecting)
+                        dragStartIndex = rawHit
+                        lastHitIndex = rawHit
+                        currentDragPosition = offset
+                        startAutoScrollIfNeeded()
+                    }
                 }
             }
         },
@@ -1039,3 +1261,308 @@ private fun formatDuration(ms: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
+
+/**
+ * Composite display model for Google Photos-grade Editorial Mosaic layout.
+ * Eliminates Compose LazyVerticalGrid row-span limitations and prevents empty/negative space
+ * by grouping companion items into matching-height blocks.
+ */
+sealed class MosaicDisplayItem {
+    abstract val key: String
+    abstract val uris: List<String>
+    abstract val sourceIndices: List<Int>
+
+    data class HeaderItem(
+        val header: GalleryListItem.Header,
+        val sourceIndex: Int
+    ) : MosaicDisplayItem() {
+        override val key: String get() = "mosaic_header_${header.id}_$sourceIndex"
+        override val uris: List<String> get() = emptyList()
+        override val sourceIndices: List<Int> get() = listOf(sourceIndex)
+    }
+
+    data class BigTileItem(
+        val item: GalleryItem,
+        val span: Int,
+        val aspectRatio: Float,
+        val sourceIndex: Int
+    ) : MosaicDisplayItem() {
+        override val key: String get() = "mosaic_big_${item.id}_${span}_$sourceIndex"
+        override val uris: List<String> get() = listOf(item.uri.toString())
+        override val sourceIndices: List<Int> get() = listOf(sourceIndex)
+    }
+
+    data class QuadTileItem(
+        val items: List<GalleryItem>,
+        override val sourceIndices: List<Int>
+    ) : MosaicDisplayItem() {
+        override val key: String get() = "mosaic_quad_${items.firstOrNull()?.id ?: 0}_${sourceIndices.firstOrNull() ?: 0}"
+        override val uris: List<String> get() = items.map { it.uri.toString() }
+    }
+
+    data class PairTileItem(
+        val items: List<GalleryItem>,
+        override val sourceIndices: List<Int>
+    ) : MosaicDisplayItem() {
+        override val key: String get() = "mosaic_pair_${items.firstOrNull()?.id ?: 0}_${sourceIndices.firstOrNull() ?: 0}"
+        override val uris: List<String> get() = items.map { it.uri.toString() }
+    }
+
+    data class SingleItem(
+        val item: GalleryItem,
+        val sourceIndex: Int
+    ) : MosaicDisplayItem() {
+        override val key: String get() = "mosaic_single_${item.id}_$sourceIndex"
+        override val uris: List<String> get() = listOf(item.uri.toString())
+        override val sourceIndices: List<Int> get() = listOf(sourceIndex)
+    }
+}
+
+private data class MosaicBlockPattern(
+    val bigSpan: Int,
+    val bigAspectRatio: Float,
+    val companionType: MosaicCompanionType,
+    val itemsConsumed: Int
+)
+
+private enum class MosaicCompanionType { QUAD, PAIR, SINGLES }
+
+private fun getMosaicPatternsForColumns(columns: Int): List<MosaicBlockPattern> {
+    val patterns = mutableListOf<MosaicBlockPattern>()
+    when (columns) {
+        2 -> {
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 2,
+                    bigAspectRatio = 16f / 9f,
+                    companionType = MosaicCompanionType.SINGLES,
+                    itemsConsumed = 1
+                )
+            )
+        }
+        3 -> {
+            // PAIR pattern: big(2) + pair(1). Both 2 units high, total row = 3 cols. Consumes 3 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 2,
+                    bigAspectRatio = 1.0f,
+                    companionType = MosaicCompanionType.PAIR,
+                    itemsConsumed = 3
+                )
+            )
+            // SINGLES pattern: big(2) + 1 single. Both 1 unit high, total row = 3 cols. Consumes 2 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 2,
+                    bigAspectRatio = 2.0f,
+                    companionType = MosaicCompanionType.SINGLES,
+                    itemsConsumed = 2
+                )
+            )
+        }
+        4 -> {
+            // QUAD pattern: big(2) + quad(2). Both 2 units high, total row = 4 cols. Consumes 5 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 2,
+                    bigAspectRatio = 1.0f,
+                    companionType = MosaicCompanionType.QUAD,
+                    itemsConsumed = 5
+                )
+            )
+            // PAIR pattern: big(3) + pair(1). Both 2 units high, total row = 4 cols. Consumes 3 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 3,
+                    bigAspectRatio = 1.5f,
+                    companionType = MosaicCompanionType.PAIR,
+                    itemsConsumed = 3
+                )
+            )
+        }
+        5 -> {
+            // QUAD pattern: big(3) + quad(2). Both 2 units high, total row = 5 cols. Consumes 5 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 3,
+                    bigAspectRatio = 1.5f,
+                    companionType = MosaicCompanionType.QUAD,
+                    itemsConsumed = 5
+                )
+            )
+            // PAIR pattern: big(4) + pair(1). Both 2 units high, total row = 5 cols. Consumes 3 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 4,
+                    bigAspectRatio = 2.0f,
+                    companionType = MosaicCompanionType.PAIR,
+                    itemsConsumed = 3
+                )
+            )
+        }
+        else -> {
+            // QUAD pattern: big(4) + quad(2). Both 2 units high, total row = 6 cols. Consumes 5 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 4,
+                    bigAspectRatio = 2.0f,
+                    companionType = MosaicCompanionType.QUAD,
+                    itemsConsumed = 5
+                )
+            )
+            // PAIR pattern: big(5) + pair(1). Both 2 units high, total row = 6 cols. Consumes 3 items.
+            patterns.add(
+                MosaicBlockPattern(
+                    bigSpan = 5,
+                    bigAspectRatio = 2.5f,
+                    companionType = MosaicCompanionType.PAIR,
+                    itemsConsumed = 3
+                )
+            )
+        }
+    }
+    return patterns
+}
+
+private fun buildMosaicDisplayItems(
+    pagedMedia: LazyPagingItems<GalleryListItem>,
+    columns: Int
+): List<MosaicDisplayItem> {
+    val cols = columns.coerceIn(2, 6)
+    val patterns = getMosaicPatternsForColumns(cols)
+    val totalCount = pagedMedia.itemCount
+    val result = ArrayList<MosaicDisplayItem>(totalCount + totalCount / 4)
+    val buffer = ArrayList<Pair<Int, GalleryItem>>(16)
+    var blockIndex = 0
+    var groupRandom = kotlin.random.Random(0)
+
+    fun pickPattern(): MosaicBlockPattern? {
+        if (patterns.isEmpty()) return null
+        val bufSize = buffer.size
+        val eligible = patterns.filter { it.itemsConsumed <= bufSize }
+        if (eligible.isEmpty()) return null
+        return eligible[groupRandom.nextInt(eligible.size)]
+    }
+
+    fun emitBlock(force: Boolean = false) {
+        if (buffer.isEmpty()) return
+        val pattern = pickPattern()
+        if (pattern == null) {
+            if (force) {
+                for ((srcIdx, item) in buffer) {
+                    result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
+                }
+                buffer.clear()
+            }
+            return
+        }
+
+        val leftSide = blockIndex % 2 == 0
+        val consumedCount: Int
+
+        when (pattern.companionType) {
+            MosaicCompanionType.QUAD -> {
+                val big = MosaicDisplayItem.BigTileItem(
+                    item = buffer[0].second,
+                    span = pattern.bigSpan,
+                    aspectRatio = pattern.bigAspectRatio,
+                    sourceIndex = buffer[0].first
+                )
+                val quad = MosaicDisplayItem.QuadTileItem(
+                    items = listOf(buffer[1].second, buffer[2].second, buffer[3].second, buffer[4].second),
+                    sourceIndices = listOf(buffer[1].first, buffer[2].first, buffer[3].first, buffer[4].first)
+                )
+                if (leftSide) {
+                    result.add(big)
+                    result.add(quad)
+                } else {
+                    result.add(quad)
+                    result.add(big)
+                }
+                consumedCount = 5
+            }
+            MosaicCompanionType.PAIR -> {
+                val big = MosaicDisplayItem.BigTileItem(
+                    item = buffer[0].second,
+                    span = pattern.bigSpan,
+                    aspectRatio = pattern.bigAspectRatio,
+                    sourceIndex = buffer[0].first
+                )
+                val pair = MosaicDisplayItem.PairTileItem(
+                    items = listOf(buffer[1].second, buffer[2].second),
+                    sourceIndices = listOf(buffer[1].first, buffer[2].first)
+                )
+                if (leftSide) {
+                    result.add(big)
+                    result.add(pair)
+                } else {
+                    result.add(pair)
+                    result.add(big)
+                }
+                consumedCount = 3
+            }
+            MosaicCompanionType.SINGLES -> {
+                val big = MosaicDisplayItem.BigTileItem(
+                    item = buffer[0].second,
+                    span = pattern.bigSpan,
+                    aspectRatio = pattern.bigAspectRatio,
+                    sourceIndex = buffer[0].first
+                )
+                val singles = (1 until pattern.itemsConsumed).map {
+                    MosaicDisplayItem.SingleItem(buffer[it].second, buffer[it].first)
+                }
+                if (leftSide) {
+                    result.add(big)
+                    result.addAll(singles)
+                } else {
+                    result.addAll(singles)
+                    result.add(big)
+                }
+                consumedCount = pattern.itemsConsumed
+            }
+        }
+
+        buffer.subList(0, consumedCount).clear()
+
+        // Emit complete rows of singles (multiples of columns)
+        val completeRowItems = (buffer.size / cols) * cols
+        for (i in 0 until completeRowItems) {
+            val (srcIdx, item) = buffer[i]
+            result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
+        }
+
+        if (force) {
+            for (i in completeRowItems until buffer.size) {
+                val (srcIdx, item) = buffer[i]
+                result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
+            }
+            buffer.clear()
+        } else if (completeRowItems > 0) {
+            buffer.subList(0, completeRowItems).clear()
+        }
+
+        blockIndex++
+    }
+
+    for (i in 0 until totalCount) {
+        val listItem = pagedMedia.peek(i)
+        when (listItem) {
+            is GalleryListItem.Header -> {
+                emitBlock(force = true)
+                blockIndex = 0
+                groupRandom = kotlin.random.Random(listItem.id.hashCode().toLong())
+                result.add(MosaicDisplayItem.HeaderItem(listItem, i))
+            }
+            is GalleryListItem.Item -> {
+                buffer.add(Pair(i, listItem.galleryItem))
+                if (buffer.size >= cols * 2 + 1) {
+                    emitBlock()
+                }
+            }
+            null -> Unit
+        }
+    }
+    emitBlock(force = true)
+    return result
+}
+

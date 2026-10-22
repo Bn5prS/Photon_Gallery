@@ -47,6 +47,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import com.inferno.gallery.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
@@ -82,16 +84,18 @@ fun AllAlbumsScreen(
     val customCovers by galleryViewModel.albumCustomCovers.collectAsState()
     val customShapes by galleryViewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val showEmptyAlbums by galleryViewModel.showEmptyAlbums.collectAsState()
 
-    val unpinnedAlbums = remember(albums, userPinnedNames) {
-        albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && it.itemCount > 0 }
+    val unpinnedAlbums = remember(albums, userPinnedNames, showEmptyAlbums) {
+        albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && (it.itemCount > 0 || showEmptyAlbums) }
     }
 
     // Unified albums: user pinned folders first (if any), then all other albums sorted according to selected sort order
-    val allDisplayAlbums = remember(userPinnedAlbums, unpinnedAlbums) {
+    val allDisplayAlbums = remember(userPinnedAlbums, unpinnedAlbums, showEmptyAlbums) {
         (userPinnedAlbums + unpinnedAlbums)
-            .filter { it.itemCount > 0 }
+            .filter { it.itemCount > 0 || showEmptyAlbums }
             .distinctBy { it.bucketName }
     }
 
@@ -225,6 +229,7 @@ fun AllAlbumsScreen(
                             showAlbumSize = showAlbumSize,
                             customShape = albumShape,
                             isCompact = true,
+                            isPinned = isPinned,
                             onClick = { onAlbumClick(bucket.bucketName) },
                             onLongPress = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -233,28 +238,6 @@ fun AllAlbumsScreen(
                         )
                     }
 
-                    if (isPinned && albumLayoutMode != AlbumLayoutMode.LIST) {
-                        Surface(
-                            shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(SpacingTokens.XS)
-                        ) {
-                            Box(
-                                modifier = Modifier.size(24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_folder),
-                                    contentDescription = "Pinned",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
                     DropdownMenu(
                         expanded = showPinMenu,
                         onDismissRequest = { showPinMenu = false },
@@ -267,14 +250,18 @@ fun AllAlbumsScreen(
                                 text = { Text(if (isUserPinned) "Unpin Album" else "Pin Album", style = MaterialTheme.typography.bodyMedium) },
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(if (isUserPinned) R.drawable.ic_ms_folder_off else R.drawable.ic_ms_folder),
+                                        imageVector = ImageVector.vectorResource(if (isUserPinned) R.drawable.ic_ms_pin_off else R.drawable.ic_ms_pin),
                                         contentDescription = null,
                                         modifier = Modifier.size(IconSizeTokens.M)
                                     )
                                 },
                                 onClick = {
                                     showPinMenu = false
-                                    galleryViewModel.togglePinAlbum(bucket.bucketName)
+                                    galleryViewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                        if (!success) {
+                                            Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 }
                             )
                         }

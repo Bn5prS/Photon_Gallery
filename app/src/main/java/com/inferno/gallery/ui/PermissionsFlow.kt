@@ -872,6 +872,7 @@ private fun SetupLooksFeelPage(
                             isSelected = !useMaterialYou && (colorPresetName == palette.id),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                settingsViewModel?.setUseMaterialYou(false)
                                 settingsViewModel?.setColorPresetName(palette.id)
                             }
                         )

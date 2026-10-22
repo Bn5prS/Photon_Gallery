@@ -81,6 +81,7 @@ class MainActivity : FragmentActivity() {
             val colorPresetName by settingsViewModel.colorPresetName.collectAsState()
             val useAmoledBlack by settingsViewModel.useAmoledBlack.collectAsState()
             val useSystemFont by settingsViewModel.useSystemFont.collectAsState()
+            val fontScale by settingsViewModel.fontScale.collectAsState()
             val secureRecentsEnabled by settingsViewModel.secureRecentsEnabled.collectAsState()
             val hapticsEnabled by settingsViewModel.hapticsEnabled.collectAsState()
             val hapticsStrength by settingsViewModel.hapticsStrength.collectAsState()
@@ -131,6 +132,7 @@ class MainActivity : FragmentActivity() {
                 colorPresetName = colorPresetName,
                 useAmoledBlack = useAmoledBlack,
                 useSystemFont = useSystemFont,
+                fontScale = fontScale,
                 animateTransitions = animateThemeTransitions,
                 motionStyle = motionStyle
             ) {

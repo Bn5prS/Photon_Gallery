@@ -700,12 +700,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     ) { favs, excluded ->
         Pair(favs, excluded)
     }.flatMapLatest { (favs, excluded) ->
-        if (favs.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
-        else database.mediaDao().observeMediaByIds(favs.mapNotNull { it.toLongOrNull() })
-            .map { entities ->
-                entities
-                    .filter { !excluded.contains(it.bucketName) && it.bucketName != "Trash" }
-                    .map { entity ->
+        val numericIds = favs.mapNotNull { it.toLongOrNull() }
+        if (numericIds.isEmpty()) {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        } else {
+            val qc = buildMediaConditions(
+                bucket = BucketNames.FAVORITES,
+                filterIndex = 0,
+                favIds = favs,
+                excluded = excluded
+            )
+            val queryString = "SELECT cm.* FROM core_media cm " +
+                buildWhereClause(qc) + " ORDER BY cm.dateAdded DESC"
+            val query = androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
+            database.mediaDao().observeMediaEntitiesRaw(query)
+                .map { entities ->
+                    entities.map { entity ->
                         val uri = Uri.parse(entity.uriString)
                         val (exists, resolved) = resolveItemFields(uri, entity.filePath)
                         GalleryItem(
@@ -723,7 +733,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             resolvedUri = resolved
                         )
                     }
-            }
+                }
+        }
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _geotaggedMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
@@ -1264,16 +1275,98 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    val showEmptyAlbums: StateFlow<Boolean> = settingsRepository.showEmptyAlbumsFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _emptyAlbumsRefreshTrigger = MutableStateFlow(0L)
+    fun refreshEmptyAlbums() {
+        _emptyAlbumsRefreshTrigger.value = System.currentTimeMillis()
+    }
+
+    private fun scanEmptyAlbumDirectories(
+        showHidden: Boolean,
+        existingBucketNames: Set<String>
+    ): List<File> {
+        val results = mutableListOf<File>()
+        val seenNames = existingBucketNames.map { it.lowercase() }.toMutableSet()
+
+        val mediaRoots = listOfNotNull(
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+        ).filter { it.exists() && it.isDirectory }
+
+        val mediaExtensions = setOf(
+            "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "dng",
+            "mp4", "mkv", "webm", "avi", "mov", "3gp", "m4v"
+        )
+
+        fun hasMediaFiles(dir: File): Boolean {
+            val files = dir.listFiles() ?: return false
+            return files.any { f ->
+                f.isFile && mediaExtensions.contains(f.extension.lowercase())
+            }
+        }
+
+        val ignoredDirNames = setOf(
+            "thumbnails", ".thumbnails", "cache", ".cache", "android", "lost.dir",
+            "system volume information", ".gallery"
+        )
+
+        for (root in mediaRoots) {
+            val subDirs = root.listFiles { file ->
+                file.isDirectory &&
+                (showHidden || !file.name.startsWith(".")) &&
+                !ignoredDirNames.contains(file.name.lowercase())
+            } ?: continue
+
+            for (subDir in subDirs) {
+                val nameLower = subDir.name.lowercase()
+                if (!seenNames.contains(nameLower)) {
+                    if (!hasMediaFiles(subDir)) {
+                        results.add(subDir)
+                        seenNames.add(nameLower)
+                    }
+                }
+
+                // Also scan 1 level deeper in Pictures and DCIM
+                val nestedDirs = subDir.listFiles { file ->
+                    file.isDirectory &&
+                    (showHidden || !file.name.startsWith(".")) &&
+                    !ignoredDirNames.contains(file.name.lowercase())
+                } ?: continue
+
+                for (nested in nestedDirs) {
+                    val nestedLower = nested.name.lowercase()
+                    if (!seenNames.contains(nestedLower)) {
+                        if (!hasMediaFiles(nested)) {
+                            results.add(nested)
+                            seenNames.add(nestedLower)
+                        }
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
     val allAlbums: StateFlow<List<AlbumBucket>> = combine(
         database.mediaDao().observeBuckets(),
         albumSortOrder,
         excludedFolders,
         settingsRepository.showHiddenAlbumsFlow,
-        settingsRepository.albumCustomCoversFlow
-    ) { buckets, order, excluded, showHidden, customCovers ->
+        combine(
+            settingsRepository.showEmptyAlbumsFlow,
+            settingsRepository.albumCustomCoversFlow,
+            _emptyAlbumsRefreshTrigger
+        ) { showEmpty, customCovers, _ ->
+            Pair(showEmpty, customCovers)
+        }
+    ) { buckets, order, excluded, showHidden, (showEmpty, customCovers) ->
         val excludedKeywords = setOf(BucketNames.TRASH, BucketNames.ALL, BucketNames.FAVORITES)
 
-        val filtered = buckets.filter { bucket ->
+        val existingBuckets = buckets.filter { bucket ->
             !excludedKeywords.contains(bucket.bucketName) &&
             !excluded.contains(bucket.bucketName) &&
             (showHidden || !bucket.bucketName.startsWith("."))
@@ -1298,32 +1391,67 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 maxDate = b.maxDate,
                 defaultCoverUri = defaultUri
             )
+        }.toMutableList()
+
+        if (showEmpty) {
+            val existingNames = buckets.map { it.bucketName }.toSet()
+            val emptyDirs = scanEmptyAlbumDirectories(showHidden, existingNames)
+            for (dir in emptyDirs) {
+                if (!excludedKeywords.contains(dir.name) &&
+                    !excluded.contains(dir.name) &&
+                    (showHidden || !dir.name.startsWith("."))
+                ) {
+                    val customUriString = customCovers[dir.name]
+                    val customUri = if (customUriString != null && isCoverValid(customUriString)) {
+                        Uri.parse(customUriString)
+                    } else null
+
+                    existingBuckets.add(
+                        AlbumBucket(
+                            bucketName = dir.name,
+                            coverUri = customUri ?: Uri.EMPTY,
+                            itemCount = 0,
+                            totalSizeBytes = 0L,
+                            maxDate = dir.lastModified() / 1000L,
+                            defaultCoverUri = Uri.EMPTY
+                        )
+                    )
+                }
+            }
         }
 
         val sortedBuckets = when (order) {
-            SortOrder.NewToOld -> filtered.sortedByDescending { it.maxDate }
-            SortOrder.OldToNew -> filtered.sortedBy { it.maxDate }
-            SortOrder.SmallToBig -> filtered.sortedBy { it.totalSizeBytes }
-            SortOrder.BigToSmall -> filtered.sortedByDescending { it.totalSizeBytes }
-            SortOrder.NameAsc -> filtered.sortedBy { it.bucketName.lowercase() }
-            SortOrder.NameDesc -> filtered.sortedByDescending { it.bucketName.lowercase() }
-            SortOrder.CountDesc -> filtered.sortedByDescending { it.itemCount }
-            SortOrder.CountAsc -> filtered.sortedBy { it.itemCount }
+            SortOrder.NewToOld -> existingBuckets.sortedByDescending { it.maxDate }
+            SortOrder.OldToNew -> existingBuckets.sortedBy { it.maxDate }
+            SortOrder.SmallToBig -> existingBuckets.sortedBy { it.totalSizeBytes }
+            SortOrder.BigToSmall -> existingBuckets.sortedByDescending { it.totalSizeBytes }
+            SortOrder.NameAsc -> existingBuckets.sortedBy { it.bucketName.lowercase() }
+            SortOrder.NameDesc -> existingBuckets.sortedByDescending { it.bucketName.lowercase() }
+            SortOrder.CountDesc -> existingBuckets.sortedByDescending { it.itemCount }
+            SortOrder.CountAsc -> existingBuckets.sortedBy { it.itemCount }
         }
 
         sortedBuckets
-    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // All bucket names for the Settings "Excluded Folders" UI (includes all folders)
     val allBucketNames: StateFlow<List<String>> = combine(
         database.mediaDao().observeBuckets(),
-        settingsRepository.showHiddenAlbumsFlow
-    ) { buckets, showHidden ->
-        buckets.map { it.bucketName }
+        settingsRepository.showHiddenAlbumsFlow,
+        settingsRepository.showEmptyAlbumsFlow,
+        _emptyAlbumsRefreshTrigger
+    ) { buckets, showHidden, showEmpty, _ ->
+        val bucketNames = buckets.map { it.bucketName }
             .filter { it != "Trash" && (showHidden || !it.startsWith(".")) }
-            .distinct()
-            .sorted()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+            .toMutableSet()
+
+        if (showEmpty) {
+            val emptyDirs = scanEmptyAlbumDirectories(showHidden, bucketNames)
+            emptyDirs.forEach { bucketNames.add(it.name) }
+        }
+
+        bucketNames.distinct().sorted()
+    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val duplicates: StateFlow<List<DuplicateGroup>> = combine(
         database.mediaDao().observeExactDuplicates(),
@@ -1572,15 +1700,28 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     val userPinnedAlbums: StateFlow<List<AlbumBucket>> = combine(
         allAlbums,
-        settingsRepository.pinnedFoldersFlow
-    ) { albums, pinnedNames ->
-        albums.filter { it.bucketName in pinnedNames }
-        // Custom covers already baked into allAlbums items above
+        settingsRepository.pinnedFoldersFlow,
+        settingsRepository.pinnedFoldersOrderFlow
+    ) { albums, pinnedNames, order ->
+        val filtered = albums.filter { it.bucketName in pinnedNames }
+        if (order.isNotEmpty()) {
+            filtered.sortedBy { bucket ->
+                val idx = order.indexOf(bucket.bucketName)
+                if (idx >= 0) idx else Int.MAX_VALUE
+            }
+        } else {
+            filtered
+        }
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun togglePinAlbum(bucketName: String) {
+    fun togglePinAlbum(bucketName: String, onResult: ((Boolean) -> Unit)? = null) {
         viewModelScope.launch(Dispatchers.IO) {
-            settingsRepository.togglePinnedFolder(bucketName)
+            val success = settingsRepository.togglePinnedFolder(bucketName)
+            if (onResult != null) {
+                withContext(Dispatchers.Main) {
+                    onResult(success)
+                }
+            }
         }
     }
 
@@ -2239,6 +2380,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         arrayOf(newFolder.absolutePath),
                         null
                     ) { _, _ -> }
+
+                    settingsRepository.updateShowEmptyAlbums(true)
+                    refreshEmptyAlbums()
 
                     withContext(Dispatchers.Main) {
                         onSuccess()

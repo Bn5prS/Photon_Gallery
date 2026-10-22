@@ -8,6 +8,7 @@ package com.inferno.gallery.ui
 
 import android.net.Uri
 import android.text.format.Formatter
+import android.widget.Toast
 import com.inferno.gallery.data.BucketNames
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -147,25 +148,20 @@ fun AlbumsScreen(
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
 
-    val unpinnedAlbums = remember(albums, userPinnedNames) {
-        albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && it.itemCount > 0 }
+    val unpinnedAlbums = remember(albums, userPinnedNames, showEmptyAlbums) {
+        albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && (it.itemCount > 0 || showEmptyAlbums) }
     }
 
-    // Unified albums: user pinned folders first (if any), then all other albums sorted according to selected sort order
-    val allUnifiedAlbums = remember(userPinnedAlbums, unpinnedAlbums) {
-        (userPinnedAlbums + unpinnedAlbums)
-            .filter { it.itemCount > 0 }
-            .distinctBy { it.bucketName }
+    val visibleAlbums = remember(unpinnedAlbums) {
+        unpinnedAlbums.take(9)
     }
-
-    val visibleAlbums = remember(allUnifiedAlbums) {
-        allUnifiedAlbums.take(9)
-    }
-    val hasMoreAlbums = allUnifiedAlbums.size > 9
+    val hasMoreAlbums = unpinnedAlbums.size > 9
 
     // Persistent expand states for sections
-    val albumsExpanded by viewModel.albumsExpandedPinned.collectAsState()
+    val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
+    val albumsExpanded by viewModel.albumsExpandedMore.collectAsState()
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
@@ -178,8 +174,8 @@ fun AlbumsScreen(
 
         // Ensure clean top alignment when albums populate or if previously pushed up
         var initialTopResetDone by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(visibleAlbums.isNotEmpty()) {
-            if (visibleAlbums.isNotEmpty() && !initialTopResetDone) {
+        LaunchedEffect(visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) {
+            if ((visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) && !initialTopResetDone) {
                 initialTopResetDone = true
                 if (!lazyGridState.isScrollInProgress && lazyGridState.firstVisibleItemIndex > 0) {
                     lazyGridState.scrollToItem(0, 0)
@@ -211,13 +207,93 @@ fun AlbumsScreen(
             modifier = modifier.fillMaxSize()
         ) {
 
-        // ── 1. Albums (Switchable 2-col cards, 3-col compact cards, or list view) ──
+        // ── 1. Pinned Albums Section (Dedicated Grid) ──
+        if (userPinnedAlbums.isNotEmpty()) {
+            item(key = "header_pinned_albums", span = { GridItemSpan(maxLineSpan) }) {
+                SectionHeader(
+                    title = "Pinned",
+                    count = userPinnedAlbums.size,
+                    isExpanded = pinnedExpanded,
+                    onToggle = { viewModel.toggleAlbumsExpandedPinned() }
+                )
+            }
+
+            if (pinnedExpanded) {
+                items(
+                    items = userPinnedAlbums,
+                    key = { "pinned_${it.bucketName}" }
+                ) { bucket ->
+                    val displayBucketName = when (bucket.bucketName) {
+                        "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                        else -> bucket.bucketName
+                    }
+                    var showCardMenu by remember { mutableStateOf(false) }
+
+                    val albumShape = remember(customShapes, bucket.bucketName) {
+                        AlbumShapes.getShape(customShapes[bucket.bucketName])
+                    }
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                            AlbumListRow(
+                                bucket = bucket.copy(bucketName = displayBucketName),
+                                showAlbumSize = showAlbumSize,
+                                customShape = albumShape,
+                                isPinned = true,
+                                onClick = { onAlbumClick(bucket.bucketName) },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showCardMenu = true
+                                }
+                            )
+                        } else {
+                            AlbumCard(
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                bucket = bucket.copy(bucketName = displayBucketName),
+                                showAlbumSize = showAlbumSize,
+                                customShape = albumShape,
+                                isCompact = true,
+                                isPinned = true,
+                                onClick = { onAlbumClick(bucket.bucketName) },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showCardMenu = true
+                                }
+                            )
+                        }
+
+                        AlbumDropdownMenu(
+                            expanded = showCardMenu,
+                            onDismissRequest = { showCardMenu = false },
+                            bucketName = bucket.bucketName,
+                            isUserPinned = true,
+                            hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                            hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                            onTogglePin = {
+                                viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                    if (!success) {
+                                        Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            onChangeCover = { onChangeCover(bucket.bucketName) },
+                            onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                            onChangeShape = { shapePickerBucket = bucket },
+                            onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── 2. All Other Albums Section ──
         item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
                 title = "Albums",
-                count = if (allUnifiedAlbums.isNotEmpty()) allUnifiedAlbums.size else null,
+                count = if (unpinnedAlbums.isNotEmpty()) unpinnedAlbums.size else null,
                 isExpanded = albumsExpanded,
-                onToggle = { viewModel.toggleAlbumsExpandedPinned() },
+                onToggle = { viewModel.toggleAlbumsExpandedMore() },
                 seeAllText = "Show all",
                 onSeeAll = if (hasMoreAlbums) onNavigateToAllAlbums else null
             )
@@ -249,7 +325,6 @@ fun AlbumsScreen(
                         "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
                         else -> bucket.bucketName
                     }
-                    val isUserPinned = bucket.bucketName in userPinnedNames
                     var showCardMenu by remember { mutableStateOf(false) }
 
                     val albumShape = remember(customShapes, bucket.bucketName) {
@@ -262,7 +337,7 @@ fun AlbumsScreen(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
-                                isPinned = isUserPinned,
+                                isPinned = false,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -277,6 +352,7 @@ fun AlbumsScreen(
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
                                 isCompact = true,
+                                isPinned = false,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -290,10 +366,16 @@ fun AlbumsScreen(
                             expanded = showCardMenu,
                             onDismissRequest = { showCardMenu = false },
                             bucketName = bucket.bucketName,
-                            isUserPinned = isUserPinned,
+                            isUserPinned = false,
                             hasCustomCover = customCovers.containsKey(bucket.bucketName),
                             hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                            onTogglePin = { viewModel.togglePinAlbum(bucket.bucketName) },
+                            onTogglePin = {
+                                viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                    if (!success) {
+                                        Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
                             onChangeCover = { onChangeCover(bucket.bucketName) },
                             onDeleteCover = { onDeleteCover(bucket.bucketName) },
                             onChangeShape = { shapePickerBucket = bucket },
@@ -312,6 +394,7 @@ fun AlbumsScreen(
                 count = if (placesClusters.isNotEmpty()) placesClusters.size else null,
                 isExpanded = placesExpanded,
                 onToggle = { viewModel.toggleAlbumsExpandedPlaces() },
+                seeAllText = "Show all",
                 onSeeAll = onNavigateToPlacesList
             )
         }
@@ -790,6 +873,7 @@ fun AlbumCard(
     showAlbumSize: Boolean = false,
     customShape: Shape? = null,
     isCompact: Boolean = false,
+    isPinned: Boolean = false,
     onClick: () -> Unit = {},
     onLongPress: (() -> Unit)? = null
 ) {
@@ -886,18 +970,32 @@ fun AlbumCard(
         Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
         // Title (Outfit Bold / SemiBold)
-        Text(
-            text = bucket.bucketName,
-            style = if (isCompact) {
-                MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-            } else {
-                MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            },
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
             modifier = Modifier.padding(horizontal = SpacingTokens.XS)
-        )
+        ) {
+            Text(
+                text = bucket.bucketName,
+                style = if (isCompact) {
+                    MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                } else {
+                    MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                },
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (isPinned) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_pin),
+                    contentDescription = "Pinned",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(IconSizeTokens.S)
+                )
+            }
+        }
 
         // Metadata: Count and Size (Plus Jakarta Sans)
         Row(
@@ -1051,7 +1149,7 @@ fun AlbumListRow(
                     )
                     if (isPinned) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_pin),
                             contentDescription = "Pinned",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(IconSizeTokens.S)
@@ -1135,7 +1233,7 @@ fun AlbumDropdownMenu(
                 text = { Text(if (isUserPinned) "Unpin Album" else "Pin Album", style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = {
                     Icon(
-                        imageVector = ImageVector.vectorResource(if (isUserPinned) R.drawable.ic_ms_folder_off else R.drawable.ic_ms_folder),
+                        imageVector = ImageVector.vectorResource(if (isUserPinned) R.drawable.ic_ms_pin_off else R.drawable.ic_ms_pin),
                         contentDescription = null,
                         modifier = Modifier.size(IconSizeTokens.M)
                     )
@@ -1508,7 +1606,7 @@ fun SectionHeader(
     count: Int? = null,
     isExpanded: Boolean = true,
     isCollapsible: Boolean = true,
-    seeAllText: String = "See all",
+    seeAllText: String = "Show all",
     onToggle: () -> Unit = {},
     onSeeAll: (() -> Unit)? = null
 ) {
