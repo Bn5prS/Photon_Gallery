@@ -4,15 +4,22 @@ package com.inferno.gallery.ui.components
 
 import android.text.format.Formatter
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -20,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -32,7 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -46,20 +52,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.inferno.gallery.R
 import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.theme.OfficialM3Shapes
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.SpacingTokens
+import com.inferno.gallery.ui.utils.pressScale
 import com.inferno.gallery.update.UpdateManager
 import com.inferno.gallery.update.UpdateState
 
@@ -197,84 +209,151 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
     val sections = remember(changelog) { parseChangelog(changelog) }
     if (sections.isEmpty() && changelog.isBlank()) return
 
+    val scrollState = rememberScrollState()
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 120.dp, max = 340.dp),
+            .heightIn(min = 120.dp, max = 320.dp),
         shape = ShapeLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(SpacingTokens.M),
-            verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-        ) {
-            if (sections.isEmpty()) {
-                Text(
-                    text = changelog,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            } else {
-                sections.forEach { section ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(section.iconRes),
-                                contentDescription = null,
-                                tint = if (section.iconRes == R.drawable.ic_ms_bug_report) {
-                                    MaterialTheme.colorScheme.tertiary
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = section.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (section.iconRes == R.drawable.ic_ms_bug_report) {
-                                    MaterialTheme.colorScheme.tertiary
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.M),
+                verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+            ) {
+                if (sections.isEmpty()) {
+                    Text(
+                        text = changelog,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    sections.forEach { section ->
+                        val isFix = section.iconRes == R.drawable.ic_ms_bug_report ||
+                            section.title.contains("Fix", ignoreCase = true) ||
+                            section.title.contains("Bug", ignoreCase = true)
+                        val isFeature = section.title.contains("Feat", ignoreCase = true) ||
+                            section.title.contains("New", ignoreCase = true) ||
+                            section.title.contains("Enhance", ignoreCase = true)
+
+                        val pillContainer = when {
+                            isFix -> MaterialTheme.colorScheme.tertiaryContainer
+                            isFeature -> MaterialTheme.colorScheme.primaryContainer
+                            else -> MaterialTheme.colorScheme.secondaryContainer
+                        }
+                        val pillContent = when {
+                            isFix -> MaterialTheme.colorScheme.onTertiaryContainer
+                            isFeature -> MaterialTheme.colorScheme.onPrimaryContainer
+                            else -> MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+                        val dotColor = when {
+                            isFix -> MaterialTheme.colorScheme.tertiary
+                            isFeature -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.secondary
                         }
 
-                        section.items.forEach { item ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = SpacingTokens.XS),
-                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
-                                verticalAlignment = Alignment.Top
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            Surface(
+                                shape = ShapeFull,
+                                color = pillContainer,
+                                contentColor = pillContent
                             ) {
-                                Box(
+                                Row(
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(section.iconRes),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = section.title,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                            }
+
+                            section.items.forEach { item ->
+                                Row(
                                     modifier = Modifier
-                                        .padding(top = 7.dp)
-                                        .size(5.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                                )
-                                Text(
-                                    text = item,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                        .fillMaxWidth()
+                                        .padding(start = SpacingTokens.XS),
+                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 8.dp)
+                                            .size(5.dp)
+                                            .clip(ShapeFull)
+                                            .background(dotColor.copy(alpha = 0.7f))
+                                    )
+                                    Text(
+                                        text = item,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
                     }
                 }
+            }
+
+            // Top gradient fade mask when scrolled down
+            AnimatedVisibility(
+                visible = scrollState.value > 0,
+                enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                exit = fadeOut(MotionTokens.fastEffectsSpec()),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(18.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceContainerLow,
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
+
+            // Bottom gradient fade mask when scrollable content remains below
+            AnimatedVisibility(
+                visible = scrollState.value < scrollState.maxValue,
+                enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                exit = fadeOut(MotionTokens.fastEffectsSpec()),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(22.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surfaceContainerLow
+                                )
+                            )
+                        )
+                )
             }
         }
     }
@@ -306,19 +385,28 @@ fun UpdateDialog() {
                 .clip(ShapeExtraLarge),
             shape = ShapeExtraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
             tonalElevation = 6.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.XL),
+                    .padding(horizontal = SpacingTokens.XL, vertical = SpacingTokens.XL),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 when (val state = updateState) {
                     is UpdateState.Checking -> {
-                        ContainedLoadingIndicator(
-                            modifier = Modifier.size(56.dp)
-                        )
+                        Surface(
+                            shape = OfficialM3Shapes.Clover4Leaf,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                ContainedLoadingIndicator(
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
                         Text(
                             text = "Checking for Updates…",
@@ -326,7 +414,7 @@ fun UpdateDialog() {
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(SpacingTokens.S))
+                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
                         Text(
                             text = "Connecting to GitHub releases",
                             style = MaterialTheme.typography.bodyMedium,
@@ -336,72 +424,97 @@ fun UpdateDialog() {
 
                     is UpdateState.UpdateAvailable -> {
                         val info = state.info
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = OfficialM3Shapes.Cookie9Sided,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(64.dp)
                         ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(IconSizeTokens.XL)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
                         Text(
                             text = "Update Available",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(SpacingTokens.S))
 
-                        // Version & Size badge row
+                        // Version transition pill & size badge row
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
                                 shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.secondaryContainer
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                             ) {
-                                Text(
-                                    text = "${info.currentVersion} → ${info.latestVersion}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                                ) {
+                                    Text(
+                                        text = info.currentVersion,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(IconSizeTokens.S)
+                                    )
+                                    Text(
+                                        text = info.latestVersion,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
 
                             if (info.apkSizeBytes > 0) {
                                 Surface(
                                     shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                 ) {
-                                    Text(
-                                        text = Formatter.formatShortFileSize(context, info.apkSizeBytes),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = SpacingTokens.XS)
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = SpacingTokens.XS),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = Formatter.formatShortFileSize(context, info.apkSizeBytes),
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
 
-                        // Features & Fixes Changelog card
+                        // Features & Fixes Categorized Changelog
                         if (info.changelog.isNotBlank()) {
                             ChangelogCard(changelog = info.changelog)
                             Spacer(modifier = Modifier.height(SpacingTokens.L))
                         }
 
-                        // Action buttons
+                        // Action Buttons Dock
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
@@ -412,7 +525,8 @@ fun UpdateDialog() {
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp),
+                                    .height(52.dp)
+                                    .pressScale(),
                                 shape = ShapeFull,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
@@ -427,8 +541,7 @@ fun UpdateDialog() {
                                 Spacer(modifier = Modifier.width(SpacingTokens.S))
                                 Text(
                                     text = "Download & Install",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                                 )
                             }
 
@@ -436,12 +549,17 @@ fun UpdateDialog() {
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                             ) {
-                                OutlinedButton(
+                                FilledTonalButton(
                                     onClick = { uriHandler.openUri(info.releasePageUrl) },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(44.dp),
-                                    shape = ShapeFull
+                                        .height(44.dp)
+                                        .pressScale(),
+                                    shape = ShapeFull,
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
                                 ) {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
@@ -450,8 +568,8 @@ fun UpdateDialog() {
                                     )
                                     Spacer(modifier = Modifier.width(SpacingTokens.XS))
                                     Text(
-                                        text = "GitHub",
-                                        style = MaterialTheme.typography.labelLarge
+                                        text = "GitHub Notes",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                                     )
                                 }
 
@@ -459,12 +577,13 @@ fun UpdateDialog() {
                                     onClick = { UpdateManager.dismiss() },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(44.dp),
+                                        .height(44.dp)
+                                        .pressScale(),
                                     shape = ShapeFull
                                 ) {
                                     Text(
                                         text = "Later",
-                                        style = MaterialTheme.typography.labelLarge
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                                     )
                                 }
                             }
@@ -478,84 +597,115 @@ fun UpdateDialog() {
                             label = "download_progress"
                         )
 
-                        Box(
+                        val infiniteTransition = rememberInfiniteTransition(label = "download_pulse")
+                        val pulseScale by infiniteTransition.animateFloat(
+                            initialValue = 0.96f,
+                            targetValue = 1.04f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1200, easing = MotionTokens.StandardEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse_scale"
+                        )
+
+                        Surface(
+                            shape = OfficialM3Shapes.Clover4Leaf,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
+                                .size(64.dp)
+                                .graphicsLayer {
+                                    scaleX = pulseScale
+                                    scaleY = pulseScale
+                                }
                         ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(IconSizeTokens.XL)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
                         Text(
                             text = "Downloading Update…",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(SpacingTokens.S))
+                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
-                        Text(
-                            text = "${(state.progress * 100).toInt()}% • ${Formatter.formatShortFileSize(context, state.downloadedBytes)} / ${Formatter.formatShortFileSize(context, state.totalBytes)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                        ) {
+                            Text(
+                                text = "${(state.progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${Formatter.formatShortFileSize(context, state.downloadedBytes)} / ${Formatter.formatShortFileSize(context, state.totalBytes)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
 
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             progress = { animatedProgress },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(ShapeFull),
+                                .height(10.dp),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerLow
                         )
 
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
 
                         TextButton(
                             onClick = { UpdateManager.dismiss() },
+                            modifier = Modifier.pressScale(),
                             shape = ShapeFull
                         ) {
                             Text(
                                 text = "Cancel",
-                                style = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
                     }
 
                     is UpdateState.ReadyToInstall -> {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = OfficialM3Shapes.Cookie9Sided,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(64.dp)
                         ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(IconSizeTokens.XL)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
                         Text(
                             text = "Ready to Install",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(SpacingTokens.S))
+                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
                         Text(
                             text = "Download complete. Tap below to launch installer.",
                             style = MaterialTheme.typography.bodyMedium,
@@ -569,44 +719,66 @@ fun UpdateDialog() {
                         ) {
                             TextButton(
                                 onClick = { UpdateManager.dismiss() },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .pressScale(),
                                 shape = ShapeFull
                             ) {
-                                Text("Later", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    text = "Later",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                                )
                             }
                             Button(
                                 onClick = { UpdateManager.installApk(context, state.apkFile) },
-                                modifier = Modifier.weight(1f),
-                                shape = ShapeFull
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .pressScale(),
+                                shape = ShapeFull,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
                             ) {
-                                Text("Install Now", style = MaterialTheme.typography.labelLarge)
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(IconSizeTokens.M)
+                                )
+                                Spacer(modifier = Modifier.width(SpacingTokens.XS))
+                                Text(
+                                    text = "Install Now",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                                )
                             }
                         }
                     }
 
                     is UpdateState.UpToDate -> {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = OfficialM3Shapes.Clover4Leaf,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(64.dp)
                         ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(IconSizeTokens.XL)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
                         Text(
                             text = "You're Up to Date!",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(SpacingTokens.S))
+                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
                         Text(
                             text = "Photon Gallery ${state.currentVersion} is currently the newest version available.",
                             style = MaterialTheme.typography.bodyMedium,
@@ -617,35 +789,41 @@ fun UpdateDialog() {
                         FilledTonalButton(
                             onClick = { UpdateManager.dismiss() },
                             shape = ShapeFull,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .pressScale()
                         ) {
-                            Text("OK", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                text = "OK",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                            )
                         }
                     }
 
                     is UpdateState.Error -> {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = OfficialM3Shapes.Cookie9Sided,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(64.dp)
                         ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(IconSizeTokens.XL)
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(SpacingTokens.L))
                         Text(
                             text = "Update Check Failed",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(SpacingTokens.S))
+                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
                         Text(
                             text = state.message,
                             style = MaterialTheme.typography.bodyMedium,
@@ -656,9 +834,15 @@ fun UpdateDialog() {
                         FilledTonalButton(
                             onClick = { UpdateManager.dismiss() },
                             shape = ShapeFull,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .pressScale()
                         ) {
-                            Text("Dismiss", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                text = "Dismiss",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                            )
                         }
                     }
 
