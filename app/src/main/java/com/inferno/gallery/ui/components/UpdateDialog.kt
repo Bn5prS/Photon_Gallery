@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -80,10 +82,21 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
 
         fun flushSection() {
             val title = currentTitle ?: return
+            val lowerTitle = title.lowercase()
+            // Ignore APK downloads, checksums, and assets sections in update notes
+            if (lowerTitle.contains("apk") || lowerTitle.contains("download") || lowerTitle.contains("checksum") || lowerTitle.contains("asset")) {
+                currentItems.clear()
+                return
+            }
             if (currentItems.isNotEmpty()) {
                 val iconRes = when {
                     title.contains("Fix", ignoreCase = true) || title.contains("Bug", ignoreCase = true) -> R.drawable.ic_ms_bug_report
                     title.contains("Improve", ignoreCase = true) || title.contains("Perf", ignoreCase = true) -> R.drawable.ic_ms_check_circle
+                    title.contains("Favorite", ignoreCase = true) -> R.drawable.ic_ms_favorite_filled
+                    title.contains("Album", ignoreCase = true) || title.contains("Pin", ignoreCase = true) -> R.drawable.ic_ms_pin
+                    title.contains("Font", ignoreCase = true) || title.contains("Type", ignoreCase = true) -> R.drawable.ic_ms_text_fields
+                    title.contains("Mosaic", ignoreCase = true) || title.contains("Layout", ignoreCase = true) -> R.drawable.ic_ms_grid_view
+                    title.contains("Folder", ignoreCase = true) || title.contains("Scanner", ignoreCase = true) -> R.drawable.ic_ms_folder
                     else -> R.drawable.ic_ms_auto_fix_high
                 }
                 sections.add(ChangelogSection(title, iconRes, currentItems.toList()))
@@ -92,10 +105,10 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
         }
 
         for (line in lines) {
-            val isHeader = line.startsWith("#") || (line.startsWith("**") && line.endsWith("**") && line.length < 40)
+            val isHeader = line.startsWith("#") || (line.startsWith("**") && line.endsWith("**") && line.length < 50)
             if (isHeader) {
                 flushSection()
-                currentTitle = line.trim('#', '*', ' ').trim()
+                currentTitle = line.trim('#', '*', ' ').replace("**", "").trim()
             } else {
                 val cleaned = cleanChangelogItem(line)
                 if (cleaned.isNotBlank() && !isIgnoredLine(cleaned)) {
@@ -106,7 +119,8 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
         flushSection()
         val isGenericTitle = { t: String ->
             val lower = t.lowercase()
-            lower.contains("what's changed") || lower.contains("whats changed") || lower.contains("release note") || lower.contains("changelog")
+            lower.contains("what's changed") || lower.contains("whats changed") || lower.contains("release note") ||
+                lower.contains("changelog") || lower.contains("highlights") || lower.contains("what’s new") || lower.contains("whats new")
         }
         if (sections.isNotEmpty() && !sections.all { isGenericTitle(it.title) }) {
             return sections
@@ -118,7 +132,7 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
     val other = mutableListOf<String>()
 
     for (line in lines) {
-        if (line.startsWith("#") || (line.startsWith("**") && line.endsWith("**") && line.length < 40)) continue
+        if (line.startsWith("#") || (line.startsWith("**") && line.endsWith("**") && line.length < 50)) continue
         val cleaned = cleanChangelogItem(line)
         if (cleaned.isBlank() || isIgnoredLine(cleaned)) continue
 
@@ -156,16 +170,26 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
 
 private fun cleanChangelogItem(line: String): String {
     var s = line.trim()
-    s = s.replace(Regex("""^\*\*([^\*]+)\*\*:\s*"""), "$1: ")
     s = s.replace(Regex("""^[\*\-\+•]\s*"""), "")
+    s = s.replace("**", "")
     s = s.replace(Regex("""\s+by\s+@[\w\-]+(\s+in\s+#\d+)?""", RegexOption.IGNORE_CASE), "")
-    s = s.replace(Regex("""\s+in\s+#\d+""", RegexOption.IGNORE_CASE), "")
     return s.trim()
 }
 
 private fun isIgnoredLine(line: String): Boolean {
     val l = line.lowercase()
-    return l.contains("full changelog") || l.contains("/compare/") || l.startsWith("https://github.com/") || l.startsWith("http://")
+    return l.contains("full changelog") ||
+        l.contains("/compare/") ||
+        l.startsWith("https://github.com/") ||
+        l.startsWith("http://") ||
+        l.contains(".apk") ||
+        l.contains("apk download") ||
+        l.contains("checksum") ||
+        l.contains("sha256") ||
+        l.contains("recommended for") ||
+        l.contains("standalone build") ||
+        l.contains("legacy support") ||
+        l.contains("emulators and devices")
 }
 
 @Composable
@@ -176,7 +200,7 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 240.dp),
+            .heightIn(min = 120.dp, max = 340.dp),
         shape = ShapeLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
@@ -221,7 +245,8 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
                                     MaterialTheme.colorScheme.tertiary
                                 } else {
                                     MaterialTheme.colorScheme.primary
-                                }
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                         }
 
@@ -243,7 +268,8 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
                                 Text(
                                     text = item,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -270,11 +296,13 @@ fun UpdateDialog() {
             if (updateState !is UpdateState.Downloading) {
                 UpdateManager.dismiss()
             }
-        }
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 440.dp)
                 .clip(ShapeExtraLarge),
             shape = ShapeExtraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -283,7 +311,7 @@ fun UpdateDialog() {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(SpacingTokens.XL),
+                    .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.XL),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 when (val state = updateState) {
