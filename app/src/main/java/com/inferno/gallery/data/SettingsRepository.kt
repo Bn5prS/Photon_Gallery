@@ -1,6 +1,7 @@
 package com.inferno.gallery.data
 
 import android.content.Context
+import android.os.Build
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -43,6 +44,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val THUMBNAIL_CORNER_RADIUS = floatPreferencesKey("thumbnail_corner_radius")
         val USE_FULL_SCREEN = booleanPreferencesKey("use_full_screen")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val ONBOARDING_V210_COMPLETED = booleanPreferencesKey("onboarding_v210_completed")
         val STRIP_METADATA_ON_SHARE = booleanPreferencesKey("strip_metadata_on_share")
         val SMART_SEARCH_AUTO_INDEX = booleanPreferencesKey("smart_search_auto_index")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
@@ -101,6 +103,9 @@ class SettingsRepository private constructor(private val context: Context) {
         // Auto Updates
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK_TIMESTAMP = androidx.datastore.preferences.core.longPreferencesKey("last_update_check_timestamp")
+
+        // Migration flags
+        val THEME_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("theme_default_migrated_v210")
     }
 
     val autoCheckUpdatesFlow: Flow<Boolean> = context.dataStore.data
@@ -188,7 +193,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val useMaterialYouFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[USE_MATERIAL_YOU] ?: true
+            preferences[USE_MATERIAL_YOU] ?: (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
         }
 
     val useAmoledBlackFlow: Flow<Boolean> = context.dataStore.data
@@ -218,7 +223,9 @@ class SettingsRepository private constructor(private val context: Context) {
 
     // ── Advanced Theming Flows ──
     val colorPresetNameFlow: Flow<String> = context.dataStore.data
-        .map { it[COLOR_PRESET_NAME] ?: "default_blue" }
+        .map { preferences ->
+            preferences[COLOR_PRESET_NAME] ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "dynamic" else "default_blue"
+        }
 
     val secondaryColorOverrideFlow: Flow<Int> = context.dataStore.data
         .map { it[SECONDARY_COLOR_OVERRIDE] ?: -1 }
@@ -512,8 +519,21 @@ class SettingsRepository private constructor(private val context: Context) {
             preferences[ONBOARDING_COMPLETED] ?: false
         }
 
+    val onboardingV210CompletedFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ONBOARDING_V210_COMPLETED] ?: false
+        }
+
     suspend fun updateOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { preferences ->
+            preferences[ONBOARDING_COMPLETED] = completed
+            preferences[ONBOARDING_V210_COMPLETED] = completed
+        }
+    }
+
+    suspend fun updateOnboardingV210Completed(completed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ONBOARDING_V210_COMPLETED] = completed
             preferences[ONBOARDING_COMPLETED] = completed
         }
     }
@@ -801,6 +821,22 @@ class SettingsRepository private constructor(private val context: Context) {
                 it[USE_MATERIAL_YOU] = true
             } else {
                 it[USE_MATERIAL_YOU] = false
+            }
+        }
+    }
+
+    suspend fun migrateThemeDefaultsIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.dataStore.edit { preferences ->
+                val alreadyMigrated = preferences[THEME_DEFAULT_MIGRATED_V210] ?: false
+                if (!alreadyMigrated) {
+                    val currentPreset = preferences[COLOR_PRESET_NAME]
+                    if (currentPreset == null || currentPreset == "default_blue") {
+                        preferences[COLOR_PRESET_NAME] = "dynamic"
+                        preferences[USE_MATERIAL_YOU] = true
+                    }
+                    preferences[THEME_DEFAULT_MIGRATED_V210] = true
+                }
             }
         }
     }

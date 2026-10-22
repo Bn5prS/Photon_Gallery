@@ -1,6 +1,7 @@
 package com.inferno.gallery.ui
 
 import android.app.Application
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.SettingsRepository
@@ -40,6 +41,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         viewModelScope.launch {
+            repository.migrateThemeDefaultsIfNeeded()
+            repository.onboardingV210CompletedFlow.first()
             repository.onboardingCompletedFlow.first()
             val autoClean = repository.autoCleanTrashEnabledFlow.first()
             val days = repository.autoCleanTrashDaysFlow.first()
@@ -48,6 +51,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             repository.useAmoledBlackFlow.first()
             repository.themeModeFlow.first()
             repository.useMaterialYouFlow.first()
+            repository.colorPresetNameFlow.first()
             repository.appSeedColorFlow.first()
             repository.motionStyleFlow.first()
             repository.dateHeaderAlignmentFlow.first()
@@ -173,7 +177,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val useMaterialYou: StateFlow<Boolean> = repository.useMaterialYouFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     )
 
     fun setUseMaterialYou(use: Boolean) {
@@ -185,7 +189,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val colorPresetName: StateFlow<String> = repository.colorPresetNameFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "default_blue"
+        initialValue = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "dynamic" else "default_blue"
     )
 
     fun setColorPresetName(name: String) {
@@ -683,6 +687,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setShowAlbumSize(show: Boolean) {
         viewModelScope.launch {
             repository.updateShowAlbumSize(show)
+        }
+    }
+
+    val onboardingV210Completed: StateFlow<Boolean> = repository.onboardingV210CompletedFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
+    fun setOnboardingV210Completed(completed: Boolean) {
+        viewModelScope.launch {
+            repository.updateOnboardingV210Completed(completed)
         }
     }
 

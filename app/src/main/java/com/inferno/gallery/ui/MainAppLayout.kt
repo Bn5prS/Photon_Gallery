@@ -208,7 +208,7 @@ fun MainAppLayout(
             android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
-    val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
+    val onboardingV210Completed by viewModel.onboardingV210Completed.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     fun checkPhotosPermission(): Boolean {
@@ -319,27 +319,26 @@ fun MainAppLayout(
     }
 
     val hasRequiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        photosGranted && videosGranted && allFilesGranted
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        photosGranted && allFilesGranted
+        photosGranted && videosGranted
     } else {
         photosGranted
     }
     
-    if (onboardingCompleted == null) {
+    if (onboardingV210Completed == null) {
         Box(modifier = modifier.fillMaxSize().background(Color.Black))
         return
     }
 
     var onboardingFinishedLocally by rememberSaveable { mutableStateOf(false) }
-    val showOnboardingFlow = (onboardingCompleted == false && !onboardingFinishedLocally)
+    val showOnboardingFlow = (onboardingV210Completed == false && !onboardingFinishedLocally)
 
     if (showOnboardingFlow || !hasRequiredPermissions) {
+        val initialStep = if (hasRequiredPermissions && showOnboardingFlow) 1 else 0
         PermissionOnboardingScreen(
             photosGranted = photosGranted,
             videosGranted = videosGranted,
             allFilesGranted = allFilesGranted,
-            initialStep = 0,
+            initialStep = initialStep,
             onGrantMediaClick = {
                 val activity = context as? android.app.Activity
                 val showRationale = activity?.let {

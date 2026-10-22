@@ -39,8 +39,8 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun PhotonGalleryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    colorPresetName: String = "default_blue",
+    dynamicColor: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+    colorPresetName: String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "dynamic" else "default_blue",
     useAmoledBlack: Boolean = false,
     useSystemFont: Boolean = false,
     fontScale: Float = 1.0f,
@@ -52,8 +52,11 @@ fun PhotonGalleryTheme(
 
     // Memoize the target color scheme to prevent re-querying system resources on arbitrary recompositions
     val targetColorScheme: ColorScheme = remember(darkTheme, dynamicColor, colorPresetName, useAmoledBlack, context) {
+        val useDynamic = (dynamicColor || colorPresetName == "dynamic") &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            (colorPresetName == "dynamic" || dynamicColor)
         when {
-            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            useDynamic -> {
                 if (darkTheme) {
                     val systemDark = dynamicDarkColorScheme(context)
                     if (useAmoledBlack) {

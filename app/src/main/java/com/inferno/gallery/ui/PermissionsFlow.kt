@@ -257,10 +257,12 @@ fun PermissionOnboardingScreen(
                     )
                     1 -> SetupLooksFeelPage(
                         settingsViewModel = resolvedSettingsViewModel,
-                        onBack = {
-                            previousStep = 1
-                            currentStep = 0
-                        },
+                        onBack = if (initialStep == 0) {
+                            {
+                                previousStep = 1
+                                currentStep = 0
+                            }
+                        } else null,
                         onContinue = {
                             previousStep = 1
                             currentStep = 2
@@ -498,19 +500,15 @@ private fun SetupWelcomePermissionsPage(
         // Bottom Action Dock (Next or Grant Permissions)
         OnboardingNavigationDock(
             onNext = {
-                if (allGranted) {
+                if (mediaGranted) {
                     onContinue()
                 } else {
-                    if (!mediaGranted) {
-                        onGrantMediaClick()
-                    } else {
-                        onGrantAllFilesClick()
-                    }
+                    onGrantMediaClick()
                 }
             },
-            nextText = if (allGranted) "Next" else "Grant Permissions",
+            nextText = if (mediaGranted) "Next" else "Grant Permissions",
             onBack = null,
-            nextIconRes = if (allGranted) R.drawable.ic_ms_chevron_right else null
+            nextIconRes = if (mediaGranted) R.drawable.ic_ms_chevron_right else null
         )
     }
 }
@@ -622,14 +620,16 @@ private fun ExpressiveGallerySymbolsCollage(
 @Composable
 private fun SetupLooksFeelPage(
     settingsViewModel: SettingsViewModel?,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     onContinue: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
 
     val currentThemeMode = settingsViewModel?.themeMode?.collectAsState()?.value ?: ThemeMode.SYSTEM
-    val useMaterialYou = settingsViewModel?.useMaterialYou?.collectAsState()?.value ?: true
-    val colorPresetName = settingsViewModel?.colorPresetName?.collectAsState()?.value ?: "default_blue"
+    val useMaterialYou = settingsViewModel?.useMaterialYou?.collectAsState()?.value 
+        ?: (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+    val colorPresetName = settingsViewModel?.colorPresetName?.collectAsState()?.value 
+        ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "dynamic" else "default_blue"
     val useAmoledBlack = settingsViewModel?.useAmoledBlack?.collectAsState()?.value ?: false
     val isSystemDark = isSystemInDarkTheme()
     val isCurrentlyDark = when (currentThemeMode) {
@@ -855,11 +855,12 @@ private fun SetupLooksFeelPage(
                             ColorSwatchItem(
                                 title = "Dynamic",
                                 color = MaterialTheme.colorScheme.primary,
-                                isSelected = useMaterialYou,
+                                isSelected = useMaterialYou || colorPresetName == "dynamic",
                                 isDynamic = true,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     settingsViewModel?.setUseMaterialYou(true)
+                                    settingsViewModel?.setColorPresetName("dynamic")
                                 }
                             )
                         }
@@ -869,7 +870,7 @@ private fun SetupLooksFeelPage(
                     items(ThemePalettes.allPalettes) { palette ->
                         FourQuadrantColorSwatch(
                             palette = palette,
-                            isSelected = !useMaterialYou && (colorPresetName == palette.id),
+                            isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id),
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 settingsViewModel?.setUseMaterialYou(false)

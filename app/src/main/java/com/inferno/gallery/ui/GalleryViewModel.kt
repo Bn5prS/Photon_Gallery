@@ -656,6 +656,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
 
 
+    val onboardingV210Completed: StateFlow<Boolean?> = settingsRepository.onboardingV210CompletedFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
     val onboardingCompleted: StateFlow<Boolean?> = settingsRepository.onboardingCompletedFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -664,7 +670,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun completeOnboarding() {
         viewModelScope.launch {
-            settingsRepository.updateOnboardingCompleted(true)
+            settingsRepository.updateOnboardingV210Completed(true)
         }
     }
 

@@ -429,7 +429,7 @@ fun SettingsScreen(
                                             title = "Material You",
                                             subtitle = "Use dynamic system wallpaper colors",
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                                            checked = useMaterialYou,
+                                            checked = useMaterialYou || colorPresetName == "dynamic",
                                             onCheckedChange = { viewModel.setUseMaterialYou(it) }
                                         )
                                     },
@@ -452,7 +452,7 @@ fun SettingsScreen(
                                                         color = MaterialTheme.colorScheme.onSurface
                                                     )
                                                     Text(
-                                                        text = if (useMaterialYou) "Select any preset to switch from system wallpaper" else "Curated 4-color Material 3 combinations",
+                                                        text = if (useMaterialYou || colorPresetName == "dynamic") "Select any preset to switch from system wallpaper" else "Curated 4-color Material 3 combinations",
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
@@ -469,7 +469,7 @@ fun SettingsScreen(
                                                 items(ThemePalettes.allPalettes) { palette ->
                                                     FourQuadrantColorSwatch(
                                                         palette = palette,
-                                                        isSelected = !useMaterialYou && (colorPresetName == palette.id),
+                                                        isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id),
                                                         onClick = {
                                                             viewModel.setUseMaterialYou(false)
                                                             viewModel.setColorPresetName(palette.id)
