@@ -29,6 +29,7 @@ replay_pid*.log
 crash.png
 crash*.png
 crash*.txt
+.superpowers/
 
 # ============================================================
 # Sensitive Info, Signing Keys & Credentials (CRITICAL)
