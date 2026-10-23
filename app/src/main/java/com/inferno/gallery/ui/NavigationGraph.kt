@@ -169,10 +169,11 @@ fun NavigationGraph(
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
                     onPhotoClick = { mediaId, bucket, query ->
-                        var route = "detail/$mediaId"
+                        val encodedMediaId = android.net.Uri.encode(mediaId)
+                        var route = "detail/$encodedMediaId"
                         val params = mutableListOf<String>()
                         if (bucket != null) params.add("bucket=${android.net.Uri.encode(bucket)}")
-                        if (query != null && bucket == "search_text") {
+                        if (query != null && (bucket == "search_text" || bucket == "search_smart")) {
                             params.add("highlight=${android.net.Uri.encode(query)}")
                         }
                         if (params.isNotEmpty()) {
@@ -238,6 +239,9 @@ fun NavigationGraph(
                     onNavigateToFrameExtractor = { videoUri ->
                         val encoded = android.net.Uri.encode(videoUri.toString())
                         navController.navigate("frame_extractor?uri=$encoded")
+                    },
+                    onNavigateToPerson = { personId ->
+                        navController.navigate("person/$personId")
                     },
                     viewModel = galleryViewModel
                 )
@@ -375,8 +379,9 @@ fun NavigationGraph(
                     personId = personId,
                     onBack = { navController.popBackStack() },
                     onMediaClick = { media ->
-                        val encoded = android.net.Uri.encode(media.uriString)
-                        navController.navigate("detail/$encoded")
+                        val encoded = android.net.Uri.encode(media.id.toString())
+                        val bucket = android.net.Uri.encode("person:$personId")
+                        navController.navigate("detail/$encoded?bucket=$bucket")
                     }
                 )
             }

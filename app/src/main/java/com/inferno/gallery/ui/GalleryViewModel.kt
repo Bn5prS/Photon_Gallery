@@ -1997,10 +1997,63 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
 
-                    val ftsResults = ftsDeferred.await().distinctBy { it.id }
+                    val ftsResults = ftsDeferred.await().distinctBy { it.id }.toMutableList()
                     val smartResults = smartDeferred.await().distinctBy { it.id }
                     val ftsIds = ftsResults.map { it.id }.toSet()
-                    val filteredSmartResults = smartResults.filterNot { it.id in ftsIds }
+                    val unclassifiedSmart = smartResults.filterNot { it.id in ftsIds }
+
+                    val cleanQ = query.trim()
+                    val queryTokens = cleanQ.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
+                    val filteredSmartResults = mutableListOf<GalleryItem>()
+
+                    if (unclassifiedSmart.isNotEmpty() && cleanQ.isNotBlank()) {
+                        withContext(Dispatchers.IO) {
+                            val rawDb = database.openHelper.readableDatabase
+                            val chunks = unclassifiedSmart.chunked(100)
+                            for (chunk in chunks) {
+                                val placeholders = chunk.joinToString(",") { "?" }
+                                val checkSql = "SELECT mediaId, extractedText FROM image_fts WHERE mediaId IN ($placeholders)"
+                                val ocrMap = mutableMapOf<String, String>()
+                                try {
+                                    rawDb.query(checkSql, chunk.map { it.id }.toTypedArray()).use { c ->
+                                        val mIdCol = c.getColumnIndex("mediaId")
+                                        val textCol = c.getColumnIndex("extractedText")
+                                        while (c.moveToNext()) {
+                                            val mId = if (mIdCol >= 0) c.getString(mIdCol) else null
+                                            val text = if (textCol >= 0 && !c.isNull(textCol)) c.getString(textCol) else null
+                                            if (mId != null && !text.isNullOrBlank()) {
+                                                ocrMap[mId] = text
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("GalleryViewModel", "Failed to check smart OCR text: ${e.message}", e)
+                                }
+
+                                for (item in chunk) {
+                                    val ocrText = ocrMap[item.id]
+                                    val matchesOcr = if (!ocrText.isNullOrBlank()) {
+                                        ocrText.contains(cleanQ, ignoreCase = true) ||
+                                            queryTokens.any { t -> t.length >= 2 && ocrText.contains(t, ignoreCase = true) }
+                                    } else false
+
+                                    if (matchesOcr) {
+                                        val snippet = DatabaseProvider.extractOcrSnippet(ocrText!!, cleanQ)
+                                        ftsResults.add(
+                                            item.copy(
+                                                matchType = "OCR",
+                                                matchSnippet = snippet
+                                            )
+                                        )
+                                    } else {
+                                        filteredSmartResults.add(item)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        filteredSmartResults.addAll(unclassifiedSmart)
+                    }
 
                     searchMatchMap.clear()
                     ftsResults.forEach { item ->

@@ -397,7 +397,13 @@ fun DetailScreen(
     val screenWidth = context.resources.displayMetrics.widthPixels.toFloat()
     val screenHeight = context.resources.displayMetrics.heightPixels.toFloat()
 
-    var showUi by remember { mutableStateOf(true) }
+    val isFromSearch = bucketName == com.inferno.gallery.data.BucketNames.SEARCH_TEXT ||
+                       bucketName == com.inferno.gallery.data.BucketNames.SEARCH_SMART ||
+                       bucketName == "search_text" ||
+                       bucketName == "search_smart" ||
+                       !highlightText.isNullOrBlank()
+
+    var showUi by remember { mutableStateOf(!isFromSearch) }
 
     // Auto hide UI after 4 seconds of inactivity (e.g., no swiping/page change)
     LaunchedEffect(showUi, pagerState.isScrollInProgress, pagerState.currentPage) {
@@ -911,11 +917,17 @@ fun DetailScreen(
                                     }
                                     if (visionText != null) {
                                         val rects = mutableListOf<android.graphics.Rect>()
+                                        val cleanHighlight = activeHighlight!!.trim()
+                                        val queryTokens = cleanHighlight.split(Regex("\\s+")).filter { it.isNotBlank() }
                                         for (block in visionText.textBlocks) {
                                             for (line in block.lines) {
-                                                for (element in line.elements) {
-                                                    if (element.text.contains(activeHighlight!!, ignoreCase = true)) {
-                                                        element.boundingBox?.let { rects.add(it) }
+                                                if (cleanHighlight.contains(" ") && line.text.contains(cleanHighlight, ignoreCase = true)) {
+                                                    line.boundingBox?.let { rects.add(it) }
+                                                } else {
+                                                    for (element in line.elements) {
+                                                        if (queryTokens.any { token -> element.text.contains(token, ignoreCase = true) }) {
+                                                            element.boundingBox?.let { rects.add(it) }
+                                                        }
                                                     }
                                                 }
                                             }

@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.inferno.gallery.R
+import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.data.db.CoreMediaEntity
 import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.ShapeFull
@@ -67,8 +68,16 @@ import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import java.io.File
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PersonDetailScreen(
     personId: Long,
@@ -77,122 +86,252 @@ fun PersonDetailScreen(
     viewModel: PeopleViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val person by viewModel.observePerson(personId).collectAsState(initial = null)
     val mediaList by viewModel.observeMediaForPerson(personId).collectAsState(initial = emptyList())
+    val allPeople by viewModel.allPersons.collectAsState()
     val haptic = LocalHapticFeedback.current
+
+    var selectedMediaIds by remember { mutableStateOf(setOf<Long>()) }
+    val isSelectionMode = selectedMediaIds.isNotEmpty()
 
     var showMenu by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
+    var showMergePicker by remember { mutableStateOf(false) }
+    var mergeCandidate by remember { mutableStateOf<PersonEntity?>(null) }
+    var collisionTarget by remember { mutableStateOf<PersonEntity?>(null) }
 
     if (showNameDialog && person != null) {
         NamePersonDialog(
             initialName = person?.name,
             onDismissRequest = { showNameDialog = false },
             onConfirm = { newName ->
-                viewModel.setPersonName(personId, newName)
-                showNameDialog = false
+                coroutineScope.launch {
+                    val collision = viewModel.checkNameCollision(personId, newName)
+                    if (collision != null) {
+                        collisionTarget = collision
+                    } else {
+                        viewModel.setPersonName(personId, newName)
+                    }
+                    showNameDialog = false
+                }
+            }
+        )
+    }
+
+    val currentCollision = collisionTarget
+    if (currentCollision != null) {
+        SamePersonCollisionDialog(
+            existingPersonName = currentCollision.name ?: "Person #${currentCollision.id}",
+            onDismissRequest = { collisionTarget = null },
+            onConfirmMerge = {
+                viewModel.mergePersons(sourcePersonId = personId, targetPersonId = currentCollision.id)
+                collisionTarget = null
+                onBack()
+            }
+        )
+    }
+
+    if (showMergePicker) {
+        MergePersonPickerSheet(
+            people = allPeople,
+            currentPersonId = personId,
+            onDismissRequest = { showMergePicker = false },
+            onSelectTargetPerson = { target ->
+                showMergePicker = false
+                mergeCandidate = target
+            }
+        )
+    }
+
+    val currentCandidate = mergeCandidate
+    if (currentCandidate != null) {
+        val sourceName = person?.name ?: "Person #$personId"
+        val targetName = currentCandidate.name ?: "Person #${currentCandidate.id}"
+        MergePersonDialog(
+            sourceName = sourceName,
+            targetName = targetName,
+            onDismissRequest = { mergeCandidate = null },
+            onConfirm = {
+                viewModel.mergePersons(sourcePersonId = personId, targetPersonId = currentCandidate.id)
+                mergeCandidate = null
+                onBack()
             }
         )
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { },
+                title = {
+                    if (isSelectionMode) {
+                        Text(
+                            text = "${selectedMediaIds.size} selected",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = {
+                            if (isSelectionMode) {
+                                selectedMediaIds = emptySet()
+                            } else {
+                                onBack()
+                            }
+                        }
+                    ) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
-                            contentDescription = "Back",
+                            imageVector = ImageVector.vectorResource(
+                                if (isSelectionMode) R.drawable.ic_ms_close else R.drawable.ic_ms_arrow_back
+                            ),
+                            contentDescription = if (isSelectionMode) "Clear selection" else "Back",
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(IconSizeTokens.L)
                         )
                     }
                 },
                 actions = {
-                    person?.let { p ->
+                    if (isSelectionMode) {
+                        if (selectedMediaIds.size == 1) {
+                            IconButton(
+                                onClick = {
+                                    val mediaId = selectedMediaIds.first()
+                                    viewModel.setMediaAsCover(personId, mediaId)
+                                    Toast.makeText(context, "Cover photo updated", Toast.LENGTH_SHORT).show()
+                                    selectedMediaIds = emptySet()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
+                                    contentDescription = "Set as feature photo",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(IconSizeTokens.L)
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.toggleFavorite(p)
+                                viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())
+                                Toast.makeText(context, "Removed from this person", Toast.LENGTH_SHORT).show()
+                                selectedMediaIds = emptySet()
                             }
                         ) {
                             Icon(
-                                imageVector = ImageVector.vectorResource(
-                                    if (p.isFavorite) R.drawable.ic_ms_favorite_filled else R.drawable.ic_ms_favorite
-                                ),
-                                contentDescription = if (p.isFavorite) "Remove from favorites" else "Add to favorites",
-                                tint = if (p.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_remove),
+                                contentDescription = "Remove from person",
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(IconSizeTokens.L)
                             )
                         }
-
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
+                    } else {
+                        person?.let { p ->
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.toggleFavorite(p)
+                                }
+                            ) {
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                    contentDescription = "More options",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    imageVector = ImageVector.vectorResource(
+                                        if (p.isFavorite) R.drawable.ic_ms_favorite_filled else R.drawable.ic_ms_favorite
+                                    ),
+                                    contentDescription = if (p.isFavorite) "Remove from favorites" else "Add to favorites",
+                                    tint = if (p.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
 
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                shape = ShapeLarge,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = if (p.name.isNullOrBlank()) "Add name" else "Rename",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_edit),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(IconSizeTokens.M)
-                                        )
-                                    },
-                                    onClick = {
-                                        showMenu = false
-                                        showNameDialog = true
-                                    }
-                                )
+                            Box {
+                                IconButton(onClick = { showMenu = true }) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                                        contentDescription = "More options",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(IconSizeTokens.L)
+                                    )
+                                }
 
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "Hide from People",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(IconSizeTokens.M)
-                                        )
-                                    },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.hidePerson(personId)
-                                        onBack()
-                                    }
-                                )
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false },
+                                    shape = ShapeLarge,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = if (p.name.isNullOrBlank()) "Add name" else "Rename",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            showNameDialog = true
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Merge with another person",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            showMergePicker = true
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Hide from People",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            viewModel.hidePerson(personId)
+                                            onBack()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
             )
         }
@@ -301,19 +440,36 @@ fun PersonDetailScreen(
                 items = mediaList,
                 key = { "person_media_${it.id}" }
             ) { media ->
+                val isSelected = selectedMediaIds.contains(media.id)
                 PersonMediaTile(
                     media = media,
-                    onClick = { onMediaClick(media) }
+                    isSelected = isSelected,
+                    isSelectionMode = isSelectionMode,
+                    onClick = {
+                        if (isSelectionMode) {
+                            selectedMediaIds = if (isSelected) selectedMediaIds - media.id else selectedMediaIds + media.id
+                        } else {
+                            onMediaClick(media)
+                        }
+                    },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedMediaIds = selectedMediaIds + media.id
+                    }
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PersonMediaTile(
     media: CoreMediaEntity,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -322,7 +478,19 @@ private fun PersonMediaTile(
         modifier = modifier
             .aspectRatio(1f)
             .pressScale(pressedScale = 0.95f)
-            .clickable(onClick = onClick)
+            .then(
+                if (isSelected) {
+                    Modifier.border(
+                        width = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = ShapeSmall
+                    )
+                } else Modifier
+            )
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -331,6 +499,31 @@ private fun PersonMediaTile(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                )
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(24.dp)
+                        .align(Alignment.TopStart)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
 
             if (media.isVideo) {
                 Surface(

@@ -17,12 +17,20 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.inferno.gallery.data.db.PersonEntity
+import com.inferno.gallery.ui.theme.ShapeMedium
+import java.io.File
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -90,17 +98,19 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    onAlbumClick: (String) -> Unit = {}
+    onAlbumClick: (String) -> Unit = {},
+    onPersonClick: (Long) -> Unit = {}
 ) {
     val query by viewModel.searchQuery.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
     val ftsResults by viewModel.ftsSearchResults.collectAsState()
     val smartResults by viewModel.smartSearchResults.collectAsState()
     val matchingAlbums by viewModel.matchingAlbums.collectAsState()
+    val matchingPeople by viewModel.matchingPeople.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val haptic = LocalHapticFeedback.current
 
-    val hasAnyResults = ftsResults.isNotEmpty() || smartResults.isNotEmpty() || matchingAlbums.isNotEmpty()
+    val hasAnyResults = ftsResults.isNotEmpty() || smartResults.isNotEmpty() || matchingAlbums.isNotEmpty() || (query.isNotBlank() && matchingPeople.isNotEmpty())
 
     Column(
         modifier = modifier
@@ -192,6 +202,8 @@ fun SearchScreen(
             when {
                 query.isBlank() -> EmptySearchState(
                     recentSearches = recentSearches,
+                    topPeople = matchingPeople,
+                    onPersonClick = onPersonClick,
                     viewModel = viewModel
                 )
                 searching -> SearchingState()
@@ -200,10 +212,12 @@ fun SearchScreen(
                     ftsResults = ftsResults,
                     smartResults = smartResults,
                     matchingAlbums = matchingAlbums,
+                    matchingPeople = matchingPeople,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     onAlbumClick = onAlbumClick,
+                    onPersonClick = onPersonClick,
                     query = query,
                     viewModel = viewModel
                 )
@@ -215,6 +229,8 @@ fun SearchScreen(
 @Composable
 private fun EmptySearchState(
     recentSearches: List<String>,
+    topPeople: List<PersonEntity>,
+    onPersonClick: (Long) -> Unit,
     viewModel: GalleryViewModel
 ) {
     val haptic = LocalHapticFeedback.current
@@ -224,6 +240,43 @@ private fun EmptySearchState(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        if (topPeople.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "People",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(topPeople, key = { it.id }) { person ->
+                        PersonSearchCard(
+                            person = person,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onPersonClick(person.id)
+                            }
+                        )
+                    }
+                }
+            }
+            item {
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
 
         if (recentSearches.isNotEmpty()) {
             item {
@@ -412,10 +465,12 @@ private fun SearchResultsList(
     ftsResults: List<GalleryItem>,
     smartResults: List<GalleryItem>,
     matchingAlbums: List<AlbumBucket>,
+    matchingPeople: List<PersonEntity>,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onPhotoClick: (String, String?, String?) -> Unit,
     onAlbumClick: (String) -> Unit,
+    onPersonClick: (Long) -> Unit,
     query: String,
     viewModel: GalleryViewModel
 ) {
@@ -480,10 +535,11 @@ private fun SearchResultsList(
     val locItems = remember(ftsResults) { ftsResults.filter { it.matchType == "LOCATION" } }
     val dateItems = remember(ftsResults) { ftsResults.filter { it.matchType == "DATE" } }
 
-    val categories = remember(ocrCount, nameCount, formatCount, semanticCount, albumCount, locationCount, dateCount, totalMatches, matchingAlbums.size) {
+    val categories = remember(ocrCount, nameCount, formatCount, semanticCount, albumCount, locationCount, dateCount, totalMatches, matchingAlbums.size, matchingPeople.size) {
         val list = mutableListOf<SearchFilterCategory>()
-        val total = totalMatches + matchingAlbums.size
+        val total = totalMatches + matchingAlbums.size + matchingPeople.size
         list.add(SearchFilterCategory("ALL", "All", total, R.drawable.ic_ms_search))
+        if (matchingPeople.isNotEmpty()) list.add(SearchFilterCategory("PEOPLE", "People", matchingPeople.size, R.drawable.ic_ms_person))
         if (ocrCount > 0) list.add(SearchFilterCategory("OCR", "OCR Text", ocrCount, R.drawable.ic_ms_text_fields))
         if (nameCount > 0) list.add(SearchFilterCategory("NAME", "File Name", nameCount, R.drawable.ic_ms_description))
         if (formatCount > 0) list.add(SearchFilterCategory("FORMAT", "Format", formatCount, R.drawable.ic_ms_image))
@@ -495,7 +551,8 @@ private fun SearchResultsList(
     }
 
     val bannerCount = when (selectedFilter) {
-        "ALL" -> if (totalMatches > 0) "$totalMatches" else "${matchingAlbums.size}"
+        "ALL" -> if (totalMatches > 0) "$totalMatches" else if (matchingPeople.isNotEmpty()) "${matchingPeople.size}" else "${matchingAlbums.size}"
+        "PEOPLE" -> "${matchingPeople.size}"
         "OCR" -> "$ocrCount"
         "NAME" -> "$nameCount"
         "FORMAT" -> "$formatCount"
@@ -512,9 +569,12 @@ private fun SearchResultsList(
                 "$totalMatches ${if (totalMatches == 1) "result" else "results"} & ${matchingAlbums.size} ${if (matchingAlbums.size == 1) "album" else "albums"} for “$query”"
             totalMatches > 0 ->
                 if (totalMatches == 1) "Result found for “$query”" else "Results found for “$query”"
+            matchingPeople.isNotEmpty() ->
+                "${matchingPeople.size} ${if (matchingPeople.size == 1) "Person" else "People"} found for “$query”"
             else ->
                 if (matchingAlbums.size == 1) "1 Album found for “$query”" else "${matchingAlbums.size} Albums found for “$query”"
         }
+        "PEOPLE" -> "${matchingPeople.size} ${if (matchingPeople.size == 1) "Person" else "People"} found"
         "OCR" -> "$ocrCount OCR text ${if (ocrCount == 1) "match" else "matches"} found"
         "NAME" -> "$nameCount File name ${if (nameCount == 1) "match" else "matches"} found"
         "FORMAT" -> "$formatCount Format ${if (formatCount == 1) "match" else "matches"} found"
@@ -649,6 +709,33 @@ private fun SearchResultsList(
         // ── Render Content based on selectedFilter ──
         when (selectedFilter) {
             "ALL" -> {
+                // Matching People Section
+                if (matchingPeople.isNotEmpty()) {
+                    item(span = { GridItemSpan(4) }) {
+                        PhotonSectionHeader(title = "People")
+                    }
+                    item(span = { GridItemSpan(4) }) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(matchingPeople, key = { it.id }) { person ->
+                                PersonSearchCard(
+                                    person = person,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onPersonClick(person.id)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    item(span = { GridItemSpan(4) }) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+
                 // Matching Albums Section
                 if (matchingAlbums.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
@@ -787,6 +874,25 @@ private fun SearchResultsList(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            "PEOPLE" -> {
+                item(span = { GridItemSpan(4) }) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(matchingPeople, key = { it.id }) { person ->
+                            PersonSearchCard(
+                                person = person,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onPersonClick(person.id)
+                                }
+                            )
                         }
                     }
                 }
@@ -1035,4 +1141,73 @@ private fun AlbumSearchCard(
         }
     }
 }
+
+@Composable
+private fun PersonSearchCard(
+    person: PersonEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .width(76.dp)
+            .clip(ShapeMedium)
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp)
+    ) {
+        Surface(
+            modifier = Modifier.size(64.dp),
+            shape = ShapeFull,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            val cropPath = person.coverCropPath
+            if (!cropPath.isNullOrBlank() && File(cropPath).exists()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(File(cropPath))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = person.name ?: "Person",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = person.name ?: "Unnamed",
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (person.name != null) FontWeight.SemiBold else FontWeight.Normal
+            ),
+            color = if (person.name != null) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 

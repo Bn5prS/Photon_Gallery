@@ -171,7 +171,7 @@ fun AlbumsScreen(
     val faceIndexWorkInfo by peopleViewModel.faceIndexWorkInfo.collectAsState()
     val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
             faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-    val people = if (allPeople.isNotEmpty()) allPeople else promotedPeople
+    val people = allPeople
     val faceProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
     val faceTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()

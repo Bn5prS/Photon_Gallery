@@ -666,7 +666,38 @@ object DatabaseProvider {
 
         // 3. Score and merge results
         val tokens = cleanQuery.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
-        val ftsMap = ftsResults.associate { it.first.id to it.second }
+        val ftsMap = ftsResults.associate { it.first.id to it.second }.toMutableMap()
+
+        // Check if any metadata candidates also have matching OCR text in image_fts
+        // that FTS prefix search might have missed (e.g. substrings, symbols, multi-token variations)
+        val missingFtsCandidates = metadataResults.filterNot { it.id in ftsMap.keys }
+        if (missingFtsCandidates.isNotEmpty()) {
+            val candidateChunks = missingFtsCandidates.chunked(100)
+            for (chunk in candidateChunks) {
+                val placeholders = chunk.joinToString(",") { "?" }
+                val checkSql = "SELECT mediaId, extractedText FROM image_fts WHERE mediaId IN ($placeholders)"
+                try {
+                    rawDb.query(checkSql, chunk.map { it.id.toString() }.toTypedArray()).use { c ->
+                        val mIdCol = c.getColumnIndex("mediaId")
+                        val textCol = c.getColumnIndex("extractedText")
+                        while (c.moveToNext()) {
+                            val mId = if (mIdCol >= 0) c.getString(mIdCol)?.toLongOrNull() else null
+                            val text = if (textCol >= 0 && !c.isNull(textCol)) c.getString(textCol) else null
+                            if (mId != null && !text.isNullOrBlank()) {
+                                val containsDirect = text.contains(cleanQuery, ignoreCase = true)
+                                val containsToken = tokens.any { t -> t.length >= 2 && text.contains(t, ignoreCase = true) }
+                                if (containsDirect || containsToken) {
+                                    ftsMap[mId] = text
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DatabaseProvider", "Failed to check candidate OCR text: ${e.message}", e)
+                }
+            }
+        }
+
         val ftsIds = ftsMap.keys
 
         val scoredMetadata = metadataResults.map { entity ->
@@ -903,52 +934,94 @@ object DatabaseProvider {
         excluded: Set<String>
     ): List<Pair<CoreMediaEntity, String?>> {
         val ftsKeywords = setOf("AND", "OR", "NOT", "NEAR")
-        val terms = query.trim().split("\\s+".toRegex())
-            .map { it.filter { c -> c.isLetterOrDigit() } }
+        val cleanQuery = query.trim()
+        val terms = cleanQuery.split(Regex("[^\\p{L}\\p{Nd}]+"))
             .filter { it.isNotBlank() && it.uppercase() !in ftsKeywords }
-        if (terms.isEmpty()) return emptyList()
-
-        val ftsQuery = terms.map { "$it*" }.joinToString(" AND ")
 
         val excludedClause = if (excluded.isNotEmpty()) {
             val placeholders = excluded.joinToString(",") { "?" }
             " AND cm.bucketName NOT IN ($placeholders)"
         } else ""
 
-        val sql = """
-            SELECT cm.*, fts.extractedText AS ocrText FROM core_media cm
-            INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
-            WHERE image_fts MATCH ?
-              AND cm.bucketName != 'Trash'
-              AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
-              AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
-              $excludedClause
-            ORDER BY cm.dateAdded DESC
-        """.trimIndent()
+        val resultsMap = LinkedHashMap<Long, Pair<CoreMediaEntity, String?>>()
 
-        val argsList = mutableListOf<String>(ftsQuery)
-        if (excluded.isNotEmpty()) {
-            argsList.addAll(excluded)
-        }
-
-        return try {
-            val cursor: Cursor = rawDb.query(sql, argsList.toTypedArray())
-            val results = mutableListOf<Pair<CoreMediaEntity, String?>>()
-            cursor.use { c ->
-                val ocrIdx = c.getColumnIndex("ocrText")
-                while (c.moveToNext()) {
-                    val entity = parseCoreMediaEntity(c)
-                    val ocrText = if (ocrIdx >= 0 && !c.isNull(ocrIdx)) c.getString(ocrIdx) else null
-                    results += (entity to ocrText)
+        fun executeFtsQuery(ftsExpr: String) {
+            val sql = """
+                SELECT cm.*, fts.extractedText AS ocrText FROM core_media cm
+                INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
+                WHERE image_fts MATCH ?
+                  AND cm.bucketName != 'Trash'
+                  AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+                  AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+                  $excludedClause
+                ORDER BY cm.dateAdded DESC
+                LIMIT 500
+            """.trimIndent()
+            val args = (listOf(ftsExpr) + excluded).toTypedArray()
+            try {
+                rawDb.query(sql, args).use { c ->
+                    val ocrIdx = c.getColumnIndex("ocrText")
+                    while (c.moveToNext()) {
+                        val entity = parseCoreMediaEntity(c)
+                        if (!resultsMap.containsKey(entity.id)) {
+                            val ocrText = if (ocrIdx >= 0 && !c.isNull(ocrIdx)) c.getString(ocrIdx) else null
+                            resultsMap[entity.id] = entity to ocrText
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("DatabaseProvider", "executeFtsQuery failed for '$ftsExpr': ${e.message}", e)
             }
-            results
-        } catch (e: Exception) {
-            emptyList()
         }
+
+        // 1. Run FTS prefix search with AND (all terms match prefix)
+        if (terms.isNotEmpty()) {
+            val andQuery = terms.map { "$it*" }.joinToString(" AND ")
+            executeFtsQuery(andQuery)
+
+            // If multi-term and we have few results, also run OR to catch photos where some terms match in OCR
+            if (terms.size > 1 && resultsMap.size < 50) {
+                val orQuery = terms.map { "$it*" }.joinToString(" OR ")
+                executeFtsQuery(orQuery)
+            }
+        }
+
+        // 2. Substring / literal LIKE check directly on fts.extractedText
+        // This catches symbols, numbers, punctuation phrases (e.g. "$50", "Wi-Fi", "01/02"),
+        // and substrings inside longer words that FTS prefix search misses
+        if (cleanQuery.length >= 2) {
+            val likeSql = """
+                SELECT cm.*, fts.extractedText AS ocrText FROM core_media cm
+                INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
+                WHERE fts.extractedText LIKE ?
+                  AND cm.bucketName != 'Trash'
+                  AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+                  AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+                  $excludedClause
+                ORDER BY cm.dateAdded DESC
+                LIMIT 500
+            """.trimIndent()
+            val likeArgs = (listOf("%$cleanQuery%") + excluded).toTypedArray()
+            try {
+                rawDb.query(likeSql, likeArgs).use { c ->
+                    val ocrIdx = c.getColumnIndex("ocrText")
+                    while (c.moveToNext()) {
+                        val entity = parseCoreMediaEntity(c)
+                        if (!resultsMap.containsKey(entity.id)) {
+                            val ocrText = if (ocrIdx >= 0 && !c.isNull(ocrIdx)) c.getString(ocrIdx) else null
+                            resultsMap[entity.id] = entity to ocrText
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DatabaseProvider", "searchFtsInternal LIKE query failed: ${e.message}", e)
+            }
+        }
+
+        return resultsMap.values.toList()
     }
 
-    private fun extractOcrSnippet(text: String, query: String): String {
+    fun extractOcrSnippet(text: String, query: String): String {
         val clean = text.replace(Regex("\\s+"), " ").trim()
         val index = clean.indexOf(query, ignoreCase = true)
         if (index >= 0) {
@@ -958,7 +1031,7 @@ object DatabaseProvider {
             val suffix = if (end < clean.length) "…" else ""
             return prefix + clean.substring(start, end).trim() + suffix
         }
-        val tokens = query.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val tokens = query.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
         for (t in tokens) {
             val tIndex = clean.indexOf(t, ignoreCase = true)
             if (tIndex >= 0) {
@@ -1011,11 +1084,8 @@ object DatabaseProvider {
             return SearchMediaResult(entity, SearchMatchType.FORMAT, formatLabel)
         }
 
-        // Camera default naming prefix detection (e.g. IMG_20240101_123456.jpg)
-        val isGenericCameraName = nameWithoutExt.matches(Regex("""^(IMG|PXL|DSC|VID|PANO|SAM|WP|AUD)[_\-].*""", RegexOption.IGNORE_CASE))
-
-        // 2. OCR MATCH (if generic camera filename or OCR matched text)
-        if (entity.id in ftsMap && isGenericCameraName) {
+        // 2. OCR MATCH (Prioritize recognized text when matched via FTS or OCR text)
+        if (entity.id in ftsMap) {
             val ocrText = ftsMap[entity.id]
             val snippet = if (!ocrText.isNullOrBlank()) extractOcrSnippet(ocrText, cleanQuery) else "Recognized text"
             return SearchMediaResult(entity, SearchMatchType.OCR, snippet)
@@ -1026,24 +1096,17 @@ object DatabaseProvider {
             return SearchMediaResult(entity, SearchMatchType.FILE_NAME, name)
         }
 
-        // 4. OCR MATCH (non-generic filename)
-        if (entity.id in ftsMap) {
-            val ocrText = ftsMap[entity.id]
-            val snippet = if (!ocrText.isNullOrBlank()) extractOcrSnippet(ocrText, cleanQuery) else "Recognized text"
-            return SearchMediaResult(entity, SearchMatchType.OCR, snippet)
-        }
-
-        // 5. ALBUM / FOLDER MATCH
+        // 4. ALBUM / FOLDER MATCH
         if (entity.bucketName.contains(cleanQuery, ignoreCase = true)) {
             return SearchMediaResult(entity, SearchMatchType.ALBUM, entity.bucketName)
         }
 
-        // 6. LOCATION MATCH
+        // 5. LOCATION MATCH
         if (entity.id in locationMap) {
             return SearchMediaResult(entity, SearchMatchType.LOCATION, locationMap[entity.id])
         }
 
-        // 7. DATE MATCH
+        // 6. DATE MATCH
         val yearMatch = Regex("""\b(19\d\d|20\d\d)\b""").find(lower)?.value
         val monthMatch = monthMap.entries.firstOrNull { Regex("""\b${it.key}\b""").containsMatchIn(lower) }?.key
         if (yearMatch != null || monthMatch != null) {
@@ -1052,12 +1115,15 @@ object DatabaseProvider {
             return SearchMediaResult(entity, SearchMatchType.DATE, dateStr)
         }
 
-        // 8. Token-based fallback check:
+        // 7. Token-based fallback check:
         val tokens = cleanQuery.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
         if (tokens.any { lowerName.contains(it.lowercase()) }) {
             return SearchMediaResult(entity, SearchMatchType.FILE_NAME, name)
         }
         if (tokens.any { entity.bucketName.contains(it, ignoreCase = true) }) {
+            return SearchMediaResult(entity, SearchMatchType.ALBUM, entity.bucketName)
+        }
+        if (entity.filePath.contains(cleanQuery, ignoreCase = true) || tokens.any { entity.filePath.contains(it, ignoreCase = true) }) {
             return SearchMediaResult(entity, SearchMatchType.ALBUM, entity.bucketName)
         }
 

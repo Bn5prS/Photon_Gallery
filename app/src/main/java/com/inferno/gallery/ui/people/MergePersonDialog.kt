@@ -88,3 +88,137 @@ fun MergePersonDialog(
         }
     )
 }
+
+@Composable
+fun BatchMergePersonDialog(
+    selectedCount: Int,
+    targetName: String,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        shape = ShapeLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        title = {
+            Text(
+                text = "Merge $selectedCount people?",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+            ) {
+                Text(
+                    text = "Merge all $selectedCount selected people into \"$targetName\"? All photos will be grouped together as one person.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "This action can be undone by re-indexing faces in Settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onConfirm()
+                },
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            ) {
+                Text(
+                    text = "Merge",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismissRequest,
+                shape = MaterialTheme.shapes.extraLarge
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
+}
+
+@Composable
+fun SamePersonCollisionDialog(
+    existingPersonName: String,
+    onDismissRequest: () -> Unit,
+    onConfirmMerge: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        shape = ShapeLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        title = {
+            Text(
+                text = "Same person?",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+            ) {
+                Text(
+                    text = "There is already a person named \"$existingPersonName\". Would you like to merge these photos together?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onConfirmMerge()
+                },
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            ) {
+                Text(
+                    text = "Merge",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismissRequest,
+                shape = MaterialTheme.shapes.extraLarge
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
+}

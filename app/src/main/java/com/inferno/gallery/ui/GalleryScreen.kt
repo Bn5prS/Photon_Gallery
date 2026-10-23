@@ -314,7 +314,7 @@ fun GalleryScreen(
                     lazyGridState.firstVisibleItemScrollOffset
                 )
                 viewModel.setInitialDetailItem(item, bucketName)
-                val query = if (bucketName == "search_text") viewModel.searchQuery.value else null
+                val query = if (bucketName == "search_text" || bucketName == "search_smart") viewModel.searchQuery.value else null
                 onPhotoClick(item.id, bucketName, query)
             }
         }

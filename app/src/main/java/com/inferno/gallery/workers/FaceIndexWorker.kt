@@ -36,6 +36,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 class FaceIndexWorker(
     appContext: Context,
@@ -102,26 +103,34 @@ class FaceIndexWorker(
         }
         engine.loadModel()
 
-        // If no faces are stored in the database yet, clear any prior stale scan statuses to ensure a complete fresh index
-        if (faceDao.getFaceCount() == 0) {
-            Log.d(TAG, "Zero faces in database: clearing obsolete scan statuses to re-index properly.")
-            faceDao.clearAllFaceStatuses()
-        }
 
         // 2. Query strictly non-vault, unindexed media
         val unindexedIds = faceDao.getUnindexedMediaIds()
+        val totalPhotos = faceDao.getTotalNonVaultMediaCount().coerceAtLeast(unindexedIds.size)
         if (unindexedIds.isEmpty()) {
             Log.d(TAG, "All media faces are up to date.")
-            setProgress(workDataOf("processed" to 0, "total" to 0))
+            com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                isIndexing = false,
+                progress = totalPhotos,
+                total = totalPhotos
+            )
+            runCatching { clusteringManager.consolidateClusters() }
+            setProgress(workDataOf("processed" to totalPhotos, "total" to totalPhotos))
             return@withContext Result.success()
         }
 
-        val totalPhotos = unindexedIds.size
+        val alreadyIndexed = (totalPhotos - unindexedIds.size).coerceAtLeast(0)
         var processedCount = 0
-        setProgress(workDataOf("processed" to 0, "total" to totalPhotos))
+
+        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+            isIndexing = true,
+            progress = alreadyIndexed,
+            total = totalPhotos
+        )
+        setProgress(workDataOf("processed" to alreadyIndexed, "total" to totalPhotos))
 
         try {
-            setForeground(createForegroundInfo("Scanning faces: 0 / $totalPhotos", 0, totalPhotos))
+            setForeground(createForegroundInfo("Scanning faces: $alreadyIndexed / $totalPhotos", alreadyIndexed, totalPhotos))
         } catch (_: Exception) {}
 
         // 3. Initialize detector with high accuracy, landmarks, and sensible minFaceSize (0.05 = 5% of photo)
@@ -197,15 +206,15 @@ class FaceIndexWorker(
                             try {
                                 val embedding = engine.extractEmbedding(aligned112) ?: continue
 
-                                // Save 160×160 avatar crop for UI
+                                // Save 160×160 natural portrait avatar crop for UI
                                 val cropFile = File(faceCropDir, "face_${media.id}_${faceIndex}.webp")
-                                val avatarBitmap = Bitmap.createScaledBitmap(aligned112, 160, 160, true)
+                                val avatarBitmap = extractNaturalPortraitCrop(sampledBitmap, box, 160)
                                 try {
                                     FileOutputStream(cropFile).use { out ->
                                         avatarBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 85, out)
                                     }
                                 } finally {
-                                    if (avatarBitmap != aligned112) avatarBitmap.recycle()
+                                    avatarBitmap.recycle()
                                 }
 
                                 val normBboxLeft = (box.left.toFloat() / sampledBitmap.width).coerceIn(0f, 1f)
@@ -256,22 +265,43 @@ class FaceIndexWorker(
                     }
 
                     processedCount++
-                    if (processedCount % 5 == 0) {
-                        setProgress(workDataOf("processed" to processedCount, "total" to totalPhotos))
+                    val currentProgress = alreadyIndexed + processedCount
+                    if (processedCount % 5 == 0 || processedCount == unindexedIds.size) {
+                        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                            isIndexing = true,
+                            progress = currentProgress,
+                            total = totalPhotos
+                        )
+                        setProgress(workDataOf("processed" to currentProgress, "total" to totalPhotos))
                     }
                 }
 
-                // Update progress and yield CPU to prevent thermal throttling
-                setProgress(workDataOf("processed" to processedCount, "total" to totalPhotos))
+                val currentBatchProgress = alreadyIndexed + processedCount
+                setProgress(workDataOf("processed" to currentBatchProgress, "total" to totalPhotos))
                 try {
-                    setForeground(createForegroundInfo("Scanning faces: $processedCount / $totalPhotos", processedCount, totalPhotos))
+                    setForeground(createForegroundInfo("Scanning faces: $currentBatchProgress / $totalPhotos", currentBatchProgress, totalPhotos))
                 } catch (_: Exception) {}
+
+                // Periodically consolidate clusters every 100 photos to keep identities grouped
+                if (processedCount % 100 == 0) {
+                    runCatching { clusteringManager.consolidateClusters() }
+                }
 
                 delay(50)
             }
 
+            // Final consolidation pass after all photos are processed
+            runCatching { clusteringManager.consolidateClusters() }
             Result.success()
         } finally {
+            val total = runCatching { faceDao.getTotalNonVaultMediaCount() }.getOrDefault(0)
+            val unindexed = runCatching { faceDao.getUnindexedMediaIds().size }.getOrDefault(0)
+            com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                isIndexing = false,
+                progress = (total - unindexed).coerceAtLeast(0),
+                total = total
+            )
+            runCatching { clusteringManager.consolidateClusters() }
             detector.close()
         }
     }
@@ -293,6 +323,33 @@ class FaceIndexWorker(
             scaled
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun extractNaturalPortraitCrop(bitmap: Bitmap, box: Rect, targetSize: Int = 160): Bitmap {
+        return try {
+            val centerX = box.centerX()
+            val centerY = box.centerY()
+            // 25% margin padding around bounding box for natural portrait look
+            val halfDim = (max(box.width(), box.height()) * 0.75f).roundToInt()
+
+            val left = (centerX - halfDim).coerceAtLeast(0)
+            val top = (centerY - halfDim).coerceAtLeast(0)
+            val right = (centerX + halfDim).coerceAtMost(bitmap.width)
+            val bottom = (centerY + halfDim).coerceAtMost(bitmap.height)
+
+            val width = right - left
+            val height = bottom - top
+            if (width <= 0 || height <= 0) {
+                Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
+            } else {
+                val cropped = Bitmap.createBitmap(bitmap, left, top, width, height)
+                val scaled = Bitmap.createScaledBitmap(cropped, targetSize, targetSize, true)
+                if (scaled != cropped) cropped.recycle()
+                scaled
+            }
+        } catch (_: Exception) {
+            Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
         }
     }
 

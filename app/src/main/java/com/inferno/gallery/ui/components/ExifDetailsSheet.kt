@@ -19,7 +19,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,6 +64,7 @@ import android.graphics.Bitmap
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.bitmapConfig
+import coil3.request.crossfade
 import androidx.compose.ui.layout.ContentScale
 import com.inferno.gallery.data.db.DatabaseProvider
 import androidx.compose.ui.res.vectorResource
@@ -458,7 +461,8 @@ fun ExifDetailsSheet(
     isOpen: Boolean,
     onDismiss: () -> Unit,
     galleryItem: GalleryItem?,
-    exifData: DetailedExifData?
+    exifData: DetailedExifData?,
+    onPersonClick: ((Long) -> Unit)? = null
 ) {
     if (!isOpen || galleryItem == null) return
     val context = LocalContext.current
@@ -466,6 +470,13 @@ fun ExifDetailsSheet(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeepMetadataSheet by remember { mutableStateOf(false) }
+
+    val mediaIdLong = remember(galleryItem.id) { galleryItem.id.toLongOrNull() }
+    val db = remember { DatabaseProvider.getDatabase(context) }
+    val peopleInPhoto by remember(mediaIdLong) {
+        if (mediaIdLong != null) db.faceDao().observePeopleForMedia(mediaIdLong)
+        else kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -518,6 +529,137 @@ fun ExifDetailsSheet(
                     }
                 }
             }
+
+            // ── People in this photo ──────────────────────────────────────────
+            if (peopleInPhoto.isNotEmpty()) {
+                item {
+                    Surface(
+                            shape = ShapeLarge,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            shadowElevation = 0.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = if (peopleInPhoto.size == 1) "Person in this photo" else "People in this photo",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Surface(
+                                        shape = ShapeFull,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ) {
+                                        Text(
+                                            text = "${peopleInPhoto.size}",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    contentPadding = PaddingValues(horizontal = 2.dp)
+                                ) {
+                                    items(peopleInPhoto, key = { it.faceId }) { person ->
+                                        val hasTarget = person.personId != null
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .width(72.dp)
+                                                .clip(ShapeMedium)
+                                                .clickable(enabled = hasTarget) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    onDismiss()
+                                                    person.personId?.let { onPersonClick?.invoke(it) }
+                                                }
+                                                .padding(vertical = 4.dp)
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.size(56.dp),
+                                                shape = ShapeFull,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                border = BorderStroke(
+                                                    width = 1.5.dp,
+                                                    color = if (hasTarget) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                                            else MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                            ) {
+                                                val cropPath = person.cropPath
+                                                if (!cropPath.isNullOrBlank() && File(cropPath).exists()) {
+                                                    AsyncImage(
+                                                        model = ImageRequest.Builder(context)
+                                                            .data(File(cropPath))
+                                                            .crossfade(true)
+                                                            .build(),
+                                                        contentDescription = person.name ?: "Person",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                } else {
+                                                    Box(
+                                                        contentAlignment = Alignment.Center,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(28.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = person.name ?: "Unnamed",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = if (person.name != null) FontWeight.SemiBold else FontWeight.Normal
+                                                ),
+                                                color = if (person.name != null) MaterialTheme.colorScheme.onSurface
+                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            if (person.personId != null) {
+                                                Text(
+                                                    text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
 
             // ── File & Timeline Card ─────────────────────────────────────────

@@ -505,6 +505,10 @@ fun MainAppLayout(
         }
     }
 
+    val isMainScreen = currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "search" || currentRoute == null
+    val isAlbumScreen = currentRoute == "album/{bucketName}"
+    val isSettingsScreen = currentRoute == "settings"
+
     Scaffold(
         modifier = modifier
             .fillMaxSize()
@@ -512,7 +516,7 @@ fun MainAppLayout(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
-            if (currentRoute != "photo_map" && currentRoute != "duplicate_cleaner" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list") {
+            if (isMainScreen || isAlbumScreen || isSettingsScreen) {
                 val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
                 val topBarColor by animateColorAsState(
                     targetValue = when {
@@ -830,10 +834,7 @@ fun MainAppLayout(
             }
         },
         bottomBar = {
-            val isHiddenAlbum = currentRoute?.startsWith("album/") == true
-            // Pill dock auto-hide on scroll temporarily disabled per user request (preserved for later revival)
-            // val isDockVisible = currentRoute != "settings" && currentRoute != "duplicate_cleaner" && currentRoute != "photo_map" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && !isHiddenAlbum && !isSelectionMode && (dockStyle != DockStyle.PILL || isScrollDockVisible)
-            val isDockVisible = currentRoute != "settings" && currentRoute != "duplicate_cleaner" && currentRoute != "photo_map" && currentRoute != "all_albums" && currentRoute != "story_viewer" && currentRoute != "places_list" && !isHiddenAlbum && !isSelectionMode
+            val isDockVisible = isMainScreen && !isSelectionMode
             AnimatedVisibility(
                 visible = isDockVisible,
                 enter = slideInVertically(initialOffsetY = { it }),
@@ -1173,6 +1174,28 @@ fun MainAppLayout(
             }
 
             composable(
+                route = "people",
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeIn(MotionTokens.snappySpring())
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(MotionTokens.snappySpring())
+                }
+            ) {
+                com.inferno.gallery.ui.people.PeopleScreen(
+                    onBack = { nestedNavController.popBackStack() },
+                    onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
+                    onStartScan = { settingsViewModel.startFaceIndexing() }
+                )
+            }
+
+            composable(
                 route = "person_detail/{personId}",
                 arguments = listOf(
                     androidx.navigation.navArgument("personId") { type = androidx.navigation.NavType.LongType }
@@ -1194,7 +1217,33 @@ fun MainAppLayout(
                 com.inferno.gallery.ui.people.PersonDetailScreen(
                     personId = personId,
                     onBack = { nestedNavController.popBackStack() },
-                    onMediaClick = { media -> onPhotoClick(media.uriString, null, null) }
+                    onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) }
+                )
+            }
+
+            composable(
+                route = "person/{personId}",
+                arguments = listOf(
+                    androidx.navigation.navArgument("personId") { type = androidx.navigation.NavType.LongType }
+                ),
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeIn(MotionTokens.snappySpring())
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(MotionTokens.snappySpring())
+                }
+            ) { backStackEntry ->
+                val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
+                com.inferno.gallery.ui.people.PersonDetailScreen(
+                    personId = personId,
+                    onBack = { nestedNavController.popBackStack() },
+                    onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) }
                 )
             }
 
@@ -1261,6 +1310,9 @@ fun MainAppLayout(
                         viewModel.setBucket(bucketName)
                         val encoded = android.net.Uri.encode(bucketName)
                         nestedNavController.navigate("album/$encoded")
+                    },
+                    onPersonClick = { personId ->
+                        nestedNavController.navigate("person/$personId")
                     }
                 )
             }
