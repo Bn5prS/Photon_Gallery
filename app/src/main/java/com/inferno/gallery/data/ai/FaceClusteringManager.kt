@@ -6,6 +6,7 @@ import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.FaceDao
 import com.inferno.gallery.data.db.FaceEntity
 import com.inferno.gallery.data.db.PersonEntity
+import com.inferno.gallery.data.db.PersonMergeSuggestionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,10 +24,22 @@ class FaceClusteringManager(private val context: Context) {
         private const val TAG = "FaceClusteringManager"
 
         // Similarity thresholds on LFW/WebFace600k 512-D MobileFaceNet embeddings
-        const val MATCH_THRESHOLD = 0.65f          // Minimum similarity to associate with an existing identity
-        const val GRAPH_EDGE_THRESHOLD = 0.68f     // Stricter threshold for building graph edges during batch clustering
+        const val MATCH_THRESHOLD = 0.52f          // Reliably associates different angles, lighting, and natural poses of the same identity
+        const val CONSOLIDATION_THRESHOLD = 0.54f  // Threshold for merging split clusters of the same person
         const val PROMOTION_MIN_PHOTOS = 1         // Instant promotion: all discovered faces appear immediately in UI
-        const val MAX_EXEMPLARS_PER_CLUSTER = 3    // Number of clean frontal exemplars stored per identity
+        const val MAX_EXEMPLARS_PER_CLUSTER = 6    // Retain up to 6 diverse pose/lighting exemplars per identity
+
+        // Ambiguous candidate similarity window for proactive merge suggestions
+        const val SUGGESTION_MIN_THRESHOLD = 0.44f
+        const val SUGGESTION_MAX_THRESHOLD = 0.54f
+
+        fun isCandidateSimilarity(similarity: Float): Boolean {
+            return similarity >= SUGGESTION_MIN_THRESHOLD && similarity < SUGGESTION_MAX_THRESHOLD
+        }
+
+        fun toCanonicalPair(idA: Long, idB: Long): Pair<Long, Long> {
+            return if (idA < idB) Pair(idA, idB) else Pair(idB, idA)
+        }
 
         @Volatile
         private var INSTANCE: FaceClusteringManager? = null
@@ -102,9 +115,15 @@ class FaceClusteringManager(private val context: Context) {
             var maxSimilarity = -1f
             var bestClusterIndex = -1
 
-            // 1. Multi-exemplar matching against all known clusters
+            // 1. Multi-exemplar & centroid matching against all known clusters
             for (i in clusterCache.indices) {
                 val cluster = clusterCache[i]
+                val simCentroid = FaceRecognitionEngine.cosineSimilarity(embedding, cluster.centroid)
+                if (simCentroid > maxSimilarity) {
+                    maxSimilarity = simCentroid
+                    bestPersonId = cluster.personId
+                    bestClusterIndex = i
+                }
                 for (exemplar in cluster.exemplars) {
                     val sim = FaceRecognitionEngine.cosineSimilarity(embedding, exemplar)
                     if (sim > maxSimilarity) {
@@ -127,11 +146,14 @@ class FaceClusteringManager(private val context: Context) {
                 }
                 val normalizedCentroid = FaceRecognitionEngine.normalizeL2(updatedCentroid)
 
-                // Update exemplars if high quality frontal face
+                // Expand angle/lighting coverage with diverse exemplars
                 var isExemplar = false
-                if (qualityScore >= 0.70f && cluster.exemplars.size < MAX_EXEMPLARS_PER_CLUSTER) {
-                    cluster.exemplars.add(embedding)
-                    isExemplar = true
+                if (cluster.exemplars.size < MAX_EXEMPLARS_PER_CLUSTER) {
+                    val isDiverse = cluster.exemplars.all { FaceRecognitionEngine.cosineSimilarity(embedding, it) < 0.88f }
+                    if (isDiverse) {
+                        cluster.exemplars.add(embedding)
+                        isExemplar = true
+                    }
                 }
 
                 cluster.centroid = normalizedCentroid
@@ -257,5 +279,189 @@ class FaceClusteringManager(private val context: Context) {
             ensureCacheLoaded()
             Log.d(TAG, "Merged person $sourcePersonId into $targetPersonId (total $totalCount faces)")
         }
+    }
+
+    /**
+     * Merges multiple person identities into a single target identity.
+     */
+    suspend fun mergeMultiplePersons(sourcePersonIds: List<Long>, targetPersonId: Long) = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val validSources = sourcePersonIds.distinct().filter { it != targetPersonId }
+            if (validSources.isEmpty()) return@withContext
+            ensureCacheLoaded()
+
+            for (sourceId in validSources) {
+                val source = faceDao.getPersonById(sourceId) ?: continue
+                val target = faceDao.getPersonById(targetPersonId) ?: continue
+
+                val totalCount = source.faceCount + target.faceCount
+                val mergedCentroid = if (source.centroid != null && target.centroid != null) {
+                    val combined = FloatArray(target.centroid.size)
+                    for (i in combined.indices) {
+                        combined[i] = target.centroid[i] * target.faceCount + source.centroid[i] * source.faceCount
+                    }
+                    FaceRecognitionEngine.normalizeL2(combined)
+                } else {
+                    target.centroid ?: source.centroid ?: FloatArray(FaceModelRegistry.EMBEDDING_DIM)
+                }
+
+                val cover = target.coverCropPath ?: source.coverCropPath
+                if (target.name.isNullOrBlank() && !source.name.isNullOrBlank()) {
+                    faceDao.setPersonName(targetPersonId, source.name)
+                }
+
+                faceDao.mergePersons(
+                    sourcePersonId = sourceId,
+                    targetPersonId = targetPersonId,
+                    mergedCentroid = mergedCentroid,
+                    faceCount = totalCount,
+                    coverCropPath = cover
+                )
+            }
+
+            isCacheInitialized = false
+            ensureCacheLoaded()
+            Log.d(TAG, "Batch merged ${validSources.size} people into $targetPersonId")
+        }
+    }
+
+    fun invalidateCache() {
+        isCacheInitialized = false
+    }
+
+    /**
+     * Iteratively merges clusters of the same identity whose centroids or exemplars exceed similarity threshold.
+     * Consolidates fragmented clusters formed due to lighting/angle/pose variations.
+     */
+    suspend fun consolidateClusters(threshold: Float = CONSOLIDATION_THRESHOLD): Int = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            isCacheInitialized = false
+            ensureCacheLoaded()
+
+            var mergeCount = 0
+            var changed = true
+
+            while (changed) {
+                changed = false
+                var bestPair: Pair<Int, Int>? = null
+                var bestSim = -1f
+
+                for (i in 0 until clusterCache.size) {
+                    val c1 = clusterCache[i]
+                    for (j in i + 1 until clusterCache.size) {
+                        val c2 = clusterCache[j]
+
+                        var maxSim = FaceRecognitionEngine.cosineSimilarity(c1.centroid, c2.centroid)
+
+                        for (e1 in c1.exemplars) {
+                            for (e2 in c2.exemplars) {
+                                val s = FaceRecognitionEngine.cosineSimilarity(e1, e2)
+                                if (s > maxSim) maxSim = s
+                            }
+                        }
+
+                        if (maxSim >= threshold && maxSim > bestSim) {
+                            bestSim = maxSim
+                            bestPair = Pair(i, j)
+                        }
+                    }
+                }
+
+                if (bestPair != null) {
+                    val (i, j) = bestPair
+                    val c1 = clusterCache[i]
+                    val c2 = clusterCache[j]
+
+                    val (target, source) = if (c1.faceCount >= c2.faceCount) Pair(c1, c2) else Pair(c2, c1)
+
+                    val totalCount = target.faceCount + source.faceCount
+                    val mergedCentroid = FloatArray(target.centroid.size)
+                    for (k in mergedCentroid.indices) {
+                        mergedCentroid[k] = target.centroid[k] * target.faceCount + source.centroid[k] * source.faceCount
+                    }
+                    val normalizedCentroid = FaceRecognitionEngine.normalizeL2(mergedCentroid)
+
+                    val targetPerson = faceDao.getPersonById(target.personId)
+                    val sourcePerson = faceDao.getPersonById(source.personId)
+
+                    if (targetPerson?.name.isNullOrBlank() && !sourcePerson?.name.isNullOrBlank()) {
+                        faceDao.setPersonName(target.personId, sourcePerson?.name)
+                    }
+
+                    faceDao.mergePersons(
+                        sourcePersonId = source.personId,
+                        targetPersonId = target.personId,
+                        mergedCentroid = normalizedCentroid,
+                        faceCount = totalCount,
+                        coverCropPath = target.coverCropPath ?: source.coverCropPath
+                    )
+
+                    for (ex in source.exemplars) {
+                        if (target.exemplars.size < MAX_EXEMPLARS_PER_CLUSTER) {
+                            target.exemplars.add(ex)
+                        }
+                    }
+                    target.centroid = normalizedCentroid
+                    target.faceCount = totalCount
+                    target.isPromoted = true
+
+                    clusterCache.remove(source)
+                    mergeCount++
+                    changed = true
+                }
+            }
+
+            Log.d(TAG, "Cluster consolidation complete: performed $mergeCount merges.")
+
+            // Proactively generate merge suggestions for remaining ambiguous clusters
+            computeAndSaveMergeSuggestions()
+
+            mergeCount
+        }
+    }
+
+    /**
+     * Finds pairs of clusters with ambiguous similarity (e.g. 0.44 to 0.54)
+     * and saves them as PENDING merge suggestions in the database.
+     */
+    suspend fun computeAndSaveMergeSuggestions(): Int = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
+        val suggestions = mutableListOf<PersonMergeSuggestionEntity>()
+
+        for (i in 0 until clusterCache.size) {
+            val c1 = clusterCache[i]
+            for (j in i + 1 until clusterCache.size) {
+                val c2 = clusterCache[j]
+
+                var maxSim = FaceRecognitionEngine.cosineSimilarity(c1.centroid, c2.centroid)
+                for (e1 in c1.exemplars) {
+                    for (e2 in c2.exemplars) {
+                        val s = FaceRecognitionEngine.cosineSimilarity(e1, e2)
+                        if (s > maxSim) maxSim = s
+                    }
+                }
+
+                if (isCandidateSimilarity(maxSim)) {
+                    val (pA, pB) = toCanonicalPair(c1.personId, c2.personId)
+                    val existing = faceDao.getExistingSuggestionStatus(pA, pB)
+                    if (existing == null) {
+                        suggestions.add(
+                            PersonMergeSuggestionEntity(
+                                personIdA = pA,
+                                personIdB = pB,
+                                similarity = maxSim,
+                                status = "PENDING"
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        if (suggestions.isNotEmpty()) {
+            faceDao.insertMergeSuggestions(suggestions)
+            Log.d(TAG, "Generated ${suggestions.size} new merge suggestions")
+        }
+        suggestions.size
     }
 }
