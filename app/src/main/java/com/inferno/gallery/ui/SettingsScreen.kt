@@ -11,6 +11,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -1431,34 +1434,60 @@ fun SettingsScreen(
 
                                                 val badgeColor = if (isFaceIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
                                                 val badgeTextColor = if (isFaceIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                                val badgeText = if (isFaceIndexing) "Scanning" else if (unindexedFacesCount == 0) "Completed" else "Pending"
+                                                val badgeText = if (isFaceIndexing) "Indexing" else if (unindexedFacesCount == 0) "Completed" else "Ready"
 
                                                 Surface(
                                                     color = badgeColor,
                                                     contentColor = badgeTextColor,
-                                                    shape = MaterialTheme.shapes.extraSmall
+                                                    shape = ShapeFull
                                                 ) {
-                                                    Text(
-                                                        text = badgeText,
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        if (isFaceIndexing) {
+                                                            LinearWavyProgressIndicator(
+                                                                modifier = Modifier.size(width = 16.dp, height = 10.dp),
+                                                                color = badgeTextColor,
+                                                                trackColor = Color.Transparent
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = badgeText,
+                                                            style = MaterialTheme.typography.labelSmall
+                                                        )
+                                                    }
                                                 }
                                             }
 
-                                            if (isFaceIndexing) {
+                                            if (isFaceIndexing || (faceTotal > 0 && faceProcessed < faceTotal)) {
+                                                val animatedFaceProgress by animateFloatAsState(
+                                                    targetValue = faceProgressFloat,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessLow),
+                                                    label = "faceProgress"
+                                                )
                                                 Column(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
-                                                    if (faceTotal > 0) {
-                                                        LinearWavyProgressIndicator(
-                                                            progress = { faceProgressFloat },
-                                                            modifier = Modifier.fillMaxWidth().height(10.dp)
-                                                        )
-                                                    } else {
-                                                        LinearWavyProgressIndicator(
-                                                            modifier = Modifier.fillMaxWidth().height(10.dp)
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(10.dp)
+                                                            .background(
+                                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                                                shape = CircleShape
+                                                            )
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth(animatedFaceProgress)
+                                                                .fillMaxHeight()
+                                                                .background(
+                                                                    color = MaterialTheme.colorScheme.primary,
+                                                                    shape = CircleShape
+                                                                )
                                                         )
                                                     }
 
@@ -1468,17 +1497,24 @@ fun SettingsScreen(
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
                                                         Text(
-                                                            text = if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos" else "Scanning faces in your gallery…",
+                                                            text = if (isFaceIndexing) {
+                                                                if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos" else "Scanning faces in your gallery…"
+                                                            } else if (faceProcessed == faceTotal && faceTotal > 0) {
+                                                                "Face indexing complete"
+                                                            } else {
+                                                                "Progress"
+                                                            },
                                                             style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.weight(1f),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
                                                         )
-                                                        if (faceTotal > 0) {
-                                                            Text(
-                                                                text = "${(faceProgressFloat * 100).toInt()}%",
-                                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                                color = MaterialTheme.colorScheme.primary
-                                                            )
-                                                        }
+                                                        Text(
+                                                            text = "${(animatedFaceProgress * 100).toInt()}%",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
                                                     }
                                                 }
                                             } else {
@@ -1510,7 +1546,7 @@ fun SettingsScreen(
                                                     }
                                                 } else {
                                                     FilledTonalButton(
-                                                        onClick = { viewModel.startFaceIndexing() },
+                                                        onClick = { viewModel.startFaceIndexing(forceRescan = true) },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
                                                         Text("Scan Faces Now")

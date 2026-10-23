@@ -41,6 +41,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -49,6 +52,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,7 +86,21 @@ fun PeopleScreen(
     viewModel: PeopleViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
-    val people by viewModel.promotedPersons.collectAsState()
+    val promotedPeople by viewModel.promotedPersons.collectAsState()
+    val allPeople by viewModel.allPersons.collectAsState()
+    val faceIndexWorkInfo by viewModel.faceIndexWorkInfo.collectAsState()
+    val isScanning = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+    val scanProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
+    val scanTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
+
+    var selectedTab by rememberSaveable { mutableStateOf(0) } // 0: Promoted (3+), 1: All Faces
+    val displayPeople = if (selectedTab == 1 || (promotedPeople.isEmpty() && allPeople.isNotEmpty())) {
+        allPeople
+    } else {
+        promotedPeople
+    }
+
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedIds by viewModel.selectedPersonIds.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
@@ -153,7 +171,7 @@ fun PeopleScreen(
                 actions = {
                     if (isSelectionMode) {
                         if (selectedIds.size == 2) {
-                            val selectedList = people.filter { selectedIds.contains(it.id) }
+                            val selectedList = displayPeople.filter { selectedIds.contains(it.id) }
                             if (selectedList.size == 2) {
                                 IconButton(
                                     onClick = {
@@ -196,7 +214,7 @@ fun PeopleScreen(
                 .padding(innerPadding)
         ) {
             // Search Bar
-            if (people.isNotEmpty() || searchQuery.isNotBlank()) {
+            if (displayPeople.isNotEmpty() || searchQuery.isNotBlank()) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.updateSearchQuery(it) },
@@ -241,7 +259,63 @@ fun PeopleScreen(
                 )
             }
 
-            if (people.isEmpty() && searchQuery.isBlank()) {
+            // Tab / Category Selector
+            if (promotedPeople.isNotEmpty() && allPeople.size > promotedPeople.size) {
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.XS)
+                ) {
+                    SegmentedButton(
+                        selected = selectedTab == 0,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedTab = 0
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) {
+                        Text("People (${promotedPeople.size})")
+                    }
+                    SegmentedButton(
+                        selected = selectedTab == 1,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedTab = 1
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) {
+                        Text("All Faces (${allPeople.size})")
+                    }
+                }
+            } else if (promotedPeople.isEmpty() && allPeople.isNotEmpty() && isScanning) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = ShapeFull,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.XS)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(IconSizeTokens.S)
+                        )
+                        Text(
+                            text = "Showing discovered faces (${allPeople.size} found) while scanning",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (displayPeople.isEmpty() && searchQuery.isBlank() && !isScanning) {
                 // Empty State
                 Box(
                     modifier = Modifier
@@ -314,7 +388,7 @@ fun PeopleScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(
-                        items = people,
+                        items = displayPeople,
                         key = { "person_grid_${it.id}" }
                     ) { person ->
                         val isSelected = selectedIds.contains(person.id)

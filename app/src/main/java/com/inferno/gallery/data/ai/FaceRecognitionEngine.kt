@@ -130,11 +130,36 @@ class FaceRecognitionEngine(private val context: Context) {
         return try {
             val inputName = currentSession.inputNames.firstOrNull() ?: FaceModelRegistry.INPUT_NAME
             currentSession.run(mapOf(inputName to tensor)).use { results ->
-                val output = results.firstOrNull()?.value as? Array<*>
-                val rawVector = output?.firstOrNull() as? FloatArray
+                val onnxTensor = runCatching { results.get(0) as? OnnxTensor }.getOrNull()
+                    ?: (results.firstOrNull()?.value as? OnnxTensor)
+
+                val tensorData = onnxTensor?.value
+                val rawVector: FloatArray? = when (tensorData) {
+                    is Array<*> -> {
+                        val firstElem = tensorData.firstOrNull()
+                        when (firstElem) {
+                            is FloatArray -> firstElem
+                            is Array<*> -> firstElem.firstOrNull() as? FloatArray
+                            else -> null
+                        }
+                    }
+                    is FloatArray -> tensorData
+                    else -> {
+                        onnxTensor?.floatBuffer?.let { buf ->
+                            val readBuf = buf.asReadOnlyBuffer()
+                            readBuf.rewind()
+                            if (readBuf.remaining() == FaceModelRegistry.EMBEDDING_DIM) {
+                                val floats = FloatArray(FaceModelRegistry.EMBEDDING_DIM)
+                                readBuf.get(floats)
+                                floats
+                            } else null
+                        }
+                    }
+                }
                 if (rawVector != null && rawVector.size == FaceModelRegistry.EMBEDDING_DIM) {
                     normalizeL2(rawVector)
                 } else {
+                    Log.w(TAG, "Failed extracting embedding: data=${tensorData?.javaClass?.name}, size=${rawVector?.size}")
                     null
                 }
             }

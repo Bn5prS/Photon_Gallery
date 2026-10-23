@@ -6,10 +6,13 @@ import android.content.Context
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -30,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -43,7 +47,7 @@ class FaceIndexWorker(
         private const val NOTIFICATION_ID = 57
         private const val CHANNEL_ID = "face_indexing_channel"
         private const val BATCH_SIZE = 10
-        private const val MAX_THUMBNAIL_DIM = 720
+        private const val MAX_THUMBNAIL_DIM = 1024
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
@@ -98,6 +102,12 @@ class FaceIndexWorker(
         }
         engine.loadModel()
 
+        // If no faces are stored in the database yet, clear any prior stale scan statuses to ensure a complete fresh index
+        if (faceDao.getFaceCount() == 0) {
+            Log.d(TAG, "Zero faces in database: clearing obsolete scan statuses to re-index properly.")
+            faceDao.clearAllFaceStatuses()
+        }
+
         // 2. Query strictly non-vault, unindexed media
         val unindexedIds = faceDao.getUnindexedMediaIds()
         if (unindexedIds.isEmpty()) {
@@ -114,11 +124,11 @@ class FaceIndexWorker(
             setForeground(createForegroundInfo("Scanning faces: 0 / $totalPhotos", 0, totalPhotos))
         } catch (_: Exception) {}
 
-        // 3. Initialize detector with high accuracy landmarks
+        // 3. Initialize detector with high accuracy, landmarks, and sensible minFaceSize (0.05 = 5% of photo)
         val detectorOptions = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-            .setMinFaceSize(0.12f)
+            .setMinFaceSize(0.05f)
             .build()
         val detector = FaceDetection.getClient(detectorOptions)
 
@@ -138,8 +148,8 @@ class FaceIndexWorker(
                     if (isStopped) return@withContext Result.retry()
 
                     val uri = Uri.parse(media.uriString)
-                    val sampledBitmap = decodeSampledBitmap(context, uri, MAX_THUMBNAIL_DIM)
-                    if (sampledBitmap == null) {
+                    val sampledBitmap = decodeSampledBitmap(context, media.filePath, uri, MAX_THUMBNAIL_DIM)
+                    if (sampledBitmap == null || sampledBitmap.width < 32 || sampledBitmap.height < 32) {
                         faceDao.insertFaceStatus(
                             com.inferno.gallery.data.db.MediaFaceStatusEntity(
                                 mediaId = media.id,
@@ -147,6 +157,7 @@ class FaceIndexWorker(
                                 scannedAt = System.currentTimeMillis()
                             )
                         )
+                        sampledBitmap?.recycle()
                         processedCount++
                         continue
                     }
@@ -159,8 +170,8 @@ class FaceIndexWorker(
                         for ((faceIndex, face) in detectedFaces.withIndex()) {
                             // Pose & quality filters
                             val box = face.boundingBox
-                            if (box.width() < 36 || box.height() < 36) continue
-                            if (abs(face.headEulerAngleY) > 45f || abs(face.headEulerAngleX) > 35f) continue
+                            if (box.width() < 28 || box.height() < 28) continue
+                            if (abs(face.headEulerAngleY) > 50f || abs(face.headEulerAngleX) > 40f) continue
 
                             // 5-Point landmarks
                             val leftEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position
@@ -169,18 +180,20 @@ class FaceIndexWorker(
                             val mouthLeft = face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position
                             val mouthRight = face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position
 
-                            if (leftEye == null || rightEye == null) continue
+                            val aligned112: Bitmap? = if (leftEye != null && rightEye != null) {
+                                val landmarks = mutableListOf(
+                                    FacePoint(leftEye.x, leftEye.y),
+                                    FacePoint(rightEye.x, rightEye.y)
+                                )
+                                if (nose != null) landmarks.add(FacePoint(nose.x, nose.y))
+                                if (mouthLeft != null) landmarks.add(FacePoint(mouthLeft.x, mouthLeft.y))
+                                if (mouthRight != null) landmarks.add(FacePoint(mouthRight.x, mouthRight.y))
+                                FaceNormalizer.alignFace(sampledBitmap, landmarks) ?: cropFaceBoundingBox(sampledBitmap, box)
+                            } else {
+                                cropFaceBoundingBox(sampledBitmap, box)
+                            }
+                            if (aligned112 == null) continue
 
-                            val landmarks = mutableListOf(
-                                FacePoint(leftEye.x, leftEye.y),
-                                FacePoint(rightEye.x, rightEye.y)
-                            )
-                            if (nose != null) landmarks.add(FacePoint(nose.x, nose.y))
-                            if (mouthLeft != null) landmarks.add(FacePoint(mouthLeft.x, mouthLeft.y))
-                            if (mouthRight != null) landmarks.add(FacePoint(mouthRight.x, mouthRight.y))
-
-                            // Canonical 112×112 warp
-                            val aligned112 = FaceNormalizer.alignFace(sampledBitmap, landmarks) ?: continue
                             try {
                                 val embedding = engine.extractEmbedding(aligned112) ?: continue
 
@@ -200,7 +213,7 @@ class FaceIndexWorker(
                                 val normBboxRight = (box.right.toFloat() / sampledBitmap.width).coerceIn(0f, 1f)
                                 val normBboxBottom = (box.bottom.toFloat() / sampledBitmap.height).coerceIn(0f, 1f)
 
-                                val poseScore = 1f - (abs(face.headEulerAngleY) / 45f * 0.5f + abs(face.headEulerAngleX) / 35f * 0.5f)
+                                val poseScore = 1f - (abs(face.headEulerAngleY) / 50f * 0.5f + abs(face.headEulerAngleX) / 40f * 0.5f)
                                 val qualityScore = poseScore.coerceIn(0.1f, 1.0f)
 
                                 clusteringManager.assignFaceToCluster(
@@ -226,8 +239,18 @@ class FaceIndexWorker(
                                 scannedAt = System.currentTimeMillis()
                             )
                         )
+                        if (savedFaceCount > 0) {
+                            Log.i(TAG, "Indexed media ${media.id}: found $savedFaceCount faces")
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "Error processing media ${media.id}: ${e.message}")
+                        faceDao.insertFaceStatus(
+                            com.inferno.gallery.data.db.MediaFaceStatusEntity(
+                                mediaId = media.id,
+                                faceCount = 0,
+                                scannedAt = System.currentTimeMillis()
+                            )
+                        )
                     } finally {
                         sampledBitmap.recycle()
                     }
@@ -253,10 +276,82 @@ class FaceIndexWorker(
         }
     }
 
-    private fun decodeSampledBitmap(context: Context, uri: Uri, maxDimension: Int): Bitmap? {
+    private fun cropFaceBoundingBox(source: Bitmap, box: Rect): Bitmap? {
         return try {
+            val marginX = (box.width() * 0.15f).toInt()
+            val marginY = (box.height() * 0.15f).toInt()
+            val left = (box.left - marginX).coerceIn(0, source.width - 1)
+            val top = (box.top - marginY).coerceIn(0, source.height - 1)
+            val right = (box.right + marginX).coerceIn(left + 1, source.width)
+            val bottom = (box.bottom + marginY).coerceIn(top + 1, source.height)
+            val cropWidth = right - left
+            val cropHeight = bottom - top
+            if (cropWidth < 32 || cropHeight < 32) return null
+            val cropped = Bitmap.createBitmap(source, left, top, cropWidth, cropHeight)
+            val scaled = Bitmap.createScaledBitmap(cropped, FaceNormalizer.CROP_SIZE, FaceNormalizer.CROP_SIZE, true)
+            if (scaled != cropped) cropped.recycle()
+            scaled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun openInputStream(context: Context, filePath: String, uri: Uri): InputStream? {
+        if (filePath.isNotBlank()) {
+            val file = File(filePath)
+            if (file.exists() && file.canRead()) {
+                return file.inputStream()
+            }
+        }
+        return context.contentResolver.openInputStream(uri)
+    }
+
+    private fun readExifOrientation(context: Context, filePath: String, uri: Uri): Int {
+        return try {
+            openInputStream(context, filePath, uri)?.use { stream ->
+                ExifInterface(stream).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (_: Exception) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+    }
+
+    private fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.postScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.postScale(-1f, 1f)
+            }
+            else -> return bitmap
+        }
+
+        return try {
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (rotated != bitmap) bitmap.recycle()
+            rotated
+        } catch (_: Exception) {
+            bitmap
+        }
+    }
+
+    private fun decodeSampledBitmap(context: Context, filePath: String, uri: Uri, maxDimension: Int): Bitmap? {
+        return try {
+            val orientation = readExifOrientation(context, filePath, uri)
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use { stream ->
+            openInputStream(context, filePath, uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, options)
             }
 
@@ -275,9 +370,11 @@ class FaceIndexWorker(
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
 
-            context.contentResolver.openInputStream(uri)?.use { stream ->
+            val decoded = openInputStream(context, filePath, uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, decodeOptions)
-            }
+            } ?: return null
+
+            applyExifOrientation(decoded, orientation)
         } catch (_: Exception) {
             null
         }

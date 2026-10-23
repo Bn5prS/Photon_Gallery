@@ -166,7 +166,14 @@ fun AlbumsScreen(
     val albumsExpanded by viewModel.albumsExpandedMore.collectAsState()
     val peopleExpanded by viewModel.albumsExpandedPeople.collectAsState()
     val peopleViewModel: com.inferno.gallery.ui.people.PeopleViewModel = viewModel()
-    val people by peopleViewModel.promotedPersons.collectAsState()
+    val promotedPeople by peopleViewModel.promotedPersons.collectAsState()
+    val allPeople by peopleViewModel.allPersons.collectAsState()
+    val faceIndexWorkInfo by peopleViewModel.faceIndexWorkInfo.collectAsState()
+    val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+    val people = if (allPeople.isNotEmpty()) allPeople else promotedPeople
+    val faceProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
+    val faceTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
@@ -393,16 +400,14 @@ fun AlbumsScreen(
 
 
         // ── People Carousel ──
-        if (people.isNotEmpty()) {
-            item(key = "section_people", span = { GridItemSpan(maxLineSpan) }) {
-                com.inferno.gallery.ui.people.PeopleCarousel(
-                    people = people,
-                    isExpanded = peopleExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedPeople() },
-                    onSeeAll = onNavigateToPeople,
-                    onPersonClick = { personId -> onPersonClick(personId.toString()) }
-                )
-            }
+        item(key = "section_people", span = { GridItemSpan(maxLineSpan) }) {
+            com.inferno.gallery.ui.people.PeopleCarousel(
+                people = people,
+                isExpanded = peopleExpanded,
+                onToggle = { viewModel.toggleAlbumsExpandedPeople() },
+                onSeeAll = onNavigateToPeople,
+                onPersonClick = { personId -> onPersonClick(personId.toString()) }
+            )
         }
 
         // ── 3. Places Carousel ──

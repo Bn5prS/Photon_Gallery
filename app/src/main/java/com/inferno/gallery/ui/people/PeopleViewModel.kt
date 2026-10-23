@@ -7,6 +7,8 @@ import com.inferno.gallery.data.ai.FaceClusteringManager
 import com.inferno.gallery.data.db.CoreMediaEntity
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.PersonEntity
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -24,6 +27,12 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     private val database = DatabaseProvider.getDatabase(application)
     private val faceDao = database.faceDao()
     private val clusteringManager = FaceClusteringManager.getInstance(application)
+
+    val faceIndexWorkInfo: StateFlow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("FaceIndexWorker")
+        .map { it.firstOrNull() }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -126,4 +135,22 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
             emit(list.find { it.id == personId })
         }
     }.flowOn(Dispatchers.IO)
+
+    fun startFaceIndexing(forceRescan: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (forceRescan || faceDao.getFaceCount() == 0) {
+                faceDao.clearAllFaceStatuses()
+            }
+            val request = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>().build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                "FaceIndexWorker",
+                androidx.work.ExistingWorkPolicy.REPLACE,
+                request
+            )
+        }
+    }
+
+    fun stopFaceIndexing() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+    }
 }

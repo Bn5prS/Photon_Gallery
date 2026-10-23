@@ -95,6 +95,9 @@ interface FaceDao {
     """)
     suspend fun getMediaForPerson(personId: Long): List<CoreMediaEntity>
 
+    @Query("SELECT COUNT(*) FROM faces")
+    suspend fun getFaceCount(): Int
+
     @Query("SELECT DISTINCT mediaId FROM faces")
     suspend fun getIndexedMediaIds(): List<Long>
 

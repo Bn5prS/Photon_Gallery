@@ -25,7 +25,7 @@ class FaceClusteringManager(private val context: Context) {
         // Similarity thresholds on LFW/WebFace600k 512-D MobileFaceNet embeddings
         const val MATCH_THRESHOLD = 0.65f          // Minimum similarity to associate with an existing identity
         const val GRAPH_EDGE_THRESHOLD = 0.68f     // Stricter threshold for building graph edges during batch clustering
-        const val PROMOTION_MIN_PHOTOS = 3         // 3-Photo Admission Rule: prevents stranger pollution in UI
+        const val PROMOTION_MIN_PHOTOS = 1         // Instant promotion: all discovered faces appear immediately in UI
         const val MAX_EXEMPLARS_PER_CLUSTER = 3    // Number of clean frontal exemplars stored per identity
 
         @Volatile
@@ -175,15 +175,16 @@ class FaceClusteringManager(private val context: Context) {
                     embedding = embedding
                 )
                 faceDao.insertFace(faceEntity)
+                Log.d(TAG, "Assigned face from media $mediaId to Person ${cluster.personId} (sim=$maxSimilarity, count=${cluster.faceCount})")
                 return@withContext cluster.personId
             } else {
-                // No match: spawn new unpromoted candidate cluster
+                // No match: spawn new candidate cluster (immediately promoted so it appears in UI)
                 val newPerson = PersonEntity(
                     name = null,
                     coverCropPath = cropCachePath,
                     isHidden = false,
                     isFavorite = false,
-                    isPromoted = false, // Must earn promotion via 3-photo rule
+                    isPromoted = true,
                     faceCount = 1,
                     centroid = embedding
                 )
@@ -209,11 +210,12 @@ class FaceClusteringManager(private val context: Context) {
                         exemplars = mutableListOf(embedding),
                         centroid = embedding,
                         faceCount = 1,
-                        isPromoted = false,
+                        isPromoted = true,
                         coverCropPath = cropCachePath
                     )
                 )
 
+                Log.d(TAG, "Created new Person cluster $newPersonId with face from media $mediaId")
                 return@withContext newPersonId
             }
         }

@@ -47,6 +47,13 @@ import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
 import java.io.File
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.ShapeLarge
+import com.inferno.gallery.ui.theme.ShapeMedium
+
 @Composable
 fun PeopleCarousel(
     people: List<PersonEntity>,
@@ -56,15 +63,13 @@ fun PeopleCarousel(
     onPersonClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (people.isEmpty()) return
-
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
     ) {
         SectionHeader(
             title = "People",
-            count = people.size,
+            count = if (people.isNotEmpty()) people.size else null,
             isExpanded = isExpanded,
             onToggle = onToggle,
             seeAllText = "Show all",
@@ -76,19 +81,71 @@ fun PeopleCarousel(
             enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
             exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
         ) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-            ) {
-                items(
-                    items = people,
-                    key = { "person_${it.id}" }
-                ) { person ->
-                    PersonAvatarCard(
-                        person = person,
-                        onClick = { onPersonClick(person.id) }
-                    )
+            if (people.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                ) {
+                    items(
+                        items = people,
+                        key = { "person_${it.id}" }
+                    ) { person ->
+                        PersonAvatarCard(
+                            person = person,
+                            onClick = { onPersonClick(person.id) }
+                        )
+                    }
+                }
+            } else {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = ShapeLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.XS)
+                        .clickable(onClick = onSeeAll)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.M),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                    ) {
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "People & Faces",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Tap to view recognized people and organize your gallery",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

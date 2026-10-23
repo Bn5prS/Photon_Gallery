@@ -649,14 +649,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceModelDownloadWorker")
     }
 
-    fun startFaceIndexing() {
-        val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
-            .build()
-        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-            "FaceIndexWorker",
-            ExistingWorkPolicy.REPLACE,
-            request
-        )
+    fun startFaceIndexing(forceRescan: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (forceRescan || db.faceDao().getFaceCount() == 0) {
+                db.faceDao().clearAllFaceStatuses()
+            }
+            val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
+                .build()
+            WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                "FaceIndexWorker",
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
+        }
     }
 
     fun stopFaceIndexing() {

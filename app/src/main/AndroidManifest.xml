@@ -44,6 +44,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PhotonGallery"
         android:enableOnBackInvokedCallback="false">
+
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="face,ocr" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
