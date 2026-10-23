@@ -1647,8 +1647,8 @@ fun DetailScreen(
                 tonalElevation = 2.dp,
                 shadowElevation = 6.dp,
                 modifier = Modifier
-                    .fillMaxWidth(0.82f)
-                    .widthIn(min = 280.dp, max = 340.dp)
+                    .fillMaxWidth(0.88f)
+                    .widthIn(min = 280.dp, max = 360.dp)
                     .height(54.dp)
             ) {
                 val currentItem = galleryItems.getOrNull(pagerState.currentPage)
@@ -1853,6 +1853,28 @@ fun DetailScreen(
                                 contentDescription = "Delete",
                                 modifier = Modifier.size(22.dp)
                             )
+                        }
+
+                        // Google Lens (Images only)
+                        if (currentItem != null && !currentItem.isVideo) {
+                            FilledTonalIconButton(
+                                onClick = {
+                                    val targetUri = resolvedCurrentUri ?: currentItem.uri
+                                    com.inferno.gallery.ui.utils.GoogleLensUtils.launch(context, targetUri)
+                                },
+                                enabled = currentItem.localExists,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_google_lens),
+                                    contentDescription = "Google Lens",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
