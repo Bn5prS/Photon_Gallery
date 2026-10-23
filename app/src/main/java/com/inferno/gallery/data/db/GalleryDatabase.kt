@@ -314,12 +314,15 @@ interface MediaDao {
         MediaEmbeddingStatusEntity::class,
         VaultMediaEntity::class,
         GeocodedLocation::class,
-        PhotoSphereEntity::class
+        PhotoSphereEntity::class,
+        PersonEntity::class,
+        FaceEntity::class,
+        MediaFaceStatusEntity::class
         // ImageFtsEntity is intentionally excluded: @Fts5 has a KSP 2.2.x incompatibility.
         // The FTS5 virtual table is instead created manually in DatabaseProvider's
         // RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
     ],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 @androidx.room.TypeConverters(EmbeddingConverter::class)
@@ -329,5 +332,6 @@ abstract class GalleryDatabase : RoomDatabase() {
     abstract fun embeddingStatusDao(): EmbeddingStatusDao
     abstract fun vaultDao(): VaultDao
     abstract fun placesDao(): PlacesDao
+    abstract fun faceDao(): FaceDao
 }
 

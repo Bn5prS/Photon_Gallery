@@ -174,11 +174,18 @@ fun SettingsScreen(
     val unindexedSmartSearchCount by viewModel.unindexedSmartSearchCount.collectAsState()
     val smartSearchAutoIndex by viewModel.smartSearchAutoIndex.collectAsState()
 
+    val faceRecognitionEnabled by viewModel.faceRecognitionEnabled.collectAsState()
+    val faceModelDownloaded by viewModel.faceModelDownloaded.collectAsState()
+    val unindexedFacesCount by viewModel.unindexedFacesCount.collectAsState()
+    val faceIndexWorkInfo by viewModel.faceIndexWorkInfo.collectAsState(initial = null)
+    val faceModelDownloadWorkInfo by viewModel.faceModelDownloadWorkInfo.collectAsState(initial = null)
+
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
     var showClearIndexConfirm by remember { mutableStateOf(false) }
     var showDeleteModelConfirm by remember { mutableStateOf(false) }
+    var showClearFacesConfirm by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
 
@@ -186,6 +193,29 @@ fun SettingsScreen(
         ThemeMode.SYSTEM -> isSystemDark
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
+    }
+
+    if (showClearFacesConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearFacesConfirm = false },
+            title = { Text("Clear Face Index", style = MaterialTheme.typography.titleLarge) },
+            text = { Text("This will wipe out all clustered faces, recognized people, and custom names. Are you sure you want to proceed?", style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearFacesConfirm = false
+                        viewModel.clearFaceIndex()
+                    }
+                ) {
+                    Text("Clear All Faces", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearFacesConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showClearIndexConfirm) {
@@ -329,7 +359,7 @@ fun SettingsScreen(
                             {
                                 SettingsCategoryRow(
                                     title = "Smart Search & OCR",
-                                    subtitle = "AI-powered semantic search and text recognition",
+                                    subtitle = "Semantic AI search, face clustering, and text recognition",
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                     iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -1274,6 +1304,199 @@ fun SettingsScreen(
                             SettingsGroupCard(
                                 title = "Local Semantic Search (AI)",
                                 items = smartSearchItems
+                            )
+
+                            // ── Face Recognition & Clustering Group Card ──
+                            val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
+                            val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
+                            val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+                            val faceItems = mutableListOf<@Composable () -> Unit>()
+
+                            faceItems.add {
+                                SwitchSettingItem(
+                                    title = "Face Recognition & People",
+                                    subtitle = "Recognize and organize people in your gallery on-device",
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                    checked = faceRecognitionEnabled,
+                                    onCheckedChange = { viewModel.setFaceRecognitionEnabled(it) }
+                                )
+                            }
+
+                            if (faceRecognitionEnabled) {
+                                if (!faceModelDownloaded) {
+                                    faceItems.add {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(
+                                                    shape = ShapeFull,
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.size(40.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(14.dp))
+                                                Text(
+                                                    text = "Face Recognition Model",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Surface(
+                                                    color = if (isFaceDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    shape = ShapeFull
+                                                ) {
+                                                    Text(
+                                                        text = if (isFaceDownloading) "Downloading" else "Needs Download",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (isFaceDownloading) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = "Download lightweight MobileFaceNet (~13MB) to cluster and group people directly on your device with 100% offline privacy.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            if (isFaceDownloading) {
+                                                LinearWavyProgressIndicator(
+                                                    progress = { faceDownloadProgress / 100f },
+                                                    modifier = Modifier.fillMaxWidth().height(10.dp)
+                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Downloading model: $faceDownloadProgress%",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    TextButton(
+                                                        onClick = { viewModel.cancelFaceModelDownload() },
+                                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                                    ) {
+                                                        Text("Cancel")
+                                                    }
+                                                }
+                                            } else {
+                                                ExpressiveButton(
+                                                    onClick = { viewModel.startFaceModelDownload() },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text("Download Face Recognition Model")
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    faceItems.add {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Face Scanning & Clustering",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+
+                                                val badgeColor = if (isFaceIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                                                val badgeTextColor = if (isFaceIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                                                val badgeText = if (isFaceIndexing) "Scanning" else if (unindexedFacesCount == 0) "Completed" else "Pending"
+
+                                                Surface(
+                                                    color = badgeColor,
+                                                    contentColor = badgeTextColor,
+                                                    shape = MaterialTheme.shapes.extraSmall
+                                                ) {
+                                                    Text(
+                                                        text = badgeText,
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = if (isFaceIndexing) {
+                                                    "Scanning faces in your gallery… (Applies 3-photo threshold to exclude strangers)"
+                                                } else if (unindexedFacesCount == 0) {
+                                                    "All photos have been scanned and organized into People."
+                                                } else {
+                                                    "$unindexedFacesCount photos waiting to be scanned for faces."
+                                                },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            if (isFaceIndexing) {
+                                                LinearWavyProgressIndicator(
+                                                    modifier = Modifier.fillMaxWidth().height(10.dp)
+                                                )
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (isFaceIndexing) {
+                                                    ExpressiveButton(
+                                                        onClick = { viewModel.stopFaceIndexing() },
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                        ),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text("Stop Scanning")
+                                                    }
+                                                } else {
+                                                    FilledTonalButton(
+                                                        onClick = { viewModel.startFaceIndexing() },
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text("Scan Faces Now")
+                                                    }
+                                                    OutlinedButton(
+                                                        onClick = { showClearFacesConfirm = true },
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text("Clear Faces")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "People & Face Recognition",
+                                items = faceItems
                             )
                         }
 

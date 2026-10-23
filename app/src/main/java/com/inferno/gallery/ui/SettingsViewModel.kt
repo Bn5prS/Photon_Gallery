@@ -68,6 +68,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
         }
+
+        viewModelScope.launch {
+            WorkManager.getInstance(application)
+                .getWorkInfosForUniqueWorkFlow("FaceModelDownloadWorker")
+                .collect { workInfos ->
+                    val workInfo = workInfos.firstOrNull()
+                    if (workInfo?.state == WorkInfo.State.SUCCEEDED) {
+                        startFaceIndexing()
+                    }
+                }
+        }
     }
 
 
@@ -570,6 +581,97 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val dir = searchEngine.getModelDir()
             if (dir.exists()) {
                 dir.deleteRecursively()
+            }
+        }
+    }
+
+    // ── Face Recognition Integration ──
+
+    val faceRecognitionEnabled: StateFlow<Boolean> = repository.faceRecognitionEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setFaceRecognitionEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateFaceRecognitionEnabled(enabled)
+            if (enabled) {
+                val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+                if (engine.isModelDownloaded()) {
+                    startFaceIndexing()
+                } else {
+                    startFaceModelDownload()
+                }
+            } else {
+                stopFaceIndexing()
+            }
+        }
+    }
+
+    val unindexedFacesCount: StateFlow<Int> = db.faceDao().observeUnindexedCount().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val faceModelDownloaded: StateFlow<Boolean> = kotlinx.coroutines.flow.flow {
+        val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+        while (true) {
+            emit(engine.isModelDownloaded())
+            delay(5000)
+        }
+    }.flowOn(Dispatchers.IO).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    val faceIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("FaceIndexWorker")
+        .map { it.firstOrNull() }
+
+    val faceModelDownloadWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("FaceModelDownloadWorker")
+        .map { it.firstOrNull() }
+
+    fun startFaceModelDownload() {
+        val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+            .build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "FaceModelDownloadWorker",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun cancelFaceModelDownload() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceModelDownloadWorker")
+    }
+
+    fun startFaceIndexing() {
+        val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
+            .build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "FaceIndexWorker",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    fun stopFaceIndexing() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+    }
+
+    fun clearFaceIndex() {
+        viewModelScope.launch(Dispatchers.IO) {
+            stopFaceIndexing()
+            db.faceDao().clearAllFaceStatuses()
+            db.faceDao().clearAllFaces()
+            db.faceDao().clearAllPersons()
+            val cropDir = java.io.File(getApplication<Application>().filesDir, "face_crops")
+            if (cropDir.exists()) {
+                cropDir.deleteRecursively()
             }
         }
     }

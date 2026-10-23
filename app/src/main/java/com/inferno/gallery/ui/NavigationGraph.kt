@@ -356,6 +356,31 @@ fun NavigationGraph(
                 )
             }
 
+            composable("people") {
+                com.inferno.gallery.ui.people.PeopleScreen(
+                    onBack = { navController.popBackStack() },
+                    onPersonClick = { personId -> navController.navigate("person/$personId") },
+                    onStartScan = { settingsViewModel.startFaceIndexing() }
+                )
+            }
+
+            composable(
+                route = "person/{personId}",
+                arguments = listOf(
+                    navArgument("personId") { type = NavType.LongType }
+                )
+            ) { backStackEntry ->
+                val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
+                com.inferno.gallery.ui.people.PersonDetailScreen(
+                    personId = personId,
+                    onBack = { navController.popBackStack() },
+                    onMediaClick = { media ->
+                        val encoded = android.net.Uri.encode(media.uriString)
+                        navController.navigate("detail/$encoded")
+                    }
+                )
+            }
+
         }
     }
 }

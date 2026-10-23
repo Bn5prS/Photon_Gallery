@@ -1087,6 +1087,8 @@ fun MainAppLayout(
                     onNavigateToDuplicateCleaner = { nestedNavController.navigate("duplicate_cleaner") },
                     onNavigateToPhotoMap = { nestedNavController.navigate("photo_map") },
                     onNavigateToPlacesList = { nestedNavController.navigate("places_list") },
+                    onNavigateToPeople = { nestedNavController.navigate("people_list") },
+                    onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onNavigateToAllAlbums = { nestedNavController.navigate("all_albums") },
                     onChangeCover = { albumName ->
                         pendingCoverAlbumName = albumName
@@ -1145,6 +1147,54 @@ fun MainAppLayout(
                 DuplicateCleanerScreen(
                     viewModel = viewModel,
                     onNavigateBack = { nestedNavController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = "people_list",
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeIn(MotionTokens.snappySpring())
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(MotionTokens.snappySpring())
+                }
+            ) {
+                com.inferno.gallery.ui.people.PeopleScreen(
+                    onBack = { nestedNavController.popBackStack() },
+                    onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
+                    onStartScan = { settingsViewModel.startFaceIndexing() }
+                )
+            }
+
+            composable(
+                route = "person_detail/{personId}",
+                arguments = listOf(
+                    androidx.navigation.navArgument("personId") { type = androidx.navigation.NavType.LongType }
+                ),
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeIn(MotionTokens.snappySpring())
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(MotionTokens.snappySpring())
+                }
+            ) { backStackEntry ->
+                val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
+                com.inferno.gallery.ui.people.PersonDetailScreen(
+                    personId = personId,
+                    onBack = { nestedNavController.popBackStack() },
+                    onMediaClick = { media -> onPhotoClick(media.uriString, null, null) }
                 )
             }
 

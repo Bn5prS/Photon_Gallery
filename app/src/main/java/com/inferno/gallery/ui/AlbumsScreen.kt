@@ -124,6 +124,7 @@ fun AlbumsScreen(
     onNavigateToDuplicateCleaner: () -> Unit = {},
     onNavigateToPhotoMap: () -> Unit = {},
     onNavigateToPlacesList: () -> Unit = {},
+    onNavigateToPeople: () -> Unit = {},
     onNavigateToAllAlbums: () -> Unit = {},
     onChangeCover: (String) -> Unit = {},
     onDeleteCover: (String) -> Unit = {}
@@ -163,6 +164,9 @@ fun AlbumsScreen(
     // Persistent expand states for sections
     val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
     val albumsExpanded by viewModel.albumsExpandedMore.collectAsState()
+    val peopleExpanded by viewModel.albumsExpandedPeople.collectAsState()
+    val peopleViewModel: com.inferno.gallery.ui.people.PeopleViewModel = viewModel()
+    val people by peopleViewModel.promotedPersons.collectAsState()
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
@@ -387,6 +391,19 @@ fun AlbumsScreen(
             }
         }
 
+
+        // ── People Carousel ──
+        if (people.isNotEmpty()) {
+            item(key = "section_people", span = { GridItemSpan(maxLineSpan) }) {
+                com.inferno.gallery.ui.people.PeopleCarousel(
+                    people = people,
+                    isExpanded = peopleExpanded,
+                    onToggle = { viewModel.toggleAlbumsExpandedPeople() },
+                    onSeeAll = onNavigateToPeople,
+                    onPersonClick = { personId -> onPersonClick(personId.toString()) }
+                )
+            }
+        }
 
         // ── 3. Places Carousel ──
         item(key = "header_places", span = { GridItemSpan(maxLineSpan) }) {

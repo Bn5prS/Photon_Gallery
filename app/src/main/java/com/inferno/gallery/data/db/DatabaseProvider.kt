@@ -354,6 +354,57 @@ object DatabaseProvider {
                 }
             }
 
+            val MIGRATION_26_27 = object : androidx.room.migration.Migration(26, 27) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS persons (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            name TEXT,
+                            coverCropPath TEXT,
+                            isHidden INTEGER NOT NULL DEFAULT 0,
+                            isFavorite INTEGER NOT NULL DEFAULT 0,
+                            isPromoted INTEGER NOT NULL DEFAULT 0,
+                            faceCount INTEGER NOT NULL DEFAULT 0,
+                            centroid BLOB,
+                            createdAt INTEGER NOT NULL DEFAULT 0
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS faces (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            mediaId INTEGER NOT NULL,
+                            personId INTEGER,
+                            bboxLeft REAL NOT NULL DEFAULT 0.0,
+                            bboxTop REAL NOT NULL DEFAULT 0.0,
+                            bboxRight REAL NOT NULL DEFAULT 0.0,
+                            bboxBottom REAL NOT NULL DEFAULT 0.0,
+                            qualityScore REAL NOT NULL DEFAULT 0.0,
+                            isExemplar INTEGER NOT NULL DEFAULT 0,
+                            cropCachePath TEXT,
+                            embedding BLOB NOT NULL,
+                            FOREIGN KEY(personId) REFERENCES persons(id) ON DELETE SET NULL,
+                            FOREIGN KEY(mediaId) REFERENCES core_media(id) ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_faces_personId ON faces(personId)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_faces_mediaId ON faces(mediaId)")
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS media_face_status (
+                            mediaId INTEGER PRIMARY KEY NOT NULL,
+                            faceCount INTEGER NOT NULL DEFAULT 0,
+                            scannedAt INTEGER NOT NULL DEFAULT 0,
+                            FOREIGN KEY(mediaId) REFERENCES core_media(id) ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                }
+            }
+
             val instance = Room.databaseBuilder(
                 context.applicationContext,
                 GalleryDatabase::class.java,
@@ -365,7 +416,8 @@ object DatabaseProvider {
                 MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
                 MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                 MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_22_24,
-                MIGRATION_24_25, MIGRATION_23_25, MIGRATION_22_25, MIGRATION_25_26
+                MIGRATION_24_25, MIGRATION_23_25, MIGRATION_22_25, MIGRATION_25_26,
+                MIGRATION_26_27
             )
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .fallbackToDestructiveMigration(true)
