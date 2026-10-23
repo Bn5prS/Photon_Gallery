@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1620,21 +1621,27 @@ fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = SpacingTokens.M, bottom = SpacingTokens.XS)
-            .then(
-                if (isCollapsible) {
-                    Modifier
-                        .clip(ShapeMedium)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggle()
-                        }
-                } else Modifier
-            ),
+            .heightIn(min = 44.dp)
+            .padding(top = SpacingTokens.S, bottom = SpacingTokens.XS),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .then(
+                    if (isCollapsible) {
+                        Modifier
+                            .clip(ShapeMedium)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggle()
+                            }
+                            .padding(horizontal = SpacingTokens.XS, vertical = SpacingTokens.XS)
+                    } else {
+                        Modifier.padding(horizontal = SpacingTokens.XS, vertical = SpacingTokens.XS)
+                    }
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
         ) {
