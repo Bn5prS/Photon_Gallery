@@ -405,6 +405,28 @@ object DatabaseProvider {
                 }
             }
 
+            val MIGRATION_27_28 = object : androidx.room.migration.Migration(27, 28) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS person_merge_suggestions (
+                            personIdA INTEGER NOT NULL,
+                            personIdB INTEGER NOT NULL,
+                            similarity REAL NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'PENDING',
+                            createdAt INTEGER NOT NULL,
+                            PRIMARY KEY(personIdA, personIdB),
+                            FOREIGN KEY(personIdA) REFERENCES persons(id) ON DELETE CASCADE,
+                            FOREIGN KEY(personIdB) REFERENCES persons(id) ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_merge_suggestions_personIdA ON person_merge_suggestions(personIdA)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_merge_suggestions_personIdB ON person_merge_suggestions(personIdB)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_merge_suggestions_status ON person_merge_suggestions(status)")
+                }
+            }
+
             val instance = Room.databaseBuilder(
                 context.applicationContext,
                 GalleryDatabase::class.java,
@@ -417,7 +439,7 @@ object DatabaseProvider {
                 MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                 MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_22_24,
                 MIGRATION_24_25, MIGRATION_23_25, MIGRATION_22_25, MIGRATION_25_26,
-                MIGRATION_26_27
+                MIGRATION_26_27, MIGRATION_27_28
             )
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .fallbackToDestructiveMigration(true)

@@ -8,6 +8,14 @@ import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+data class MediaPersonInfo(
+    val faceId: Long,
+    val personId: Long?,
+    val name: String?,
+    val cropPath: String?,
+    val faceCount: Int
+)
+
 @Dao
 interface FaceDao {
 
@@ -25,14 +33,70 @@ interface FaceDao {
     @Query("SELECT * FROM persons WHERE id = :id")
     suspend fun getPersonById(id: Long): PersonEntity?
 
-    @Query("SELECT * FROM persons WHERE isPromoted = 1 AND isHidden = 0 ORDER BY isFavorite DESC, faceCount DESC")
+    @Query("""
+        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+               (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+                INNER JOIN core_media c ON f.mediaId = c.id 
+                WHERE f.personId = p.id AND c.bucketName != 'Trash' 
+                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
+        FROM persons p
+        WHERE p.isPromoted = 1 AND p.isHidden = 0
+        ORDER BY p.isFavorite DESC, faceCount DESC
+    """)
     fun observePromotedPersons(): Flow<List<PersonEntity>>
 
-    @Query("SELECT * FROM persons WHERE isHidden = 0 ORDER BY faceCount DESC")
+    @Query("""
+        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+               (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+                INNER JOIN core_media c ON f.mediaId = c.id 
+                WHERE f.personId = p.id AND c.bucketName != 'Trash' 
+                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
+        FROM persons p
+        WHERE p.isHidden = 0
+        ORDER BY faceCount DESC
+    """)
     fun observeAllVisiblePersons(): Flow<List<PersonEntity>>
 
     @Query("SELECT * FROM persons WHERE centroid IS NOT NULL")
     suspend fun getAllPersonsWithCentroids(): List<PersonEntity>
+
+    @Query("""
+        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+               (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+                INNER JOIN core_media c ON f.mediaId = c.id 
+                WHERE f.personId = p.id AND c.bucketName != 'Trash' 
+                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
+        FROM persons p
+        WHERE p.isHidden = 1
+        ORDER BY faceCount DESC
+    """)
+    fun observeHiddenPersons(): Flow<List<PersonEntity>>
+
+    @Query("""
+        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+               (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+                INNER JOIN core_media c ON f.mediaId = c.id 
+                WHERE f.personId = p.id AND c.bucketName != 'Trash' 
+                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
+        FROM persons p
+        ORDER BY p.isHidden ASC, faceCount DESC
+    """)
+    fun observeAllPersonsIncludingHidden(): Flow<List<PersonEntity>>
+
+    @Query("SELECT * FROM persons WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name)) AND id != :excludePersonId LIMIT 1")
+    suspend fun findPersonByName(name: String, excludePersonId: Long): PersonEntity?
+
+    @Query("""
+        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+               (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+                INNER JOIN core_media c ON f.mediaId = c.id 
+                WHERE f.personId = p.id AND c.bucketName != 'Trash' 
+                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
+        FROM persons p
+        WHERE p.name IS NOT NULL AND LOWER(p.name) LIKE '%' || LOWER(:query) || '%' AND p.isHidden = 0
+        ORDER BY faceCount DESC
+    """)
+    suspend fun searchPersonsByName(query: String): List<PersonEntity>
 
     @Query("UPDATE persons SET name = :name WHERE id = :id")
     suspend fun setPersonName(id: Long, name: String?)
@@ -45,6 +109,46 @@ interface FaceDao {
 
     @Query("UPDATE persons SET isFavorite = :favorite WHERE id = :id")
     suspend fun setPersonFavorite(id: Long, favorite: Boolean)
+
+    @Query("UPDATE persons SET faceCount = :count WHERE id = :personId")
+    suspend fun updatePersonFaceCount(personId: Long, count: Int)
+
+    @Query("SELECT COUNT(*) FROM faces WHERE personId = :personId")
+    suspend fun getFaceCountForPerson(personId: Long): Int
+
+    @Query("UPDATE faces SET personId = NULL WHERE mediaId IN (:mediaIds) AND personId = :personId")
+    suspend fun unassignFacesFromPerson(mediaIds: List<Long>, personId: Long)
+
+    @Query("SELECT cropCachePath FROM faces WHERE mediaId = :mediaId AND personId = :personId LIMIT 1")
+    suspend fun getCropCachePathForMedia(mediaId: Long, personId: Long): String?
+
+    @Query("""
+        SELECT DISTINCT p.* FROM persons p
+        INNER JOIN faces f ON p.id = f.personId
+        WHERE f.mediaId = :mediaId AND p.isHidden = 0
+    """)
+    fun observePersonsForMedia(mediaId: Long): Flow<List<PersonEntity>>
+
+    @Query("""
+        SELECT DISTINCT p.* FROM persons p
+        INNER JOIN faces f ON p.id = f.personId
+        WHERE f.mediaId = :mediaId AND p.isHidden = 0
+    """)
+    suspend fun getPersonsForMedia(mediaId: Long): List<PersonEntity>
+
+    @Query("""
+        SELECT 
+            f.id AS faceId,
+            f.personId AS personId,
+            p.name AS name,
+            COALESCE(f.cropCachePath, p.coverCropPath) AS cropPath,
+            COALESCE(p.faceCount, 1) AS faceCount
+        FROM faces f
+        LEFT JOIN persons p ON f.personId = p.id
+        WHERE f.mediaId = :mediaId AND (p.isHidden IS NULL OR p.isHidden = 0)
+        GROUP BY COALESCE(f.personId, -f.id)
+    """)
+    fun observePeopleForMedia(mediaId: Long): Flow<List<MediaPersonInfo>>
 
     // ── Face Operations ──
 
@@ -137,6 +241,14 @@ interface FaceDao {
     @Query("UPDATE faces SET personId = :targetPersonId WHERE personId = :sourcePersonId")
     suspend fun reassignFaces(sourcePersonId: Long, targetPersonId: Long)
 
+    @Query("""
+        SELECT COUNT(id) FROM core_media 
+        WHERE isVideo = 0 
+          AND bucketName != 'Trash' 
+          AND uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    suspend fun getTotalNonVaultMediaCount(): Int
+
     @Transaction
     suspend fun mergePersons(
         sourcePersonId: Long,
@@ -151,7 +263,7 @@ interface FaceDao {
             centroid = mergedCentroid,
             faceCount = faceCount,
             coverCropPath = coverCropPath ?: target.coverCropPath,
-            isPromoted = faceCount >= 3
+            isPromoted = true
         )
         updatePerson(updated)
         deletePerson(sourcePersonId)
@@ -162,5 +274,29 @@ interface FaceDao {
 
     @Query("DELETE FROM persons")
     suspend fun clearAllPersons()
+
+    // ── Merge Suggestions ──
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMergeSuggestions(suggestions: List<PersonMergeSuggestionEntity>)
+
+    @Query("UPDATE person_merge_suggestions SET status = :status WHERE personIdA = :personIdA AND personIdB = :personIdB")
+    suspend fun setMergeSuggestionStatus(personIdA: Long, personIdB: Long, status: String)
+
+    @Query("SELECT status FROM person_merge_suggestions WHERE personIdA = :personIdA AND personIdB = :personIdB LIMIT 1")
+    suspend fun getExistingSuggestionStatus(personIdA: Long, personIdB: Long): String?
+
+    @Query("DELETE FROM person_merge_suggestions WHERE personIdA = :personId OR personIdB = :personId")
+    suspend fun deleteMergeSuggestionsForPerson(personId: Long)
+
+    @Transaction
+    @Query("""
+        SELECT s.* FROM person_merge_suggestions s
+        INNER JOIN persons pa ON s.personIdA = pa.id
+        INNER JOIN persons pb ON s.personIdB = pb.id
+        WHERE s.status = 'PENDING' AND pa.isHidden = 0 AND pb.isHidden = 0
+        ORDER BY s.similarity DESC
+    """)
+    fun observePendingMergeSuggestions(): Flow<List<MergeSuggestionWithPersons>>
 }
 
