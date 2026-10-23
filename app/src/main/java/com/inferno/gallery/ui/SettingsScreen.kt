@@ -180,8 +180,10 @@ fun SettingsScreen(
     val faceRecognitionEnabled by viewModel.faceRecognitionEnabled.collectAsState()
     val faceModelDownloaded by viewModel.faceModelDownloaded.collectAsState()
     val unindexedFacesCount by viewModel.unindexedFacesCount.collectAsState()
+    val faceProgressState by viewModel.faceProgress.collectAsState()
     val faceIndexWorkInfo by viewModel.faceIndexWorkInfo.collectAsState(initial = null)
     val faceModelDownloadWorkInfo by viewModel.faceModelDownloadWorkInfo.collectAsState(initial = null)
+    val faceAutoIndex by viewModel.faceAutoIndex.collectAsState()
 
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -1312,11 +1314,12 @@ fun SettingsScreen(
                             // ── Face Recognition & Clustering Group Card ──
                             val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
                                     faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-                            val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+                            val isFaceIndexing = faceProgressState.isIndexing ||
+                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
                                     faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
                             val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
-                            val faceProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
-                            val faceTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
+                            val faceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
+                            val faceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
                             val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
                             val faceItems = mutableListOf<@Composable () -> Unit>()
 
@@ -1415,6 +1418,16 @@ fun SettingsScreen(
                                         }
                                     }
                                 } else {
+                                    faceItems.add {
+                                        SwitchSettingItem(
+                                            title = "Auto-Index New Faces",
+                                            subtitle = "Automatically detect and cluster faces when new photos arrive",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                            checked = faceAutoIndex,
+                                            onCheckedChange = { viewModel.setFaceAutoIndex(it) }
+                                        )
+                                    }
+
                                     faceItems.add {
                                         Column(
                                             modifier = Modifier
@@ -1546,10 +1559,10 @@ fun SettingsScreen(
                                                     }
                                                 } else {
                                                     FilledTonalButton(
-                                                        onClick = { viewModel.startFaceIndexing(forceRescan = true) },
+                                                        onClick = { viewModel.startFaceIndexing(forceRescan = (unindexedFacesCount == 0)) },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Text("Scan Faces Now")
+                                                        Text(if (unindexedFacesCount == 0) "Rescan All Faces" else "Scan Faces Now")
                                                     }
                                                     OutlinedButton(
                                                         onClick = { showClearFacesConfirm = true },

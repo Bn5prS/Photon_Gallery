@@ -114,6 +114,24 @@ class MediaSyncWorker(
                 )
             }
 
+            val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
+            val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(applicationContext)
+            val unindexedFaceCount = database.faceDao().getUnindexedMediaIds().size
+            if (autoIndexFacesEnabled && faceEngine.isModelDownloaded() && unindexedFaceCount > 0) {
+                Log.d("MediaSyncWorker", "Auto-indexing $unindexedFaceCount images for Face Recognition...")
+                val constraints = androidx.work.Constraints.Builder()
+                    .setRequiresBatteryNotLow(true)
+                    .build()
+                val faceIndexRequest = androidx.work.OneTimeWorkRequestBuilder<FaceIndexWorker>()
+                    .setConstraints(constraints)
+                    .build()
+                androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                    "FaceIndexWorker",
+                    androidx.work.ExistingWorkPolicy.KEEP,
+                    faceIndexRequest
+                )
+            }
+
 
             // Auto-trigger Reverse Geocoding & GPS metadata extraction in background
             val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()

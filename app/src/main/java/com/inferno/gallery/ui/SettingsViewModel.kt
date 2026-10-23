@@ -68,17 +68,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
         }
-
-        viewModelScope.launch {
-            WorkManager.getInstance(application)
-                .getWorkInfosForUniqueWorkFlow("FaceModelDownloadWorker")
-                .collect { workInfos ->
-                    val workInfo = workInfos.firstOrNull()
-                    if (workInfo?.state == WorkInfo.State.SUCCEEDED) {
-                        startFaceIndexing()
-                    }
-                }
-        }
     }
 
 
@@ -627,6 +616,29 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         initialValue = false
     )
 
+    val faceProgress = com.inferno.gallery.data.IndexingProgressManager.faceProgress
+
+    val faceAutoIndex: StateFlow<Boolean> = repository.faceAutoIndexFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setFaceAutoIndex(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateFaceAutoIndex(enabled)
+            if (enabled) {
+                val shouldIndex = withContext(Dispatchers.IO) {
+                    val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+                    faceEngine.isModelDownloaded() && db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                }
+                if (shouldIndex) {
+                    startFaceIndexing()
+                }
+            }
+        }
+    }
+
     val faceIndexWorkInfo: Flow<WorkInfo?> = WorkManager.getInstance(application)
         .getWorkInfosForUniqueWorkFlow("FaceIndexWorker")
         .map { it.firstOrNull() }
@@ -651,16 +663,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun startFaceIndexing(forceRescan: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (forceRescan || db.faceDao().getFaceCount() == 0) {
+            if (forceRescan) {
                 db.faceDao().clearAllFaceStatuses()
             }
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>()
                 .build()
             WorkManager.getInstance(getApplication()).enqueueUniqueWork(
                 "FaceIndexWorker",
-                ExistingWorkPolicy.REPLACE,
+                if (forceRescan) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
                 request
             )
+        }
+    }
+
+    fun consolidateFaceClusters() {
+        viewModelScope.launch(Dispatchers.IO) {
+            com.inferno.gallery.data.ai.FaceClusteringManager.getInstance(getApplication()).consolidateClusters()
         }
     }
 

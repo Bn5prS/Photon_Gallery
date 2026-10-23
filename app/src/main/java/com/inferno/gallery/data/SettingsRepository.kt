@@ -49,6 +49,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val STRIP_METADATA_ON_SHARE = booleanPreferencesKey("strip_metadata_on_share")
         val SMART_SEARCH_AUTO_INDEX = booleanPreferencesKey("smart_search_auto_index")
         val FACE_RECOGNITION_ENABLED = booleanPreferencesKey("face_recognition_enabled")
+        val FACE_AUTO_INDEX = booleanPreferencesKey("face_auto_index")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val FONT_SCALE = floatPreferencesKey("font_scale")
         val TYPOGRAPHY_STYLE = stringPreferencesKey("typography_style")
@@ -250,6 +251,11 @@ class SettingsRepository private constructor(private val context: Context) {
     val smartSearchAutoIndexFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[SMART_SEARCH_AUTO_INDEX] ?: true
+        }
+
+    val faceAutoIndexFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[FACE_AUTO_INDEX] ?: true
         }
 
     val confirmDeleteEnabledFlow: Flow<Boolean> = context.dataStore.data
@@ -577,6 +583,12 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateFaceRecognitionEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[FACE_RECOGNITION_ENABLED] = enabled
+        }
+    }
+
+    suspend fun updateFaceAutoIndex(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[FACE_AUTO_INDEX] = enabled
         }
     }
 
