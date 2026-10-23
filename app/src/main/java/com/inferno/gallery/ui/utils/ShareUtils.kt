@@ -3,7 +3,9 @@ package com.inferno.gallery.ui.utils
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
@@ -125,32 +127,66 @@ object ShareUtils {
 
         val mimeType = getSharedMimeType(context, urisToShare)
 
+        val clipData = if (urisToShare.size == 1) {
+            ClipData.newRawUri("Shared Media", urisToShare.first())
+        } else {
+            ClipData.newRawUri("Shared Media", urisToShare.first()).apply {
+                for (i in 1 until urisToShare.size) {
+                    addItem(ClipData.Item(urisToShare[i]))
+                }
+            }
+        }
+
         val intent = if (urisToShare.size == 1) {
             val singleUri = urisToShare.first()
             val singleMime = resolveMimeType(context, singleUri)
             Intent(Intent.ACTION_SEND).apply {
                 type = singleMime
                 putExtra(Intent.EXTRA_STREAM, singleUri)
-                clipData = ClipData.newUri(context.contentResolver, "Media", singleUri)
+                this.clipData = clipData
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         } else {
             Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                 type = mimeType
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(urisToShare))
-                val firstUri = urisToShare.first()
-                val clip = ClipData.newRawUri("Shared Media", firstUri)
-                for (i in 1 until urisToShare.size) {
-                    clip.addItem(ClipData.Item(urisToShare[i]))
-                }
-                clipData = clip
+                this.clipData = clipData
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
 
         val chooser = Intent.createChooser(intent, "Share via").apply {
+            this.clipData = clipData
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         }
+
+        // Explicitly grant read URI permissions to all matching resolve activities
+        // so Direct Share targets (like Google Messages contact shortcuts) inherit full access
+        try {
+            val resInfoList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.queryIntentActivities(
+                    intent,
+                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            }
+            for (resolveInfo in resInfoList) {
+                val packageName = resolveInfo.activityInfo.packageName
+                for (uri in urisToShare) {
+                    try {
+                        context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ShareUtils", "Error granting URI permissions to share targets", e)
+        }
+
         context.startActivity(chooser)
     }
 }

@@ -159,6 +159,18 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         forcePeakDisplayRefreshRate()
+        triggerSyncOnResume()
+    }
+
+    private fun triggerSyncOnResume() {
+        try {
+            val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+            androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                "MediaSyncWorker_Foreground",
+                androidx.work.ExistingWorkPolicy.KEEP,
+                syncRequest
+            )
+        } catch (_: Exception) {}
     }
 
     private fun forcePeakDisplayRefreshRate() {

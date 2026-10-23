@@ -54,11 +54,22 @@ class MediaSyncWorker(
 
             val vaultUris = database.vaultDao().getAllOriginalUris().toSet()
             val vaultPaths = database.vaultDao().getAllOriginalPaths().toSet()
+            val showHiddenAlbums = settingsRepo.showHiddenAlbumsFlow.first()
+            val noMediaCache = HashMap<String, Boolean>()
 
             // Find items in MediaStore not in DB or changed (using deltaList)
             for (media in deltaList) {
                 if (vaultUris.contains(media.uri.toString()) || vaultPaths.contains(media.path)) {
                     continue
+                }
+                if (media.path.isNotBlank()) {
+                    val file = java.io.File(media.path)
+                    if (!file.exists()) {
+                        continue
+                    }
+                    if (!showHiddenAlbums && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(media.path, noMediaCache)) {
+                        continue
+                    }
                 }
                 val dbItem = dbMap[media.id]
                 // For incremental, anything in deltaList needs updating/inserting
@@ -84,10 +95,19 @@ class MediaSyncWorker(
                 )
             }
 
-            // Find deletions: compare DB against lightweight ID list and active vault items
+            // Find deletions: compare DB against lightweight ID list, active vault items, disk existence, and .nomedia
+            val deadPathsToRescan = mutableListOf<String>()
             for (dbItem in dbList) {
-                if (!allMediaStoreIds.contains(dbItem.id) || vaultUris.contains(dbItem.uriString) || vaultPaths.contains(dbItem.filePath)) {
+                val file = if (dbItem.filePath.isNotBlank()) java.io.File(dbItem.filePath) else null
+                val fileExists = file != null && file.exists()
+                val isHiddenByNoMedia = !showHiddenAlbums && dbItem.filePath.isNotBlank() &&
+                        com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(dbItem.filePath, noMediaCache)
+
+                if (!allMediaStoreIds.contains(dbItem.id) || !fileExists || isHiddenByNoMedia || vaultUris.contains(dbItem.uriString) || vaultPaths.contains(dbItem.filePath)) {
                     toDelete.add(dbItem.id)
+                    if (!fileExists && dbItem.filePath.isNotBlank()) {
+                        deadPathsToRescan.add(dbItem.filePath)
+                    }
                 }
             }
 
@@ -99,6 +119,19 @@ class MediaSyncWorker(
             if (toDelete.isNotEmpty()) {
                 Log.d("MediaSyncWorker", "Deleting ${toDelete.size} items from Room SSOT.")
                 database.mediaDao().deleteByIds(toDelete)
+            }
+
+            if (deadPathsToRescan.isNotEmpty()) {
+                try {
+                    android.media.MediaScannerConnection.scanFile(
+                        applicationContext,
+                        deadPathsToRescan.toTypedArray(),
+                        null,
+                        null
+                    )
+                } catch (e: Exception) {
+                    Log.w("MediaSyncWorker", "Error notifying MediaScanner of deleted files", e)
+                }
             }
 
             val autoIndexSmartEnabled = settingsRepo.smartSearchAutoIndexFlow.first()

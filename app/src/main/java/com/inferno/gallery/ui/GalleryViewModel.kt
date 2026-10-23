@@ -17,6 +17,7 @@ import com.inferno.gallery.data.VaultAuthManager
 import com.inferno.gallery.data.BucketNames
 import com.inferno.gallery.data.AlbumLayoutMode
 import com.inferno.gallery.data.MediaQueryBuilder
+import com.inferno.gallery.data.db.PersonEntity
 import android.util.Log
 
 import kotlinx.coroutines.CancellationException
@@ -908,6 +909,38 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
 
+            if (bucketName?.startsWith("person:") == true) {
+                val personId = bucketName.removePrefix("person:").toLongOrNull()
+                if (personId != null) {
+                    val entities = database.faceDao().getMediaForPerson(personId)
+                    val items = entities.map { entity ->
+                        val uri = Uri.parse(entity.uriString)
+                        val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                        GalleryItem(
+                            id = entity.id.toString(),
+                            uri = uri,
+                            bucketName = entity.bucketName,
+                            dateAdded = entity.dateAdded,
+                            size = entity.size,
+                            name = entity.name,
+                            dateModified = entity.dateModified,
+                            path = entity.filePath,
+                            isVideo = entity.isVideo,
+                            durationMs = entity.durationMs,
+                            localExists = exists,
+                            resolvedUri = resolved,
+                            latitude = entity.latitude,
+                            longitude = entity.longitude
+                        )
+                    }
+                    _detailMedia.value = items
+                    currentDetailBucket = bucketName
+                    currentDetailFilter = filterIndex
+                    currentDetailOrder = order
+                    return@launch
+                }
+            }
+
             // Build the SQLite query for the bucket
             val filterIndex = selectedFilterIndex.value
             val order = sortOrder.value
@@ -1337,7 +1370,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         for (root in mediaRoots) {
             val subDirs = root.listFiles { file ->
                 file.isDirectory &&
-                (showHidden || !file.name.startsWith(".")) &&
+                (showHidden || (!file.name.startsWith(".") && !File(file, ".nomedia").exists())) &&
                 !ignoredDirNames.contains(file.name.lowercase())
             } ?: continue
 
@@ -1353,7 +1386,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 // Also scan 1 level deeper in Pictures and DCIM
                 val nestedDirs = subDir.listFiles { file ->
                     file.isDirectory &&
-                    (showHidden || !file.name.startsWith(".")) &&
+                    (showHidden || (!file.name.startsWith(".") && !File(file, ".nomedia").exists())) &&
                     !ignoredDirNames.contains(file.name.lowercase())
                 } ?: continue
 
@@ -1777,6 +1810,21 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** People whose name matches the current search query, or top visible people when query is empty. */
+    val matchingPeople: StateFlow<List<PersonEntity>> = combine(
+        searchQuery,
+        database.faceDao().observeAllVisiblePersons()
+    ) { query, allPersons ->
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            allPersons.filter { it.isPromoted && !it.isHidden }.take(10)
+        } else {
+            allPersons.filter { person ->
+                !person.isHidden && person.name?.contains(trimmed, ignoreCase = true) == true
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val recentSearches: StateFlow<List<String>> = settingsRepository.recentSearchesFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -2029,6 +2077,23 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _initialDetailItem.value = null
             }
             _uiEvents.send(UiEvent.DeleteSuccess)
+        }
+    }
+
+    fun notifyExternalMediaModifiedOrDeleted(uriString: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.mediaDao().deleteByUri(uriString)
+            _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+            if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                _initialDetailItem.value = null
+            }
+            val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>()
+                .build()
+            androidx.work.WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                "MediaSyncWorker_Foreground",
+                androidx.work.ExistingWorkPolicy.REPLACE,
+                syncRequest
+            )
         }
     }
 

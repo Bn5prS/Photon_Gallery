@@ -73,6 +73,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -174,7 +175,8 @@ fun DetailScreen(
     viewModel: GalleryViewModel = viewModel(),
     onBack: () -> Unit,
     onNavigateToEditor: (android.net.Uri) -> Unit = {},
-    onNavigateToFrameExtractor: (android.net.Uri) -> Unit = {}
+    onNavigateToFrameExtractor: (android.net.Uri) -> Unit = {},
+    onNavigateToPerson: ((Long) -> Unit)? = null
 ) {
     androidx.compose.runtime.LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
@@ -192,6 +194,7 @@ fun DetailScreen(
     val activity = context as? android.app.Activity
     val window = activity?.window
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+    val coroutineScope = rememberCoroutineScope()
     
     val rawGalleryItems by viewModel.detailMedia.collectAsState()
     val initialDetailItem by viewModel.initialDetailItem.collectAsState()
@@ -270,11 +273,49 @@ fun DetailScreen(
     }
 
     val currentItem = galleryItems.getOrNull(pagerState.currentPage)
-    var isLocalFileMissing by remember(currentItem) { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, currentItem) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val item = currentItem
+                if (item != null && item.path.isNotBlank()) {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        val file = java.io.File(item.path)
+                        val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
+                        val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
+                        if (!file.exists() || isHidden) {
+                            withContext(Dispatchers.Main) {
+                                viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
+                                if (galleryItems.size <= 1) {
+                                    onBack()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     LaunchedEffect(currentItem) {
-        if (currentItem != null) {
-            isLocalFileMissing = withContext(Dispatchers.IO) {
-                !java.io.File(currentItem.path).exists()
+        if (currentItem != null && currentItem.path.isNotBlank()) {
+            withContext(Dispatchers.IO) {
+                val file = java.io.File(currentItem.path)
+                val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
+                val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(currentItem.path)
+                if (!file.exists() || isHidden) {
+                    withContext(Dispatchers.Main) {
+                        viewModel.notifyExternalMediaModifiedOrDeleted(currentItem.uri.toString())
+                        if (galleryItems.size <= 1) {
+                            onBack()
+                        }
+                    }
+                }
             }
         }
     }
@@ -333,7 +374,7 @@ fun DetailScreen(
     var activeHighlight by remember { mutableStateOf(highlightText) }
     var highlightRects by remember { mutableStateOf<List<android.graphics.Rect>>(emptyList()) }
     var highlightImageSize by remember { mutableStateOf<androidx.compose.ui.geometry.Size?>(null) }
-    var highlightOverlayVisible by remember { mutableStateOf(highlightText != null) }
+    var highlightOverlayVisible by remember { mutableStateOf(false) }
 
     var hasInitialScrolled by remember(mediaId) { mutableStateOf(false) }
 
@@ -353,7 +394,6 @@ fun DetailScreen(
         }
     }
 
-    val coroutineScope = rememberCoroutineScope()
     val screenWidth = context.resources.displayMetrics.widthPixels.toFloat()
     val screenHeight = context.resources.displayMetrics.heightPixels.toFloat()
 
@@ -858,38 +898,49 @@ fun DetailScreen(
                 } else {
                     androidx.compose.runtime.LaunchedEffect(activeHighlight, page, pagerState.currentPage, resolvedUri) {
                         if (page == pagerState.currentPage && activeHighlight != null) {
+                            var foundRects = emptyList<android.graphics.Rect>()
+                            var imgSize: androidx.compose.ui.geometry.Size? = null
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    try {
-                                        val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
-                                        val inputImage = com.google.mlkit.vision.common.InputImage.fromFilePath(context, resolvedUri)
-                                        val visionText: com.google.mlkit.vision.text.Text? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-                                            recognizer.process(inputImage)
-                                                .addOnSuccessListener { cont.resumeWith(kotlin.Result.success(it)) }
-                                                .addOnFailureListener { cont.resumeWith(kotlin.Result.success(null)) }
-                                        }
-                                        if (visionText != null) {
-                                            val rects = mutableListOf<android.graphics.Rect>()
-                                            for (block in visionText.textBlocks) {
-                                                for (line in block.lines) {
-                                                    for (element in line.elements) {
-                                                        if (element.text.contains(activeHighlight!!, ignoreCase = true)) {
-                                                            element.boundingBox?.let { rects.add(it) }
-                                                        }
+                                try {
+                                    val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+                                    val inputImage = com.google.mlkit.vision.common.InputImage.fromFilePath(context, resolvedUri)
+                                    val visionText: com.google.mlkit.vision.text.Text? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                                        recognizer.process(inputImage)
+                                            .addOnSuccessListener { cont.resumeWith(kotlin.Result.success(it)) }
+                                            .addOnFailureListener { cont.resumeWith(kotlin.Result.success(null)) }
+                                    }
+                                    if (visionText != null) {
+                                        val rects = mutableListOf<android.graphics.Rect>()
+                                        for (block in visionText.textBlocks) {
+                                            for (line in block.lines) {
+                                                for (element in line.elements) {
+                                                    if (element.text.contains(activeHighlight!!, ignoreCase = true)) {
+                                                        element.boundingBox?.let { rects.add(it) }
                                                     }
                                                 }
                                             }
-                                            highlightRects = rects
-                                            highlightImageSize = androidx.compose.ui.geometry.Size(inputImage.width.toFloat(), inputImage.height.toFloat())
                                         }
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("DetailScreen", "OCR highlight failed", e)
+                                        foundRects = rects
+                                        imgSize = androidx.compose.ui.geometry.Size(inputImage.width.toFloat(), inputImage.height.toFloat())
                                     }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("DetailScreen", "OCR highlight failed", e)
                                 }
-                                // Auto dismiss
+                            }
+                            highlightRects = foundRects
+                            highlightImageSize = imgSize
+                            if (foundRects.isNotEmpty()) {
                                 highlightOverlayVisible = true
                                 kotlinx.coroutines.delay(4000)
                                 highlightOverlayVisible = false
+                            } else {
+                                highlightOverlayVisible = false
                             }
+                        } else {
+                            highlightRects = emptyList()
+                            highlightImageSize = null
+                            highlightOverlayVisible = false
+                        }
                     }
 
                     with(sharedTransitionScope) {
@@ -1161,8 +1212,10 @@ fun DetailScreen(
                             )
                         }
                         
-                        if (activeHighlight != null) {
+                        if (activeHighlight != null && highlightOverlayVisible && highlightRects.isNotEmpty() && highlightImageSize != null) {
                             val highlightColor = MaterialTheme.colorScheme.primary
+                            val iSize = highlightImageSize!!
+
                             Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1174,57 +1227,46 @@ fun DetailScreen(
                                         translationY = offsetY.floatValue
                                     }
                             ) {
-                                val iSize = highlightImageSize
-                                val hasRects = iSize != null && highlightRects.isNotEmpty()
-                                
-                                val fitScale = if (hasRects) kotlin.math.min(size.width / iSize!!.width, size.height / iSize.height) else 1f
-                                val dx = if (hasRects) (size.width - iSize!!.width * fitScale) / 2f else 0f
-                                val dy = if (hasRects) (size.height - iSize!!.height * fitScale) / 2f else 0f
+                                val fitScale = kotlin.math.min(size.width / iSize.width, size.height / iSize.height)
+                                val dx = (size.width - iSize.width * fitScale) / 2f
+                                val dy = (size.height - iSize.height * fitScale) / 2f
                                 val padding = 6.dp.toPx()
 
-                                if (highlightOverlayVisible) {
-                                    if (hasRects) {
-                                        val clipPath = androidx.compose.ui.graphics.Path().apply {
-                                            for (rect in highlightRects) {
-                                                val rLeft = dx + rect.left * fitScale - padding
-                                                val rTop = dy + rect.top * fitScale - padding
-                                                val rWidth = (rect.right - rect.left) * fitScale + (padding * 2)
-                                                val rHeight = (rect.bottom - rect.top) * fitScale + (padding * 2)
-                                                addRoundRect(androidx.compose.ui.geometry.RoundRect(
-                                                    rLeft, rTop, rLeft + rWidth, rTop + rHeight,
-                                                    androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
-                                                ))
-                                            }
-                                        }
-                                        clipPath(path = clipPath, clipOp = androidx.compose.ui.graphics.ClipOp.Difference) {
-                                            drawRect(Color.Black.copy(alpha = 0.6f))
-                                        }
-                                    } else {
-                                        drawRect(Color.Black.copy(alpha = 0.6f))
-                                    }
-                                }
-                                
-                                if (hasRects) {
+                                val clipPath = androidx.compose.ui.graphics.Path().apply {
                                     for (rect in highlightRects) {
                                         val rLeft = dx + rect.left * fitScale - padding
                                         val rTop = dy + rect.top * fitScale - padding
                                         val rWidth = (rect.right - rect.left) * fitScale + (padding * 2)
                                         val rHeight = (rect.bottom - rect.top) * fitScale + (padding * 2)
-                                        
-                                        drawRoundRect(
-                                            color = highlightColor.copy(alpha = 0.4f),
-                                            topLeft = Offset(rLeft, rTop),
-                                            size = androidx.compose.ui.geometry.Size(rWidth, rHeight),
-                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
-                                        )
-                                        drawRoundRect(
-                                            color = highlightColor,
-                                            topLeft = Offset(rLeft, rTop),
-                                            size = androidx.compose.ui.geometry.Size(rWidth, rHeight),
-                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()),
-                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-                                        )
+                                        addRoundRect(androidx.compose.ui.geometry.RoundRect(
+                                            rLeft, rTop, rLeft + rWidth, rTop + rHeight,
+                                            androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
+                                        ))
                                     }
+                                }
+                                clipPath(path = clipPath, clipOp = androidx.compose.ui.graphics.ClipOp.Difference) {
+                                    drawRect(Color.Black.copy(alpha = 0.6f))
+                                }
+
+                                for (rect in highlightRects) {
+                                    val rLeft = dx + rect.left * fitScale - padding
+                                    val rTop = dy + rect.top * fitScale - padding
+                                    val rWidth = (rect.right - rect.left) * fitScale + (padding * 2)
+                                    val rHeight = (rect.bottom - rect.top) * fitScale + (padding * 2)
+
+                                    drawRoundRect(
+                                        color = highlightColor.copy(alpha = 0.4f),
+                                        topLeft = Offset(rLeft, rTop),
+                                        size = androidx.compose.ui.geometry.Size(rWidth, rHeight),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
+                                    )
+                                    drawRoundRect(
+                                        color = highlightColor,
+                                        topLeft = Offset(rLeft, rTop),
+                                        size = androidx.compose.ui.geometry.Size(rWidth, rHeight),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()),
+                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
+                                    )
                                 }
                             }
                         }
@@ -1583,7 +1625,8 @@ fun DetailScreen(
             isOpen = showInfoCard,
             onDismiss = { showInfoCard = false },
             galleryItem = galleryItems.getOrNull(pagerState.currentPage),
-            exifData = currentExif
+            exifData = currentExif,
+            onPersonClick = onNavigateToPerson
         )
 
         // ── Floating Deep Zoom Pill ──
