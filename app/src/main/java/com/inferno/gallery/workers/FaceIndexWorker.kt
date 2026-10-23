@@ -42,7 +42,7 @@ class FaceIndexWorker(
         private const val TAG = "FaceIndexWorker"
         private const val NOTIFICATION_ID = 57
         private const val CHANNEL_ID = "face_indexing_channel"
-        private const val BATCH_SIZE = 15
+        private const val BATCH_SIZE = 10
         private const val MAX_THUMBNAIL_DIM = 720
     }
 
@@ -93,8 +93,8 @@ class FaceIndexWorker(
         }
 
         if (!engine.isModelDownloaded()) {
-            Log.w(TAG, "Face model is not yet downloaded.")
-            return@withContext Result.retry()
+            Log.w(TAG, "Face model is not yet downloaded. Aborting indexing.")
+            return@withContext Result.failure()
         }
         engine.loadModel()
 
@@ -102,11 +102,13 @@ class FaceIndexWorker(
         val unindexedIds = faceDao.getUnindexedMediaIds()
         if (unindexedIds.isEmpty()) {
             Log.d(TAG, "All media faces are up to date.")
+            setProgress(workDataOf("processed" to 0, "total" to 0))
             return@withContext Result.success()
         }
 
         val totalPhotos = unindexedIds.size
         var processedCount = 0
+        setProgress(workDataOf("processed" to 0, "total" to totalPhotos))
 
         try {
             setForeground(createForegroundInfo("Scanning faces: 0 / $totalPhotos", 0, totalPhotos))
@@ -231,6 +233,9 @@ class FaceIndexWorker(
                     }
 
                     processedCount++
+                    if (processedCount % 5 == 0) {
+                        setProgress(workDataOf("processed" to processedCount, "total" to totalPhotos))
+                    }
                 }
 
                 // Update progress and yield CPU to prevent thermal throttling

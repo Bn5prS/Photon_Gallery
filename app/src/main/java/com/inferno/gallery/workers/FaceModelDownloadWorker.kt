@@ -74,6 +74,7 @@ class FaceModelDownloadWorker(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to set foreground info: ${e.message}")
         }
+        setProgress(workDataOf("progress" to 0))
 
         val targetDir = File(context.filesDir, FaceModelRegistry.MODEL_DIR).apply {
             if (!exists()) mkdirs()
@@ -85,6 +86,7 @@ class FaceModelDownloadWorker(
             val valid = verifyChecksum(targetFile, FaceModelRegistry.MODEL_SHA256)
             if (valid) {
                 Log.d(TAG, "Face model already downloaded and verified.")
+                setProgress(workDataOf("progress" to 100))
                 return@withContext Result.success()
             } else {
                 Log.w(TAG, "Existing face model corrupt, redownloading.")
@@ -103,6 +105,7 @@ class FaceModelDownloadWorker(
                 }
                 if (verifyChecksum(targetFile, FaceModelRegistry.MODEL_SHA256)) {
                     Log.d(TAG, "Copied face model from assets.")
+                    setProgress(workDataOf("progress" to 100))
                     return@withContext Result.success()
                 }
             }
@@ -113,11 +116,15 @@ class FaceModelDownloadWorker(
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .followRedirects(true)
+            .retryOnConnectionFailure(true)
             .build()
 
         val tempFile = File(targetDir, "${FaceModelRegistry.MODEL_NAME}.tmp")
         try {
-            val request = Request.Builder().url(FaceModelRegistry.MODEL_URL).build()
+            val request = Request.Builder()
+                .url(FaceModelRegistry.MODEL_URL)
+                .header("User-Agent", "PhotonGallery-ModelDownloader/2.1.3")
+                .build()
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {

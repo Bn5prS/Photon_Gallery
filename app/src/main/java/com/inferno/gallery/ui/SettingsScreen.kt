@@ -1307,9 +1307,14 @@ fun SettingsScreen(
                             )
 
                             // ── Face Recognition & Clustering Group Card ──
-                            val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
-                            val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
+                            val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+                                    faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+                            val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
                             val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+                            val faceProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
+                            val faceTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
+                            val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
                             val faceItems = mutableListOf<@Composable () -> Unit>()
 
                             faceItems.add {
@@ -1441,21 +1446,50 @@ fun SettingsScreen(
                                                 }
                                             }
 
-                                            Text(
-                                                text = if (isFaceIndexing) {
-                                                    "Scanning faces in your gallery… (Applies 3-photo threshold to exclude strangers)"
-                                                } else if (unindexedFacesCount == 0) {
-                                                    "All photos have been scanned and organized into People."
-                                                } else {
-                                                    "$unindexedFacesCount photos waiting to be scanned for faces."
-                                                },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-
                                             if (isFaceIndexing) {
-                                                LinearWavyProgressIndicator(
-                                                    modifier = Modifier.fillMaxWidth().height(10.dp)
+                                                Column(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    if (faceTotal > 0) {
+                                                        LinearWavyProgressIndicator(
+                                                            progress = { faceProgressFloat },
+                                                            modifier = Modifier.fillMaxWidth().height(10.dp)
+                                                        )
+                                                    } else {
+                                                        LinearWavyProgressIndicator(
+                                                            modifier = Modifier.fillMaxWidth().height(10.dp)
+                                                        )
+                                                    }
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos" else "Scanning faces in your gallery…",
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                        if (faceTotal > 0) {
+                                                            Text(
+                                                                text = "${(faceProgressFloat * 100).toInt()}%",
+                                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                                color = MaterialTheme.colorScheme.primary
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                Text(
+                                                    text = if (unindexedFacesCount == 0) {
+                                                        "All photos have been scanned and organized into People."
+                                                    } else {
+                                                        "$unindexedFacesCount photos waiting to be scanned for faces."
+                                                    },
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
 
