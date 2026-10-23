@@ -32,6 +32,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Configure Signing Keystore
+        id: keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -44,15 +45,19 @@ jobs:
             echo "storePassword=$KEYSTORE_PASSWORD" >> key.properties
             echo "keyAlias=$KEY_ALIAS" >> key.properties
             echo "keyPassword=$KEY_PASSWORD" >> key.properties
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
             echo "Signing keys configured successfully."
           else
-            echo "No signing keystore secret provided. Building with default/unsigned configuration."
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+            echo "No signing keystore secret provided. Skipping automated release build to avoid uploading mis-signed APKs."
           fi
 
       - name: Build Release APKs
+        if: steps.keystore.outputs.has_keystore == 'true'
         run: ./gradlew assembleRelease
 
       - name: Create GitHub Release
+        if: steps.keystore.outputs.has_keystore == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
