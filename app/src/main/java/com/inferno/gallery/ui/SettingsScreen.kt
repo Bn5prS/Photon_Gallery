@@ -46,7 +46,9 @@ import androidx.compose.foundation.verticalScroll
 import com.inferno.gallery.ui.components.FourQuadrantColorSwatch
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
+import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.ShapeMedium
+import com.inferno.gallery.ui.theme.IconSizeTokens
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -187,6 +189,7 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val haptic = LocalHapticFeedback.current
 
     var showClearIndexConfirm by remember { mutableStateOf(false) }
     var showDeleteModelConfirm by remember { mutableStateOf(false) }
@@ -910,6 +913,59 @@ fun SettingsScreen(
                             val ocrIndexed = if (isOcrRunning) ocrProgressState.progress else dbIndexed
                             val ocrTotal = if (isOcrRunning) ocrProgressState.total else totalImagesCount
 
+                            // ── 100% On-Device & Open Source Privacy Explainer Card ──
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                shape = ShapeLarge,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Surface(
+                                        shape = ShapeFull,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                        }
+                                    }
+
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "100% On-Device & Open Source",
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "These AI models are open source and completely optional. You only need to download them once. All photo scanning, text recognition, and face clustering run entirely on your device—no images or personal data will ever be sent to any cloud or external server.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
                             SettingsGroupCard(
                                 title = "Local Text Search (OCR)",
                                 items = listOf(
@@ -1121,6 +1177,30 @@ fun SettingsScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
 
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(ShapeSmall)
+                                                .clickable {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery/tree/master/models")
+                                                }
+                                                .padding(vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(IconSizeTokens.S)
+                                            )
+                                            Text(
+                                                text = "Model source: GitHub (MobileCLIP)",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+
                                         if (isDownloading) {
                                             LinearWavyProgressIndicator(
                                                 progress = { downloadProgress / 100f },
@@ -1291,6 +1371,30 @@ fun SettingsScreen(
                                             }
                                         }
 
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(ShapeSmall)
+                                                .clickable {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery/tree/master/models")
+                                                }
+                                                .padding(vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(IconSizeTokens.S)
+                                            )
+                                            Text(
+                                                text = "Model source: GitHub (MobileCLIP)",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+
                                         if (!isClipIndexing) {
                                             OutlinedButton(
                                                 onClick = { showDeleteModelConfirm = true },
@@ -1384,6 +1488,30 @@ fun SettingsScreen(
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+
+                                            Row(
+                                                modifier = Modifier
+                                                    .clip(ShapeSmall)
+                                                    .clickable {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        uriHandler.openUri("https://huggingface.co/deepghs/insightface")
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(IconSizeTokens.S)
+                                                )
+                                                Text(
+                                                    text = "Model source: Hugging Face (MobileFaceNet)",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
 
                                             if (isFaceDownloading) {
                                                 LinearWavyProgressIndicator(
@@ -1571,6 +1699,30 @@ fun SettingsScreen(
                                                         Text("Clear Faces")
                                                     }
                                                 }
+                                            }
+
+                                            Row(
+                                                modifier = Modifier
+                                                    .clip(ShapeSmall)
+                                                    .clickable {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        uriHandler.openUri("https://huggingface.co/deepghs/insightface")
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(IconSizeTokens.S)
+                                                )
+                                                Text(
+                                                    text = "Model source: Hugging Face (MobileFaceNet)",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
                                             }
                                         }
                                     }
