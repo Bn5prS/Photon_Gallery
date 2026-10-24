@@ -23,8 +23,12 @@ class MarkupRasterizerTest {
         // Left and right arrowhead points should be strictly to the left of the tip (smaller X)
         assertTrue(head.leftX < head.tipX)
         assertTrue(head.rightX < head.tipX)
+        // Notch is indented between base and tip
+        assertTrue(head.notchX > head.leftX)
+        assertTrue(head.notchX < head.tipX)
         // Arrowhead should be symmetric above and below the horizontal axis (500f)
         assertEquals(500f, (head.leftY + head.rightY) / 2f, 1e-2f)
+        assertEquals(500f, head.notchY, 1e-2f)
     }
 
     @Test

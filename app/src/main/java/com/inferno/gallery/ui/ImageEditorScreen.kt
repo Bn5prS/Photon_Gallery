@@ -414,8 +414,12 @@ fun ImageEditorScreen(
     // ── Markup tool state ────────────────────────────────────────────────
     var activeMarkupTool by remember { mutableStateOf(MarkupTool.PEN) }
     var markupColor by remember { mutableStateOf(MarkupPalette.COLORS[2]) } // Red default
-    var markupStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_PEN_WIDTH) }
+    var penStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_PEN_WIDTH) }
+    var highlighterStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_HIGHLIGHTER_WIDTH) }
+    var arrowStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_ARROW_WIDTH) }
+    var eraserRadius by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_ERASER_RADIUS) }
     var editingTextItem by remember { mutableStateOf<MarkupText?>(null) }
+    var selectedMarkupTextId by remember { mutableStateOf<Long?>(null) }
     var showTextDialog by remember { mutableStateOf(false) }
 
     // ── Filter presets ───────────────────────────────────────────────────
@@ -675,11 +679,21 @@ fun ImageEditorScreen(
                                     )
                             )
 
+                            val currentStrokeWidth = when (activeMarkupTool) {
+                                MarkupTool.HIGHLIGHTER -> highlighterStrokeWidth
+                                MarkupTool.ARROW -> arrowStrokeWidth
+                                else -> penStrokeWidth
+                            }
                             MarkupCanvasOverlay(
                                 markupState = currentState.markup,
                                 activeTool = activeMarkupTool,
                                 currentColor = markupColor,
-                                currentStrokeWidth = markupStrokeWidth,
+                                currentStrokeWidth = currentStrokeWidth,
+                                eraserRadius = eraserRadius,
+                                selectedTextId = selectedMarkupTextId,
+                                onSelectText = { id ->
+                                    selectedMarkupTextId = id
+                                },
                                 isInteractive = (activeTool == EditorTool.MARKUP),
                                 onStateChanged = { newMarkup ->
                                     pushState(currentState.copy(markup = newMarkup))
@@ -772,26 +786,81 @@ fun ImageEditorScreen(
                                     pushState(currentState.copy(vignetteStrength = s))
                                 }
                             )
-                            EditorTool.MARKUP -> MarkupBottomDock(
-                                activeTool = activeMarkupTool,
-                                selectedColor = markupColor,
-                                strokeWidth = markupStrokeWidth,
-                                onToolSelected = { selectedTool ->
-                                    if (selectedTool == MarkupTool.TEXT) {
+                            EditorTool.MARKUP -> {
+                                val currentSelectedText = currentState.markup.texts.find { it.id == selectedMarkupTextId }
+                                MarkupBottomDock(
+                                    activeTool = activeMarkupTool,
+                                    selectedColor = currentSelectedText?.color ?: markupColor,
+                                    penStrokeWidth = penStrokeWidth,
+                                    highlighterStrokeWidth = highlighterStrokeWidth,
+                                    arrowStrokeWidth = arrowStrokeWidth,
+                                    eraserRadius = eraserRadius,
+                                    selectedText = currentSelectedText,
+                                    onToolSelected = { selectedTool ->
+                                        activeMarkupTool = selectedTool
+                                        if (selectedTool == MarkupTool.TEXT) {
+                                            if (currentState.markup.texts.isEmpty()) {
+                                                editingTextItem = null
+                                                showTextDialog = true
+                                            } else if (selectedMarkupTextId == null) {
+                                                selectedMarkupTextId = currentState.markup.texts.last().id
+                                            }
+                                        }
+                                    },
+                                    onColorSelected = { newColor ->
+                                        markupColor = newColor
+                                        if (activeMarkupTool == MarkupTool.TEXT && currentSelectedText != null) {
+                                            val updated = currentSelectedText.copy(color = newColor)
+                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
+                                        }
+                                    },
+                                    onPenStrokeWidthChanged = { penStrokeWidth = it },
+                                    onHighlighterStrokeWidthChanged = { highlighterStrokeWidth = it },
+                                    onArrowStrokeWidthChanged = { arrowStrokeWidth = it },
+                                    onEraserRadiusChanged = { eraserRadius = it },
+                                    onClearAllClick = {
+                                        if (currentState.markup.strokes.isNotEmpty() || currentState.markup.texts.isNotEmpty()) {
+                                            pushState(currentState.copy(markup = MarkupState()))
+                                            selectedMarkupTextId = null
+                                        }
+                                    },
+                                    onAddTextClick = {
                                         editingTextItem = null
                                         showTextDialog = true
-                                    } else {
-                                        activeMarkupTool = selectedTool
-                                        markupStrokeWidth = when (selectedTool) {
-                                            MarkupTool.HIGHLIGHTER -> MarkupPalette.DEFAULT_HIGHLIGHTER_WIDTH
-                                            MarkupTool.ARROW -> MarkupPalette.DEFAULT_ARROW_WIDTH
-                                            else -> MarkupPalette.DEFAULT_PEN_WIDTH
+                                    },
+                                    onRotateTextClick = {
+                                        if (currentSelectedText != null) {
+                                            val newRotation = (currentSelectedText.rotation + 45f) % 360f
+                                            val updated = currentSelectedText.copy(rotation = newRotation)
+                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
+                                        }
+                                    },
+                                    onDeleteTextClick = {
+                                        if (currentSelectedText != null) {
+                                            pushState(currentState.copy(markup = currentState.markup.withRemovedText(currentSelectedText.id)))
+                                            selectedMarkupTextId = null
+                                        }
+                                    },
+                                    onEditTextClick = {
+                                        if (currentSelectedText != null) {
+                                            editingTextItem = currentSelectedText
+                                            showTextDialog = true
+                                        }
+                                    },
+                                    onToggleBoxClick = {
+                                        if (currentSelectedText != null) {
+                                            val updated = currentSelectedText.copy(hasBackgroundBox = !currentSelectedText.hasBackgroundBox)
+                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
+                                        }
+                                    },
+                                    onTextScaleChanged = { newScale ->
+                                        if (currentSelectedText != null) {
+                                            val updated = currentSelectedText.copy(scale = newScale)
+                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
                                         }
                                     }
-                                },
-                                onColorSelected = { markupColor = it },
-                                onStrokeWidthChanged = { markupStrokeWidth = it }
-                            )
+                                )
+                            }
                             null -> Spacer(modifier = Modifier.height(0.dp))
                         }
                     }
@@ -955,11 +1024,16 @@ fun ImageEditorScreen(
                         currentState.markup.withAddedText(updatedItem)
                     }
                     pushState(currentState.copy(markup = newMarkup))
+                    selectedMarkupTextId = updatedItem.id
+                    activeMarkupTool = MarkupTool.TEXT
                     showTextDialog = false
                     editingTextItem = null
                 },
                 onDelete = { id ->
                     pushState(currentState.copy(markup = currentState.markup.withRemovedText(id)))
+                    if (selectedMarkupTextId == id) {
+                        selectedMarkupTextId = null
+                    }
                     showTextDialog = false
                     editingTextItem = null
                 }

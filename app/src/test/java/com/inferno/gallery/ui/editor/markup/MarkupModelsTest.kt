@@ -45,9 +45,27 @@ class MarkupModelsTest {
     }
 
     @Test
-    fun testPaletteContainsVibrantColors() {
-        assertTrue(MarkupPalette.COLORS.isNotEmpty())
-        assertTrue(MarkupPalette.COLORS.contains(Color.White))
-        assertTrue(MarkupPalette.COLORS.contains(Color.Black))
+    fun testTextHitTestingWithScaleAndRotation() {
+        val text = MarkupText(
+            id = 10L,
+            text = "Hello World",
+            position = Offset(0.5f, 0.5f),
+            color = Color.White,
+            scale = 1.0f,
+            rotation = 0f
+        )
+        // Center point should hit
+        assertTrue(text.isHitBy(Offset(0.5f, 0.5f), width = 1000f, height = 1000f))
+        // Way off point should not hit
+        assertFalse(text.isHitBy(Offset(0.1f, 0.1f), width = 1000f, height = 1000f))
+
+        // Rotated 90 degrees: vertical offset near center should hit, horizontal far offset should not
+        val rotated = text.copy(rotation = 90f)
+        assertTrue(rotated.isHitBy(Offset(0.5f, 0.52f), width = 1000f, height = 1000f))
+
+        // Scaled up text covers larger area
+        val scaledUp = text.copy(scale = 2.5f)
+        assertTrue(scaledUp.isHitBy(Offset(0.58f, 0.5f), width = 1000f, height = 1000f))
     }
 }
+

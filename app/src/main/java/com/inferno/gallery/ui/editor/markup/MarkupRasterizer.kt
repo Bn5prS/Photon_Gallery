@@ -53,16 +53,7 @@ object MarkupRasterizer {
                 }
 
                 MarkupTool.ARROW -> {
-                    val paint = Paint().apply {
-                        isAntiAlias = true
-                        style = Paint.Style.STROKE
-                        strokeCap = Paint.Cap.ROUND
-                        strokeJoin = Paint.Join.ROUND
-                        color = stroke.color.toArgb()
-                        strokeWidth = strokePx
-                    }
-                    drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
-                    drawArrowhead(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, stroke.color.toArgb())
+                    drawArrowElement(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, stroke.color.toArgb())
                 }
 
                 else -> {}
@@ -108,47 +99,53 @@ object MarkupRasterizer {
         val leftX: Float,
         val leftY: Float,
         val rightX: Float,
-        val rightY: Float
+        val rightY: Float,
+        val notchX: Float,
+        val notchY: Float
     )
 
     internal fun calculateArrowhead(
         tip: androidx.compose.ui.geometry.Offset,
-        prev: androidx.compose.ui.geometry.Offset,
+        anchor: androidx.compose.ui.geometry.Offset,
         width: Int,
         height: Int,
         strokePx: Float
     ): Arrowhead? {
         val tipX = tip.x * width
         val tipY = tip.y * height
-        val prevX = prev.x * width
-        val prevY = prev.y * height
+        val anchorX = anchor.x * width
+        val anchorY = anchor.y * height
 
-        val dx = tipX - prevX
-        val dy = tipY - prevY
+        val dx = tipX - anchorX
+        val dy = tipY - anchorY
         val len = sqrt(dx * dx + dy * dy)
         if (len < 1e-4f) return null
+
+        val rawHeadLen = (strokePx * 3.4f).coerceIn(24f, 120f)
+        val headLen = minOf(rawHeadLen, len * 0.85f)
+        val halfWidth = headLen * 0.48f
+        val notchDepth = headLen * 0.25f
 
         val ndx = dx / len
         val ndy = dy / len
         val perpX = -ndy
         val perpY = ndx
 
-        val arrowHeadLen = (strokePx * 3.5f).coerceAtLeast(20f)
-        val arrowHeadHalfWidth = arrowHeadLen * 0.55f
+        val baseCenterX = tipX - ndx * headLen
+        val baseCenterY = tipY - ndy * headLen
+        val notchX = tipX - ndx * (headLen - notchDepth)
+        val notchY = tipY - ndy * (headLen - notchDepth)
 
-        val baseX = tipX - ndx * arrowHeadLen
-        val baseY = tipY - ndy * arrowHeadLen
+        val leftX = baseCenterX + perpX * halfWidth
+        val leftY = baseCenterY + perpY * halfWidth
 
-        val leftX = baseX + perpX * arrowHeadHalfWidth
-        val leftY = baseY + perpY * arrowHeadHalfWidth
+        val rightX = baseCenterX - perpX * halfWidth
+        val rightY = baseCenterY - perpY * halfWidth
 
-        val rightX = baseX - perpX * arrowHeadHalfWidth
-        val rightY = baseY - perpY * arrowHeadHalfWidth
-
-        return Arrowhead(tipX, tipY, leftX, leftY, rightX, rightY)
+        return Arrowhead(tipX, tipY, leftX, leftY, rightX, rightY, notchX, notchY)
     }
 
-    private fun drawArrowhead(
+    private fun drawArrowElement(
         canvas: Canvas,
         points: List<androidx.compose.ui.geometry.Offset>,
         width: Int,
@@ -156,22 +153,70 @@ object MarkupRasterizer {
         strokePx: Float,
         colorArgb: Int
     ) {
-        if (points.size < 2) return
-        val head = calculateArrowhead(points.last(), points[points.size - 2], width, height, strokePx) ?: return
+        if (points.isEmpty()) return
+        if (points.size < 2) {
+            val p = points[0]
+            val fillPaint = Paint().apply {
+                isAntiAlias = true
+                style = Paint.Style.FILL
+                color = colorArgb
+            }
+            canvas.drawCircle(p.x * width, p.y * height, strokePx / 2f, fillPaint)
+            return
+        }
 
+        val tip = points.last()
+        val tipX = tip.x * width
+        val tipY = tip.y * height
+
+        val rawHeadLen = (strokePx * 3.4f).coerceIn(24f, 120f)
+        val minAnchorDist = maxOf(rawHeadLen * 0.8f, 20f)
+        val minAnchorDistSq = minAnchorDist * minAnchorDist
+
+        var anchor = points[0]
+        for (i in points.size - 2 downTo 0) {
+            val px = points[i].x * width
+            val py = points[i].y * height
+            val dSq = (tipX - px) * (tipX - px) + (tipY - py) * (tipY - py)
+            if (dSq >= minAnchorDistSq) {
+                anchor = points[i]
+                break
+            }
+        }
+
+        val head = calculateArrowhead(tip, anchor, width, height, strokePx) ?: return
+
+        // 1. Draw shaft line terminating at notch
+        val shaftPaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            color = colorArgb
+            strokeWidth = strokePx
+        }
+        val shaftPath = Path()
+        shaftPath.moveTo(points[0].x * width, points[0].y * height)
+        for (i in 1 until points.size - 1) {
+            shaftPath.lineTo(points[i].x * width, points[i].y * height)
+        }
+        shaftPath.lineTo(head.notchX, head.notchY)
+        canvas.drawPath(shaftPath, shaftPaint)
+
+        // 2. Draw sleek arrowhead with sharp tip
         val headPath = Path().apply {
             moveTo(head.tipX, head.tipY)
             lineTo(head.leftX, head.leftY)
+            lineTo(head.notchX, head.notchY)
             lineTo(head.rightX, head.rightY)
             close()
         }
-
-        val fillPaint = Paint().apply {
+        val headPaint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.FILL
             color = colorArgb
         }
-        canvas.drawPath(headPath, fillPaint)
+        canvas.drawPath(headPath, headPaint)
     }
 
     private fun drawTextElement(
@@ -180,7 +225,8 @@ object MarkupRasterizer {
         width: Int,
         height: Int
     ) {
-        val scale = (width / 420f).coerceIn(0.5f, 6.0f)
+        val baseScale = (width / 420f).coerceIn(0.5f, 6.0f)
+        val scale = baseScale * textElem.scale
         val textSizePx = textElem.fontSize * scale
 
         val textPaint = Paint().apply {
@@ -199,13 +245,19 @@ object MarkupRasterizer {
         val textWidth = bounds.width().toFloat()
         val textHeight = bounds.height().toFloat()
 
+        canvas.save()
+        canvas.translate(centerX, centerY)
+        if (textElem.rotation != 0f) {
+            canvas.rotate(textElem.rotation)
+        }
+
         if (textElem.hasBackgroundBox) {
             val padX = textSizePx * 0.45f
             val padY = textSizePx * 0.30f
-            val rectLeft = centerX - textWidth / 2f - padX
-            val rectTop = centerY - textHeight / 2f - padY
-            val rectRight = centerX + textWidth / 2f + padX
-            val rectBottom = centerY + textHeight / 2f + padY
+            val rectLeft = -textWidth / 2f - padX
+            val rectTop = -textHeight / 2f - padY
+            val rectRight = textWidth / 2f + padX
+            val rectBottom = textHeight / 2f + padY
 
             val isDarkText = isColorDark(textElem.color)
             val bgArgb = if (isDarkText) 0xDDFFFFFF.toInt() else 0xCC000000.toInt()
@@ -223,9 +275,10 @@ object MarkupRasterizer {
             )
         }
 
-        val drawX = centerX - textWidth / 2f - bounds.left
-        val drawY = centerY + textHeight / 2f - bounds.bottom
+        val drawX = -textWidth / 2f - bounds.left
+        val drawY = textHeight / 2f - bounds.bottom
         canvas.drawText(textElem.text, drawX, drawY, textPaint)
+        canvas.restore()
     }
 
     internal fun isColorDark(color: androidx.compose.ui.graphics.Color): Boolean {

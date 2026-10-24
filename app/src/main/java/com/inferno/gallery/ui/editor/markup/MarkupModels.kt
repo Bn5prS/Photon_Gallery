@@ -58,8 +58,30 @@ data class MarkupText(
     val position: Offset, // Normalized center coordinates (0..1)
     val color: Color,
     val fontSize: Float = 22f, // Sp-equivalent
+    val scale: Float = 1.0f, // Multiplier (0.5f..4.0f)
+    val rotation: Float = 0f, // Degrees (-180f..180f)
     val hasBackgroundBox: Boolean = true
-)
+) {
+    fun isHitBy(normPoint: Offset, width: Float, height: Float): Boolean {
+        if (width <= 0f || height <= 0f) return false
+        val baseScale = (width / 420f).coerceIn(0.7f, 3.5f)
+        val effScale = baseScale * scale
+        val estimatedCharWidthPx = (fontSize * 0.55f) * effScale
+        val halfWPx = maxOf((text.length * estimatedCharWidthPx + 36f * effScale) / 2f, 28f * effScale)
+        val halfHPx = maxOf((fontSize * 1.4f * effScale + 28f * effScale) / 2f, 24f * effScale)
+
+        val px = (normPoint.x - position.x) * width
+        val py = (normPoint.y - position.y) * height
+
+        val rad = Math.toRadians(-rotation.toDouble())
+        val cos = kotlin.math.cos(rad).toFloat()
+        val sin = kotlin.math.sin(rad).toFloat()
+        val localPx = kotlin.math.abs(cos * px - sin * py)
+        val localPy = kotlin.math.abs(sin * px + cos * py)
+
+        return localPx <= halfWPx && localPy <= halfHPx
+    }
+}
 
 data class MarkupState(
     val strokes: List<MarkupStroke> = emptyList(),
@@ -97,5 +119,6 @@ object MarkupPalette {
 
     const val DEFAULT_PEN_WIDTH = 0.010f
     const val DEFAULT_HIGHLIGHTER_WIDTH = 0.040f
-    const val DEFAULT_ARROW_WIDTH = 0.012f
+    const val DEFAULT_ARROW_WIDTH = 0.014f
+    const val DEFAULT_ERASER_RADIUS = 0.045f
 }

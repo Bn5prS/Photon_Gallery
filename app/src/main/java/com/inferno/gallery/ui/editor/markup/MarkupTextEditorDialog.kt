@@ -25,12 +25,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,6 +57,7 @@ import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -67,6 +71,8 @@ fun MarkupTextEditorDialog(
     var textValue by remember { mutableStateOf(initialText?.text ?: "") }
     var selectedColor by remember { mutableStateOf(initialText?.color ?: Color.White) }
     var hasBackgroundBox by remember { mutableStateOf(initialText?.hasBackgroundBox ?: true) }
+    var textScale by remember { mutableFloatStateOf(initialText?.scale ?: 1.0f) }
+    var textRotation by remember { mutableFloatStateOf(initialText?.rotation ?: 0f) }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -126,6 +132,43 @@ fun MarkupTextEditorDialog(
                         .focusRequester(focusRequester)
                 )
 
+                // Size & Rotation row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Size: ${(textScale * 100).roundToInt()}%",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(76.dp)
+                    )
+                    Slider(
+                        value = textScale,
+                        onValueChange = { textScale = it },
+                        valueRange = 0.5f..2.5f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            textRotation = (textRotation + 45f) % 360f
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_rotate_right),
+                            contentDescription = "Rotate",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
                 // Color row
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -174,11 +217,15 @@ fun MarkupTextEditorDialog(
                         val textItem = initialText?.copy(
                             text = trimmed,
                             color = selectedColor,
+                            scale = textScale,
+                            rotation = textRotation,
                             hasBackgroundBox = hasBackgroundBox
                         ) ?: MarkupText(
                             text = trimmed,
                             position = Offset(0.5f, 0.5f),
                             color = selectedColor,
+                            scale = textScale,
+                            rotation = textRotation,
                             hasBackgroundBox = hasBackgroundBox
                         )
                         onConfirm(textItem)
