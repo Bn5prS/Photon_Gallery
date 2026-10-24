@@ -195,6 +195,16 @@ fun DetailScreen(
     val window = activity?.window
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
     val coroutineScope = rememberCoroutineScope()
+
+    var hasNavigatedBack by remember { mutableStateOf(false) }
+    val safeOnBack: () -> Unit = remember(onBack) {
+        {
+            if (!hasNavigatedBack) {
+                hasNavigatedBack = true
+                onBack()
+            }
+        }
+    }
     
     val rawGalleryItems by viewModel.detailMedia.collectAsState()
     val initialDetailItem by viewModel.initialDetailItem.collectAsState()
@@ -235,6 +245,13 @@ fun DetailScreen(
             }
         } else {
             onDispose {}
+        }
+    }
+
+    // Auto-navigate back safely when list is empty
+    LaunchedEffect(galleryItems.isEmpty()) {
+        if (galleryItems.isEmpty()) {
+            safeOnBack()
         }
     }
 
@@ -288,7 +305,7 @@ fun DetailScreen(
                             withContext(Dispatchers.Main) {
                                 viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
                                 if (galleryItems.size <= 1) {
-                                    onBack()
+                                    safeOnBack()
                                 }
                             }
                         }
@@ -312,7 +329,7 @@ fun DetailScreen(
                     withContext(Dispatchers.Main) {
                         viewModel.notifyExternalMediaModifiedOrDeleted(currentItem.uri.toString())
                         if (galleryItems.size <= 1) {
-                            onBack()
+                            safeOnBack()
                         }
                     }
                 }
@@ -460,7 +477,7 @@ fun DetailScreen(
     // Auto-navigate after delete: if list becomes empty, go back; clamp if at the end
     LaunchedEffect(galleryItems.size) {
         if (galleryItems.isEmpty()) {
-            onBack()
+            safeOnBack()
         } else if (pagerState.currentPage >= galleryItems.size) {
             pagerState.scrollToPage(galleryItems.size - 1)
         }
@@ -650,7 +667,7 @@ fun DetailScreen(
                         activity = activity,
                         onSuccess = {
                             viewModel.hideMedia(listOf(currentItem.uri))
-                            onBack()
+                            safeOnBack()
                         },
                         onFailure = {}
                     )
@@ -794,7 +811,7 @@ fun DetailScreen(
                                     kotlin.math.abs(velocity) > velocityThreshold
                                 ) {
                                     // Commit dismiss — trigger existing back transition
-                                    onBack()
+                                    safeOnBack()
                                 } else {
                                     // Snap back with spring
                                     dismissOffsetY.animateTo(
@@ -1382,7 +1399,7 @@ fun DetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalIconButton(
-                        onClick = onBack,
+                        onClick = safeOnBack,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                             contentColor = MaterialTheme.colorScheme.onSurface
@@ -1619,7 +1636,7 @@ fun DetailScreen(
                                                 activity = activity,
                                                 onSuccess = {
                                                     viewModel.hideMedia(listOf(currentItem.uri))
-                                                    onBack()
+                                                    safeOnBack()
                                                 },
                                                 onFailure = {}
                                             )

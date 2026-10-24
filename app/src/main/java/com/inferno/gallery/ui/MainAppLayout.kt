@@ -5,6 +5,7 @@ import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
+import com.inferno.gallery.ui.utils.popBackStackSafely
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.AnimatedContent
@@ -608,7 +609,7 @@ fun MainAppLayout(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 ExpressiveFilledIconButton(
-                                    onClick = { nestedNavController.popBackStack() },
+                                    onClick = { nestedNavController.popBackStackSafely() },
                                     modifier = Modifier.size(40.dp),
                                     colors = IconButtonDefaults.filledIconButtonColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -657,7 +658,7 @@ fun MainAppLayout(
                                         if (settingsActiveSection != null) {
                                             settingsActiveSection = null
                                         } else {
-                                            nestedNavController.popBackStack()
+                                            nestedNavController.popBackStackSafely()
                                         }
                                     },
                                     colors = IconButtonDefaults.filledIconButtonColors(
@@ -1120,7 +1121,7 @@ fun MainAppLayout(
             ) {
                 PlacesListScreen(
                     viewModel = viewModel,
-                    onNavigateUp = { nestedNavController.popBackStack() },
+                    onNavigateUp = { nestedNavController.popBackStackSafely() },
                     onNavigateToMap = { nestedNavController.navigate("photo_map") },
                     onPlaceClick = { placeName ->
                         val target = if (placeName.startsWith("place:")) placeName else "place:$placeName"
@@ -1147,7 +1148,7 @@ fun MainAppLayout(
             ) {
                 DuplicateCleanerScreen(
                     viewModel = viewModel,
-                    onNavigateBack = { nestedNavController.popBackStack() }
+                    onNavigateBack = { nestedNavController.popBackStackSafely() }
                 )
             }
 
@@ -1167,7 +1168,7 @@ fun MainAppLayout(
                 }
             ) {
                 com.inferno.gallery.ui.people.PeopleScreen(
-                    onBack = { nestedNavController.popBackStack() },
+                    onBack = { nestedNavController.popBackStackSafely() },
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onStartScan = { settingsViewModel.startFaceIndexing() }
                 )
@@ -1189,7 +1190,7 @@ fun MainAppLayout(
                 }
             ) {
                 com.inferno.gallery.ui.people.PeopleScreen(
-                    onBack = { nestedNavController.popBackStack() },
+                    onBack = { nestedNavController.popBackStackSafely() },
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onStartScan = { settingsViewModel.startFaceIndexing() }
                 )
@@ -1216,7 +1217,7 @@ fun MainAppLayout(
                 val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
                 com.inferno.gallery.ui.people.PersonDetailScreen(
                     personId = personId,
-                    onBack = { nestedNavController.popBackStack() },
+                    onBack = { nestedNavController.popBackStackSafely(backStackEntry) },
                     onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) }
                 )
             }
@@ -1242,7 +1243,7 @@ fun MainAppLayout(
                 val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
                 com.inferno.gallery.ui.people.PersonDetailScreen(
                     personId = personId,
-                    onBack = { nestedNavController.popBackStack() },
+                    onBack = { nestedNavController.popBackStackSafely(backStackEntry) },
                     onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) }
                 )
             }
@@ -1320,7 +1321,7 @@ fun MainAppLayout(
                 SettingsScreen(
                     contentPadding = innerPadding,
                     galleryViewModel = viewModel,
-                    onBackClick = { nestedNavController.popBackStack() },
+                    onBackClick = { nestedNavController.popBackStackSafely() },
                     onNavigateToVault = onNavigateToVault,
                     activeSection = settingsActiveSection,
                     onActiveSectionChange = { settingsActiveSection = it }
@@ -1332,7 +1333,7 @@ fun MainAppLayout(
                 PhotoMapScreen(
                     galleryViewModel = viewModel,
                     onPhotoClick = onPhotoClick,
-                    onBackClick = { nestedNavController.popBackStack() }
+                    onBackClick = { nestedNavController.popBackStackSafely() }
                 )
             }
             composable(
@@ -1382,7 +1383,7 @@ fun MainAppLayout(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = this,
                     galleryViewModel = viewModel,
-                    onBackClick = { nestedNavController.popBackStack() },
+                    onBackClick = { nestedNavController.popBackStackSafely() },
                     onAlbumClick = { bucketName -> 
                         viewModel.resetGridScrollPosition(bucketName)
                         viewModel.setBucket(bucketName)

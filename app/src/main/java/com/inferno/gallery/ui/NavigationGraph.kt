@@ -28,6 +28,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
 import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.utils.popBackStackSafely
 
 /**
  * Top-level navigation graph for Photon Gallery.
@@ -231,7 +232,7 @@ fun NavigationGraph(
                     useFullScreenGlobal = useFullScreen,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popBackStackSafely(backStackEntry) },
                     onNavigateToEditor = { editUri ->
                         val encoded = android.net.Uri.encode(editUri.toString())
                         navController.navigate("editor?uri=$encoded")
@@ -263,7 +264,7 @@ fun NavigationGraph(
                 val uris = joined.split("|").filter { it.isNotBlank() }
                 CollageScreen(
                     initialUris = uris,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStackSafely(backStackEntry) }
                 )
             }
             composable(
@@ -282,7 +283,7 @@ fun NavigationGraph(
                 val uris = joined.split("|").filter { it.isNotBlank() }
                 StitchScreen(
                     initialUris = uris,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStackSafely(backStackEntry) }
                 )
             }
 
@@ -315,7 +316,7 @@ fun NavigationGraph(
                 val uri = android.net.Uri.parse(android.net.Uri.decode(uriString))
                 ImageEditorScreen(
                     imageUri = uri,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popBackStackSafely(backStackEntry) },
                     onSaved = { }
                 )
             }
@@ -349,20 +350,20 @@ fun NavigationGraph(
                 val uri = android.net.Uri.parse(android.net.Uri.decode(uriString))
                 VideoFrameExtractorScreen(
                     videoUri = uri,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStackSafely(backStackEntry) }
                 )
             }
 
             composable("vault") {
                 com.inferno.gallery.ui.vault.PrivateSpaceScreen(
                     viewModel = galleryViewModel,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStackSafely() }
                 )
             }
 
             composable("people") {
                 com.inferno.gallery.ui.people.PeopleScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popBackStackSafely() },
                     onPersonClick = { personId -> navController.navigate("person/$personId") },
                     onStartScan = { settingsViewModel.startFaceIndexing() }
                 )
@@ -377,7 +378,7 @@ fun NavigationGraph(
                 val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
                 com.inferno.gallery.ui.people.PersonDetailScreen(
                     personId = personId,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popBackStackSafely(backStackEntry) },
                     onMediaClick = { media ->
                         val encoded = android.net.Uri.encode(media.id.toString())
                         val bucket = android.net.Uri.encode("person:$personId")
