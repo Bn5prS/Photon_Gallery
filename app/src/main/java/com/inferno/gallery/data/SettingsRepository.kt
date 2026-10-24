@@ -110,7 +110,27 @@ class SettingsRepository private constructor(private val context: Context) {
         // Migration flags
         val THEME_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("theme_default_migrated_v210")
         val DATE_HEADER_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("date_header_default_migrated_v210")
+
+        // One-time Feature Discovery Tips
+        const val TIP_ALBUMS_CUSTOMIZE = "tip_albums_customize"
+        const val TIP_PEOPLE_COVER = "tip_people_cover"
+        const val TIP_MOTION_PHOTO = "tip_motion_photo"
+        const val TIP_MARKUP_GESTURES = "tip_markup_gestures"
     }
+
+    fun isTipDismissed(tipKey: String): Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[booleanPreferencesKey(tipKey)] ?: false }
+
+    suspend fun dismissTip(tipKey: String) {
+        context.dataStore.edit { preferences ->
+            preferences[booleanPreferencesKey(tipKey)] = true
+        }
+    }
+
+    val tipAlbumsCustomizeDismissedFlow: Flow<Boolean> = isTipDismissed(TIP_ALBUMS_CUSTOMIZE)
+    val tipPeopleCoverDismissedFlow: Flow<Boolean> = isTipDismissed(TIP_PEOPLE_COVER)
+    val tipMotionPhotoDismissedFlow: Flow<Boolean> = isTipDismissed(TIP_MOTION_PHOTO)
+    val tipMarkupGesturesDismissedFlow: Flow<Boolean> = isTipDismissed(TIP_MARKUP_GESTURES)
 
     val autoCheckUpdatesFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences -> preferences[AUTO_CHECK_UPDATES] ?: true }
