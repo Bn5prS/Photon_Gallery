@@ -101,6 +101,7 @@ import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
+import com.inferno.gallery.ui.components.FloatingTipCard
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -747,6 +748,25 @@ fun PeopleScreen(
                                 }
                             )
                         }
+                    }
+
+                    val settingsRepo = remember(context) { com.inferno.gallery.data.SettingsRepository.getInstance(context) }
+                    val tipPeopleDismissed by settingsRepo.tipPeopleCoverDismissedFlow.collectAsState(initial = true)
+
+                    if (!tipPeopleDismissed && displayPeople.isNotEmpty() && !isSelectionMode) {
+                        FloatingTipCard(
+                            title = "Quick Tip",
+                            message = "Press & hold any person to choose their best cover shot, rename them, or merge clusters.",
+                            iconResId = R.drawable.ic_ms_person,
+                            onDismiss = {
+                                coroutineScope.launch {
+                                    settingsRepo.dismissTip(com.inferno.gallery.data.SettingsRepository.TIP_PEOPLE_COVER)
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = SpacingTokens.L)
+                        )
                     }
                 }
             }

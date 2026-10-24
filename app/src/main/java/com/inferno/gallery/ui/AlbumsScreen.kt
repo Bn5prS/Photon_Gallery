@@ -105,6 +105,9 @@ import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.theme.AlbumShapes
 import com.inferno.gallery.ui.components.AlbumShapePickerSheet
+import com.inferno.gallery.ui.components.FloatingTipCard
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.inferno.gallery.ui.utils.pressScale
 import com.inferno.gallery.ui.theme.photonColors
 import java.text.NumberFormat
@@ -181,43 +184,44 @@ fun AlbumsScreen(
         viewModel.setTopBarCollapsed(false)
     }
 
-    key(albumLayoutMode) {
-        val lazyGridState = rememberLazyGridState()
+    Box(modifier = modifier.fillMaxSize()) {
+        key(albumLayoutMode) {
+            val lazyGridState = rememberLazyGridState()
 
-        // Ensure clean top alignment when albums populate or if previously pushed up
-        var initialTopResetDone by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) {
-            if ((visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) && !initialTopResetDone) {
-                initialTopResetDone = true
-                if (!lazyGridState.isScrollInProgress && lazyGridState.firstVisibleItemIndex > 0) {
-                    lazyGridState.scrollToItem(0, 0)
+            // Ensure clean top alignment when albums populate or if previously pushed up
+            var initialTopResetDone by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) {
+                if ((visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) && !initialTopResetDone) {
+                    initialTopResetDone = true
+                    if (!lazyGridState.isScrollInProgress && lazyGridState.firstVisibleItemIndex > 0) {
+                        lazyGridState.scrollToItem(0, 0)
+                    }
                 }
             }
-        }
 
-        LaunchedEffect(viewModel) {
-            viewModel.albumsScrollToTopTrigger.collect {
-                lazyGridState.animateScrollToItem(0, 0)
+            LaunchedEffect(viewModel) {
+                viewModel.albumsScrollToTopTrigger.collect {
+                    lazyGridState.animateScrollToItem(0, 0)
+                }
             }
-        }
 
-        LazyVerticalGrid(
-            columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
-            state = lazyGridState,
-            contentPadding = PaddingValues(
-                start = SpacingTokens.L,
-                end = SpacingTokens.L,
-                top = contentPadding.calculateTopPadding() + SpacingTokens.M,
-                bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
-            ),
-            verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
-                Arrangement.spacedBy(SpacingTokens.S)
-            } else {
-                Arrangement.spacedBy(SpacingTokens.L)
-            },
-            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
-            modifier = modifier.fillMaxSize()
-        ) {
+            LazyVerticalGrid(
+                columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
+                state = lazyGridState,
+                contentPadding = PaddingValues(
+                    start = SpacingTokens.L,
+                    end = SpacingTokens.L,
+                    top = contentPadding.calculateTopPadding() + SpacingTokens.M,
+                    bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
+                ),
+                verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                    Arrangement.spacedBy(SpacingTokens.S)
+                } else {
+                    Arrangement.spacedBy(SpacingTokens.L)
+                },
+                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                modifier = Modifier.fillMaxSize()
+            ) {
 
         // ── 1. Pinned Albums Section (Dedicated Grid) ──
         if (userPinnedAlbums.isNotEmpty()) {
@@ -878,6 +882,26 @@ fun AlbumsScreen(
             }
         )
     }
+
+    val tipAlbumsDismissed by viewModel.settingsRepository.tipAlbumsCustomizeDismissedFlow.collectAsState(initial = true)
+    val coroutineScope = rememberCoroutineScope()
+
+    if (!tipAlbumsDismissed) {
+        FloatingTipCard(
+            title = "Quick Tip",
+            message = "Press & hold any album to change its cover photo or choose custom shapes like Cookie, Clover & Pill.",
+            iconResId = R.drawable.ic_ms_auto_fix_high,
+            onDismiss = {
+                coroutineScope.launch {
+                    viewModel.settingsRepository.dismissTip(com.inferno.gallery.data.SettingsRepository.TIP_ALBUMS_CUSTOMIZE)
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = contentPadding.calculateBottomPadding() + SpacingTokens.M)
+        )
+    }
+}
 }
 
 // ── Utility Hub Data Item ──
