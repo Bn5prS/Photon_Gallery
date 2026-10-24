@@ -40,6 +40,7 @@ fun MarkupCanvasOverlay(
     currentStrokeWidth: Float,
     onStateChanged: (MarkupState) -> Unit,
     onEditTextRequest: (MarkupText?) -> Unit,
+    isInteractive: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -49,9 +50,8 @@ fun MarkupCanvasOverlay(
     val livePoints = remember { mutableStateListOf<Offset>() }
     var draggingTextId by remember { mutableStateOf<Long?>(null) }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
+    val interactiveModifier = if (isInteractive) {
+        Modifier
             .pointerInput(activeTool, markupState, currentColor, currentStrokeWidth) {
                 if (activeTool == MarkupTool.TEXT) {
                     detectTapGestures { tapOffset ->
@@ -176,6 +176,12 @@ fun MarkupCanvasOverlay(
                     }
                 )
             }
+    } else Modifier
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .then(interactiveModifier)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val canvasW = size.width

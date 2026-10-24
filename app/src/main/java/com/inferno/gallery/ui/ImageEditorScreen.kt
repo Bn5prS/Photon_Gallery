@@ -118,6 +118,14 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
+import com.inferno.gallery.ui.editor.markup.MarkupBottomDock
+import com.inferno.gallery.ui.editor.markup.MarkupCanvasOverlay
+import com.inferno.gallery.ui.editor.markup.MarkupPalette
+import com.inferno.gallery.ui.editor.markup.MarkupRasterizer
+import com.inferno.gallery.ui.editor.markup.MarkupState
+import com.inferno.gallery.ui.editor.markup.MarkupText
+import com.inferno.gallery.ui.editor.markup.MarkupTextEditorDialog
+import com.inferno.gallery.ui.editor.markup.MarkupTool
 
 
 // ── Data Models ──────────────────────────────────────────────────────────────
@@ -126,7 +134,8 @@ enum class EditorTool(val label: String, @androidx.annotation.DrawableRes val ic
     TUNE("Tune", R.drawable.ic_ms_tune),
     CROP("Crop", R.drawable.ic_ms_crop),
     FILTERS("Filters", R.drawable.ic_ms_palette),
-    VIGNETTE("Vignette", R.drawable.ic_ms_photo_camera)
+    VIGNETTE("Vignette", R.drawable.ic_ms_photo_camera),
+    MARKUP("Markup", R.drawable.ic_ms_edit)
 }
 
 data class TuneValues(
@@ -155,7 +164,8 @@ data class EditorState(
     val tune: TuneValues = TuneValues(),
     val crop: CropState = CropState(),
     val filterIndex: Int = 0,
-    val vignetteStrength: Float = 0f
+    val vignetteStrength: Float = 0f,
+    val markup: MarkupState = MarkupState()
 )
 
 // ── Filter Presets ───────────────────────────────────────────────────────────
@@ -401,6 +411,13 @@ fun ImageEditorScreen(
     var isSaving by remember { mutableStateOf(false) }
     var showSaveOptions by remember { mutableStateOf(false) }
 
+    // ── Markup tool state ────────────────────────────────────────────────
+    var activeMarkupTool by remember { mutableStateOf(MarkupTool.PEN) }
+    var markupColor by remember { mutableStateOf(MarkupPalette.COLORS[2]) } // Red default
+    var markupStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_PEN_WIDTH) }
+    var editingTextItem by remember { mutableStateOf<MarkupText?>(null) }
+    var showTextDialog by remember { mutableStateOf(false) }
+
     // ── Filter presets ───────────────────────────────────────────────────
     val filterPresets = remember { buildFilterPresets() }
 
@@ -425,6 +442,19 @@ fun ImageEditorScreen(
                 // Apply crop
                 val crop = currentState.crop
                 var workBitmap = bmp
+
+                // Apply markup onto high-res bitmap
+                if (currentState.markup.strokes.isNotEmpty() || currentState.markup.texts.isNotEmpty()) {
+                    val annotated = workBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                    val markupCanvas = Canvas(annotated)
+                    MarkupRasterizer.rasterize(
+                        canvas = markupCanvas,
+                        bitmapWidth = annotated.width,
+                        bitmapHeight = annotated.height,
+                        markup = currentState.markup
+                    )
+                    workBitmap = annotated
+                }
 
                 // Apply rotation/flip
                 if (crop.rotation != 0 || crop.flipH || crop.flipV) {
@@ -584,39 +614,83 @@ fun ImageEditorScreen(
                         }
                     )
                 } else {
-                    Box(contentAlignment = Alignment.Center) {
-                        Image(
-                            bitmap = imageBitmap,
-                            contentDescription = "Preview",
-                            contentScale = ContentScale.Fit,
-                            colorFilter = combinedColorFilter,
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val maxW = constraints.maxWidth.toFloat()
+                        val maxH = constraints.maxHeight.toFloat()
+                        val isRotated90 = currentState.crop.rotation % 180 != 0
+                        val effectiveAspect = if (isRotated90) 1f / imageAspect else imageAspect
+
+                        val (imgW, imgH) = if (effectiveAspect > maxW / maxH) {
+                            maxW to (maxW / effectiveAspect)
+                        } else {
+                            (maxH * effectiveAspect) to maxH
+                        }
+
+                        val density = androidx.compose.ui.platform.LocalDensity.current.density
+                        val (drawW, drawH) = if (isRotated90) imgH to imgW else imgW to imgH
+
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .size(
+                                    width = (drawW / density).dp,
+                                    height = (drawH / density).dp
+                                )
                                 .graphicsLayer {
                                     rotationZ = currentState.crop.rotation.toFloat()
                                     scaleX = if (currentState.crop.flipH) -1f else 1f
                                     scaleY = if (currentState.crop.flipV) -1f else 1f
-                                }
-                                .then(
-                                    if (currentState.vignetteStrength > 0f) {
-                                        Modifier.drawWithContent {
-                                            drawContent()
-                                            val alpha = currentState.vignetteStrength / 100f * 0.8f
-                                            drawRect(
-                                                brush = Brush.radialGradient(
-                                                    colors = listOf(
-                                                        Color.Transparent,
-                                                        Color.Transparent,
-                                                        Color.Black.copy(alpha = alpha)
-                                                    ),
-                                                    center = Offset(size.width / 2, size.height / 2),
-                                                    radius = maxOf(size.width, size.height) * 0.6f
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = imageBitmap,
+                                contentDescription = "Preview",
+                                contentScale = ContentScale.FillBounds,
+                                colorFilter = combinedColorFilter,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(
+                                        if (currentState.vignetteStrength > 0f) {
+                                            Modifier.drawWithContent {
+                                                drawContent()
+                                                val alpha = currentState.vignetteStrength / 100f * 0.8f
+                                                drawRect(
+                                                    brush = Brush.radialGradient(
+                                                        colors = listOf(
+                                                            Color.Transparent,
+                                                            Color.Transparent,
+                                                            Color.Black.copy(alpha = alpha)
+                                                        ),
+                                                        center = Offset(size.width / 2, size.height / 2),
+                                                        radius = maxOf(size.width, size.height) * 0.6f
+                                                    )
                                                 )
-                                            )
-                                        }
-                                    } else Modifier
-                                )
-                        )
+                                            }
+                                        } else Modifier
+                                    )
+                            )
+
+                            MarkupCanvasOverlay(
+                                markupState = currentState.markup,
+                                activeTool = activeMarkupTool,
+                                currentColor = markupColor,
+                                currentStrokeWidth = markupStrokeWidth,
+                                isInteractive = (activeTool == EditorTool.MARKUP),
+                                onStateChanged = { newMarkup ->
+                                    pushState(currentState.copy(markup = newMarkup))
+                                },
+                                onEditTextRequest = { textItem ->
+                                    editingTextItem = textItem
+                                    showTextDialog = true
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
 
@@ -697,6 +771,26 @@ fun ImageEditorScreen(
                                 onStrengthChanged = { s ->
                                     pushState(currentState.copy(vignetteStrength = s))
                                 }
+                            )
+                            EditorTool.MARKUP -> MarkupBottomDock(
+                                activeTool = activeMarkupTool,
+                                selectedColor = markupColor,
+                                strokeWidth = markupStrokeWidth,
+                                onToolSelected = { selectedTool ->
+                                    if (selectedTool == MarkupTool.TEXT) {
+                                        editingTextItem = null
+                                        showTextDialog = true
+                                    } else {
+                                        activeMarkupTool = selectedTool
+                                        markupStrokeWidth = when (selectedTool) {
+                                            MarkupTool.HIGHLIGHTER -> MarkupPalette.DEFAULT_HIGHLIGHTER_WIDTH
+                                            MarkupTool.ARROW -> MarkupPalette.DEFAULT_ARROW_WIDTH
+                                            else -> MarkupPalette.DEFAULT_PEN_WIDTH
+                                        }
+                                    }
+                                },
+                                onColorSelected = { markupColor = it },
+                                onStrokeWidthChanged = { markupStrokeWidth = it }
                             )
                             null -> Spacer(modifier = Modifier.height(0.dp))
                         }
@@ -844,6 +938,32 @@ fun ImageEditorScreen(
                     }
                 }
             }
+        }
+
+        if (showTextDialog) {
+            MarkupTextEditorDialog(
+                initialText = editingTextItem,
+                onDismissRequest = {
+                    showTextDialog = false
+                    editingTextItem = null
+                },
+                onConfirm = { updatedItem ->
+                    val exists = currentState.markup.texts.any { it.id == updatedItem.id }
+                    val newMarkup = if (exists) {
+                        currentState.markup.withUpdatedText(updatedItem)
+                    } else {
+                        currentState.markup.withAddedText(updatedItem)
+                    }
+                    pushState(currentState.copy(markup = newMarkup))
+                    showTextDialog = false
+                    editingTextItem = null
+                },
+                onDelete = { id ->
+                    pushState(currentState.copy(markup = currentState.markup.withRemovedText(id)))
+                    showTextDialog = false
+                    editingTextItem = null
+                }
+            )
         }
     }
 }
