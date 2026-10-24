@@ -35,18 +35,23 @@ class ModelDownloadWorker(
         private const val NOTIFICATION_ID = 55
         private const val CHANNEL_ID = "model_download_channel"
 
-        private const val TEXT_MODEL_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/text_model_quantized.onnx"
-        private const val VISION_MODEL_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/vision_model_quantized.onnx"
-        private const val TOKENIZER_URL = "https://raw.githubusercontent.com/Bn5prS/Photon_Gallery/master/models/tokenizer.json"
+        const val TEXT_MODEL_URL = "https://huggingface.co/Xenova/clip-vit-base-patch16/resolve/main/onnx/text_model_quantized.onnx"
+        const val VISION_MODEL_URL = "https://huggingface.co/Xenova/clip-vit-base-patch16/resolve/main/onnx/vision_model_quantized.onnx"
+        const val TOKENIZER_URL = "https://huggingface.co/Xenova/clip-vit-base-patch16/raw/main/tokenizer.json"
 
-        private const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
-        private const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
-        private const val TOKENIZER_NAME = "tokenizer.json"
+        const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
+        const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
+        const val TOKENIZER_NAME = "tokenizer.json"
 
-        private const val TEXT_MODEL_SHA256 = "9106b51e6c663a56b99182ec617c2b3d53577b037e7e24a7717eb78048a0c97a"
-        private const val VISION_MODEL_SHA256 = "44eece4fe5fe4e0359a88268a327adf758633a1aade3917690b952bef1501f96"
-        private const val MODEL_DIR = "smart_search_model_v2"
-        private const val TOKENIZER_SHA256 = "72ed5c96db5729294468543e4bc75fce14ca63f58e37300290189ba1c1e52b85"
+        const val VISION_MODEL_SIZE = 87_461_602L
+        const val TEXT_MODEL_SIZE = 64_504_507L
+        const val TOKENIZER_SIZE = 2_224_081L
+
+        const val TEXT_MODEL_SHA256 = "9106b51e6c663a56b99182ec617c2b3d53577b037e7e24a7717eb78048a0c97a"
+        const val VISION_MODEL_SHA256 = "44eece4fe5fe4e0359a88268a327adf758633a1aade3917690b952bef1501f96"
+        const val TOKENIZER_SHA256 = "72ed5c96db5729294468543e4bc75fce14ca63f58e37300290189ba1c1e52b85"
+        const val MODEL_DIR = "smart_search_model_v3"
+        const val SEMANTIC_MODEL_VERSION = 3
     }
 
     private data class DownloadTarget(
@@ -122,9 +127,9 @@ class ModelDownloadWorker(
                 .build()
 
             val downloadTargets = listOf(
-                DownloadTarget(TOKENIZER_URL, TOKENIZER_NAME, 2_224_081L, TOKENIZER_SHA256),
-                DownloadTarget(TEXT_MODEL_URL, TEXT_MODEL_NAME, 64_504_507L, TEXT_MODEL_SHA256),
-                DownloadTarget(VISION_MODEL_URL, VISION_MODEL_NAME, 87_461_602L, VISION_MODEL_SHA256)
+                DownloadTarget(TOKENIZER_URL, TOKENIZER_NAME, TOKENIZER_SIZE, TOKENIZER_SHA256),
+                DownloadTarget(TEXT_MODEL_URL, TEXT_MODEL_NAME, TEXT_MODEL_SIZE, TEXT_MODEL_SHA256),
+                DownloadTarget(VISION_MODEL_URL, VISION_MODEL_NAME, VISION_MODEL_SIZE, VISION_MODEL_SHA256)
             )
 
             val totalBytesExpected = downloadTargets.sumOf { it.expectedSize }

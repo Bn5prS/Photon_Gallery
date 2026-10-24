@@ -1131,13 +1131,13 @@ private fun SetupAiPage(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "On-Device MobileCLIP",
+                                text = "On-Device CLIP Vision",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Apple MobileCLIP • ~147 MB • 100% Offline",
+                                text = "OpenAI CLIP ViT-B/16 • ~150 MB • 100% Offline (CPU)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

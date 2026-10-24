@@ -1172,7 +1172,7 @@ fun SettingsScreen(
                                         }
 
                                         Text(
-                                            text = "Download on-device MobileCLIP model (~100MB) to find photos using visual concepts like 'beach sunset' or 'white cat'.",
+                                            text = "Download on-device OpenAI CLIP ViT-B/16 model (~150MB) to search photos using natural descriptions (e.g. 'dog sleeping on green rug', 'sunset at beach with friends'). Runs 100% offline on CPU.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1182,7 +1182,7 @@ fun SettingsScreen(
                                                 .clip(ShapeSmall)
                                                 .clickable {
                                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery/tree/master/models")
+                                                    uriHandler.openUri("https://huggingface.co/Xenova/clip-vit-base-patch16")
                                                 }
                                                 .padding(vertical = 2.dp),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -1195,7 +1195,7 @@ fun SettingsScreen(
                                                 modifier = Modifier.size(IconSizeTokens.S)
                                             )
                                             Text(
-                                                text = "Model source: GitHub (MobileCLIP)",
+                                                text = "Model source: Hugging Face (OpenAI CLIP ViT-B/16)",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -1376,7 +1376,7 @@ fun SettingsScreen(
                                                 .clip(ShapeSmall)
                                                 .clickable {
                                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery/tree/master/models")
+                                                    uriHandler.openUri("https://huggingface.co/Xenova/clip-vit-base-patch16")
                                                 }
                                                 .padding(vertical = 2.dp),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -1389,7 +1389,7 @@ fun SettingsScreen(
                                                 modifier = Modifier.size(IconSizeTokens.S)
                                             )
                                             Text(
-                                                text = "Model source: GitHub (MobileCLIP)",
+                                                text = "Model source: Hugging Face (OpenAI CLIP ViT-B/16)",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -2417,7 +2417,7 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
         "Coil 3 Image Loading" to "Apache License 2.0 • Coil Contributors",
         "Room Database" to "Apache License 2.0 • Google LLC",
         "ONNX Runtime" to "MIT License • Microsoft Corp.",
-        "MobileCLIP" to "MIT License • Apple Inc.",
+        "CLIP Vision & Language" to "MIT License • OpenAI",
         "Roboto Flex & Google Sans Flex" to "SIL Open Font License 1.1 • Google LLC",
         "AndroidX WorkManager" to "Apache License 2.0 • Google LLC",
         "AndroidX Graphics Shapes" to "Apache License 2.0 • Google LLC",

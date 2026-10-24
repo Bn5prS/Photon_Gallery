@@ -1937,10 +1937,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 val allEmbeddings = database.embeddingDao().getAllEmbeddings()
                                 if (allEmbeddings.isEmpty()) return@async emptyList()
 
-                                val threshold = 0.27f
+                                val minConfidence = 0.278f
                                 android.util.Log.i(
                                     "GalleryViewModel",
-                                    "Smart search for: '$query'. Query vector sample: [${queryVector.take(3).joinToString(", ")}], Total DB embeddings: ${allEmbeddings.size}, Threshold: $threshold"
+                                    "Smart search for: '$query'. Query vector sample: [${queryVector.take(3).joinToString(", ")}], Total DB embeddings: ${allEmbeddings.size}, MinConfidence: $minConfidence"
                                 )
 
                                 val scored = allEmbeddings.map { record ->
@@ -1948,9 +1948,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 }.sortedByDescending { it.second }
 
                                 val topScore = scored.firstOrNull()?.second ?: return@async emptyList()
-                                val adaptiveThreshold = maxOf(threshold, topScore - 0.06f)
+                                // Noise floor rejection: if top match is below minConfidence, concept is absent from gallery
+                                if (topScore < minConfidence) {
+                                    android.util.Log.d("GalleryViewModel", "Smart search: topScore $topScore < minConfidence $minConfidence, returning empty list")
+                                    return@async emptyList()
+                                }
+
+                                val adaptiveThreshold = maxOf(minConfidence, topScore - 0.030f)
                                 val maxResults = 200
                                 val matched = scored.filter { it.second >= adaptiveThreshold }.take(maxResults)
+                                android.util.Log.i(
+                                    "GalleryViewModel",
+                                    "Smart search: topScore $topScore, adaptiveThreshold $adaptiveThreshold, matches found: ${matched.size}"
+                                )
 
                                 if (matched.isNotEmpty()) {
                                     val scoreMap = matched.associate { it.first to it.second }
@@ -1964,7 +1974,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                             val uri = Uri.parse(entity.uriString)
                                             val (exists, resolved) = resolveItemFields(uri, entity.filePath)
                                             val score = scoreMap[entity.id]
-                                            val snippet = score?.let { "${(it * 100).toInt()}% match" }
+                                            val snippet = score?.let {
+                                                val pct = (((it - 0.278f) / (0.330f - 0.278f)) * 35f + 65f).coerceIn(65f, 99f).toInt()
+                                                "$pct% match"
+                                            }
                                             GalleryItem(
                                                 id = entity.id.toString(),
                                                 uri = uri,

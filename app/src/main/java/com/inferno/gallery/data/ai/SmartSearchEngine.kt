@@ -2,6 +2,8 @@ package com.inferno.gallery.data.ai
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Rect
 import android.util.Log
 import ai.onnxruntime.OnnxTensor
@@ -10,6 +12,7 @@ import ai.onnxruntime.OrtSession
 import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import android.os.Build
 
@@ -17,7 +20,7 @@ class SmartSearchEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "SmartSearchEngine"
-        private const val MODEL_DIR = "smart_search_model_v2"
+        private const val MODEL_DIR = "smart_search_model_v3"
         private const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
         private const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
         private const val TOKENIZER_NAME = "tokenizer.json"
@@ -39,6 +42,30 @@ class SmartSearchEngine(private val context: Context) {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: SmartSearchEngine(context.applicationContext).also { INSTANCE = it }
             }
+        }
+
+        private val PHRASE_EXPANSIONS = listOf(
+            Regex("""\b(iron\s*box|ironbox)\b""", RegexOption.IGNORE_CASE) to "clothes iron steam iron",
+            Regex("""\b(fridge)\b""", RegexOption.IGNORE_CASE) to "refrigerator fridge",
+            Regex("""\b(specs|spectacles|cooling\s*glass(es)?)\b""", RegexOption.IGNORE_CASE) to "eyeglasses sunglasses spectacles",
+            Regex("""\b(scooty|moped)\b""", RegexOption.IGNORE_CASE) to "motor scooter moped",
+            Regex("""\b(ac)\b""", RegexOption.IGNORE_CASE) to "air conditioner",
+            Regex("""\b(autorickshaw|rickshaw)\b""", RegexOption.IGNORE_CASE) to "auto rickshaw",
+            Regex("""\b(chappal(s)?|slippers)\b""", RegexOption.IGNORE_CASE) to "slippers sandals footwear",
+            Regex("""\b(mobile|cellphone|cell\s*phone)\b""", RegexOption.IGNORE_CASE) to "smartphone mobile phone",
+            Regex("""\b(doggie|doggy)\b""", RegexOption.IGNORE_CASE) to "dog puppy",
+            Regex("""\b(kitty)\b""", RegexOption.IGNORE_CASE) to "cat kitten"
+        )
+
+        fun normalizeQuery(query: String): String {
+            var q = query.trim()
+            if (q.isEmpty()) return ""
+            for ((regex, replacement) in PHRASE_EXPANSIONS) {
+                if (regex.containsMatchIn(q)) {
+                    q = regex.replace(q, replacement)
+                }
+            }
+            return q
         }
     }
 
@@ -123,15 +150,17 @@ class SmartSearchEngine(private val context: Context) {
             val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
             this.tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
 
-            // Initialize Text Session options
+            // Initialize Text Session options (optimized for mobile CPU)
             val textFile = File(modelDirFile, TEXT_MODEL_NAME)
             OrtSession.SessionOptions().use { textOptions ->
+                textOptions.setIntraOpNumThreads(4)
                 this.textSession = environment.createSession(textFile.absolutePath, textOptions)
             }
 
-            // Initialize Vision Session options
+            // Initialize Vision Session options (optimized for mobile CPU)
             val visionFile = File(modelDirFile, VISION_MODEL_NAME)
             OrtSession.SessionOptions().use { visionOptions ->
+                visionOptions.setIntraOpNumThreads(4)
                 this.visionSession = environment.createSession(visionFile.absolutePath, visionOptions)
             }
 
@@ -164,23 +193,37 @@ class SmartSearchEngine(private val context: Context) {
     fun isLoaded(): Boolean = isLoaded
 
     fun encodeText(query: String): FloatArray {
+        val trimmed = normalizeQuery(query)
+        if (trimmed.isEmpty()) return FloatArray(512)
+
+        val baseVec = encodeSingleText(trimmed)
+        if (trimmed.startsWith("a photo of", ignoreCase = true) ||
+            trimmed.startsWith("a picture of", ignoreCase = true)
+        ) {
+            return baseVec
+        }
+
+        // Prompt ensembling: combine raw prompt and contextual template to maximize retrieval accuracy
+        val templatedVec = encodeSingleText("a photo of $trimmed")
+        val ensembled = FloatArray(512)
+        for (i in 0 until 512) {
+            ensembled[i] = baseVec[i] + templatedVec[i]
+        }
+        return l2Normalize(ensembled)
+    }
+
+    private fun encodeSingleText(text: String): FloatArray {
         if (!isLoaded) loadModel()
         val currentTokenizer = tokenizer ?: throw IllegalStateException("Tokenizer not loaded")
         val currentEnv = env ?: throw IllegalStateException("Environment not loaded")
         val currentTextSession = textSession ?: throw IllegalStateException("Text session not loaded")
 
-        val tokenIds = currentTokenizer.encode(query)
+        val tokenIds = currentTokenizer.encode(text)
 
-        // Generate attention mask (1s for tokens including start/end, 0s for padding)
+        // Generate attention mask (1s for valid tokens, 0s for trailing padding)
         val attentionMask = LongArray(77)
-        var endTokenReached = false
-        // End token is 49407 for CLIP
-        val endTokenId = currentTokenizer.vocab["<|endoftext|>"]?.toLong() ?: 49407L
         for (i in 0 until 77) {
-            attentionMask[i] = if (!endTokenReached) 1L else 0L
-            if (tokenIds[i] == endTokenId) {
-                endTokenReached = true
-            }
+            attentionMask[i] = if (tokenIds[i] != 0L) 1L else 0L
         }
 
         val shape = longArrayOf(1, 77)
@@ -233,32 +276,30 @@ class SmartSearchEngine(private val context: Context) {
             bitmap
         }
 
-        val inputBitmap = prepareClipInputBitmap(softwareBitmap)
+        val inputBitmap = prepareLetterboxInputBitmap(softwareBitmap, 224)
         if (softwareBitmap != bitmap) {
             softwareBitmap.recycle()
         }
 
-        // Preprocess pixels into RGB flat NCHW buffer
-        val pixels = IntArray(224 * 224)
+        // Preprocess pixels into RGB flat NCHW buffer for CLIP ViT-B/16 (224x224)
+        val planeSize = 224 * 224
+        val pixels = IntArray(planeSize)
         inputBitmap.getPixels(pixels, 0, 224, 0, 0, 224, 224)
         if (inputBitmap != bitmap) {
             inputBitmap.recycle()
         }
 
-        val floatBuffer = FloatArray(3 * 224 * 224)
-        for (i in 0 until 224 * 224) {
+        val floatBuffer = FloatArray(3 * planeSize)
+        for (i in 0 until planeSize) {
             val pixel = pixels[i]
             val r = ((pixel shr 16) and 0xFF) / 255.0f
             val g = ((pixel shr 8) and 0xFF) / 255.0f
             val b = (pixel and 0xFF) / 255.0f
 
-            // CLIP Image Normalization
-            // Channel 0 (Red)
+            // Official OpenAI CLIP Image Normalization
             floatBuffer[i] = (r - 0.48145466f) / 0.26862954f
-            // Channel 1 (Green)
-            floatBuffer[i + 50176] = (g - 0.4578275f) / 0.26130258f
-            // Channel 2 (Blue)
-            floatBuffer[i + 100352] = (b - 0.40821073f) / 0.2757771f
+            floatBuffer[i + planeSize] = (g - 0.4578275f) / 0.26130258f
+            floatBuffer[i + 2 * planeSize] = (b - 0.40821073f) / 0.2757771f
         }
 
         val shape = longArrayOf(1, 3, 224, 224)
@@ -291,39 +332,36 @@ class SmartSearchEngine(private val context: Context) {
         }
     }
 
-    private fun prepareClipInputBitmap(bitmap: Bitmap): Bitmap {
-        if (bitmap.width == 224 && bitmap.height == 224) return bitmap
-
+    fun prepareLetterboxInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {
         val sourceWidth = bitmap.width
         val sourceHeight = bitmap.height
         if (sourceWidth <= 0 || sourceHeight <= 0) {
             throw IllegalArgumentException("Bitmap has invalid dimensions: ${sourceWidth}x$sourceHeight")
         }
 
-        val sourceAspect = sourceWidth.toFloat() / sourceHeight.toFloat()
-        val targetAspect = 1f
-        val cropRect = if (sourceAspect > targetAspect) {
-            val cropWidth = sourceHeight
-            val left = (sourceWidth - cropWidth) / 2
-            Rect(left, 0, left + cropWidth, sourceHeight)
-        } else {
-            val cropHeight = sourceWidth
-            val top = (sourceHeight - cropHeight) / 2
-            Rect(0, top, sourceWidth, top + cropHeight)
+        if (sourceWidth == targetSize && sourceHeight == targetSize) {
+            return bitmap
         }
 
-        val cropped = Bitmap.createBitmap(
-            bitmap,
-            cropRect.left,
-            cropRect.top,
-            cropRect.width(),
-            cropRect.height()
-        )
-        val scaled = Bitmap.createScaledBitmap(cropped, 224, 224, true)
-        if (cropped != bitmap) {
-            cropped.recycle()
+        val scale = targetSize.toFloat() / maxOf(sourceWidth, sourceHeight).toFloat()
+        val scaledWidth = maxOf(1, (sourceWidth * scale).roundToInt())
+        val scaledHeight = maxOf(1, (sourceHeight * scale).roundToInt())
+
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+
+        val output = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawColor(Color.BLACK)
+
+        val left = (targetSize - scaledWidth) / 2f
+        val top = (targetSize - scaledHeight) / 2f
+        canvas.drawBitmap(scaledBitmap, left, top, null)
+
+        if (scaledBitmap != bitmap) {
+            scaledBitmap.recycle()
         }
-        return scaled
+
+        return output
     }
 
     private fun l2Normalize(vector: FloatArray): FloatArray {

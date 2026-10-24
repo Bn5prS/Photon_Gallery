@@ -152,13 +152,13 @@ class BPETokenizer(jsonContent: String) {
         }
         tokenIds.add(endToken)
 
-        // Pad or truncate to sequence length 77
+        // Pad or truncate to sequence length 77 (CLIP expects 0L padding for unused context slots)
         val result = LongArray(77)
         for (i in 0 until 77) {
             result[i] = if (i < tokenIds.size) {
                 tokenIds[i].toLong()
             } else {
-                endToken.toLong() // Pad with <|endoftext|> (49407) in CLIP
+                0L
             }
         }
         return result
