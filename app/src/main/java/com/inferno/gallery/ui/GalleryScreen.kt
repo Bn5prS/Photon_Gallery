@@ -651,8 +651,6 @@ fun FastScroller(
     // screen's restart scope.
     if (pagedMedia.itemCount < 50 && totalMediaCount < 50) return
 
-    val fullDateFormat = remember { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()) }
-
     // Sample header density once when the first page lands, then lock it so the scrollbar track
     // denominator NEVER fluctuates or jumps while scrolling or loading subsequent pages.
     var sampledHeaderRatio by remember { mutableFloatStateOf(0.06f) }
@@ -682,19 +680,6 @@ fun FastScroller(
     com.inferno.gallery.ui.components.ExpressiveScrollBar(
         gridState = lazyGridState,
         totalItemsCount = totalEstimatedItems,
-        dragLabelProvider = { rawIndex ->
-            val index = rawIndex - headerOffset
-            if (index in 0 until pagedMedia.itemCount) {
-                when (val item = pagedMedia.peek(index)) {
-                    is GalleryListItem.Header -> item.title
-                    is GalleryListItem.Item -> {
-                        val sec = item.galleryItem.dateAdded
-                        if (sec > 0) fullDateFormat.format(Date(sec * 1000L)) else null
-                    }
-                    null -> null
-                }
-            } else null
-        },
         modifier = modifier
     )
 }

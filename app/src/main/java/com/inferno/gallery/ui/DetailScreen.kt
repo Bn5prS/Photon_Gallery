@@ -119,6 +119,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import com.inferno.gallery.ui.theme.ShapeSmall
+import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.text.font.FontWeight
@@ -158,6 +165,7 @@ import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.data.MotionPhotoHelper
 import com.inferno.gallery.data.MotionPhotoInfo
 import com.inferno.gallery.ui.components.MotionPhotoPlayerOverlay
+import com.inferno.gallery.ui.components.FloatingTipCard
 
 
 
@@ -223,6 +231,7 @@ fun DetailScreen(
     val maxBrightnessEnabled by settingsRepo.maxBrightnessEnabledFlow.collectAsState(initial = false)
     val viewerBlurEffect by settingsRepo.viewerBlurEffectFlow.collectAsState(initial = false)
     val viewerDynamicColor by settingsRepo.viewerDynamicColorFlow.collectAsState(initial = false)
+    val viewerFilmstripEnabled = false // Feature backed up: re-bind to settingsRepo.viewerFilmstripEnabledFlow when requested
 
     // Overrides screen brightness to maximum in fullscreen and restores it when leaving
     androidx.compose.runtime.DisposableEffect(maxBrightnessEnabled) {
@@ -1666,7 +1675,7 @@ fun DetailScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = if (showUi) 78.dp else 24.dp)
+                .padding(bottom = if (showUi) (if (viewerFilmstripEnabled && galleryItems.size > 1) 130.dp else 78.dp) else 24.dp)
         ) {
             Surface(
                 shape = ShapeFull,
@@ -1699,260 +1708,479 @@ fun DetailScreen(
             }
         }
 
-        // ── Material 3 Expressive Floating Bottom Action Dock ──
-        AnimatedVisibility(
-            visible = showUi,
-            enter = fadeIn(MotionTokens.gentleSpring()) +
-                    slideInVertically(MotionTokens.gentleSpring()) { it } +
-                    scaleIn(MotionTokens.snappySpring()),
-            exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    slideOutVertically(MotionTokens.gentleSpring()) { it } +
-                    scaleOut(MotionTokens.gentleSpring()),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp)
-        ) {
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                tonalElevation = 2.dp,
-                shadowElevation = 6.dp,
+        val tipMotionDismissed by settingsRepo.tipMotionPhotoDismissedFlow.collectAsState(initial = true)
+        if (!tipMotionDismissed && motionPhotoInfo?.isMotionPhoto == true && showUi) {
+            FloatingTipCard(
+                title = "Quick Tip",
+                message = "Press & hold anywhere on the photo to play live motion video.",
+                iconResId = R.drawable.ic_ms_motion_photos_on,
+                onDismiss = {
+                    coroutineScope.launch {
+                        settingsRepo.dismissTip(com.inferno.gallery.data.SettingsRepository.TIP_MOTION_PHOTO)
+                    }
+                },
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .widthIn(min = 280.dp, max = 360.dp)
-                    .height(54.dp)
-            ) {
-                val currentItem = galleryItems.getOrNull(pagerState.currentPage)
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (bucketName == "Trash") {
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (currentItem != null) {
-                                    val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                                    if (isMediaStoreUri) {
-                                        pendingDeleteItem = currentItem
-                                        pendingDeletePage = pagerState.currentPage
-                                        val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
-                                        restoreLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build())
-                                    }
-                                }
-                            },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                                contentDescription = "Restore",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = if (viewerFilmstripEnabled && galleryItems.size > 1) 136.dp else 84.dp)
+            )
+        }
 
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (currentItem != null) {
-                                    val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                                    if (isMediaStoreUri) {
-                                        pendingDeleteItem = currentItem
-                                        pendingDeletePage = pagerState.currentPage
-                                        val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
-                                        launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build())
-                                    }
-                                }
-                            },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                contentDescription = "Permanently Delete",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+        val currentItem = galleryItems.getOrNull(pagerState.currentPage)
+        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
+        val heartView = androidx.compose.ui.platform.LocalView.current
+
+        val onRestoreAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (isMediaStoreUri) {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
+                    restoreLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build())
+                }
+            }
+        }
+
+        val onPermanentDeleteAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (isMediaStoreUri) {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
+                    launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build())
+                }
+            }
+        }
+
+        val onShareAction = {
+            val item = currentItem
+            if (item != null) {
+                coroutineScope.launch {
+                    val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                    com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
+                }
+            }
+        }
+
+        val onEditAction = {
+            if (currentItem != null) {
+                val uri = resolvedCurrentUri ?: currentItem.uri
+                if (!currentItem.isVideo) {
+                    onNavigateToEditor(uri)
+                } else {
+                    val editIntent = Intent(Intent.ACTION_EDIT).apply {
+                        setDataAndType(uri, "video/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    }
+                    try {
+                        context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        val onFavoriteAction = {
+            if (currentItem != null) {
+                heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                viewModel.toggleFavorite(currentItem.id)
+            }
+        }
+
+        val onDeleteAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (!isMediaStoreUri) {
+                    android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    if (confirmDeleteEnabled) {
+                        showDeleteConfirmDialog = true
                     } else {
-                        // Share
-                        FilledTonalIconButton(
-                            onClick = {
-                                val item = currentItem
-                                if (item != null) {
-                                    coroutineScope.launch {
-                                        val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
-                                        com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
-                                    }
-                                }
-                            },
-                            enabled = currentItem?.localExists == true,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
-                                contentDescription = "Share",
-                                modifier = Modifier.size(22.dp)
+                        try {
+                            val trashIntent = MediaStore.createTrashRequest(
+                                context.contentResolver,
+                                listOf(currentItem.uri),
+                                true
                             )
-                        }
-
-                        // Edit / Frame extractor
-                        FilledTonalIconButton(
-                            enabled = currentItem?.localExists == true,
-                            onClick = {
-                                if (currentItem != null) {
-                                    val uri = resolvedCurrentUri ?: currentItem.uri
-                                    if (!currentItem.isVideo) {
-                                        onNavigateToEditor(uri)
-                                    } else {
-                                        val editIntent = Intent(Intent.ACTION_EDIT).apply {
-                                            setDataAndType(uri, "video/*")
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                                        }
-                                        try {
-                                            context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
-                                        } catch (e: Exception) {
-                                            android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                            },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
-                                contentDescription = if (currentItem?.isVideo == true) "Extract frame" else "Edit",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        // Favorite
-                        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
-                        val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
-                        var heartBounce by remember { mutableStateOf(false) }
-                        val heartScale by animateFloatAsState(
-                            targetValue = if (heartBounce) 1.45f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            ),
-                            label = "heartScale",
-                            finishedListener = { if (heartBounce) heartBounce = false }
-                        )
-                        val heartView = androidx.compose.ui.platform.LocalView.current
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (currentItem != null) {
-                                    heartBounce = true
-                                    heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                                    viewModel.toggleFavorite(currentItem.id)
-                                }
-                            },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = if (isFavorite) favoriteHarmonized.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                                contentDescription = "Favorite",
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer {
-                                        scaleX = heartScale
-                                        scaleY = heartScale
-                                    }
-                            )
-                        }
-
-                        // Delete
-                        FilledTonalIconButton(
-                            onClick = {
-                                if (currentItem != null) {
-                                    val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                                    if (!isMediaStoreUri) {
-                                        android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
-                                        return@FilledTonalIconButton
-                                    }
-                                    pendingDeleteItem = currentItem
-                                    pendingDeletePage = pagerState.currentPage
-                                    if (confirmDeleteEnabled) {
-                                        showDeleteConfirmDialog = true
-                                    } else {
-                                        try {
-                                            val trashIntent = MediaStore.createTrashRequest(
-                                                context.contentResolver,
-                                                listOf(currentItem.uri),
-                                                true
-                                            )
-                                            val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                            launcher.launch(request)
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Unable to trash this item: ${e.message}",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }
-                                }
-                            },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.error
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                contentDescription = "Delete",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        // Google Lens (Images only)
-                        if (currentItem != null && !currentItem.isVideo) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    val targetUri = resolvedCurrentUri ?: currentItem.uri
-                                    com.inferno.gallery.ui.utils.GoogleLensUtils.launch(context, targetUri)
-                                },
-                                enabled = currentItem.localExists,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_google_lens),
-                                    contentDescription = "Google Lens",
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
+                            val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                            launcher.launch(request)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            android.widget.Toast.makeText(
+                                context,
+                                "Unable to trash this item: ${e.message}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
                 }
             }
         }
 
+        val onLensAction = {
+            if (currentItem != null) {
+                val targetUri = resolvedCurrentUri ?: currentItem.uri
+                com.inferno.gallery.ui.utils.GoogleLensUtils.launch(context, targetUri)
+            }
+        }
+
+        if (!viewerFilmstripEnabled) {
+            // ── Material 3 Expressive Floating Bottom Action Dock (Preserved) ──
+            AnimatedVisibility(
+                visible = showUi,
+                enter = fadeIn(MotionTokens.gentleSpring()) +
+                        slideInVertically(MotionTokens.gentleSpring()) { it } +
+                        scaleIn(MotionTokens.snappySpring()),
+                exit  = fadeOut(MotionTokens.gentleSpring()) +
+                        slideOutVertically(MotionTokens.gentleSpring()) { it } +
+                        scaleOut(MotionTokens.gentleSpring()),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
+            ) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    tonalElevation = 2.dp,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .widthIn(min = 280.dp, max = 360.dp)
+                        .height(54.dp)
+                ) {
+                    ViewerActionButtonsRow(
+                        currentItem = currentItem,
+                        isTrash = bucketName == "Trash",
+                        isFavorite = isFavorite,
+                        onRestore = onRestoreAction,
+                        onPermanentDelete = onPermanentDeleteAction,
+                        onShare = onShareAction,
+                        onEdit = onEditAction,
+                        onFavorite = onFavoriteAction,
+                        onDelete = onDeleteAction,
+                        onLens = onLensAction,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        } else {
+            // ── Material 3 Expressive Docked Bottom Bar with Filmstrip ──
+            AnimatedVisibility(
+                visible = showUi,
+                enter = fadeIn(MotionTokens.gentleSpring()) +
+                        slideInVertically(MotionTokens.gentleSpring()) { it },
+                exit  = fadeOut(MotionTokens.gentleSpring()) +
+                        slideOutVertically(MotionTokens.gentleSpring()) { it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+            ) {
+                Surface(
+                    shape = ShapeNone,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(top = 8.dp, bottom = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (galleryItems.size > 1) {
+                            ViewerFilmstripRow(
+                                galleryItems = galleryItems,
+                                currentPage = pagerState.currentPage,
+                                onThumbnailClick = { index ->
+                                    coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                                },
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ViewerActionButtonsRow(
+                                currentItem = currentItem,
+                                isTrash = bucketName == "Trash",
+                                isFavorite = isFavorite,
+                                onRestore = onRestoreAction,
+                                onPermanentDelete = onPermanentDeleteAction,
+                                onShare = onShareAction,
+                                onEdit = onEditAction,
+                                onFavorite = onFavoriteAction,
+                                onDelete = onDeleteAction,
+                                onLens = onLensAction,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.92f)
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+}
+
+@Composable
+private fun ViewerFilmstripRow(
+    galleryItems: List<GalleryItem>,
+    currentPage: Int,
+    onThumbnailClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState()
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidth = configuration.screenWidthDp.dp
+
+    // Center the active thumbnail when currentPage changes
+    LaunchedEffect(currentPage, galleryItems.size) {
+        if (galleryItems.isNotEmpty() && currentPage in galleryItems.indices) {
+            val offset = with(density) { -(screenWidth / 2 - 24.dp).roundToPx() }
+            listState.animateScrollToItem(index = currentPage, scrollOffset = offset)
+        }
+    }
+
+    LazyRow(
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(54.dp)
+    ) {
+        itemsIndexed(
+            items = galleryItems,
+            key = { _, item -> item.id }
+        ) { index, item ->
+            val isSelected = index == currentPage
+            val alpha by animateFloatAsState(
+                targetValue = if (isSelected) 1f else 0.80f,
+                animationSpec = MotionTokens.fastEffectsSpec(),
+                label = "filmstrip_alpha"
+            )
+            val borderStroke = if (isSelected) {
+                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            } else {
+                null
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(width = 38.dp, height = 50.dp)
+                    .clip(ShapeExtraSmall)
+                    .then(
+                        if (borderStroke != null) Modifier.border(borderStroke, ShapeExtraSmall)
+                        else Modifier
+                    )
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable {
+                        onThumbnailClick(index)
+                    }
+            ) {
+                AsyncImage(
+                    model = item.uri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(alpha)
+                )
+
+                if (item.isVideo) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(2.dp)
+                            .size(14.dp)
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f), ShapeFull),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ViewerActionButtonsRow(
+    currentItem: GalleryItem?,
+    isTrash: Boolean,
+    isFavorite: Boolean,
+    onRestore: () -> Unit,
+    onPermanentDelete: () -> Unit,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onFavorite: () -> Unit,
+    onDelete: () -> Unit,
+    onLens: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isTrash) {
+            FilledTonalIconButton(
+                onClick = onRestore,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                    contentDescription = "Restore",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            FilledTonalIconButton(
+                onClick = onPermanentDelete,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    contentDescription = "Permanently Delete",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        } else {
+            // Share
+            FilledTonalIconButton(
+                onClick = onShare,
+                enabled = currentItem?.localExists == true,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                    contentDescription = "Share",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Edit / Frame extractor
+            FilledTonalIconButton(
+                enabled = currentItem?.localExists == true,
+                onClick = onEdit,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
+                    contentDescription = if (currentItem?.isVideo == true) "Extract frame" else "Edit",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Favorite
+            val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
+            var heartBounce by remember { mutableStateOf(false) }
+            val heartScale by animateFloatAsState(
+                targetValue = if (heartBounce) 1.45f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "heartScale",
+                finishedListener = { if (heartBounce) heartBounce = false }
+            )
+            FilledTonalIconButton(
+                onClick = {
+                    heartBounce = true
+                    onFavorite()
+                },
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (isFavorite) favoriteHarmonized.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                    contentDescription = "Favorite",
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer {
+                            scaleX = heartScale
+                            scaleY = heartScale
+                        }
+                )
+            }
+
+            // Delete
+            FilledTonalIconButton(
+                onClick = onDelete,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    contentDescription = "Delete",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Google Lens (Images only)
+            if (currentItem != null && !currentItem.isVideo) {
+                FilledTonalIconButton(
+                    onClick = onLens,
+                    enabled = currentItem.localExists,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_google_lens),
+                        contentDescription = "Google Lens",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
     }
 }
 

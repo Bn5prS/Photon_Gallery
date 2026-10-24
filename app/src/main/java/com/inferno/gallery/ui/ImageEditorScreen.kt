@@ -72,6 +72,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -126,6 +127,7 @@ import com.inferno.gallery.ui.editor.markup.MarkupState
 import com.inferno.gallery.ui.editor.markup.MarkupText
 import com.inferno.gallery.ui.editor.markup.MarkupTextEditorDialog
 import com.inferno.gallery.ui.editor.markup.MarkupTool
+import com.inferno.gallery.ui.components.FloatingTipCard
 
 
 // ── Data Models ──────────────────────────────────────────────────────────────
@@ -788,8 +790,28 @@ fun ImageEditorScreen(
                             )
                             EditorTool.MARKUP -> {
                                 val currentSelectedText = currentState.markup.texts.find { it.id == selectedMarkupTextId }
-                                MarkupBottomDock(
-                                    activeTool = activeMarkupTool,
+                                val settingsRepo = remember(context) { com.inferno.gallery.data.SettingsRepository.getInstance(context) }
+                                val tipMarkupDismissed by settingsRepo.tipMarkupGesturesDismissedFlow.collectAsState(initial = true)
+
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    if (!tipMarkupDismissed) {
+                                        FloatingTipCard(
+                                            title = "Quick Tip",
+                                            message = "Tap placed text or arrows to move, scale, and rotate freely with two fingers.",
+                                            iconResId = R.drawable.ic_ms_touch_app,
+                                            onDismiss = {
+                                                coroutineScope.launch {
+                                                    settingsRepo.dismissTip(com.inferno.gallery.data.SettingsRepository.TIP_MARKUP_GESTURES)
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp)
+                                        )
+                                    }
+
+                                    MarkupBottomDock(
+                                        activeTool = activeMarkupTool,
                                     selectedColor = currentSelectedText?.color ?: markupColor,
                                     penStrokeWidth = penStrokeWidth,
                                     highlighterStrokeWidth = highlighterStrokeWidth,
@@ -861,6 +883,7 @@ fun ImageEditorScreen(
                                     }
                                 )
                             }
+                        }
                             null -> Spacer(modifier = Modifier.height(0.dp))
                         }
                     }

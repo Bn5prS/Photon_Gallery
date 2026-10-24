@@ -63,10 +63,7 @@ fun ExpressiveScrollBar(
     indicatorExpandedWidthBoost: Dp = 0.dp,
     indicatorRightCornerRadius: Dp = 0.dp,
     paddingEnd: Dp = 0.dp,
-    trackGap: Dp = 0.dp,
-    dragLabelProvider: ((Int) -> String?)? = null,
-    dragLabelSize: Dp = 40.dp,
-    dragLabelGap: Dp = 12.dp
+    trackGap: Dp = 0.dp
 ) {
     val canScrollForward by remember(listState, gridState) {
         derivedStateOf { listState?.canScrollForward ?: gridState?.canScrollForward ?: false }
@@ -103,7 +100,6 @@ fun ExpressiveScrollBar(
 
         var dragProgress by remember(listState, gridState) { mutableFloatStateOf(-1f) }
         var pendingScrollIndex by remember(listState, gridState) { mutableIntStateOf(-1) }
-        var retainedDragLabel by remember(listState, gridState) { mutableStateOf<String?>(null) }
 
         val primaryColor = MaterialTheme.colorScheme.primary
         val innerIcon = ImageVector.vectorResource(R.drawable.ic_ms_unfold_more)
@@ -403,85 +399,6 @@ fun ExpressiveScrollBar(
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.fillMaxSize()
                 )
-            }
-
-            if (dragLabelProvider != null) {
-                val dragLabelTargetIndex = when {
-                    pendingScrollIndex >= 0 -> pendingScrollIndex
-                    listState != null -> listState.firstVisibleItemIndex
-                    gridState != null -> gridState.firstVisibleItemIndex
-                    else -> -1
-                }
-                val activeDragLabel =
-                    if (isDragging && dragLabelTargetIndex >= 0) {
-                        dragLabelProvider(dragLabelTargetIndex)
-                    } else {
-                        null
-                    }
-                val showDragLabel = isDragging && !activeDragLabel.isNullOrBlank()
-
-                LaunchedEffect(activeDragLabel) {
-                    if (!activeDragLabel.isNullOrBlank()) {
-                        retainedDragLabel = activeDragLabel
-                    }
-                }
-
-                val dragLabelAlpha by animateFloatAsState(
-                    targetValue = if (showDragLabel) 1f else 0f,
-                    animationSpec = tween(durationMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedEasing),
-                    label = "DragLabelAlpha"
-                )
-                val dragLabelScale by animateFloatAsState(
-                    targetValue = if (showDragLabel) 1f else 0.82f,
-                    animationSpec = tween(durationMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedEasing),
-                    label = "DragLabelScale"
-                )
-                val dragLabelSlide by animateDpAsState(
-                    targetValue = if (showDragLabel) 0.dp else 8.dp,
-                    animationSpec = tween(durationMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedEasing),
-                    label = "DragLabelSlide"
-                )
-
-                val displayedDragLabel = activeDragLabel ?: retainedDragLabel
-                if (dragLabelAlpha > 0f && !displayedDragLabel.isNullOrBlank()) {
-                    Surface(
-                        modifier = Modifier
-                            .offset {
-                                val handleY = visualProgress * scrollableHeight
-                                val handleHeight = minHeight.toPx()
-                                val dragLabelGapPx = dragLabelGap.toPx()
-                                val dragLabelSlidePx = dragLabelSlide.toPx()
-                                val paddingEndPx = paddingEnd.toPx()
-                                val animatedWidthPx = animatedWidth.toPx()
-                                val maxWidthPx = constraintsMaxWidth.toPx()
-
-                                val indicatorX = maxWidthPx - paddingEndPx - animatedWidthPx
-                                val x = indicatorX - dragLabelGapPx - dragLabelSlidePx
-                                val y = handleY + (handleHeight / 2f)
-
-                                IntOffset(x.toInt(), y.toInt())
-                            }
-                            .graphicsLayer {
-                                alpha = dragLabelAlpha
-                                scaleX = dragLabelScale
-                                scaleY = dragLabelScale
-                                translationX = -size.width.toFloat()
-                                translationY = -size.height.toFloat() / 2f
-                            },
-                        shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 3.dp
-                    ) {
-                        Text(
-                            text = displayedDragLabel,
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                            maxLines = 1
-                        )
-                    }
-                }
             }
         }
     }

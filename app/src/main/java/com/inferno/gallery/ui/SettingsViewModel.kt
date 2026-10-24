@@ -813,6 +813,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val viewerFilmstripEnabled: StateFlow<Boolean> = repository.viewerFilmstripEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setViewerFilmstripEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateViewerFilmstripEnabled(enabled)
+        }
+    }
+
 
 
     val showAlbumSize: StateFlow<Boolean> = repository.showAlbumSizeFlow.stateIn(

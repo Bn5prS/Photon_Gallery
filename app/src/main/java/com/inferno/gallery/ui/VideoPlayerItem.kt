@@ -165,6 +165,7 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
 
     val settings = remember { com.inferno.gallery.data.SettingsRepository.getInstance(context) }
     val autoplayWithSound by settings.autoplayWithSoundEnabledFlow.collectAsState(initial = false)
+    val viewerFilmstripEnabled = false // Feature backed up: re-bind to settings.viewerFilmstripEnabledFlow when requested
     var isMuted by remember(autoplayWithSound) { mutableStateOf(!autoplayWithSound) }
 
     DisposableEffect(exoPlayer) {
@@ -532,7 +533,11 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 82.dp, start = 16.dp, end = 16.dp)
+                .padding(
+                    bottom = if (viewerFilmstripEnabled) 138.dp else 82.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                )
         ) {
             Row(
                 modifier = Modifier
