@@ -78,19 +78,37 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 
 @Composable
-fun VideoPlayerItem(uri: Uri, isCurrentPage: Boolean, showControls: Boolean, modifier: Modifier = Modifier, onTap: (() -> Unit)? = null) {
+fun VideoPlayerItem(
+    uri: Uri,
+    isCurrentPage: Boolean,
+    showControls: Boolean,
+    modifier: Modifier = Modifier,
+    onTap: (() -> Unit)? = null,
+    onPinchOverview: (() -> Unit)? = null,
+    onPinchExpand: (() -> Unit)? = null
+) {
     VideoPlayerItemWithResolvedUri(
         uri = uri,
         isCurrentPage = isCurrentPage,
         showControls = showControls,
         modifier = modifier,
-        onTap = onTap
+        onTap = onTap,
+        onPinchOverview = onPinchOverview,
+        onPinchExpand = onPinchExpand
     )
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControls: Boolean, modifier: Modifier = Modifier, onTap: (() -> Unit)? = null) {
+fun VideoPlayerItemWithResolvedUri(
+    uri: Uri,
+    isCurrentPage: Boolean,
+    showControls: Boolean,
+    modifier: Modifier = Modifier,
+    onTap: (() -> Unit)? = null,
+    onPinchOverview: (() -> Unit)? = null,
+    onPinchExpand: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val exoPlayer = remember(uri) {
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
@@ -375,9 +393,34 @@ fun VideoPlayerItemWithResolvedUri(uri: Uri, isCurrentPage: Boolean, showControl
                                         event.changes.forEach { if (it.positionChanged()) it.consume() }
                                     }
                                 }
+                            } // end if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero))
+
+                            // Pinch-in threshold check on every multitouch frame
+                            if (pastTouchSlop && event.changes.count { it.pressed } >= 2) {
+                                accumulatedZoom *= zoomChange
+                                if (accumulatedZoom < 0.85f && scale.floatValue <= 1.05f) {
+                                    onPinchOverview?.invoke()
+                                } else if (accumulatedZoom > 1.15f) {
+                                    onPinchExpand?.invoke()
+                                }
                             }
 
                             if (!event.changes.any { it.pressed }) break
+                        }
+
+                        // If pinched in past threshold or released below 0.90x, trigger overview
+                        if (pastTouchSlop && maxPointerCount >= 2) {
+                            if (scale.floatValue < 0.90f || accumulatedZoom < 0.88f) {
+                                onPinchOverview?.invoke()
+                                scale.floatValue = 1f
+                                offsetX.floatValue = 0f
+                                offsetY.floatValue = 0f
+                            } else if (accumulatedZoom > 1.15f) {
+                                onPinchExpand?.invoke()
+                                scale.floatValue = 1f
+                                offsetX.floatValue = 0f
+                                offsetY.floatValue = 0f
+                            }
                         }
 
                         // Snap back if released below 1.05x

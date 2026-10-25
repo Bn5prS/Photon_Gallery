@@ -166,6 +166,9 @@ import com.inferno.gallery.data.MotionPhotoHelper
 import com.inferno.gallery.data.MotionPhotoInfo
 import com.inferno.gallery.ui.components.MotionPhotoPlayerOverlay
 import com.inferno.gallery.ui.components.FloatingTipCard
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.BoxWithConstraints
 
 
 
@@ -430,10 +433,25 @@ fun DetailScreen(
                        !highlightText.isNullOrBlank()
 
     var showUi by remember { mutableStateOf(!isFromSearch) }
+    var isFilmstripOverview by remember { mutableStateOf(false) }
+    val overviewProgress by animateFloatAsState(
+        targetValue = if (isFilmstripOverview) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "overviewProgress"
+    )
 
-    // Auto hide UI after 4 seconds of inactivity (e.g., no swiping/page change)
-    LaunchedEffect(showUi, pagerState.isScrollInProgress, pagerState.currentPage) {
-        if (showUi) {
+    // Exit overview mode on hardware/gesture back
+    BackHandler(enabled = isFilmstripOverview) {
+        isFilmstripOverview = false
+        showUi = true
+    }
+
+    // Auto hide UI after 4 seconds of inactivity — skip if in filmstrip overview
+    LaunchedEffect(showUi, pagerState.isScrollInProgress, pagerState.currentPage, isFilmstripOverview) {
+        if (showUi && !isFilmstripOverview) {
             kotlinx.coroutines.delay(4000)
             showUi = false
         }
@@ -794,7 +812,7 @@ fun DetailScreen(
 
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = currentScale <= 1.05f && dismissOffsetY.value == 0f,
+            userScrollEnabled = (currentScale <= 1.05f && dismissOffsetY.value == 0f) || isFilmstripOverview,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
@@ -848,7 +866,9 @@ fun DetailScreen(
                         }
                     }
                 },
-            key = { page -> galleryItems.getOrNull(page)?.id ?: page.toString() }
+            key = { page -> galleryItems.getOrNull(page)?.id ?: page.toString() },
+            contentPadding = PaddingValues(horizontal = (72.dp * overviewProgress.coerceIn(0f, 1f))),
+            pageSpacing = (12.dp * overviewProgress.coerceIn(0f, 1f)),
         ) { page ->
             val item = galleryItems.getOrNull(page) ?: return@HorizontalPager
             val resolvedUri by produceState(initialValue = item.uri, key1 = item) {
@@ -890,10 +910,42 @@ fun DetailScreen(
             
             val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
             val absoluteOffset = kotlin.math.abs(pageOffset)
-            val pagerScale = 1f - (absoluteOffset.coerceIn(0f, 1f) * 0.05f)
-            val pagerAlpha = 1f - (absoluteOffset.coerceIn(0f, 1f) * 0.5f)
+            // Normal (non-overview) subtle transform
+            val normalPagerScale = 1f - (absoluteOffset.coerceIn(0f, 1f) * 0.05f)
+            val normalPagerAlpha = 1f - (absoluteOffset.coerceIn(0f, 1f) * 0.5f)
+            // Overview-mode transform: center card 1.0 scale; neighbors 0.88; lerp by overviewProgress
+            val overviewCardScale = if (absoluteOffset < 0.5f)
+                androidx.compose.ui.util.lerp(normalPagerScale, 0.95f, overviewProgress)
+            else
+                androidx.compose.ui.util.lerp(normalPagerScale, 0.88f, overviewProgress)
+            val overviewCardAlpha = if (absoluteOffset < 0.5f)
+                1f
+            else
+                androidx.compose.ui.util.lerp(normalPagerAlpha, 0.70f, overviewProgress)
+            val pagerScale = overviewCardScale
+            val pagerAlpha = overviewCardAlpha
+            // Corner radius for card shape in overview mode (ShapeLargeIncreased = 20dp)
+            val overviewCornerDp = 20.dp * overviewProgress
+            val overviewElevation = 8.dp * overviewProgress * (if (absoluteOffset < 0.5f) 1f else 0f)
 
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = pagerScale
+                        scaleY = pagerScale
+                        alpha = pagerAlpha
+                    }
+                    .then(if (overviewProgress > 0.01f) {
+                        val safeProgress = overviewProgress.coerceIn(0f, 1f)
+                        Modifier
+                            .padding(vertical = (8.dp * safeProgress))
+                            .shadow(overviewElevation, RoundedCornerShape(20.dp * safeProgress))
+                            .clip(RoundedCornerShape(20.dp * safeProgress))
+                    } else Modifier)
+            ) {
             androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+
                 val parentWidth = constraints.maxWidth.toFloat()
                 val parentHeight = constraints.maxHeight.toFloat()
                 if (item.isVideo) {
@@ -914,15 +966,33 @@ fun DetailScreen(
                             VideoPlayerItem(
                                 uri = resolvedUri,
                                 isCurrentPage = page == pagerState.currentPage,
-                                showControls = showUi,
+                                showControls = showUi && !isFilmstripOverview,
                                 modifier = Modifier.fillMaxSize(),
                                 onTap = {
-                                    if (showInfoCard || showUi) {
-                                        showInfoCard = false
-                                        showUi = false
+                                    if (isFilmstripOverview) {
+                                        coroutineScope.launch {
+                                            if (page != pagerState.currentPage) {
+                                                pagerState.animateScrollToPage(page)
+                                            }
+                                            isFilmstripOverview = false
+                                            showUi = true
+                                        }
                                     } else {
-                                        showUi = true
+                                        if (showInfoCard || showUi) {
+                                            showInfoCard = false
+                                            showUi = false
+                                        } else {
+                                            showUi = true
+                                        }
                                     }
+                                },
+                                onPinchOverview = {
+                                    isFilmstripOverview = true
+                                    showUi = false
+                                },
+                                onPinchExpand = {
+                                    isFilmstripOverview = false
+                                    showUi = true
                                 }
                             )
                         }
@@ -1033,13 +1103,24 @@ fun DetailScreen(
                                             }
                                         },
                                         onTap = {
-                                            activeHighlight = null
-                                            highlightOverlayVisible = false
-                                            if (showInfoCard || showUi) {
-                                                showInfoCard = false
-                                                showUi = false
+                                            if (isFilmstripOverview) {
+                                                // Tap in overview: navigate to this page if not current, then exit overview
+                                                coroutineScope.launch {
+                                                    if (page != pagerState.currentPage) {
+                                                        pagerState.animateScrollToPage(page)
+                                                    }
+                                                    isFilmstripOverview = false
+                                                    showUi = true
+                                                }
                                             } else {
-                                                showUi = true
+                                                activeHighlight = null
+                                                highlightOverlayVisible = false
+                                                if (showInfoCard || showUi) {
+                                                    showInfoCard = false
+                                                    showUi = false
+                                                } else {
+                                                    showUi = true
+                                                }
                                             }
                                         },
                                         onDoubleTap = { centroid ->
@@ -1131,9 +1212,30 @@ fun DetailScreen(
                                                 val centroid = event.calculateCentroid(useCurrent = false)
                                                 animJob.value?.cancel()
                                                 val oldScale = scale.floatValue
+                                                // Keep tracking accumulated zoom after slop
+                                                if (isMultiTouch) accumulatedZoom *= zoomChange
                                                 val newScale = (oldScale * zoomChange).coerceIn(1f, 25f)
+                                                // Pinch-in past threshold while at normal scale → enter filmstrip overview
+                                                if (isMultiTouch && !isFilmstripOverview &&
+                                                    oldScale <= 1.05f && accumulatedZoom < 0.82f) {
+                                                    isFilmstripOverview = true
+                                                    showUi = false
+                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                }
+                                                // Pinch-out while in overview → exit overview
+                                                if (isMultiTouch && isFilmstripOverview &&
+                                                    accumulatedZoom > 1.25f) {
+                                                    isFilmstripOverview = false
+                                                    showUi = true
+                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                }
 
-                                                if (newScale > 1.02f) showUi = false
+                                                if (isFilmstripOverview) {
+                                                    // eat gesture events in overview — pager handles horizontal scroll
+                                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                                } else if (newScale > 1.02f) {
+                                                    showUi = false
+                                                }
 
                                                 val imageW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
                                                 val imageH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imageW / imageAspectRatio else composableH
@@ -1209,9 +1311,8 @@ fun DetailScreen(
                                     }
                                 }
                                 .graphicsLayer {
-                                    scaleX = scale.floatValue * pagerScale
-                                    scaleY = scale.floatValue * pagerScale
-                                    alpha = pagerAlpha
+                                    scaleX = scale.floatValue
+                                    scaleY = scale.floatValue
                                     translationX = offsetX.floatValue
                                     translationY = offsetY.floatValue
                                 }
@@ -1226,9 +1327,8 @@ fun DetailScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        scaleX = scale.floatValue * pagerScale
-                                        scaleY = scale.floatValue * pagerScale
-                                        alpha = pagerAlpha
+                                        scaleX = scale.floatValue
+                                        scaleY = scale.floatValue
                                         translationX = offsetX.floatValue
                                         translationY = offsetY.floatValue
                                     },
@@ -1244,8 +1344,8 @@ fun DetailScreen(
                                 scale = scale.floatValue,
                                 offsetX = offsetX.floatValue,
                                 offsetY = offsetY.floatValue,
-                                pagerScale = pagerScale,
-                                pagerAlpha = pagerAlpha,
+                                pagerScale = 1f,
+                                pagerAlpha = 1f,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -1378,7 +1478,8 @@ fun DetailScreen(
                         )
                     }
                 }
-            }
+            } // end BoxWithConstraints
+            } // end wrapper Box
         }
         }
 
