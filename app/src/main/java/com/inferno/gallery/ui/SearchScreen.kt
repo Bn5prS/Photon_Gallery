@@ -267,7 +267,7 @@ private fun EmptySearchState(
                             person = person,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onPersonClick(person.id)
+                                person.name?.takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }; onPersonClick(person.id)
                             }
                         )
                     }
@@ -725,7 +725,7 @@ private fun SearchResultsList(
                                     person = person,
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onPersonClick(person.id)
+                                        person.name?.takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }; onPersonClick(person.id)
                                     }
                                 )
                             }
@@ -890,7 +890,7 @@ private fun SearchResultsList(
                                 person = person,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onPersonClick(person.id)
+                                    person.name?.takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }; onPersonClick(person.id)
                                 }
                             )
                         }

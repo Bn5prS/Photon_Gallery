@@ -1810,18 +1810,39 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** People whose name matches the current search query, or top visible people when query is empty. */
+    /**
+     * People whose name matches the current search query, or top visible people when query is
+     * empty. Ordered by recent search activity — people you searched for most recently come
+     * first; everyone else keeps the default order (unlike the Albums people carousel).
+     */
     val matchingPeople: StateFlow<List<PersonEntity>> = combine(
         searchQuery,
-        database.faceDao().observeAllVisiblePersons()
-    ) { query, allPersons ->
+        database.faceDao().observeAllVisiblePersons(),
+        settingsRepository.recentSearchesFlow
+    ) { query, allPersons, recentSearches ->
+        // recentSearches is newest-first, capped at 5
+        val recencyRank: (PersonEntity) -> Int = { person ->
+            val name = person.name
+            if (name.isNullOrBlank()) {
+                Int.MAX_VALUE
+            } else {
+                val index = recentSearches.indexOfFirst { recent ->
+                    recent.equals(name, ignoreCase = true) ||
+                            recent.contains(name, ignoreCase = true) ||
+                            (recent.length >= 3 && name.contains(recent, ignoreCase = true))
+                }
+                if (index < 0) Int.MAX_VALUE else index
+            }
+        }
         val trimmed = query.trim()
         if (trimmed.isEmpty()) {
-            allPersons.filter { it.isPromoted && !it.isHidden }.take(10)
+            allPersons.filter { it.isPromoted && !it.isHidden }
+                .sortedBy(recencyRank)
+                .take(10)
         } else {
             allPersons.filter { person ->
                 !person.isHidden && person.name?.contains(trimmed, ignoreCase = true) == true
-            }
+            }.sortedBy(recencyRank)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
