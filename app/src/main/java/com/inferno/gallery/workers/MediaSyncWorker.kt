@@ -72,6 +72,17 @@ class MediaSyncWorker(
                     }
                 }
                 val dbItem = dbMap[media.id]
+                // Skip if item is already in Room and core properties are completely identical
+                if (dbItem != null &&
+                    dbItem.dateModified == media.dateModified &&
+                    dbItem.size == media.size &&
+                    dbItem.filePath == media.path &&
+                    dbItem.bucketName == media.bucketName &&
+                    dbItem.name == media.name
+                ) {
+                    continue
+                }
+
                 // For incremental, anything in deltaList needs updating/inserting
                 toInsert.add(
                     CoreMediaEntity(
@@ -95,6 +106,8 @@ class MediaSyncWorker(
                 )
             }
 
+            val newPhotosCount = toInsert.count { !dbMap.containsKey(it.id) }
+
             // Find deletions: compare DB against lightweight ID list, active vault items, disk existence, and .nomedia
             val deadPathsToRescan = mutableListOf<String>()
             for (dbItem in dbList) {
@@ -112,7 +125,7 @@ class MediaSyncWorker(
             }
 
             if (toInsert.isNotEmpty()) {
-                Log.d("MediaSyncWorker", "Inserting ${toInsert.size} new items into Room SSOT.")
+                Log.d("MediaSyncWorker", "Inserting ${toInsert.size} new/modified items into Room SSOT.")
                 database.mediaDao().insertAll(toInsert)
             }
 
@@ -137,7 +150,7 @@ class MediaSyncWorker(
             val autoIndexSmartEnabled = settingsRepo.smartSearchAutoIndexFlow.first()
             val smartSearchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(applicationContext)
             val unindexedSmartCount = database.embeddingDao().getUnindexedMediaIds().size
-            if (autoIndexSmartEnabled && smartSearchEngine.isModelDownloaded() && unindexedSmartCount > 0) {
+            if (autoIndexSmartEnabled && smartSearchEngine.isModelDownloaded() && unindexedSmartCount > 0 && newPhotosCount > 0) {
                 Log.d("MediaSyncWorker", "Auto-indexing $unindexedSmartCount images for Smart Search...")
                 val indexRequest = androidx.work.OneTimeWorkRequestBuilder<SmartSearchIndexWorker>().build()
                 androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
@@ -147,11 +160,12 @@ class MediaSyncWorker(
                 )
             }
 
+            val faceRecognitionEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
             val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
             val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(applicationContext)
             val unindexedFaceCount = database.faceDao().getUnindexedMediaIds().size
-            if (autoIndexFacesEnabled && faceEngine.isModelDownloaded() && unindexedFaceCount > 0) {
-                Log.d("MediaSyncWorker", "Auto-indexing $unindexedFaceCount images for Face Recognition...")
+            if (faceRecognitionEnabled && autoIndexFacesEnabled && faceEngine.isModelDownloaded() && unindexedFaceCount > 0 && newPhotosCount > 0) {
+                Log.d("MediaSyncWorker", "Auto-indexing faces for $newPhotosCount newly arrived images...")
                 val constraints = androidx.work.Constraints.Builder()
                     .setRequiresBatteryNotLow(true)
                     .build()

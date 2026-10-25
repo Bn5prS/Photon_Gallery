@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import androidx.paging.PagingSource
 
@@ -79,10 +80,10 @@ interface MediaDao {
     @Query("SELECT id FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMediaIds(): List<Long>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insert(media: CoreMediaEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertAll(media: List<CoreMediaEntity>)
 
     @Query("DELETE FROM core_media WHERE id IN (:ids)")
