@@ -71,7 +71,14 @@ fun PhotonGalleryTheme(
                         systemDark
                     }
                 } else {
-                    dynamicLightColorScheme(context)
+                    val systemLight = dynamicLightColorScheme(context)
+                    // Soft-white canvas: tone 98 carries a subtle wallpaper blend — between the
+                    // tint-heavy tone 96 and the near-stark tone 100. Lowest stays pure white so
+                    // cards/placeholders keep contrast above the canvas.
+                    systemLight.copy(
+                        surfaceContainerLowest = Color.White,
+                        surfaceContainerLow = systemLight.surface
+                    )
                 }
             }
             else -> {
