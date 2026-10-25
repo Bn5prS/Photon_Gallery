@@ -558,6 +558,20 @@ fun DetailScreen(
         }
     }
 
+    // Single-tap immersive mode: the status bar follows the viewer chrome toggle.
+    // Skipped when the global full-screen setting already keeps system bars hidden.
+    LaunchedEffect(showUi, useFullScreenGlobal) {
+        if (insetsController != null && !useFullScreenGlobal) {
+            if (showUi) {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+            } else {
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                insetsController.systemBarsBehavior =
+                    androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+    }
+
     if (showDeleteConfirmDialog && pendingDeleteItem != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
