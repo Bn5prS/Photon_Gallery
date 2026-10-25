@@ -67,6 +67,7 @@ fun AboutScreenContent(
     updateState: UpdateState = UpdateState.Idle,
     onAutoCheckUpdatesChange: (Boolean) -> Unit,
     onCheckForUpdates: () -> Unit,
+    onOpenUpdateLog: () -> Unit = {},
     onOpenLicenses: () -> Unit,
     onOpenPrivacy: () -> Unit,
     modifier: Modifier = Modifier
@@ -321,6 +322,17 @@ fun AboutScreenContent(
                         onClick = {
                             haptic.tick()
                             onCheckForUpdates()
+                        }
+                    )
+                },
+                {
+                    ClickableSettingItem(
+                        title = "Update Log",
+                        subtitle = "Timeline of every release — dates, builds, and changes",
+                        icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
+                        onClick = {
+                            haptic.tick()
+                            onOpenUpdateLog()
                         }
                     )
                 },

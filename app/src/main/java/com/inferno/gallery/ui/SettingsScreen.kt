@@ -116,6 +116,7 @@ import coil3.compose.SubcomposeAsyncImage
 import com.inferno.gallery.BuildConfig
 import com.inferno.gallery.R
 import com.inferno.gallery.ui.components.AboutScreenContent
+import com.inferno.gallery.ui.components.UpdateLogContent
 import com.inferno.gallery.ui.components.ExpressiveButton
 import com.inferno.gallery.ui.theme.ExpressiveShapes
 import com.inferno.gallery.ui.theme.MotionTokens
@@ -299,7 +300,7 @@ fun SettingsScreen(
 
 
     androidx.activity.compose.BackHandler(enabled = activeSection != null) {
-        onActiveSectionChange(null)
+        onActiveSectionChange(if (activeSection == "Update Log") "About" else null)
     }
 
     Column(
@@ -1913,9 +1914,19 @@ fun SettingsScreen(
                                 updateState = updateState,
                                 onAutoCheckUpdatesChange = { viewModel.setAutoCheckUpdates(it) },
                                 onCheckForUpdates = { viewModel.checkForUpdates() },
+                                onOpenUpdateLog = { onActiveSectionChange("Update Log") },
                                 onOpenLicenses = { showLicensesDialog = true },
                                 onOpenPrivacy = { showPrivacyDialog = true }
                             )
+                        }
+
+                        "Update Log" -> {
+                            val pendingInfo = when (val state = updateState) {
+                                is com.inferno.gallery.update.UpdateState.UpdateAvailable -> state.info
+                                is com.inferno.gallery.update.UpdateState.ReadyToInstall -> state.info
+                                else -> null
+                            }
+                            UpdateLogContent(pendingUpdate = pendingInfo)
                         }
                     }
 
