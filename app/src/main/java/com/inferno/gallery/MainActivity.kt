@@ -61,10 +61,10 @@ class MainActivity : FragmentActivity() {
             val autoCheck = repo.autoCheckUpdatesFlow.first()
             if (autoCheck) {
                 val lastCheck = repo.lastUpdateCheckTimestampFlow.first()
-                val twelveHours = 12 * 60 * 60 * 1000L
-                if (System.currentTimeMillis() - lastCheck > twelveHours) {
+                val fiveMinutes = 5 * 60 * 1000L
+                if (System.currentTimeMillis() - lastCheck > fiveMinutes) {
                     repo.updateLastUpdateCheckTimestamp(System.currentTimeMillis())
-                    UpdateManager.checkForUpdates(lifecycleScope, manual = false)
+                    UpdateManager.checkForUpdates(lifecycleScope, manual = false, context = applicationContext)
                 }
             }
         }

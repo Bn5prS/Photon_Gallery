@@ -339,7 +339,7 @@ fun AboutScreenContent(
                 {
                     SwitchSettingItem(
                         title = "Auto-Check for Updates",
-                        subtitle = "Check GitHub releases periodically in the background",
+                        subtitle = "Notify about updates on app launch and in the background",
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
                         checked = autoCheckUpdates,
                         onCheckedChange = { onAutoCheckUpdatesChange(it) }

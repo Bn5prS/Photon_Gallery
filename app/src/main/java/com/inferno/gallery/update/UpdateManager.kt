@@ -49,7 +49,7 @@ object UpdateManager {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    fun checkForUpdates(scope: CoroutineScope, manual: Boolean = false) {
+    fun checkForUpdates(scope: CoroutineScope, manual: Boolean = false, context: Context? = null) {
         if (_state.value is UpdateState.Checking || _state.value is UpdateState.Downloading) {
             return
         }
@@ -63,6 +63,13 @@ object UpdateManager {
 
                 if (updateInfo != null && updateInfo.isAvailable) {
                     _state.value = UpdateState.UpdateAvailable(updateInfo)
+                    if (context != null) {
+                        try {
+                            UpdateNotificationHelper.showUpdateNotification(context.applicationContext, updateInfo)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to post update notification: ${e.message}")
+                        }
+                    }
                 } else if (updateInfo != null && !updateInfo.isAvailable) {
                     if (manual) {
                         _state.value = UpdateState.UpToDate(currentVersion)

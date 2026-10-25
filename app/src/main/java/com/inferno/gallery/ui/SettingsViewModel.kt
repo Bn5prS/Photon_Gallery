@@ -896,7 +896,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val updateState: StateFlow<UpdateState> = UpdateManager.state
 
     fun checkForUpdates() {
-        UpdateManager.checkForUpdates(viewModelScope, manual = true)
+        UpdateManager.checkForUpdates(viewModelScope, manual = true, context = getApplication())
     }
 }
 
