@@ -26,6 +26,14 @@ Photon Gallery can now automatically recognize and group faces across your photo
 
 ---
 
+### Privacy & Metadata Sanitization
+* **Byte-Level Stripping**: The "Strip metadata when sharing" feature now strips 100% of metadata bytes across all supported media formats, including JPEG, PNG, WebP, animated GIFs, and MP4/MOV videos.
+* **Location & Identity Scrubbing**: Completely eliminates all EXIF, XMP, IPTC records, MakerNotes, camera serial numbers, camera owner tags, and user comments.
+* **Video Privacy Protection**: ISOBMFF user data, QuickTime metadata, and custom camera UUID boxes are scrubbed into free padding, and video recording and modification timestamps are cleared to prevent leaking coordinates or dates.
+* **Orientation Preservation**: Images captured at non-standard camera angles are automatically rotated into physical pixels prior to stripping, ensuring shared photos always display upright without relying on EXIF tags.
+
+---
+
 ### Bug Fixes & Stability
 * **Direct / Quick Share Attachments (#17)**: Fixed an issue where photos shared via Direct Share / Quick Share to messaging apps (e.g., Google Messages) would not attach properly.
 * **`.nomedia` & Vault Media Refresh (#18)**: Fixed gallery synchronization so encrypted files and newly added `.nomedia` folders are immediately hidden from the gallery without requiring an app reinstall.

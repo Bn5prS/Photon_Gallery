@@ -114,7 +114,13 @@ Quick start:
 
 ## 📄 License
 
-This project is licensed under the **GNU General Public License v3.0 (GPLv3)** — an OSI-approved free and open-source license. See the [LICENSE](LICENSE) file for complete license terms. Third-party font and icon licenses are documented in [LICENSES.md](LICENSES.md).
+Photon Gallery is licensed under the **GNU General Public License v3.0 (GPLv3)** with **Section 7 Anti-Theft & Attribution Provisions**:
+- **Attribution & Origin**: Original copyright notices, author attributions (`Bn5prS`), and repository links must remain intact in all forks and user interfaces.
+- **No Misrepresentation**: You may not claim authorship of the original code, UI designs, or on-device AI algorithms.
+- **Trademark & Branding**: The name "Photon Gallery", project logo, and branding may not be used for derived works without explicit permission. Forks must use a distinct name, icon, and package identifier.
+- **Anti-Repackaging**: Re-packaging the app with ads, monetization trackers, or paid paywalls on app stores (Google Play, etc.) is strictly prohibited.
+
+See the [LICENSE](LICENSE) file for complete legal terms. Third-party font and icon licenses are documented in [LICENSES.md](LICENSES.md).
 
 ---
 

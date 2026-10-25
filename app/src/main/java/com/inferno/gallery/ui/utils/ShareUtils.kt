@@ -48,11 +48,17 @@ object ShareUtils {
         val urisToShare: List<Uri> = if (stripMetadata) {
             withContext(Dispatchers.IO) {
                 val shareDir = File(context.cacheDir, "shared_images").also { it.mkdirs() }
+                // Housekeeping: remove old temporary share files older than 24h
+                try {
+                    val oneDayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+                    shareDir.listFiles()?.forEach { oldFile ->
+                        if (oldFile.lastModified() < oneDayAgo) oldFile.delete()
+                    }
+                } catch (_: Exception) {}
+
                 validUris.mapIndexed { idx, uri ->
                     try {
                         val mimeType = resolveMimeType(context, uri)
-                        val isImage = mimeType.startsWith("image/")
-
                         val extension = when {
                             mimeType.contains("png", true) -> "png"
                             mimeType.contains("webp", true) -> "webp"
@@ -70,48 +76,26 @@ object ShareUtils {
                             else -> "jpg"
                         }
 
-                        val tempFile = File(shareDir, "share_${System.currentTimeMillis()}_$idx.$extension")
+                        val timeStamp = System.currentTimeMillis()
+                        val tempRawFile = File(shareDir, "raw_${timeStamp}_$idx.$extension")
+                        val cleanFile = File(shareDir, "share_${timeStamp}_$idx.$extension")
+
                         context.contentResolver.openInputStream(uri)?.use { input ->
-                            tempFile.outputStream().use { output -> input.copyTo(output) }
+                            tempRawFile.outputStream().use { output -> input.copyTo(output) }
                         }
 
-                        if (isImage && !mimeType.contains("gif", true)) {
-                            val exif = androidx.exifinterface.media.ExifInterface(tempFile.absolutePath)
-                            val piiTags = listOf(
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE_REF,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE_REF,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_ALTITUDE,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_ALTITUDE_REF,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_TIMESTAMP,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_DATESTAMP,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_PROCESSING_METHOD,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_DEST_BEARING,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_DEST_DISTANCE,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_SPEED,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_TRACK,
-                                androidx.exifinterface.media.ExifInterface.TAG_GPS_IMG_DIRECTION,
-                                androidx.exifinterface.media.ExifInterface.TAG_MAKE,
-                                androidx.exifinterface.media.ExifInterface.TAG_MODEL,
-                                androidx.exifinterface.media.ExifInterface.TAG_SOFTWARE,
-                                androidx.exifinterface.media.ExifInterface.TAG_ARTIST,
-                                androidx.exifinterface.media.ExifInterface.TAG_COPYRIGHT,
-                                androidx.exifinterface.media.ExifInterface.TAG_USER_COMMENT,
-                                androidx.exifinterface.media.ExifInterface.TAG_DATETIME,
-                                androidx.exifinterface.media.ExifInterface.TAG_DATETIME_ORIGINAL,
-                                androidx.exifinterface.media.ExifInterface.TAG_DATETIME_DIGITIZED,
-                                androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME,
-                                androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME_ORIGINAL
-                            )
-                            piiTags.forEach { tag -> exif.setAttribute(tag, null) }
-                            exif.saveAttributes()
+                        val stripped = MetadataStripper.strip(tempRawFile, cleanFile, mimeType)
+                        val fileToShare = if (stripped && cleanFile.exists() && cleanFile.length() > 0L) {
+                            try { tempRawFile.delete() } catch (_: Exception) {}
+                            cleanFile
+                        } else {
+                            tempRawFile
                         }
 
                         FileProvider.getUriForFile(
                             context,
                             "${context.packageName}.fileprovider",
-                            tempFile
+                            fileToShare
                         )
                     } catch (e: Exception) {
                         android.util.Log.e("ShareUtils", "Failed to strip metadata for $uri", e)

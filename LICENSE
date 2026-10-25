@@ -1,5 +1,50 @@
-                    GNU GENERAL PUBLIC LICENSE
-                       Version 3, 29 June 2007
+Photon Gallery
+Copyright (C) 2024-2026 Bn5prS <https://github.com/Bn5prS/Photon_Gallery>
+All rights reserved.
+
+==============================================================================
+ADDITIONAL TERMS & ANTI-THEFT PROVISIONS (Under GNU GPLv3 Section 7)
+==============================================================================
+
+In accordance with Section 7 of the GNU General Public License version 3 (GPLv3),
+the following additional requirements and restrictions apply to all covered works,
+modifications, and distributions of Photon Gallery:
+
+1. ATTRIBUTION & LEGAL NOTICES (Section 7b):
+   - All copies, forks, modifications, and derivative works must conspicuously
+     preserve the original copyright notice, author attribution ("Bn5prS"),
+     and repository URL (https://github.com/Bn5prS/Photon_Gallery) in the source code
+     and all user-facing legal/about dialogs.
+   - Interactive user interfaces must retain prominent attribution to Photon Gallery
+     and provide a functional direct link to the original repository.
+
+2. PROHIBITION OF ORIGIN MISREPRESENTATION (Section 7c):
+   - You must NOT misrepresent the origin of this software or its components.
+   - You must NOT claim to have written or designed the original application, its
+     on-device AI algorithms, or its user interface architecture.
+   - Any modified version or fork must be prominently marked as different from the
+     original version and must clearly state that it is an unofficial fork.
+
+3. TRADEMARK & BRANDING PROTECTION (Section 7e):
+   - No trademark rights are granted. The name "Photon Gallery", the application
+     branding, package namespace ("com.inferno.gallery"), and project logo/icons
+     may NOT be used to endorse, brand, or promote derived works or forks without
+     prior express written permission.
+   - Any fork or re-distribution published on app stores or distribution platforms
+     MUST use a distinct application name, distinct package identifier, and
+     distinct app icon.
+
+4. RE-PACKAGING & COMMERCIAL STORE RESTRICTIONS:
+   - Re-packaging this application with embedded advertisements, monetization trackers,
+     or premium paywalls for publication on digital distribution platforms (including
+     the Google Play Store, Amazon Appstore, GetApps, and third-party app stores)
+     without significant functional contributions and explicit author authorization
+     is strictly prohibited and violates origin misrepresentation provisions.
+
+==============================================================================
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+==============================================================================
 
  Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
  Everyone is permitted to copy and distribute verbatim copies
