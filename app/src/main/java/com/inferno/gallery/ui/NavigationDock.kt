@@ -98,7 +98,7 @@ fun FloatingNavigationPill(
         shape = ShapeFull,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         tonalElevation = 3.dp,
-        shadowElevation = 8.dp
+        shadowElevation = 3.dp
     ) {
         BoxWithConstraints(
             modifier = Modifier
