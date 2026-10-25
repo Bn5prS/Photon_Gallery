@@ -11,7 +11,7 @@ object FaceModelRegistry {
 
     const val MODEL_DIR = "face_models_v1"
     const val MODEL_NAME = "w600k_mbf.onnx"
-    const val MODEL_URL = "https://huggingface.co/deepghs/insightface/resolve/main/buffalo_s/w600k_mbf.onnx"
+    const val MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/w600k_mbf.onnx"
     const val MODEL_SHA256 = "9cc6e4a75f0e2bf0b1aed94578f144d15175f357bdc05e815e5c4a02b319eb4f"
     const val MODEL_SIZE = 13_616_099L
 

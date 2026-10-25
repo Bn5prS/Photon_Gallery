@@ -35,9 +35,9 @@ class ModelDownloadWorker(
         private const val NOTIFICATION_ID = 55
         private const val CHANNEL_ID = "model_download_channel"
 
-        const val TEXT_MODEL_URL = "https://huggingface.co/Xenova/clip-vit-base-patch16/resolve/main/onnx/text_model_quantized.onnx"
-        const val VISION_MODEL_URL = "https://huggingface.co/Xenova/clip-vit-base-patch16/resolve/main/onnx/vision_model_quantized.onnx"
-        const val TOKENIZER_URL = "https://huggingface.co/Xenova/clip-vit-base-patch16/raw/main/tokenizer.json"
+        const val TEXT_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/text_model_quantized.onnx"
+        const val VISION_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/vision_model_quantized.onnx"
+        const val TOKENIZER_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/tokenizer.json"
 
         const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
         const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
