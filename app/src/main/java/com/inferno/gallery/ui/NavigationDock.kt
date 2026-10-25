@@ -134,7 +134,7 @@ fun FloatingNavigationPill(
                         translationX = pillInsetPx + (animatedFraction * tabWidthPx)
                     }
                     .clip(ShapeFull)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
             )
 
             // ── Interactive Tabs ──
@@ -210,7 +210,7 @@ fun SlidingPillTabItem(
 
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.onPrimary
+            MaterialTheme.colorScheme.onSecondaryContainer
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
         },
@@ -222,7 +222,7 @@ fun SlidingPillTabItem(
     )
 
     val rippleColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimary
+        MaterialTheme.colorScheme.onSecondaryContainer
     } else {
         MaterialTheme.colorScheme.primary
     }
@@ -348,14 +348,14 @@ fun DockItem(
         MaterialTheme.colorScheme.primary
     }
 
+    // Outer box = full-height touch target; inner Row keeps the pill at content size
     Box(
         modifier = Modifier
+            .fillMaxHeight()
             .graphicsLayer {
                 scaleX = touchScale
                 scaleY = touchScale
             }
-            .clip(ShapeFull)
-            .background(pillColor)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(
@@ -366,11 +366,14 @@ fun DockItem(
                     view.tick()
                     onClick()
                 }
-            )
-            .padding(horizontal = 16.dp, vertical = 7.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
         Row(
+            modifier = Modifier
+                .clip(ShapeFull)
+                .background(pillColor)
+                .padding(horizontal = 16.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {

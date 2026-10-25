@@ -906,7 +906,7 @@ fun MainAppLayout(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
-                                .height(50.dp)
+                                .height(56.dp)
                                 .padding(horizontal = 6.dp),
                             horizontalArrangement = Arrangement.SpaceAround,
                             verticalAlignment = Alignment.CenterVertically
