@@ -53,6 +53,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -195,6 +196,9 @@ fun SettingsScreen(
     var showClearIndexConfirm by remember { mutableStateOf(false) }
     var showDeleteModelConfirm by remember { mutableStateOf(false) }
     var showClearFacesConfirm by remember { mutableStateOf(false) }
+    var showRescanFacesConfirm by remember { mutableStateOf(false) }
+    var showDeleteFaceModelConfirm by remember { mutableStateOf(false) }
+    var showRebuildOcrConfirm by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
 
@@ -253,8 +257,8 @@ fun SettingsScreen(
     if (showDeleteModelConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteModelConfirm = false },
-            title = { Text("Delete AI Model Files") },
-            text = { Text("This will delete the local ONNX model files (approx. 30MB+). You will not be able to use semantic search or index new images until you download them again. Are you sure?") },
+            title = { Text("Delete AI Model Files", style = MaterialTheme.typography.titleLarge) },
+            text = { Text("This will delete the local ONNX model files (approx. 150MB). You will not be able to use semantic search or index new images until you download them again. Are you sure?", style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -267,6 +271,90 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteModelConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRescanFacesConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRescanFacesConfirm = false },
+            title = { Text("Rescan All Faces", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Text(
+                    text = "This will reset face scan status and re-analyze all photos in your gallery using the on-device face engine.\n\nAll existing named people, custom tags, and manual groupings will be safely preserved. Are you sure you want to rescan?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRescanFacesConfirm = false
+                        viewModel.startFaceIndexing(forceRescan = true)
+                    }
+                ) {
+                    Text("Rescan All", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRescanFacesConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDeleteFaceModelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteFaceModelConfirm = false },
+            title = { Text("Delete Face Model File", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Text(
+                    text = "This will delete the local MobileFaceNet ONNX model file (~13MB).\n\nYou will not be able to scan or cluster new faces until you download it again. Existing people and tags already in your gallery will remain untouched.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteFaceModelConfirm = false
+                        viewModel.deleteFaceModel()
+                    }
+                ) {
+                    Text("Delete Model", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteFaceModelConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRebuildOcrConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRebuildOcrConfirm = false },
+            title = { Text("Rebuild Text Index", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Text(
+                    text = "This will wipe out all cached OCR text recognition entries and re-index text across all images in your gallery from scratch. Are you sure you want to proceed?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRebuildOcrConfirm = false
+                        viewModel.rebuildOcrIndex()
+                    }
+                ) {
+                    Text("Rebuild Index", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRebuildOcrConfirm = false }) {
                     Text("Cancel")
                 }
             }
@@ -1010,10 +1098,10 @@ fun SettingsScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
                                                         if (isOcrRunning) {
-                                                            LinearWavyProgressIndicator(
-                                                                modifier = Modifier.size(width = 16.dp, height = 10.dp),
-                                                                color = badgeTextColor,
-                                                                trackColor = Color.Transparent
+                                                            CircularProgressIndicator(
+                                                                modifier = Modifier.size(12.dp),
+                                                                strokeWidth = 2.dp,
+                                                                color = badgeTextColor
                                                             )
                                                         }
                                                         Text(
@@ -1104,7 +1192,7 @@ fun SettingsScreen(
                                                         Text("Start Indexing")
                                                     }
                                                     OutlinedButton(
-                                                        onClick = { viewModel.rebuildOcrIndex() },
+                                                        onClick = { showRebuildOcrConfirm = true },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
                                                         Text("Rebuild Index")
@@ -1277,10 +1365,10 @@ fun SettingsScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
                                                     if (isClipIndexing) {
-                                                        LinearWavyProgressIndicator(
-                                                            modifier = Modifier.size(width = 16.dp, height = 10.dp),
-                                                            color = badgeTextColor,
-                                                            trackColor = Color.Transparent
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(12.dp),
+                                                            strokeWidth = 2.dp,
+                                                            color = badgeTextColor
                                                         )
                                                     }
                                                     Text(
@@ -1589,10 +1677,10 @@ fun SettingsScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
                                                         if (isFaceIndexing) {
-                                                            LinearWavyProgressIndicator(
-                                                                modifier = Modifier.size(width = 16.dp, height = 10.dp),
-                                                                color = badgeTextColor,
-                                                                trackColor = Color.Transparent
+                                                            CircularProgressIndicator(
+                                                                modifier = Modifier.size(12.dp),
+                                                                strokeWidth = 2.dp,
+                                                                color = badgeTextColor
                                                             )
                                                         }
                                                         Text(
@@ -1613,23 +1701,18 @@ fun SettingsScreen(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .height(10.dp)
-                                                            .background(
-                                                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                                                shape = CircleShape
-                                                            )
-                                                    ) {
-                                                        Box(
+                                                    if (faceTotal > 0) {
+                                                        LinearWavyProgressIndicator(
+                                                            progress = { animatedFaceProgress.coerceIn(0f, 1f) },
                                                             modifier = Modifier
-                                                                .fillMaxWidth(animatedFaceProgress)
-                                                                .fillMaxHeight()
-                                                                .background(
-                                                                    color = MaterialTheme.colorScheme.primary,
-                                                                    shape = CircleShape
-                                                                )
+                                                                .fillMaxWidth()
+                                                                .height(10.dp)
+                                                        )
+                                                    } else {
+                                                        LinearWavyProgressIndicator(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(10.dp)
                                                         )
                                                     }
 
@@ -1638,9 +1721,12 @@ fun SettingsScreen(
                                                         horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
+                                                        val currentFaceImage = faceProgressState.currentImageName
                                                         Text(
                                                             text = if (isFaceIndexing) {
-                                                                if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos" else "Scanning faces in your gallery…"
+                                                                if (!currentFaceImage.isNullOrBlank()) "Scanning: $currentFaceImage"
+                                                                else if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos"
+                                                                else "Scanning faces in your gallery…"
                                                             } else if (faceProcessed == faceTotal && faceTotal > 0) {
                                                                 "Face indexing complete"
                                                             } else {
@@ -1652,8 +1738,12 @@ fun SettingsScreen(
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis
                                                         )
+                                                        val pctInt = (animatedFaceProgress * 100).toInt()
+                                                        val displayPct = if (faceProcessed == faceTotal && faceTotal > 0) "100%"
+                                                            else if (faceProcessed > 0 && pctInt == 0) "<1%"
+                                                            else "$pctInt%"
                                                         Text(
-                                                            text = "${(animatedFaceProgress * 100).toInt()}%",
+                                                            text = if (faceTotal > 0) "$faceProcessed / $faceTotal ($displayPct)" else displayPct,
                                                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                             color = MaterialTheme.colorScheme.primary
                                                         )
@@ -1688,7 +1778,13 @@ fun SettingsScreen(
                                                     }
                                                 } else {
                                                     FilledTonalButton(
-                                                        onClick = { viewModel.startFaceIndexing(forceRescan = (unindexedFacesCount == 0)) },
+                                                        onClick = {
+                                                            if (unindexedFacesCount == 0) {
+                                                                showRescanFacesConfirm = true
+                                                            } else {
+                                                                viewModel.startFaceIndexing(forceRescan = false)
+                                                            }
+                                                        },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
                                                         Text(if (unindexedFacesCount == 0) "Rescan All Faces" else "Scan Faces Now")
@@ -1724,6 +1820,18 @@ fun SettingsScreen(
                                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                                     color = MaterialTheme.colorScheme.primary
                                                 )
+                                            }
+
+                                            if (!isFaceIndexing) {
+                                                OutlinedButton(
+                                                    onClick = { showDeleteFaceModelConfirm = true },
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.error
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text("Delete Face Model File")
+                                                }
                                             }
                                         }
                                     }

@@ -699,6 +699,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun deleteFaceModel() {
+        viewModelScope.launch(Dispatchers.IO) {
+            stopFaceIndexing()
+            val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+            val modelFile = engine.getModelFile()
+            if (modelFile.exists()) {
+                modelFile.delete()
+            }
+        }
+    }
+
     val confirmDeleteEnabled: StateFlow<Boolean> = repository.confirmDeleteEnabledFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
