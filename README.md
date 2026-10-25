@@ -50,7 +50,8 @@
 - **On-Device Smart Search & OCR** — Natural-language semantic search and on-device text recognition running 100% locally.
 - **Photo Map & Places** — Geotagged media exploration on an interactive offline-capable map.
 - **Albums & Collections** — Smart auto-albums, custom pinning, folder exclusions, and custom album covers.
-- **Photo Editor & Collage Builder** — Image cropping, rotation, filters, color adjustments, and multi-photo stitching.
+- **People & Face Grouping** — On-device facial recognition, automatic clustering, and smart merge suggestions running 100% locally.
+- **Photo Editor & Markup Tools** — Drawing and annotations (pen, highlighter, neon brush, blur redaction, shapes, and interactive text), filters, color adjustments, and collage stitching.
 - **Duplicate Cleaner & Recycle Bin** — Perceptual hash duplicate detection and soft-delete trash with auto-cleanup.
 - **Private Space (Vault)** — Biometric-locked hidden vault isolated from the main gallery.
 
