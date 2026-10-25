@@ -40,12 +40,16 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -117,11 +121,13 @@ fun PeopleScreen(
     val promotedPeople by viewModel.promotedPersons.collectAsState()
     val allPeople by viewModel.allPersons.collectAsState()
     val pendingSuggestions by viewModel.pendingMergeSuggestions.collectAsState()
+    val faceProgressState by viewModel.faceProgress.collectAsState()
     val faceIndexWorkInfo by viewModel.faceIndexWorkInfo.collectAsState()
-    val isScanning = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+    val isScanning = faceProgressState.isIndexing ||
+            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
             faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-    val scanProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
-    val scanTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
+    val scanProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
+    val scanTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
 
     var minPhotosThreshold by rememberSaveable { mutableIntStateOf(1) }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -148,6 +154,7 @@ fun PeopleScreen(
     var namingPerson by remember { mutableStateOf<PersonEntity?>(null) }
     var collisionPair by remember { mutableStateOf<Pair<PersonEntity, PersonEntity>?>(null) }
     var showHideShowSheet by remember { mutableStateOf(false) }
+    var isMergeCardDismissedByUser by rememberSaveable { mutableStateOf(false) }
     var gridCols by rememberSaveable { mutableIntStateOf(3) }
     var isPinching by remember { mutableStateOf(false) }
     val livePinchScaleAnim = remember { Animatable(1f) }
@@ -310,6 +317,34 @@ fun PeopleScreen(
                         }
                     } else {
                         var showMenu by remember { mutableStateOf(false) }
+                        if (pendingSuggestions.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    isMergeCardDismissedByUser = !isMergeCardDismissedByUser
+                                }
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ) {
+                                            Text(
+                                                text = "${pendingSuggestions.size}",
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                        contentDescription = if (isMergeCardDismissedByUser) "Show merge suggestions" else "Hide merge suggestions",
+                                        tint = if (!isMergeCardDismissedByUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(IconSizeTokens.L)
+                                    )
+                                }
+                            }
+                        }
                         Box {
                             IconButton(onClick = { showMenu = true }) {
                                 Icon(
@@ -323,10 +358,29 @@ fun PeopleScreen(
                                 expanded = showMenu,
                                 onDismissRequest = { showMenu = false }
                             ) {
+                                if (pendingSuggestions.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(if (isMergeCardDismissedByUser) "Show merge suggestions (${pendingSuggestions.size})" else "Hide merge suggestions")
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            isMergeCardDismissedByUser = !isMergeCardDismissedByUser
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Merge Similar Faces") },
                                     onClick = {
                                         showMenu = false
+                                        isMergeCardDismissedByUser = false
                                         viewModel.consolidateClusters()
                                         android.widget.Toast.makeText(context, "Consolidating similar faces…", android.widget.Toast.LENGTH_SHORT).show()
                                     },
@@ -429,7 +483,7 @@ fun PeopleScreen(
 
             // Proactive Merge Suggestions Hero Card
             AnimatedVisibility(
-                visible = pendingSuggestions.isNotEmpty() && !isSelectionMode,
+                visible = pendingSuggestions.isNotEmpty() && !isSelectionMode && !isMergeCardDismissedByUser,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
@@ -440,6 +494,9 @@ fun PeopleScreen(
                     },
                     onDismiss = { suggestion ->
                         viewModel.dismissMergeSuggestion(suggestion)
+                    },
+                    onCloseCard = {
+                        isMergeCardDismissedByUser = true
                     }
                 )
             }
@@ -542,22 +599,84 @@ fun PeopleScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                     ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(IconSizeTokens.S)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
                         )
+                        val currentImageName = faceProgressState.currentImageName
+                        val progressText = if (!currentImageName.isNullOrBlank()) {
+                            if (scanTotal > 0) "Scanning: $currentImageName ($scanProcessed / $scanTotal)" else "Scanning: $currentImageName"
+                        } else if (scanTotal > 0) {
+                            "Scanning faces: $scanProcessed / $scanTotal photos"
+                        } else {
+                            "Scanning photos for faces…"
+                        }
                         Text(
-                            text = "Scanning photos for faces…",
+                            text = progressText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            if (displayPeople.isEmpty() && searchQuery.isBlank() && !isScanning) {
+            if (displayPeople.isEmpty() && isScanning) {
+                // Active scanning state when no people are visible yet
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(SpacingTokens.XXL),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(SpacingTokens.L)
+                    ) {
+                        androidx.compose.material3.ContainedLoadingIndicator(
+                            modifier = Modifier.size(56.dp)
+                        )
+
+                        Text(
+                            text = "Scanning photos for faces…",
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+
+                        val scanSub = if (scanTotal > 0) {
+                            "Processed $scanProcessed of $scanTotal photos. Recognized people will appear here automatically."
+                        } else {
+                            "Analyzing faces in your gallery on-device. Recognized people will appear here automatically."
+                        }
+                        Text(
+                            text = scanSub,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = SpacingTokens.L)
+                        )
+
+                        if (scanTotal > 0) {
+                            val progressFloat = (scanProcessed.toFloat() / scanTotal.toFloat()).coerceIn(0f, 1f)
+                            LinearWavyProgressIndicator(
+                                progress = { progressFloat },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.7f)
+                                    .height(10.dp)
+                            )
+                        } else {
+                            LinearWavyProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.7f)
+                                    .height(10.dp)
+                            )
+                        }
+                    }
+                }
+            } else if (displayPeople.isEmpty() && searchQuery.isBlank() && !isScanning) {
                 if (allPeople.isNotEmpty() && minPhotosThreshold > 1) {
                     // Filter empty state
                     Box(

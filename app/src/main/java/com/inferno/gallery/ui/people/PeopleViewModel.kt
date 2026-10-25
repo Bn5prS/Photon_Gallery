@@ -29,11 +29,19 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     private val faceDao = database.faceDao()
     private val clusteringManager = FaceClusteringManager.getInstance(application)
 
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            faceDao.recalculateAllPersonFaceCounts()
+        }
+    }
+
     val faceIndexWorkInfo: StateFlow<WorkInfo?> = WorkManager.getInstance(application)
         .getWorkInfosForUniqueWorkFlow("FaceIndexWorker")
         .map { it.firstOrNull() }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val faceProgress = com.inferno.gallery.data.IndexingProgressManager.faceProgress
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -190,6 +198,7 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
             clusteringManager.mergePersons(sourcePersonId = source.id, targetPersonId = target.id)
             faceDao.setMergeSuggestionStatus(suggestion.suggestion.personIdA, suggestion.suggestion.personIdB, "ACCEPTED")
             faceDao.deleteMergeSuggestionsForPerson(source.id)
+            faceDao.recalculateAllPersonFaceCounts()
         }
     }
 

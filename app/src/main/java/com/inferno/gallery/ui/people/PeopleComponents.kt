@@ -424,6 +424,7 @@ fun MergeSuggestionHeroCard(
     suggestions: List<MergeSuggestionWithPersons>,
     onMerge: (MergeSuggestionWithPersons) -> Unit,
     onDismiss: (MergeSuggestionWithPersons) -> Unit,
+    onCloseCard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (suggestions.isEmpty()) return
@@ -499,6 +500,19 @@ fun MergeSuggestionHeroCard(
                             modifier = Modifier.size(IconSizeTokens.M)
                         )
                     }
+                    Spacer(modifier = Modifier.width(SpacingTokens.XS))
+                }
+
+                IconButton(
+                    onClick = onCloseCard,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                        contentDescription = "Close suggestions",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
                 }
             }
 
@@ -644,7 +658,7 @@ private fun PersonAvatarColumn(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = "${person.faceCount} photos",
+            text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
