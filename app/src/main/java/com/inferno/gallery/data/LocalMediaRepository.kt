@@ -137,10 +137,11 @@ class LocalMediaRepository(
                     val rawDateAdded = if (dateAddedColumn >= 0) cursor.getLong(dateAddedColumn) else 0L
                     val dateTakenMs = if (dateTakenColumn >= 0) cursor.getLong(dateTakenColumn) else 0L
                     val dateTakenSec = if (dateTakenMs > 0) dateTakenMs / 1000L else 0L
-                    val dateModified = if (dateModifiedColumn >= 0) cursor.getLong(dateModifiedColumn) else 0L
+                    val rawDateModified = if (dateModifiedColumn >= 0) cursor.getLong(dateModifiedColumn) else 0L
+                    val dateModified = maxOf(rawDateModified, rawDateAdded)
                     val dateAdded = when {
                         dateTakenSec > 0 -> dateTakenSec
-                        dateModified > 0 -> dateModified
+                        rawDateModified > 0 -> rawDateModified
                         else -> rawDateAdded
                     }
                     val size = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L

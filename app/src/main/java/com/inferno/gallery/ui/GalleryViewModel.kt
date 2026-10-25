@@ -121,6 +121,8 @@ data class StableUriSet(val uris: Set<String>) {
 enum class SortOrder {
     NewToOld,
     OldToNew,
+    DateModifiedNewToOld,
+    DateModifiedOldToNew,
     SmallToBig,
     BigToSmall,
     NameAsc,
@@ -1477,6 +1479,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         val sortedBuckets = when (order) {
             SortOrder.NewToOld -> existingBuckets.sortedByDescending { it.maxDate }
             SortOrder.OldToNew -> existingBuckets.sortedBy { it.maxDate }
+            SortOrder.DateModifiedNewToOld -> existingBuckets.sortedByDescending { it.maxDate }
+            SortOrder.DateModifiedOldToNew -> existingBuckets.sortedBy { it.maxDate }
             SortOrder.SmallToBig -> existingBuckets.sortedBy { it.totalSizeBytes }
             SortOrder.BigToSmall -> existingBuckets.sortedByDescending { it.totalSizeBytes }
             SortOrder.NameAsc -> existingBuckets.sortedBy { it.bucketName.lowercase() }
@@ -2756,7 +2760,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         Triple(mode, order, bucket)
     }.flatMapLatest { (mode, order, bucket) ->
         val isSmartSearch = bucket == BucketNames.SEARCH_SMART
-        val isDateSort = (order == SortOrder.NewToOld || order == SortOrder.OldToNew) && !isSmartSearch
+        val isDateSort = (order == SortOrder.NewToOld || order == SortOrder.OldToNew ||
+                         order == SortOrder.DateModifiedNewToOld || order == SortOrder.DateModifiedOldToNew) && !isSmartSearch
         pagedMediaRaw.map { pagingData ->
             if (mode == ViewMode.Immersive || !isDateSort) {
                 // No date headers in Immersive mode, Smart Search (ordered by relevance), or non-date sorts
@@ -2765,12 +2770,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 pagingData.insertSeparators { before: GalleryItem?, after: GalleryItem? ->
                     if (after == null) return@insertSeparators null
 
-                    val afterTitle = formatGroupHeader(after.dateAdded)
+                    val afterDate = if (order == SortOrder.DateModifiedNewToOld || order == SortOrder.DateModifiedOldToNew) {
+                        after.dateModified
+                    } else {
+                        after.dateAdded
+                    }
+                    val afterTitle = formatGroupHeader(afterDate)
 
                     if (before == null) {
                         GalleryListItem.Header(title = afterTitle, id = after.id)
                     } else {
-                        val beforeTitle = formatGroupHeader(before.dateAdded)
+                        val beforeDate = if (order == SortOrder.DateModifiedNewToOld || order == SortOrder.DateModifiedOldToNew) {
+                            before.dateModified
+                        } else {
+                            before.dateAdded
+                        }
+                        val beforeTitle = formatGroupHeader(beforeDate)
                         if (beforeTitle != afterTitle) {
                             GalleryListItem.Header(title = afterTitle, id = after.id)
                         } else {

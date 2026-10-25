@@ -103,4 +103,22 @@ class AlbumLayoutAndSortingTest {
         val countAsc = list.sortedBy { it.itemCount }
         assertEquals(listOf("Zebra", "Animals", "Camera"), countAsc.map { it.bucketName })
     }
+
+    @Test
+    fun testSortOrderEnumValues() {
+        val orders = SortOrder.values()
+        assertTrue(orders.contains(SortOrder.DateModifiedNewToOld))
+        assertTrue(orders.contains(SortOrder.DateModifiedOldToNew))
+        assertTrue(orders.contains(SortOrder.NewToOld))
+        assertTrue(orders.contains(SortOrder.OldToNew))
+    }
+
+    @Test
+    fun testMediaQueryBuilderOrderClauses() {
+        assertEquals("ORDER BY cm.dateAdded DESC, cm.id DESC", com.inferno.gallery.data.MediaQueryBuilder.buildOrderClause("NewToOld"))
+        assertEquals("ORDER BY cm.dateAdded ASC, cm.id ASC", com.inferno.gallery.data.MediaQueryBuilder.buildOrderClause("OldToNew"))
+        assertEquals("ORDER BY cm.dateModified DESC, cm.id DESC", com.inferno.gallery.data.MediaQueryBuilder.buildOrderClause("DateModifiedNewToOld"))
+        assertEquals("ORDER BY cm.dateModified ASC, cm.id ASC", com.inferno.gallery.data.MediaQueryBuilder.buildOrderClause("DateModifiedOldToNew"))
+        assertEquals("ORDER BY cm.name DESC, cm.id DESC", com.inferno.gallery.data.MediaQueryBuilder.buildOrderClause("NameDesc"))
+    }
 }

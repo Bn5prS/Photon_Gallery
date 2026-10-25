@@ -183,9 +183,12 @@ object MediaQueryBuilder {
     fun buildOrderClause(order: String): String = when (order) {
         "NewToOld" -> "ORDER BY cm.dateAdded DESC, cm.id DESC"
         "OldToNew" -> "ORDER BY cm.dateAdded ASC, cm.id ASC"
+        "DateModifiedNewToOld" -> "ORDER BY cm.dateModified DESC, cm.id DESC"
+        "DateModifiedOldToNew" -> "ORDER BY cm.dateModified ASC, cm.id ASC"
         "SmallToBig" -> "ORDER BY cm.size ASC, cm.id ASC"
         "BigToSmall" -> "ORDER BY cm.size DESC, cm.id DESC"
         "NameAsc" -> "ORDER BY cm.name ASC, cm.id ASC"
+        "NameDesc" -> "ORDER BY cm.name DESC, cm.id DESC"
         else -> "ORDER BY cm.dateAdded DESC, cm.id DESC"
     }
 

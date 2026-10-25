@@ -1374,8 +1374,10 @@ fun AlbumsControlBar(
     val sortLabel = when (currentSort) {
         SortOrder.NameAsc -> "Name (A-Z)"
         SortOrder.NameDesc -> "Name (Z-A)"
-        SortOrder.NewToOld -> "Date (Newest)"
-        SortOrder.OldToNew -> "Date (Oldest)"
+        SortOrder.NewToOld -> "Date Taken (Newest)"
+        SortOrder.OldToNew -> "Date Taken (Oldest)"
+        SortOrder.DateModifiedNewToOld -> "Date Added (Newest)"
+        SortOrder.DateModifiedOldToNew -> "Date Added (Oldest)"
         SortOrder.CountDesc -> "Count (Most)"
         SortOrder.CountAsc -> "Count (Least)"
         SortOrder.BigToSmall -> "Size (Largest)"
@@ -1452,9 +1454,30 @@ fun AlbumsControlBar(
                         showSortMenu = false
                     }
                 )
-                // Date Modified Sorts
+                // Date Added / Modified Sorts
                 DropdownMenuItem(
-                    text = { Text("Date Modified (Newest)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text("Date Added (Newest)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.DateModifiedNewToOld, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.DateModifiedNewToOld)
+                        showSortMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Date Added (Oldest)", style = MaterialTheme.typography.bodyMedium) },
+                    trailingIcon = {
+                        RadioButton(selected = currentSort == SortOrder.DateModifiedOldToNew, onClick = null)
+                    },
+                    onClick = {
+                        onSortChange(SortOrder.DateModifiedOldToNew)
+                        showSortMenu = false
+                    }
+                )
+                // Date Taken Sorts
+                DropdownMenuItem(
+                    text = { Text("Date Taken (Newest)", style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.NewToOld, onClick = null)
                     },
@@ -1464,7 +1487,7 @@ fun AlbumsControlBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Date Modified (Oldest)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text("Date Taken (Oldest)", style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.OldToNew, onClick = null)
                     },
