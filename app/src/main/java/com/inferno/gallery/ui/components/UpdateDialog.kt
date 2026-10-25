@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +69,8 @@ import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.OfficialM3Shapes
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
+import com.inferno.gallery.ui.theme.ShapeExtraLargeIncreased
+import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
@@ -78,8 +82,60 @@ import com.inferno.gallery.update.UpdateState
 data class ChangelogSection(
     val title: String,
     val iconRes: Int,
+    val shape: Shape = OfficialM3Shapes.Clover4Leaf,
     val items: List<String>
 )
+
+private val EMOJI_AND_SYMBOLS_REGEX = Regex(
+    """[\p{So}\p{Sk}\uFE0F\u200D\u20E3]|[\uD83C-\uDBFF\uDC00-\uDFFF]|[\u2600-\u27BF]"""
+)
+
+internal fun stripEmojis(text: String): String {
+    return text.replace(EMOJI_AND_SYMBOLS_REGEX, "")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
+}
+
+internal fun resolveSectionIconAndShape(title: String): Pair<Int, Shape> {
+    val t = title.lowercase()
+    return when {
+        t.contains("people") || t.contains("face") || t.contains("person") ->
+            R.drawable.ic_ms_person to OfficialM3Shapes.Cookie12Sided
+
+        t.contains("edit") || t.contains("markup") || t.contains("paint") || t.contains("draw") || t.contains("annotation") ->
+            R.drawable.ic_ms_edit to OfficialM3Shapes.Burst
+
+        t.contains("notification") || t.contains("alert") || t.contains("schedule") ->
+            R.drawable.ic_ms_schedule to OfficialM3Shapes.Sunny
+
+        t.contains("fix") || t.contains("bug") || t.contains("crash") || t.contains("stability") || t.contains("issue") ->
+            R.drawable.ic_ms_bug_report to OfficialM3Shapes.Cookie7Sided
+
+        t.contains("privacy") || t.contains("vault") || t.contains("secure") || t.contains("safety") || t.contains("lock") ->
+            R.drawable.ic_ms_shield_lock to OfficialM3Shapes.Clover4Leaf
+
+        t.contains("perf") || t.contains("speed") || t.contains("fast") || t.contains("search") || t.contains("index") ->
+            R.drawable.ic_ms_bolt to OfficialM3Shapes.Boom
+
+        t.contains("album") || t.contains("pin") || t.contains("folder") ->
+            R.drawable.ic_ms_photo_album to OfficialM3Shapes.Cookie9Sided
+
+        t.contains("view") || t.contains("fullscreen") || t.contains("player") ->
+            R.drawable.ic_ms_visibility to OfficialM3Shapes.SoftBurst
+
+        t.contains("font") || t.contains("type") ->
+            R.drawable.ic_ms_text_fields to OfficialM3Shapes.SoftBoom
+
+        t.contains("layout") || t.contains("grid") || t.contains("mosaic") ->
+            R.drawable.ic_ms_grid_view to OfficialM3Shapes.PuffyDiamond
+
+        t.contains("favorite") ->
+            R.drawable.ic_ms_favorite_filled to OfficialM3Shapes.Heart
+
+        else ->
+            R.drawable.ic_ms_auto_fix_high to OfficialM3Shapes.Clover8Leaf
+    }
+}
 
 internal fun parseChangelog(raw: String): List<ChangelogSection> {
     if (raw.isBlank()) return emptyList()
@@ -101,17 +157,8 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
                 return
             }
             if (currentItems.isNotEmpty()) {
-                val iconRes = when {
-                    title.contains("Fix", ignoreCase = true) || title.contains("Bug", ignoreCase = true) -> R.drawable.ic_ms_bug_report
-                    title.contains("Improve", ignoreCase = true) || title.contains("Perf", ignoreCase = true) -> R.drawable.ic_ms_check_circle
-                    title.contains("Favorite", ignoreCase = true) -> R.drawable.ic_ms_favorite_filled
-                    title.contains("Album", ignoreCase = true) || title.contains("Pin", ignoreCase = true) -> R.drawable.ic_ms_pin
-                    title.contains("Font", ignoreCase = true) || title.contains("Type", ignoreCase = true) -> R.drawable.ic_ms_text_fields
-                    title.contains("Mosaic", ignoreCase = true) || title.contains("Layout", ignoreCase = true) -> R.drawable.ic_ms_grid_view
-                    title.contains("Folder", ignoreCase = true) || title.contains("Scanner", ignoreCase = true) -> R.drawable.ic_ms_folder
-                    else -> R.drawable.ic_ms_auto_fix_high
-                }
-                sections.add(ChangelogSection(title, iconRes, currentItems.toList()))
+                val (iconRes, shape) = resolveSectionIconAndShape(title)
+                sections.add(ChangelogSection(title, iconRes, shape, currentItems.toList()))
                 currentItems.clear()
             }
         }
@@ -120,7 +167,8 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
             val isHeader = line.startsWith("#") || (line.startsWith("**") && line.endsWith("**") && line.length < 50)
             if (isHeader) {
                 flushSection()
-                currentTitle = line.trim('#', '*', ' ').replace("**", "").trim()
+                val rawTitle = line.trim('#', '*', ' ').replace("**", "").trim()
+                currentTitle = stripEmojis(rawTitle)
             } else {
                 val cleaned = cleanChangelogItem(line)
                 if (cleaned.isNotBlank() && !isIgnoredLine(cleaned)) {
@@ -166,30 +214,47 @@ internal fun parseChangelog(raw: String): List<ChangelogSection> {
 
     val result = mutableListOf<ChangelogSection>()
     if (features.isNotEmpty()) {
-        result.add(ChangelogSection("Features & Enhancements", R.drawable.ic_ms_auto_fix_high, features))
+        result.add(
+            ChangelogSection(
+                title = "Features & Enhancements",
+                iconRes = R.drawable.ic_ms_auto_fix_high,
+                shape = OfficialM3Shapes.Clover8Leaf,
+                items = features
+            )
+        )
     }
     if (fixes.isNotEmpty()) {
-        result.add(ChangelogSection("Fixes & Improvements", R.drawable.ic_ms_check_circle, fixes))
+        result.add(
+            ChangelogSection(
+                title = "Fixes & Improvements",
+                iconRes = R.drawable.ic_ms_bug_report,
+                shape = OfficialM3Shapes.Cookie7Sided,
+                items = fixes
+            )
+        )
     }
     if (other.isNotEmpty()) {
         val title = if (result.isEmpty()) "What's New" else "Other Changes"
         val icon = if (result.isEmpty()) R.drawable.ic_ms_auto_fix_high else R.drawable.ic_ms_description
-        result.add(ChangelogSection(title, icon, other))
+        val shape = if (result.isEmpty()) OfficialM3Shapes.Clover8Leaf else OfficialM3Shapes.Clover4Leaf
+        result.add(ChangelogSection(title, icon, shape, other))
     }
 
     return result
 }
 
-private fun cleanChangelogItem(line: String): String {
+internal fun cleanChangelogItem(line: String): String {
     var s = line.trim()
     s = s.replace(Regex("""^[\*\-\+•]\s*"""), "")
     s = s.replace("**", "")
+    s = stripEmojis(s)
     s = s.replace(Regex("""\s+by\s+@[\w\-]+(\s+in\s+#\d+)?""", RegexOption.IGNORE_CASE), "")
     return s.trim()
 }
 
-private fun isIgnoredLine(line: String): Boolean {
-    val l = line.lowercase()
+internal fun isIgnoredLine(line: String): Boolean {
+    val l = line.trim().lowercase()
+    if (l.isEmpty() || l.all { it == '-' || it == '=' || it == '*' || it == '_' }) return true
     return l.contains("full changelog") ||
         l.contains("/compare/") ||
         l.startsWith("https://github.com/") ||
@@ -212,20 +277,18 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
     val scrollState = rememberScrollState()
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 120.dp, max = 320.dp),
+        modifier = modifier.fillMaxWidth(),
         shape = ShapeLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .verticalScroll(scrollState)
                     .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.M),
-                verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                verticalArrangement = Arrangement.spacedBy(SpacingTokens.L)
             ) {
                 if (sections.isEmpty()) {
                     Text(
@@ -238,73 +301,103 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
                         val isFix = section.iconRes == R.drawable.ic_ms_bug_report ||
                             section.title.contains("Fix", ignoreCase = true) ||
                             section.title.contains("Bug", ignoreCase = true)
+                        val isEdit = section.iconRes == R.drawable.ic_ms_edit ||
+                            section.title.contains("Edit", ignoreCase = true) ||
+                            section.title.contains("Markup", ignoreCase = true) ||
+                            section.title.contains("Paint", ignoreCase = true)
+                        val isPerson = section.iconRes == R.drawable.ic_ms_person ||
+                            section.title.contains("People", ignoreCase = true) ||
+                            section.title.contains("Face", ignoreCase = true)
                         val isFeature = section.title.contains("Feat", ignoreCase = true) ||
                             section.title.contains("New", ignoreCase = true) ||
                             section.title.contains("Enhance", ignoreCase = true)
 
-                        val pillContainer = when {
-                            isFix -> MaterialTheme.colorScheme.tertiaryContainer
-                            isFeature -> MaterialTheme.colorScheme.primaryContainer
-                            else -> MaterialTheme.colorScheme.secondaryContainer
-                        }
-                        val pillContent = when {
-                            isFix -> MaterialTheme.colorScheme.onTertiaryContainer
-                            isFeature -> MaterialTheme.colorScheme.onPrimaryContainer
-                            else -> MaterialTheme.colorScheme.onSecondaryContainer
-                        }
-                        val dotColor = when {
-                            isFix -> MaterialTheme.colorScheme.tertiary
-                            isFeature -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.secondary
+                        val (pillContainer, pillContent, dotColor) = when {
+                            isFix -> Triple(
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                                MaterialTheme.colorScheme.onErrorContainer,
+                                MaterialTheme.colorScheme.error
+                            )
+                            isEdit -> Triple(
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.onTertiaryContainer,
+                                MaterialTheme.colorScheme.tertiary
+                            )
+                            isPerson || isFeature -> Triple(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.onPrimaryContainer,
+                                MaterialTheme.colorScheme.primary
+                            )
+                            else -> Triple(
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                                MaterialTheme.colorScheme.secondary
+                            )
                         }
 
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                         ) {
+                            // Section header capsule featuring Material 3 Expressive Shape container & Material Symbol
                             Surface(
                                 shape = ShapeFull,
                                 color = pillContainer,
                                 contentColor = pillContent
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 3.dp),
+                                    modifier = Modifier.padding(start = 4.dp, end = SpacingTokens.M, top = 3.dp, bottom = 3.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                                 ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(section.iconRes),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(13.dp)
-                                    )
+                                    Surface(
+                                        shape = section.shape,
+                                        color = pillContent.copy(alpha = 0.16f),
+                                        contentColor = pillContent,
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(section.iconRes),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = section.title,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                                     )
                                 }
                             }
 
-                            section.items.forEach { item ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = SpacingTokens.XS),
-                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 8.dp)
-                                            .size(5.dp)
-                                            .clip(ShapeFull)
-                                            .background(dotColor.copy(alpha = 0.7f))
-                                    )
-                                    Text(
-                                        text = item,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.weight(1f)
-                                    )
+                            // Items under section with M3 micro squircle bullet
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = SpacingTokens.XS),
+                                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                            ) {
+                                section.items.forEach { item ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Surface(
+                                            shape = ShapeExtraSmall,
+                                            color = dotColor.copy(alpha = 0.85f),
+                                            modifier = Modifier
+                                                .padding(top = 7.dp)
+                                                .size(width = 6.dp, height = 6.dp)
+                                        ) {}
+                                        Text(
+                                            text = item,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -322,7 +415,7 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(18.dp)
+                        .height(20.dp)
                         .background(
                             Brush.verticalGradient(
                                 listOf(
@@ -344,7 +437,7 @@ fun ChangelogCard(changelog: String, modifier: Modifier = Modifier) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(22.dp)
+                        .height(24.dp)
                         .background(
                             Brush.verticalGradient(
                                 listOf(
@@ -378,20 +471,31 @@ fun UpdateDialog() {
         },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val isUpdateAvailable = updateState is UpdateState.UpdateAvailable
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .widthIn(max = 440.dp)
-                .clip(ShapeExtraLarge),
-            shape = ShapeExtraLarge,
+            modifier = if (isUpdateAvailable) {
+                Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.90f)
+                    .widthIn(max = 560.dp)
+                    .clip(ShapeExtraLargeIncreased)
+            } else {
+                Modifier
+                    .fillMaxWidth(0.92f)
+                    .widthIn(max = 440.dp)
+                    .clip(ShapeExtraLarge)
+            },
+            shape = if (isUpdateAvailable) ShapeExtraLargeIncreased else ShapeExtraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
             tonalElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = SpacingTokens.XL, vertical = SpacingTokens.XL),
+                modifier = (if (isUpdateAvailable) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
+                    .padding(
+                        horizontal = if (isUpdateAvailable) SpacingTokens.L else SpacingTokens.XL,
+                        vertical = if (isUpdateAvailable) SpacingTokens.L else SpacingTokens.XL
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 when (val state = updateState) {
@@ -428,18 +532,18 @@ fun UpdateDialog() {
                             shape = OfficialM3Shapes.Cookie9Sided,
                             color = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                    modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(SpacingTokens.L))
+                        Spacer(modifier = Modifier.height(SpacingTokens.M))
                         Text(
                             text = "Update Available",
                             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
@@ -506,12 +610,17 @@ fun UpdateDialog() {
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(SpacingTokens.L))
+                        Spacer(modifier = Modifier.height(SpacingTokens.M))
 
                         // Features & Fixes Categorized Changelog
                         if (info.changelog.isNotBlank()) {
-                            ChangelogCard(changelog = info.changelog)
-                            Spacer(modifier = Modifier.height(SpacingTokens.L))
+                            ChangelogCard(
+                                changelog = info.changelog,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            )
+                            Spacer(modifier = Modifier.height(SpacingTokens.M))
                         }
 
                         // Action Buttons Dock
