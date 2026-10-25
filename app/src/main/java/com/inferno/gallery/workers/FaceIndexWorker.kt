@@ -114,7 +114,6 @@ class FaceIndexWorker(
                 progress = totalPhotos,
                 total = totalPhotos
             )
-            runCatching { clusteringManager.consolidateClusters() }
             setProgress(workDataOf("processed" to totalPhotos, "total" to totalPhotos))
             return@withContext Result.success()
         }
@@ -266,12 +265,14 @@ class FaceIndexWorker(
 
                     processedCount++
                     val currentProgress = alreadyIndexed + processedCount
+                    val photoName = media.name.ifBlank { media.filePath.substringAfterLast('/') }
+                    com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                        isIndexing = true,
+                        progress = currentProgress,
+                        total = totalPhotos,
+                        currentImageName = photoName
+                    )
                     if (processedCount % 5 == 0 || processedCount == unindexedIds.size) {
-                        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
-                            isIndexing = true,
-                            progress = currentProgress,
-                            total = totalPhotos
-                        )
                         setProgress(workDataOf("processed" to currentProgress, "total" to totalPhotos))
                     }
                 }
@@ -283,7 +284,7 @@ class FaceIndexWorker(
                 } catch (_: Exception) {}
 
                 // Periodically consolidate clusters every 100 photos to keep identities grouped
-                if (processedCount % 100 == 0) {
+                if (processedCount > 0 && processedCount % 100 == 0) {
                     runCatching { clusteringManager.consolidateClusters() }
                 }
 
@@ -291,7 +292,9 @@ class FaceIndexWorker(
             }
 
             // Final consolidation pass after all photos are processed
-            runCatching { clusteringManager.consolidateClusters() }
+            if (processedCount > 0) {
+                runCatching { clusteringManager.consolidateClusters() }
+            }
             Result.success()
         } finally {
             val total = runCatching { faceDao.getTotalNonVaultMediaCount() }.getOrDefault(0)
@@ -301,7 +304,10 @@ class FaceIndexWorker(
                 progress = (total - unindexed).coerceAtLeast(0),
                 total = total
             )
-            runCatching { clusteringManager.consolidateClusters() }
+            if (processedCount > 0) {
+                runCatching { clusteringManager.consolidateClusters() }
+            }
+            runCatching { faceDao.recalculateAllPersonFaceCounts() }
             detector.close()
         }
     }

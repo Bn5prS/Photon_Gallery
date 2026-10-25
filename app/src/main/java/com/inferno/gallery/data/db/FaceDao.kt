@@ -142,7 +142,14 @@ interface FaceDao {
             f.personId AS personId,
             p.name AS name,
             COALESCE(f.cropCachePath, p.coverCropPath) AS cropPath,
-            COALESCE(p.faceCount, 1) AS faceCount
+            COALESCE((
+                SELECT COUNT(DISTINCT f2.mediaId) 
+                FROM faces f2 
+                INNER JOIN core_media c ON f2.mediaId = c.id 
+                WHERE f2.personId = p.id AND c.bucketName != 'Trash' 
+                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)
+                  AND c.filePath NOT IN (SELECT originalPath FROM vault_media)
+            ), 1) AS faceCount
         FROM faces f
         LEFT JOIN persons p ON f.personId = p.id
         WHERE f.mediaId = :mediaId AND (p.isHidden IS NULL OR p.isHidden = 0)
@@ -176,8 +183,26 @@ interface FaceDao {
     @Query("SELECT * FROM faces WHERE personId IS NULL")
     suspend fun getUnassignedFaces(): List<FaceEntity>
 
-    @Query("SELECT COUNT(DISTINCT mediaId) FROM faces WHERE personId = :personId")
+    @Query("""
+        SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+        INNER JOIN core_media c ON f.mediaId = c.id 
+        WHERE f.personId = :personId 
+          AND c.bucketName != 'Trash' 
+          AND c.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND c.filePath NOT IN (SELECT originalPath FROM vault_media)
+    """)
     suspend fun countDistinctMediaForPerson(personId: Long): Int
+
+    @Query("""
+        UPDATE persons SET faceCount = COALESCE((
+            SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+            INNER JOIN core_media c ON f.mediaId = c.id 
+            WHERE f.personId = persons.id AND c.bucketName != 'Trash' 
+              AND c.uriString NOT IN (SELECT originalUri FROM vault_media)
+              AND c.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ), 0)
+    """)
+    suspend fun recalculateAllPersonFaceCounts()
 
     @Query("""
         SELECT DISTINCT c.* FROM core_media c
@@ -259,9 +284,10 @@ interface FaceDao {
     ) {
         reassignFaces(sourcePersonId, targetPersonId)
         val target = getPersonById(targetPersonId) ?: return
+        val distinctPhotoCount = countDistinctMediaForPerson(targetPersonId)
         val updated = target.copy(
             centroid = mergedCentroid,
-            faceCount = faceCount,
+            faceCount = distinctPhotoCount,
             coverCropPath = coverCropPath ?: target.coverCropPath,
             isPromoted = true
         )
@@ -295,6 +321,8 @@ interface FaceDao {
         INNER JOIN persons pa ON s.personIdA = pa.id
         INNER JOIN persons pb ON s.personIdB = pb.id
         WHERE s.status = 'PENDING' AND pa.isHidden = 0 AND pb.isHidden = 0
+          AND ((pa.faceCount >= 2 OR (pa.name IS NOT NULL AND pa.name != '')) 
+               OR (pb.faceCount >= 2 OR (pb.name IS NOT NULL AND pb.name != '')))
         ORDER BY s.similarity DESC
     """)
     fun observePendingMergeSuggestions(): Flow<List<MergeSuggestionWithPersons>>

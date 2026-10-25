@@ -45,4 +45,52 @@ class FaceCentroidSimilarityTest {
         assertEquals(3L, pair2.first)
         assertEquals(12L, pair2.second)
     }
+
+    @Test
+    fun testShouldSuggestMerge() {
+        // Both single face unnamed: rejected (noise)
+        assertFalse(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 1, nameA = null, isHiddenA = false,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.50f
+            )
+        )
+
+        // One cluster has 2+ faces: accepted
+        assertTrue(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 3, nameA = null, isHiddenA = false,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.50f
+            )
+        )
+
+        // One cluster is named: accepted
+        assertTrue(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 1, nameA = "Alice", isHiddenA = false,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.50f
+            )
+        )
+
+        // Either cluster is hidden: rejected
+        assertFalse(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 5, nameA = "Bob", isHiddenA = true,
+                faceCountB = 3, nameB = null, isHiddenB = false,
+                similarity = 0.50f
+            )
+        )
+
+        // Similarity too low (< 0.48f): rejected
+        assertFalse(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 5, nameA = "Bob", isHiddenA = false,
+                faceCountB = 3, nameB = null, isHiddenB = false,
+                similarity = 0.42f
+            )
+        )
+    }
 }

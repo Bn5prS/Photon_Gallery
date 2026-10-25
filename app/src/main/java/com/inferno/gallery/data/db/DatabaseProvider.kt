@@ -537,6 +537,21 @@ object DatabaseProvider {
                         END;
                         """.trimIndent()
                     )
+
+                    // Recalculate person face counts to ensure photo counts accurately reflect distinct photos
+                    try {
+                        db.execSQL(
+                            """
+                            UPDATE persons SET faceCount = COALESCE((
+                                SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
+                                INNER JOIN core_media c ON f.mediaId = c.id 
+                                WHERE f.personId = persons.id AND c.bucketName != 'Trash' 
+                                  AND c.uriString NOT IN (SELECT originalUri FROM vault_media)
+                                  AND c.filePath NOT IN (SELECT originalPath FROM vault_media)
+                            ), 0)
+                            """.trimIndent()
+                        )
+                    } catch (_: Exception) {}
                 }
             })
             .build()

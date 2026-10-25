@@ -30,11 +30,25 @@ class FaceClusteringManager(private val context: Context) {
         const val MAX_EXEMPLARS_PER_CLUSTER = 6    // Retain up to 6 diverse pose/lighting exemplars per identity
 
         // Ambiguous candidate similarity window for proactive merge suggestions
-        const val SUGGESTION_MIN_THRESHOLD = 0.44f
+        const val SUGGESTION_MIN_THRESHOLD = 0.48f
         const val SUGGESTION_MAX_THRESHOLD = 0.54f
 
         fun isCandidateSimilarity(similarity: Float): Boolean {
             return similarity >= SUGGESTION_MIN_THRESHOLD && similarity < SUGGESTION_MAX_THRESHOLD
+        }
+
+        fun shouldSuggestMerge(
+            faceCountA: Int,
+            nameA: String?,
+            isHiddenA: Boolean,
+            faceCountB: Int,
+            nameB: String?,
+            isHiddenB: Boolean,
+            similarity: Float
+        ): Boolean {
+            if (isHiddenA || isHiddenB) return false
+            if (!isCandidateSimilarity(similarity)) return false
+            return (faceCountA >= 2 || !nameA.isNullOrBlank()) || (faceCountB >= 2 || !nameB.isNullOrBlank())
         }
 
         fun toCanonicalPair(idA: Long, idB: Long): Pair<Long, Long> {
@@ -60,6 +74,8 @@ class FaceClusteringManager(private val context: Context) {
         var centroid: FloatArray,
         var faceCount: Int,
         var isPromoted: Boolean,
+        var isHidden: Boolean,
+        var name: String?,
         var coverCropPath: String?
     )
 
@@ -87,6 +103,8 @@ class FaceClusteringManager(private val context: Context) {
                     centroid = centroid,
                     faceCount = person.faceCount,
                     isPromoted = person.isPromoted,
+                    isHidden = person.isHidden,
+                    name = person.name,
                     coverCropPath = person.coverCropPath
                 )
             )
@@ -163,13 +181,14 @@ class FaceClusteringManager(private val context: Context) {
                 }
 
                 // 3-Photo Admission Rule: promote cluster once 3 distinct photos contain this person
+                val distinctPhotos = faceDao.countDistinctMediaForPerson(cluster.personId) + 1
                 val shouldPromote = if (!cluster.isPromoted) {
-                    val distinctPhotos = faceDao.countDistinctMediaForPerson(cluster.personId) + 1
                     distinctPhotos >= PROMOTION_MIN_PHOTOS
                 } else {
                     true
                 }
                 cluster.isPromoted = shouldPromote
+                cluster.faceCount = distinctPhotos
 
                 // Persist updates
                 val existingPerson = faceDao.getPersonById(cluster.personId)
@@ -177,7 +196,7 @@ class FaceClusteringManager(private val context: Context) {
                     faceDao.updatePerson(
                         existingPerson.copy(
                             centroid = normalizedCentroid,
-                            faceCount = newCount,
+                            faceCount = distinctPhotos,
                             coverCropPath = cluster.coverCropPath,
                             isPromoted = shouldPromote
                         )
@@ -233,6 +252,8 @@ class FaceClusteringManager(private val context: Context) {
                         centroid = embedding,
                         faceCount = 1,
                         isPromoted = true,
+                        isHidden = false,
+                        name = null,
                         coverCropPath = cropCachePath
                     )
                 )
@@ -273,6 +294,7 @@ class FaceClusteringManager(private val context: Context) {
                 faceCount = totalCount,
                 coverCropPath = cover
             )
+            faceDao.recalculateAllPersonFaceCounts()
 
             // Invalidate cache to reflect merged state
             isCacheInitialized = false
@@ -318,6 +340,7 @@ class FaceClusteringManager(private val context: Context) {
                     coverCropPath = cover
                 )
             }
+            faceDao.recalculateAllPersonFaceCounts()
 
             isCacheInitialized = false
             ensureCacheLoaded()
@@ -411,6 +434,7 @@ class FaceClusteringManager(private val context: Context) {
                 }
             }
 
+            faceDao.recalculateAllPersonFaceCounts()
             Log.d(TAG, "Cluster consolidation complete: performed $mergeCount merges.")
 
             // Proactively generate merge suggestions for remaining ambiguous clusters
@@ -441,7 +465,15 @@ class FaceClusteringManager(private val context: Context) {
                     }
                 }
 
-                if (isCandidateSimilarity(maxSim)) {
+                if (shouldSuggestMerge(
+                    faceCountA = c1.faceCount,
+                    nameA = c1.name,
+                    isHiddenA = c1.isHidden,
+                    faceCountB = c2.faceCount,
+                    nameB = c2.name,
+                    isHiddenB = c2.isHidden,
+                    similarity = maxSim
+                )) {
                     val (pA, pB) = toCanonicalPair(c1.personId, c2.personId)
                     val existing = faceDao.getExistingSuggestionStatus(pA, pB)
                     if (existing == null) {
