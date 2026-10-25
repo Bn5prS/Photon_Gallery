@@ -96,9 +96,9 @@ fun FloatingNavigationPill(
             .height(56.dp)
             .pointerInput(Unit) {},
         shape = ShapeFull,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp,
+        shadowElevation = 2.dp
     ) {
         BoxWithConstraints(
             modifier = Modifier
@@ -111,13 +111,10 @@ fun FloatingNavigationPill(
             val pillHorizontalInset = 2.dp
             val pillWidth = tabWidth - (pillHorizontalInset * 2)
 
-            // Smooth non-bouncy sliding animation (Material 3 Emphasized / DampingRatioNoBouncy)
+            // Smooth M3 Expressive sliding animation via MotionTokens.snappySpring (defaultSpatialSpec)
             val animatedFraction by animateFloatAsState(
                 targetValue = selectedIndex.toFloat(),
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
+                animationSpec = MotionTokens.snappySpring(),
                 label = "slidingPillFraction"
             )
 
@@ -134,7 +131,7 @@ fun FloatingNavigationPill(
                         translationX = pillInsetPx + (animatedFraction * tabWidthPx)
                     }
                     .clip(ShapeFull)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
             )
 
             // ── Interactive Tabs ──
@@ -201,28 +198,22 @@ fun SlidingPillTabItem(
 
     val touchScale by animateFloatAsState(
         targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = MotionTokens.bouncySpring(),
         label = "tabItemTouchScale"
     )
 
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
+            MaterialTheme.colorScheme.onPrimaryContainer
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+            MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = MotionTokens.fastEffectsSpec(),
         label = "tabItemContentColor"
     )
 
     val rippleColor = if (isSelected) {
-        MaterialTheme.colorScheme.onSecondaryContainer
+        MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.primary
     }
@@ -257,26 +248,14 @@ fun SlidingPillTabItem(
                 AnimatedVisibility(
                     visible = isSelected,
                     enter = fadeIn(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = MotionTokens.fastEffectsSpec()
                     ) + expandHorizontally(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = MotionTokens.bouncySpring()
                     ),
                     exit = fadeOut(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = MotionTokens.fastEffectsSpec()
                     ) + shrinkHorizontally(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = MotionTokens.bouncySpring()
                     )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

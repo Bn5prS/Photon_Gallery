@@ -846,7 +846,7 @@ fun MainAppLayout(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(bottom = 10.dp),
+                            .padding(bottom = 14.dp),
                         contentAlignment = Alignment.BottomCenter
                     ) {
                         FloatingNavigationPill(
