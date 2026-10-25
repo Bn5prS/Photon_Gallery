@@ -1,0 +1,13 @@
+Photon Gallery is an open-source, fully offline Android gallery designed around privacy, high-performance fluid motion, and stunning Material 3 Expressive aesthetics.
+
+Key Features:
+• Fluid Media Browsing: Responsive high-fps grid with smooth pinch-to-zoom transitions, customizable column counts, and instant media loading.
+• Material 3 Expressive UI: Modern fluid design featuring 5-tier elevation surfaces, shape morphing, spring physics, dynamic wallpaper theming (Material You), and curated typography.
+• People & Face Grouping: 100% on-device facial recognition, automatic clustering, and smart merge suggestions with complete privacy (no cloud uploads).
+• On-Device Smart Search & OCR: 100% offline semantic AI search (CLIP) and optical character recognition running locally on your device with zero cloud tracking.
+• Photo Editor & Markup Tools: Full drawing and annotation toolset (pen, highlighter, neon brush, blur redaction, shapes, interactive text), filters, and collage stitch builders.
+• Metadata Privacy Sanitization: Byte-level metadata stripping across all formats (JPEG, PNG, WebP, animated GIFs, and MP4/MOV videos) with automatic upright rotation.
+• Full-Screen Viewer & Video Player: Deep zoom, background blur, gesture filmstrip, full EXIF metadata inspector, and motion photo playback.
+• Albums & Custom Collections: Auto-generated date groupings, pin favorite albums, folder exclusions, and custom album covers.
+• Secure Vault (Private Space): Biometric-protected isolated vault with hardware-backed encryption.
+• Duplicate Cleaner & Recycle Bin: Perceptual hash duplicate detection and soft-delete trash with automatic cleanup.

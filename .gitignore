@@ -124,6 +124,7 @@ gallery_database.db
 # ============================================================
 # Fastlane metadata (allow metadata for F-Droid/IzzyOnDroid)
 # ============================================================
+!fastlane/metadata/**
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/

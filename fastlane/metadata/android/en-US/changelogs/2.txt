@@ -1,0 +1,5 @@
+• Material 3 Expressive UI, animations, and fluid motion polish
+• Optimized media indexing, query performance, and background sync
+• Enhanced Private Space security and media share workflows
+• UI refinements across Home, Albums, Viewer, and Settings screens
+• Improved on-device Smart Search performance

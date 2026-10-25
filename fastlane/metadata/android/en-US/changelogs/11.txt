@@ -1,0 +1,16 @@
+### People & Face Grouping (New Feature!)
+* 100% on-device facial recognition, automatic clustering, and smart merge suggestions running completely offline.
+* Name, favorite, or hide individual identities with customizable photo count filters.
+
+### Markup & Paint Tools in Editor (#20)
+* Full drawing toolset inside the photo editor with pen, highlighter, neon brush, blur redaction, and geometric shapes.
+* Interactive text annotations with scaling and high-resolution export.
+
+### Privacy & Metadata Sanitization
+* Byte-level stripping purges 100% of EXIF, XMP, IPTC records, MakerNotes, serial numbers, and video location/timestamp metadata.
+* Automatic physical pixel rotation preserves upright photo orientation when sharing.
+
+### Bug Fixes & Stability
+* Fixed Direct Share attachment drops to messaging apps (#17).
+* Fixed .nomedia and vault file synchronization (#18).
+* Resolved deletion transition crash in photo viewer (#19).
