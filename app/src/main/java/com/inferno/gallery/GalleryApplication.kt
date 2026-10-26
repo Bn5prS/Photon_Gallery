@@ -50,13 +50,12 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             if (ocrEnabled) {
                 val ocrConstraints = androidx.work.Constraints.Builder()
                     .setRequiresBatteryNotLow(true)
-                    .setRequiresDeviceIdle(true)
                     .build()
                 val ocrIndexRequest = androidx.work.OneTimeWorkRequestBuilder<OcrIndexWorker>()
                     .setConstraints(ocrConstraints)
                     .build()
                 WorkManager.getInstance(this@GalleryApplication)
-                    .enqueueUniqueWork("OcrIndexWorkerIdle", androidx.work.ExistingWorkPolicy.KEEP, ocrIndexRequest)
+                    .enqueueUniqueWork("OcrIndexWorker", androidx.work.ExistingWorkPolicy.KEEP, ocrIndexRequest)
             }
 
             // Periodic sync every 6 hours

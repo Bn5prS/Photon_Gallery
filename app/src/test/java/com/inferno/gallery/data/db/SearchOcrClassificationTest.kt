@@ -34,4 +34,31 @@ class SearchOcrClassificationTest {
         val expected = listOf("wi", "fi", "user", "test", "com", "50", "00")
         assertEquals(expected, terms)
     }
+
+    @Test
+    fun testFtsMultiTokenQueryUsesImplicitAndSpaceSyntax() {
+        val ftsKeywords = setOf("AND", "OR", "NOT", "NEAR")
+        val cleanQuery = "electric bill payment"
+        val terms = cleanQuery.split(Regex("[^\\p{L}\\p{Nd}]+"))
+            .filter { it.isNotBlank() && it.uppercase() !in ftsKeywords }
+
+        val andQuery = terms.joinToString(" ") { "$it*" }
+        assertEquals("electric* bill* payment*", andQuery)
+        assertTrue("Query should not contain literal AND keyword", !andQuery.contains(" AND "))
+
+        val orQuery = terms.joinToString(" OR ") { "$it*" }
+        assertEquals("electric* OR bill* OR payment*", orQuery)
+    }
+
+    @Test
+    fun testFtsKeywordsIgnoredInTerms() {
+        val ftsKeywords = setOf("AND", "OR", "NOT", "NEAR")
+        val cleanQuery = "bread and butter or jam"
+        val terms = cleanQuery.split(Regex("[^\\p{L}\\p{Nd}]+"))
+            .filter { it.isNotBlank() && it.uppercase() !in ftsKeywords }
+
+        val andQuery = terms.joinToString(" ") { "$it*" }
+        assertEquals("bread* butter* jam*", andQuery)
+    }
 }
+

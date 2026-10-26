@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -78,13 +79,33 @@ class OcrIndexWorker(
 
     private data class LoadedImage(
         val entity: CoreMediaEntity,
-        val bitmap: Bitmap
+        val bitmap: Bitmap,
+        val rotationDegrees: Int = 0
     )
 
     private data class EmbeddedImage(
         val entity: CoreMediaEntity,
         val extractedText: String?
     )
+
+    private fun getExifOrientationDegrees(context: Context, filePath: String, uriString: String): Int {
+        return try {
+            openInputStream(context, filePath, uriString).use { input ->
+                val orientation = ExifInterface(input).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+                when (orientation) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                    else -> 0
+                }
+            }
+        } catch (e: Exception) {
+            0
+        }
+    }
 
     private fun openInputStream(context: Context, filePath: String, uriString: String): InputStream {
         try {
@@ -161,6 +182,22 @@ class OcrIndexWorker(
             val db = DatabaseProvider.getDatabase(applicationContext)
 
             val unindexed = withContext(Dispatchers.IO) {
+                // Self-healing check: If photos are marked indexed for OCR, but image_fts is completely empty,
+                // reset is_indexed_ocr so they can actually be processed.
+                val ftsCount = try {
+                    val cursor = db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM image_fts")
+                    cursor.use { if (it.moveToFirst()) it.getInt(0) else 0 }
+                } catch (_: Exception) { 0 }
+
+                val totalImages = db.mediaDao().getTotalImageCount()
+                val unindexedBefore = db.mediaDao().getUnindexedImageCount()
+                val totalIndexed = totalImages - unindexedBefore
+
+                if (ftsCount == 0 && totalIndexed > 0 && totalImages > 0) {
+                    Log.w(TAG, "Self-healing: Found $totalIndexed photos marked as indexed, but image_fts has 0 rows. Resetting OCR index status.")
+                    db.mediaDao().resetOcrIndexStatus()
+                }
+
                 db.mediaDao().getUnindexedOcrMedia()
             }
 
@@ -204,7 +241,8 @@ class OcrIndexWorker(
                         try {
                             val bitmap = decodeOcrBitmap(applicationContext, entity.filePath, entity.uriString)
                             if (bitmap != null) {
-                                loadChannel.send(LoadedImage(entity, bitmap))
+                                val rotation = getExifOrientationDegrees(applicationContext, entity.filePath, entity.uriString)
+                                loadChannel.send(LoadedImage(entity, bitmap, rotation))
                             } else {
                                 Log.w(TAG, "Bitmap decoding returned null for OCR: ${entity.name}. Marking as indexed.")
                                 db.mediaDao().updateOcrIndexStatus(entity.id, true)
@@ -243,14 +281,15 @@ class OcrIndexWorker(
                         try {
                             val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(
                                 loaded.bitmap,
-                                0
+                                loaded.rotationDegrees
                             )
                             val extractedText = suspendCancellableCoroutine { cont ->
                                 textRecognizer.process(inputImage)
                                     .addOnSuccessListener { visionText ->
                                         cont.resumeWith(kotlin.Result.success(visionText.text))
                                     }
-                                    .addOnFailureListener {
+                                    .addOnFailureListener { e ->
+                                        Log.w(TAG, "ML Kit OCR failed for ${loaded.entity.name}: ${e.message}")
                                         cont.resumeWith(kotlin.Result.success(null))
                                     }
                             }
@@ -285,13 +324,17 @@ class OcrIndexWorker(
                     for (embedded in embedChannel) {
                         if (isStopped) break
 
-                        if (!embedded.extractedText.isNullOrBlank()) {
-                            DatabaseProvider.insertFtsRow(db, embedded.entity.id, embedded.extractedText, "")
+                        if (embedded.extractedText != null) {
+                            if (embedded.extractedText.isNotBlank()) {
+                                DatabaseProvider.insertFtsRow(db, embedded.entity.id, embedded.extractedText, "")
+                            }
+                            // Valid OCR run completed (either found text or image contains no text). Mark indexed!
+                            ocrIndexedBatch.add(embedded.entity.id)
+                        } else {
+                            // ML Kit threw an exception (e.g. model still downloading or engine error).
+                            // Do NOT mark as indexed so it can be scanned when the engine is ready!
+                            Log.w(TAG, "Skipping marking ${embedded.entity.name} as indexed due to OCR engine failure.")
                         }
-                        // Always mark as indexed — even if text is null (ML failure) or blank (no text found).
-                        // Without this, failed images stay "unindexed" forever, causing the progress
-                        // to get stuck at 99% / last item since they re-fail on every retry.
-                        ocrIndexedBatch.add(embedded.entity.id)
 
                         processedCount++
                         recentUris.addLast(embedded.entity.uriString)

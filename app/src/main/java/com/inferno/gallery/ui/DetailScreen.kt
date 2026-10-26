@@ -111,7 +111,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
@@ -167,7 +166,6 @@ import com.inferno.gallery.data.MotionPhotoInfo
 import com.inferno.gallery.ui.components.MotionPhotoPlayerOverlay
 import com.inferno.gallery.ui.components.FloatingTipCard
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.BoxWithConstraints
 
 
@@ -938,10 +936,6 @@ fun DetailScreen(
                 androidx.compose.ui.util.lerp(normalPagerAlpha, 0.70f, overviewProgress)
             val pagerScale = overviewCardScale
             val pagerAlpha = overviewCardAlpha
-            // Corner radius for card shape in overview mode (ShapeLargeIncreased = 20dp)
-            val overviewCornerDp = 20.dp * overviewProgress
-            val overviewElevation = 8.dp * overviewProgress * (if (absoluteOffset < 0.5f) 1f else 0f)
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -950,13 +944,6 @@ fun DetailScreen(
                         scaleY = pagerScale
                         alpha = pagerAlpha
                     }
-                    .then(if (overviewProgress > 0.01f) {
-                        val safeProgress = overviewProgress.coerceIn(0f, 1f)
-                        Modifier
-                            .padding(vertical = (8.dp * safeProgress))
-                            .shadow(overviewElevation, RoundedCornerShape(20.dp * safeProgress))
-                            .clip(RoundedCornerShape(20.dp * safeProgress))
-                    } else Modifier)
             ) {
             androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
 

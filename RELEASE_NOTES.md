@@ -1,43 +1,56 @@
-# Release Notes
+# Release Notes — v3.0.0
 
 ## What's New
 
 ### People & Face Grouping (New Feature!)
 Photon Gallery can now automatically recognize and group faces across your photos — running **100% locally on your device with complete privacy (no cloud uploads)**:
-* **People Section**: Dedicated tab with clean portrait cards and customizable grid zoom (2 to 5 columns).
-* **Automatic Clustering**: Discovers and clusters faces into individual identities.
-* **Smart Merge Suggestions**: Recommends merging matching identities with side-by-side comparisons, match percentages, and quick dismiss/re-launch controls.
-* **Names & Favorites**: Assign names, mark favorites, or hide specific faces from your library.
-* **Photo Count Filter**: Filter out casual background faces (3+, 5+, 10+ photos) so only meaningful people appear.
-* **Face Tags in Photo Info**: Tap any recognized person chip in the details sheet to see all photos of that person.
+* Dedicated People Section: Browse identified people cards with customizable zoom (2 to 5 columns).
+* Automatic Grouping: Discovers and groups recurring faces into individual identities offline.
+* Smart Merge Suggestions: Recommends merging matching identities with side-by-side comparisons and quick confirmation.
+* Names & Favorites: Assign names, mark favorites, or hide specific people from your library.
+* Photo Count Filter: Filter out casual background faces (3+, 5+, 10+ photos) so only meaningful people appear.
+* Face Tags in Photo Info: Tap any recognized person chip in the details sheet to view all photos of that person.
 
 ---
 
 ### Markup & Paint Tools in Editor (#20)
-* **Drawing & Annotation**: Complete markup toolset inside the photo editor featuring pen, highlighter, neon brush, blur redaction, and geometric shapes (arrows, rectangles, circles).
-* **Interactive Text**: Add movable, scalable, and rotatable text annotations with custom styling.
-* **High-Res Export**: Annotations and drawings render at original image resolution upon export.
+* Complete Drawing Suite: Annotate photos inside the built-in editor using pen, highlighter, neon brush, blur redaction, and geometric shapes (arrows, rectangles, circles).
+* Interactive Text Annotations: Add movable, scalable, and rotatable text labels with custom styling and background fills.
+* High-Resolution Export: Annotations and sketches render at full original image resolution upon export.
 
 ---
 
-### Instant Update Notifications
-* **Prompt on Launch**: Checks for GitHub releases immediately when opening the app (with a 5-minute cooldown) so you're notified as soon as a new build is out.
-* **Notification Drawer Alert**: Displays an in-app dialog and posts a status bar notification so you can update at your convenience.
+### Full-Screen Viewer & Timeline Navigation
+* Pinch-to-Filmstrip Overview: Pinch in on any full-screen photo to view an interactive horizontal filmstrip of adjacent photos, and tap any photo to return to full screen.
+* Equidistant Date Headers: Re-aligned date headers in the timeline grid with balanced spacing above and below so headers sit centered between date groups.
+* Immersive Single-Tap View: Single-tap in the photo viewer now toggles both the top and bottom controls and the system status bar.
+
+---
+
+### Text & Document Search (OCR)
+* Multi-Word Text Search: Completely restored full-text search across photos containing documents, bills, signs, and receipts, ensuring multi-word queries (e.g., "electric bill", "wifi password") return instant matches.
+* Automatic Text Indexing: Newly taken or imported photos are automatically indexed for text search in the background.
+* Accurate Relevance Ranking: Photos with matching recognized text are prioritized alongside exact filename matches.
 
 ---
 
 ### Privacy & Metadata Sanitization
-* **Byte-Level Stripping**: The "Strip metadata when sharing" feature now strips 100% of metadata bytes across all supported media formats, including JPEG, PNG, WebP, animated GIFs, and MP4/MOV videos.
-* **Location & Identity Scrubbing**: Completely eliminates all EXIF, XMP, IPTC records, MakerNotes, camera serial numbers, camera owner tags, and user comments.
-* **Video Privacy Protection**: ISOBMFF user data, QuickTime metadata, and custom camera UUID boxes are scrubbed into free padding, and video recording and modification timestamps are cleared to prevent leaking coordinates or dates.
-* **Orientation Preservation**: Images captured at non-standard camera angles are automatically rotated into physical pixels prior to stripping, ensuring shared photos always display upright without relying on EXIF tags.
+* Byte-Level Sanitization: The "Strip metadata when sharing" option strips 100% of metadata bytes across all supported media formats, including JPEG, PNG, WebP, animated GIFs, and MP4/MOV videos.
+* Location & Hardware Scrubbing: Completely eliminates all EXIF, XMP, IPTC records, MakerNotes, camera serial numbers, owner tags, and GPS coordinates.
+* Video Privacy Protection: ISOBMFF user data boxes and QuickTime metadata are scrubbed, and recording/modification timestamps are cleared to prevent leaking coordinates or capture times.
+* Orientation Baking: Images captured at tilted angles are automatically normalized into physical pixels before stripping so shared photos always display upright.
+
+---
+
+### Instant Update Notifications
+* Launch Check: Promptly checks for GitHub releases when opening the app so you are notified as soon as a new build is available.
+* Notification Alert: Displays an expansive in-app changelog dialog and posts a status bar notification to update at your convenience.
 
 ---
 
 ### Bug Fixes & Stability
-* **Direct / Quick Share Attachments (#17)**: Fixed an issue where photos shared via Direct Share / Quick Share to messaging apps (e.g., Google Messages) would not attach properly.
-* **`.nomedia` & Vault Media Refresh (#18)**: Fixed gallery synchronization so encrypted files and newly added `.nomedia` folders are immediately hidden from the gallery without requiring an app reinstall.
-* **Deletion Transition Crash (#19)**: Resolved a `java.lang.IllegalStateException: Cannot transition entry that is not in the back stack` crash when deleting photos in the viewer.
-* **Accurate Photo Counts**: Corrected face count calculations under person chips and merge suggestion cards to strictly reflect unique photos.
-* **Safety Confirmation Prompts**: Added confirmation dialogs before executing critical actions (rescan/clear faces, delete AI models, or rebuild search indexes).
-* **Immersive Full-Screen**: Single-tap in the photo viewer now cleanly toggles both the UI controls and the system status bar.
+* Direct / Quick Share Attachments (#17): Resolved an issue where photos shared via Direct Share / Quick Share to messaging apps (such as Google Messages) would not attach properly.
+* `.nomedia` & Vault Media Refresh (#18): Gallery synchronization now immediately hides encrypted files and newly created `.nomedia` folders without requiring an app reinstall.
+* Deletion Transition Crash (#19): Resolved a crash (`IllegalStateException: Cannot transition entry that is not in the back stack`) when deleting photos from within the viewer.
+* Accurate Photo Counts: Corrected face count calculations under person chips and merge suggestion cards to strictly reflect unique photos.
+* Destructive Action Prompts: Added safety confirmation dialogs before rescanning faces, deleting offline AI models, or rebuilding search indexes.

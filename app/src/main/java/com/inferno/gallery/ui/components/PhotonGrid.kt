@@ -579,7 +579,7 @@ fun TimelineSectionHeader(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = if (isCenter) Alignment.Center else Alignment.CenterStart
     ) {
         Text(

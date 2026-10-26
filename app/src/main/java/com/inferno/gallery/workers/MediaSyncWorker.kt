@@ -179,6 +179,23 @@ class MediaSyncWorker(
                 )
             }
 
+            val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
+            val unindexedOcrCount = database.mediaDao().getUnindexedImageCount()
+            if (ocrEnabled && unindexedOcrCount > 0 && newPhotosCount > 0) {
+                Log.d("MediaSyncWorker", "Auto-indexing OCR for $unindexedOcrCount images...")
+                val constraints = androidx.work.Constraints.Builder()
+                    .setRequiresBatteryNotLow(true)
+                    .build()
+                val ocrIndexRequest = androidx.work.OneTimeWorkRequestBuilder<OcrIndexWorker>()
+                    .setConstraints(constraints)
+                    .build()
+                androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                    "OcrIndexWorker",
+                    androidx.work.ExistingWorkPolicy.KEEP,
+                    ocrIndexRequest
+                )
+            }
+
 
             // Auto-trigger Reverse Geocoding & GPS metadata extraction in background
             val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()

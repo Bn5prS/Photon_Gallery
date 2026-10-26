@@ -722,8 +722,14 @@ object DatabaseProvider {
         }
 
         val existingIds = metadataResults.map { it.id }.toSet()
-        val nonOverlappingFts = ftsResults.filter { it.first.id !in existingIds }.map { (entity, _) ->
-            entity to 20 // Base score for OCR-only matches
+        val nonOverlappingFts = ftsResults.filter { it.first.id !in existingIds }.map { (entity, ocrText) ->
+            val text = ocrText ?: ftsMap[entity.id]
+            val score = when {
+                text != null && text.contains(cleanQuery, ignoreCase = true) -> 600
+                text != null && tokens.isNotEmpty() && tokens.all { text.contains(it, ignoreCase = true) } -> 500
+                else -> 400
+            }
+            entity to score
         }
 
         val combinedEntities = (scoredMetadata + nonOverlappingFts)
@@ -962,8 +968,8 @@ object DatabaseProvider {
 
         fun executeFtsQuery(ftsExpr: String) {
             val sql = """
-                SELECT cm.*, fts.extractedText AS ocrText FROM core_media cm
-                INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
+                SELECT cm.*, fts.extractedText AS ocrText FROM image_fts fts
+                INNER JOIN core_media cm ON cm.id = CAST(fts.mediaId AS INTEGER)
                 WHERE image_fts MATCH ?
                   AND cm.bucketName != 'Trash'
                   AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
@@ -989,14 +995,14 @@ object DatabaseProvider {
             }
         }
 
-        // 1. Run FTS prefix search with AND (all terms match prefix)
+        // 1. Run FTS prefix search (space-separated terms form implicit AND in SQLite FTS)
         if (terms.isNotEmpty()) {
-            val andQuery = terms.map { "$it*" }.joinToString(" AND ")
+            val andQuery = terms.joinToString(" ") { "$it*" }
             executeFtsQuery(andQuery)
 
             // If multi-term and we have few results, also run OR to catch photos where some terms match in OCR
             if (terms.size > 1 && resultsMap.size < 50) {
-                val orQuery = terms.map { "$it*" }.joinToString(" OR ")
+                val orQuery = terms.joinToString(" OR ") { "$it*" }
                 executeFtsQuery(orQuery)
             }
         }
@@ -1006,8 +1012,8 @@ object DatabaseProvider {
         // and substrings inside longer words that FTS prefix search misses
         if (cleanQuery.length >= 2) {
             val likeSql = """
-                SELECT cm.*, fts.extractedText AS ocrText FROM core_media cm
-                INNER JOIN image_fts fts ON CAST(cm.id AS TEXT) = fts.mediaId
+                SELECT cm.*, fts.extractedText AS ocrText FROM image_fts fts
+                INNER JOIN core_media cm ON cm.id = CAST(fts.mediaId AS INTEGER)
                 WHERE fts.extractedText LIKE ?
                   AND cm.bucketName != 'Trash'
                   AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
