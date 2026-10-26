@@ -138,8 +138,8 @@ class OcrIndexWorker(
                 return null
             }
 
-            // Downsample if either dimension exceeds 1600px
-            val maxDim = 1600
+            // Downsample if either dimension exceeds 2560px (preserves full resolution on standard phone screenshots)
+            val maxDim = 2560
             var sampleSize = 1
             var w = options.outWidth
             var h = options.outHeight

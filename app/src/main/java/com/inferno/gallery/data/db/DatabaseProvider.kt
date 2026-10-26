@@ -700,8 +700,8 @@ object DatabaseProvider {
                             val text = if (textCol >= 0 && !c.isNull(textCol)) c.getString(textCol) else null
                             if (mId != null && !text.isNullOrBlank()) {
                                 val containsDirect = text.contains(cleanQuery, ignoreCase = true)
-                                val containsToken = tokens.any { t -> t.length >= 2 && text.contains(t, ignoreCase = true) }
-                                if (containsDirect || containsToken) {
+                                val containsAllTokens = tokens.size > 1 && tokens.all { t -> text.contains(t, ignoreCase = true) }
+                                if (containsDirect || containsAllTokens) {
                                     ftsMap[mId] = text
                                 }
                             }
@@ -1036,6 +1036,39 @@ object DatabaseProvider {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DatabaseProvider", "searchFtsInternal LIKE query failed: ${e.message}", e)
+            }
+        }
+
+        // 3. Multi-token separated words LIKE check:
+        // When query contains multiple terms, check if all terms appear in extractedText
+        // even if they appear on separate lines (e.g. receipts, invoices, screenshots)
+        if (terms.size > 1) {
+            val multiLikeClauses = terms.joinToString(" AND ") { "fts.extractedText LIKE ?" }
+            val multiSql = """
+                SELECT cm.*, fts.extractedText AS ocrText FROM image_fts fts
+                INNER JOIN core_media cm ON cm.id = CAST(fts.mediaId AS INTEGER)
+                WHERE $multiLikeClauses
+                  AND cm.bucketName != 'Trash'
+                  AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+                  AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+                  $excludedClause
+                ORDER BY cm.dateAdded DESC
+                LIMIT 500
+            """.trimIndent()
+            val multiArgs = (terms.map { "%$it%" } + excluded).toTypedArray()
+            try {
+                rawDb.query(multiSql, multiArgs).use { c ->
+                    val ocrIdx = c.getColumnIndex("ocrText")
+                    while (c.moveToNext()) {
+                        val entity = parseCoreMediaEntity(c)
+                        if (!resultsMap.containsKey(entity.id)) {
+                            val ocrText = if (ocrIdx >= 0 && !c.isNull(ocrIdx)) c.getString(ocrIdx) else null
+                            resultsMap[entity.id] = entity to ocrText
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DatabaseProvider", "searchFtsInternal multi-term LIKE query failed: ${e.message}", e)
             }
         }
 

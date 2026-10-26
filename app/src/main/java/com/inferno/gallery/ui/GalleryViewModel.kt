@@ -2072,7 +2072,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                     val ocrText = ocrMap[item.id]
                                     val matchesOcr = if (!ocrText.isNullOrBlank()) {
                                         ocrText.contains(cleanQ, ignoreCase = true) ||
-                                            queryTokens.any { t -> t.length >= 2 && ocrText.contains(t, ignoreCase = true) }
+                                            (queryTokens.size > 1 && queryTokens.all { t -> ocrText.contains(t, ignoreCase = true) })
                                     } else false
 
                                     if (matchesOcr) {
@@ -2159,24 +2159,42 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val uiEvents = _uiEvents.receiveAsFlow()
 
     fun removeMediaOptimistically(uriString: String) {
-        viewModelScope.launch {
-            // Instantly move to Trash bin so the UI updates
+        viewModelScope.launch(Dispatchers.IO) {
+            // Instantly move to Trash bin in Room so the grid and counts update
             database.mediaDao().updateBucketByUri(uriString, "Trash")
             // Also remove from the detail pager list immediately
-            _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
-            if (_initialDetailItem.value?.uri?.toString() == uriString) {
-                _initialDetailItem.value = null
+            withContext(Dispatchers.Main) {
+                _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+                if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                    _initialDetailItem.value = null
+                }
+                _uiEvents.send(UiEvent.DeleteSuccess)
             }
-            _uiEvents.send(UiEvent.DeleteSuccess)
+        }
+    }
+
+    fun deleteMediaPermanentlyOptimistically(uriString: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Instantly delete from Room so it's gone from all views
+            database.mediaDao().deleteByUri(uriString)
+            withContext(Dispatchers.Main) {
+                _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+                if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                    _initialDetailItem.value = null
+                }
+                _uiEvents.send(UiEvent.DeleteSuccess)
+            }
         }
     }
 
     fun notifyExternalMediaModifiedOrDeleted(uriString: String) {
         viewModelScope.launch(Dispatchers.IO) {
             database.mediaDao().deleteByUri(uriString)
-            _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
-            if (_initialDetailItem.value?.uri?.toString() == uriString) {
-                _initialDetailItem.value = null
+            withContext(Dispatchers.Main) {
+                _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+                if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                    _initialDetailItem.value = null
+                }
             }
             val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>()
                 .build()
@@ -2189,17 +2207,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun restoreMediaOptimistically(uriString: String) {
-        viewModelScope.launch {
-            // Remove from the detail pager list immediately
-            _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
-            if (_initialDetailItem.value?.uri?.toString() == uriString) {
-                _initialDetailItem.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            // Fast Room bucket restoration: restore to parent folder album immediately
+            val entity = database.mediaDao().getMediaByUri(uriString)
+            val originalBucket = if (entity != null && entity.filePath.isNotBlank()) {
+                java.io.File(entity.filePath).parentFile?.name ?: "Camera"
+            } else "Camera"
+            database.mediaDao().updateBucketByUri(uriString, originalBucket)
+            withContext(Dispatchers.Main) {
+                _detailMedia.value = _detailMedia.value.filter { it.uri.toString() != uriString }
+                if (_initialDetailItem.value?.uri?.toString() == uriString) {
+                    _initialDetailItem.value = null
+                }
+                _uiEvents.send(UiEvent.DeleteSuccess)
             }
-            val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>()
-                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .build()
-            androidx.work.WorkManager.getInstance(getApplication()).enqueue(syncRequest)
-            _uiEvents.send(UiEvent.DeleteSuccess)
         }
     }
 
@@ -2540,10 +2561,40 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun deleteSelectedMediaFromDb(uris: List<String>) {
+    fun trashSelectedMedia(uris: List<String>) {
+        if (uris.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            for (uriString in uris) {
-                database.mediaDao().deleteByUri(uriString)
+            database.mediaDao().updateBucketByUrisChunked(uris, "Trash")
+            withContext(Dispatchers.Main) {
+                _uiEvents.send(UiEvent.DeleteSuccess)
+            }
+        }
+    }
+
+    fun restoreSelectedMedia(uris: List<String>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            for (chunk in uris.chunked(500)) {
+                val entities = database.mediaDao().getMediaByUrisList(chunk)
+                for (entity in entities) {
+                    val originalBucket = if (entity.filePath.isNotBlank()) {
+                        java.io.File(entity.filePath).parentFile?.name ?: "Camera"
+                    } else "Camera"
+                    database.mediaDao().updateBucketByUri(entity.uriString, originalBucket)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                _uiEvents.send(UiEvent.DeleteSuccess)
+            }
+        }
+    }
+
+    fun deleteSelectedMediaFromDb(uris: List<String>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            database.mediaDao().deleteByUrisChunked(uris)
+            withContext(Dispatchers.Main) {
+                _uiEvents.send(UiEvent.DeleteSuccess)
             }
         }
     }
