@@ -114,3 +114,17 @@ data class CoreMediaProjection(
     val latitude: Double? = null,
     val longitude: Double? = null
 )
+
+@Entity(
+    tableName = "document_classifications",
+    primaryKeys = ["mediaId", "category"],
+    indices = [
+        Index(value = ["category"]),
+        Index(value = ["mediaId"])
+    ]
+)
+data class DocumentClassificationEntity(
+    val mediaId: Long,
+    val category: String
+)
+

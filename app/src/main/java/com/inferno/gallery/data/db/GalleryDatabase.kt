@@ -95,8 +95,31 @@ interface MediaDao {
     @Query("DELETE FROM core_media WHERE uriString = :uriString")
     suspend fun deleteByUri(uriString: String)
 
+    @Query("DELETE FROM core_media WHERE uriString IN (:uris)")
+    suspend fun deleteByUris(uris: List<String>)
+
+    @Query("SELECT * FROM core_media WHERE uriString IN (:uris)")
+    suspend fun getMediaByUrisList(uris: List<String>): List<CoreMediaEntity>
+
     @Query("UPDATE core_media SET bucketName = :bucket WHERE uriString = :uriString")
     suspend fun updateBucketByUri(uriString: String, bucket: String)
+
+    @Query("UPDATE core_media SET bucketName = :bucket WHERE uriString IN (:uris)")
+    suspend fun updateBucketByUris(uris: List<String>, bucket: String)
+
+    @androidx.room.Transaction
+    suspend fun updateBucketByUrisChunked(uris: List<String>, bucket: String) {
+        uris.chunked(500).forEach { chunk ->
+            updateBucketByUris(chunk, bucket)
+        }
+    }
+
+    @androidx.room.Transaction
+    suspend fun deleteByUrisChunked(uris: List<String>) {
+        uris.chunked(500).forEach { chunk ->
+            deleteByUris(chunk)
+        }
+    }
 
     @Query("UPDATE core_media SET filePath = :newPath, bucketName = :newBucket, name = :newName WHERE id = :id")
     suspend fun updatePathAndBucket(id: Long, newPath: String, newBucket: String, newName: String)
@@ -309,6 +332,27 @@ interface MediaDao {
 
     @Query("SELECT COUNT(*) FROM core_media WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND bucketName != 'Trash'")
     suspend fun getGeotaggedCount(): Int
+
+    @Query("""
+        SELECT COUNT(*) as itemCount, COALESCE(SUM(cm.size), 0) as totalSizeBytes, COALESCE(MAX(cm.dateAdded), 0) as maxDate,
+        (SELECT uriString FROM core_media c2 JOIN document_classifications dc2 ON c2.id = dc2.mediaId WHERE dc2.category = :category AND c2.bucketName != 'Trash' AND c2.uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY c2.dateAdded DESC LIMIT 1) as coverUriString
+        FROM core_media cm
+        JOIN document_classifications dc ON cm.id = dc.mediaId
+        WHERE dc.category = :category AND cm.bucketName != 'Trash' AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+    """)
+    fun observeDocumentCategoryStats(category: String): Flow<MediaAggregateStats>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDocumentClassifications(items: List<DocumentClassificationEntity>)
+
+    @Query("DELETE FROM document_classifications WHERE mediaId = :mediaId")
+    suspend fun deleteDocumentClassificationsForMedia(mediaId: Long)
+
+    @Query("DELETE FROM document_classifications")
+    suspend fun clearDocumentClassifications()
+
+    @Query("SELECT COUNT(*) FROM document_classifications")
+    suspend fun getDocumentClassificationsCount(): Int
 }
 
 @Database(
@@ -322,12 +366,13 @@ interface MediaDao {
         PersonEntity::class,
         FaceEntity::class,
         MediaFaceStatusEntity::class,
-        PersonMergeSuggestionEntity::class
+        PersonMergeSuggestionEntity::class,
+        DocumentClassificationEntity::class
         // ImageFtsEntity is intentionally excluded: @Fts5 has a KSP 2.2.x incompatibility.
         // The FTS5 virtual table is instead created manually in DatabaseProvider's
         // RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
     ],
-    version = 28,
+    version = 29,
     exportSchema = true
 )
 @androidx.room.TypeConverters(EmbeddingConverter::class)

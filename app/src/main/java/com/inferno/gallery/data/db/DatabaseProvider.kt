@@ -427,6 +427,31 @@ object DatabaseProvider {
                 }
             }
 
+            val MIGRATION_28_29 = object : androidx.room.migration.Migration(28, 29) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS document_classifications (
+                            mediaId INTEGER NOT NULL,
+                            category TEXT NOT NULL,
+                            PRIMARY KEY(mediaId, category)
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_document_classifications_category ON document_classifications(category)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_document_classifications_mediaId ON document_classifications(mediaId)")
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_doc_classifications_delete
+                        AFTER DELETE ON core_media
+                        BEGIN
+                            DELETE FROM document_classifications WHERE mediaId = old.id;
+                        END;
+                        """.trimIndent()
+                    )
+                }
+            }
+
             val instance = Room.databaseBuilder(
                 context.applicationContext,
                 GalleryDatabase::class.java,
@@ -439,7 +464,7 @@ object DatabaseProvider {
                 MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                 MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_22_24,
                 MIGRATION_24_25, MIGRATION_23_25, MIGRATION_22_25, MIGRATION_25_26,
-                MIGRATION_26_27, MIGRATION_27_28
+                MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29
             )
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .fallbackToDestructiveMigration(true)
@@ -491,6 +516,28 @@ object DatabaseProvider {
                         END;
                         """.trimIndent()
                     )
+
+                    // Document classifications table
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS document_classifications (
+                            mediaId INTEGER NOT NULL,
+                            category TEXT NOT NULL,
+                            PRIMARY KEY(mediaId, category)
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_document_classifications_category ON document_classifications(category)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_document_classifications_mediaId ON document_classifications(mediaId)")
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_doc_classifications_delete
+                        AFTER DELETE ON core_media
+                        BEGIN
+                            DELETE FROM document_classifications WHERE mediaId = old.id;
+                        END;
+                        """.trimIndent()
+                    )
                 }
 
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -534,6 +581,28 @@ object DatabaseProvider {
                         AFTER DELETE ON core_media
                         BEGIN
                             DELETE FROM photo_spheres WHERE mediaId = old.id;
+                        END;
+                        """.trimIndent()
+                    )
+
+                    // Ensure document_classifications table, indices, and trigger exist
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS document_classifications (
+                            mediaId INTEGER NOT NULL,
+                            category TEXT NOT NULL,
+                            PRIMARY KEY(mediaId, category)
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_document_classifications_category ON document_classifications(category)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_document_classifications_mediaId ON document_classifications(mediaId)")
+                    db.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS core_media_doc_classifications_delete
+                        AFTER DELETE ON core_media
+                        BEGIN
+                            DELETE FROM document_classifications WHERE mediaId = old.id;
                         END;
                         """.trimIndent()
                     )
