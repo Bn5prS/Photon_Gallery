@@ -328,6 +328,21 @@ class OcrIndexWorker(
                             if (embedded.extractedText.isNotBlank()) {
                                 DatabaseProvider.insertFtsRow(db, embedded.entity.id, embedded.extractedText, "")
                             }
+                            // Classify document categories
+                            val categories = com.inferno.gallery.data.ai.DocumentClassifier.classify(
+                                extractedText = embedded.extractedText,
+                                filePath = embedded.entity.filePath,
+                                bucketName = embedded.entity.bucketName
+                            )
+                            if (categories.isNotEmpty()) {
+                                val docEntities = categories.map { cat ->
+                                    com.inferno.gallery.data.db.DocumentClassificationEntity(
+                                        mediaId = embedded.entity.id,
+                                        category = cat
+                                    )
+                                }
+                                db.mediaDao().insertDocumentClassifications(docEntities)
+                            }
                             // Valid OCR run completed (either found text or image contains no text). Mark indexed!
                             ocrIndexedBatch.add(embedded.entity.id)
                         } else {

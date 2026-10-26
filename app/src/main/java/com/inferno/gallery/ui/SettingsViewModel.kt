@@ -452,6 +452,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             db.mediaDao().resetOcrIndexStatus()
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 db.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")
+                db.mediaDao().clearDocumentClassifications()
             }
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)

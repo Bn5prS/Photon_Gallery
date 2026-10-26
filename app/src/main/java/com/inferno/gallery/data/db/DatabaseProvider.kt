@@ -673,6 +673,48 @@ object DatabaseProvider {
         } catch (_: Exception) {}
     }
 
+    suspend fun backfillDocumentClassifications(db: GalleryDatabase) = withContext(Dispatchers.IO) {
+        try {
+            if (db.mediaDao().getDocumentClassificationsCount() > 0) {
+                return@withContext
+            }
+            val rawDb = db.openHelper.readableDatabase
+            val cursor = rawDb.query(
+                """
+                SELECT CAST(fts.mediaId AS INTEGER) as id, fts.extractedText, cm.filePath, cm.bucketName
+                FROM image_fts fts
+                JOIN core_media cm ON cm.id = CAST(fts.mediaId AS INTEGER)
+                WHERE cm.bucketName != 'Trash'
+                """.trimIndent()
+            )
+            val batch = mutableListOf<DocumentClassificationEntity>()
+            cursor.use {
+                val idCol = it.getColumnIndex("id")
+                val textCol = it.getColumnIndex("extractedText")
+                val pathCol = it.getColumnIndex("filePath")
+                val bucketCol = it.getColumnIndex("bucketName")
+                while (it.moveToNext()) {
+                    val id = it.getLong(idCol)
+                    val text = if (textCol >= 0) it.getString(textCol) else null
+                    val path = if (pathCol >= 0) it.getString(pathCol) else null
+                    val bucket = if (bucketCol >= 0) it.getString(bucketCol) else null
+
+                    val categories = com.inferno.gallery.data.ai.DocumentClassifier.classify(
+                        extractedText = text,
+                        filePath = path,
+                        bucketName = bucket
+                    )
+                    for (cat in categories) {
+                        batch.add(DocumentClassificationEntity(mediaId = id, category = cat))
+                    }
+                }
+            }
+            if (batch.isNotEmpty()) {
+                db.mediaDao().insertDocumentClassifications(batch)
+            }
+        } catch (_: Exception) {}
+    }
+
     /**
      * Insert or replace an FTS5 row for a given media item.
      * Uses openHelper directly since the table is not in the @Database schema.

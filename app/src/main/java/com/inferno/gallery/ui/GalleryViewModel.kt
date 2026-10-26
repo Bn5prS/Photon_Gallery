@@ -409,6 +409,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // Silently scan for duplicates and photo spheres in the background on startup
         scanForDuplicates()
         scanPhotoSpheres()
+        viewModelScope.launch(Dispatchers.IO) {
+            DatabaseProvider.backfillDocumentClassifications(database)
+        }
 
         // Collect & observe memories whenever excluded folders, favorites, or media count changes
         viewModelScope.launch(Dispatchers.IO) {
