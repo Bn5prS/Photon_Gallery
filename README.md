@@ -38,7 +38,7 @@
 
 | Smart Search | Collage | Settings |
 |:---:|:---:|:---:|
-| <img src="screenshots/06-search.jpg" width="180" /> | <img src="screenshots/07-collage.jpg" width="180" /> | <img src="screenshots/08-settings.jpg?v=2" width="180" /> |
+| <img src="screenshots/06-search.jpg?v=2" width="180" /> | <img src="screenshots/07-collage.jpg" width="180" /> | <img src="screenshots/08-settings.jpg?v=3" width="180" /> |
 
 ---
 
