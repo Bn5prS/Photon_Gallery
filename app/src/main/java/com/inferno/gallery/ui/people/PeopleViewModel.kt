@@ -244,32 +244,41 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     fun mergePersons(sourcePersonId: Long, targetPersonId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            clusteringManager.mergePersons(sourcePersonId, targetPersonId)
-            clearSelection()
+            try {
+                clusteringManager.mergePersons(sourcePersonId, targetPersonId)
+                clearSelection()
+            } catch (e: Exception) {
+                Log.e("PeopleViewModel", "Failed to merge persons: ${e.message}", e)
+            }
         }
     }
 
     fun mergeMultiplePersons(sourcePersonIds: List<Long>, targetPersonId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            clusteringManager.mergeMultiplePersons(sourcePersonIds, targetPersonId)
-            clearSelection()
+            try {
+                clusteringManager.mergeMultiplePersons(sourcePersonIds, targetPersonId)
+                clearSelection()
+            } catch (e: Exception) {
+                Log.e("PeopleViewModel", "Failed to merge multiple persons: ${e.message}", e)
+            }
         }
     }
 
     fun acceptMergeSuggestion(suggestion: MergeSuggestionWithPersons) {
         viewModelScope.launch(Dispatchers.IO) {
-            val pA = suggestion.personA
-            val pB = suggestion.personB
-            // The person with a name or higher faceCount becomes the target
-            val (target, source) = if (!pA.name.isNullOrBlank() || pA.faceCount >= pB.faceCount) {
-                Pair(pA, pB)
-            } else {
-                Pair(pB, pA)
+            try {
+                val pA = suggestion.personA
+                val pB = suggestion.personB
+                // The person with a name or higher faceCount becomes the target
+                val (target, source) = if (!pA.name.isNullOrBlank() || pA.faceCount >= pB.faceCount) {
+                    Pair(pA, pB)
+                } else {
+                    Pair(pB, pA)
+                }
+                clusteringManager.mergePersons(sourcePersonId = source.id, targetPersonId = target.id)
+            } catch (e: Exception) {
+                Log.e("PeopleViewModel", "Failed to accept merge suggestion: ${e.message}", e)
             }
-            clusteringManager.mergePersons(sourcePersonId = source.id, targetPersonId = target.id)
-            faceDao.setMergeSuggestionStatus(suggestion.suggestion.personIdA, suggestion.suggestion.personIdB, "ACCEPTED")
-            faceDao.deleteMergeSuggestionsForPerson(source.id)
-            faceDao.recalculateAllPersonFaceCounts()
         }
     }
 
@@ -306,7 +315,11 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     fun consolidateClusters() {
         viewModelScope.launch(Dispatchers.IO) {
-            clusteringManager.consolidateClusters()
+            try {
+                clusteringManager.consolidateClusters()
+            } catch (e: Exception) {
+                Log.e("PeopleViewModel", "Failed to consolidate clusters: ${e.message}", e)
+            }
         }
     }
 

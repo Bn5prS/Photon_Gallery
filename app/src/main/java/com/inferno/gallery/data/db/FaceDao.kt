@@ -34,7 +34,7 @@ interface FaceDao {
     suspend fun getPersonById(id: Long): PersonEntity?
 
     @Query("""
-        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+        SELECT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
                (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
                 INNER JOIN core_media c ON f.mediaId = c.id 
                 WHERE f.personId = p.id AND c.bucketName != 'Trash' 
@@ -46,7 +46,7 @@ interface FaceDao {
     fun observePromotedPersons(): Flow<List<PersonEntity>>
 
     @Query("""
-        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+        SELECT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
                (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
                 INNER JOIN core_media c ON f.mediaId = c.id 
                 WHERE f.personId = p.id AND c.bucketName != 'Trash' 
@@ -61,7 +61,7 @@ interface FaceDao {
     suspend fun getAllPersonsWithCentroids(): List<PersonEntity>
 
     @Query("""
-        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+        SELECT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
                (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
                 INNER JOIN core_media c ON f.mediaId = c.id 
                 WHERE f.personId = p.id AND c.bucketName != 'Trash' 
@@ -73,7 +73,7 @@ interface FaceDao {
     fun observeHiddenPersons(): Flow<List<PersonEntity>>
 
     @Query("""
-        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+        SELECT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
                (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
                 INNER JOIN core_media c ON f.mediaId = c.id 
                 WHERE f.personId = p.id AND c.bucketName != 'Trash' 
@@ -87,7 +87,7 @@ interface FaceDao {
     suspend fun findPersonByName(name: String, excludePersonId: Long): PersonEntity?
 
     @Query("""
-        SELECT p.id, p.name, p.coverCropPath, p.centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
+        SELECT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.createdAt,
                (SELECT COUNT(DISTINCT f.mediaId) FROM faces f 
                 INNER JOIN core_media c ON f.mediaId = c.id 
                 WHERE f.personId = p.id AND c.bucketName != 'Trash' 
@@ -126,14 +126,14 @@ interface FaceDao {
     suspend fun getFaceForMediaAndPerson(mediaId: Long, personId: Long): FaceEntity?
 
     @Query("""
-        SELECT DISTINCT p.* FROM persons p
+        SELECT DISTINCT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.faceCount, p.createdAt FROM persons p
         INNER JOIN faces f ON p.id = f.personId
         WHERE f.mediaId = :mediaId AND p.isHidden = 0
     """)
     fun observePersonsForMedia(mediaId: Long): Flow<List<PersonEntity>>
 
     @Query("""
-        SELECT DISTINCT p.* FROM persons p
+        SELECT DISTINCT p.id, p.name, p.coverCropPath, NULL AS centroid, p.isPromoted, p.isHidden, p.isFavorite, p.faceCount, p.createdAt FROM persons p
         INNER JOIN faces f ON p.id = f.personId
         WHERE f.mediaId = :mediaId AND p.isHidden = 0
     """)
@@ -288,6 +288,7 @@ interface FaceDao {
         faceCount: Int,
         coverCropPath: String?
     ) {
+        deleteMergeSuggestionsForPerson(sourcePersonId)
         reassignFaces(sourcePersonId, targetPersonId)
         val target = getPersonById(targetPersonId) ?: return
         val distinctPhotoCount = countDistinctMediaForPerson(targetPersonId)

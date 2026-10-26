@@ -32,6 +32,15 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             .build()
     override fun onCreate() {
         super.onCreate()
+        // Increase Android CursorWindow limit to 32MB to prevent window overflow / paging errors on large libraries
+        try {
+            val field = android.database.CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
+            field.isAccessible = true
+            field.set(null, 32 * 1024 * 1024)
+        } catch (_: Throwable) {
+            // Field may be hidden or restricted on some vendor OEM builds; non-fatal
+        }
+
         // Install global crash handler — must be first to catch startup crashes
         com.inferno.gallery.crash.CrashHandler.install(this)
         // Chain: MediaStore sync → OCR indexing (OCR must wait for sync to populate the DB)
