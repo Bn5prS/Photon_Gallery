@@ -421,7 +421,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         scanForDuplicates()
         scanPhotoSpheres()
         viewModelScope.launch(Dispatchers.IO) {
-            DatabaseProvider.backfillDocumentClassifications(database)
+            val currentVersion = 2
+            val storedVersion = settingsRepository.docClassifierVersionFlow.first()
+            val force = storedVersion < currentVersion
+            DatabaseProvider.backfillDocumentClassifications(database, forceReclassify = force)
+            if (force) {
+                settingsRepository.updateDocClassifierVersion(currentVersion)
+            }
         }
 
         // Collect & observe memories whenever excluded folders, favorites, or media count changes

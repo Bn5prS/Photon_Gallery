@@ -90,6 +90,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val ALBUMS_EXPANDED_PLACES = booleanPreferencesKey("albums_expanded_places")
         val ALBUMS_EXPANDED_MEDIA_TYPES = booleanPreferencesKey("albums_expanded_media_types")
         val ALBUMS_EXPANDED_DOCUMENTS = booleanPreferencesKey("albums_expanded_documents")
+        val DOC_CLASSIFIER_VERSION = intPreferencesKey("doc_classifier_version")
 
         // Theme Customization
         val APP_SEED_COLOR = intPreferencesKey("app_seed_color")
@@ -189,6 +190,13 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateAlbumsExpandedDocuments(expanded: Boolean) {
         context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_DOCUMENTS] = expanded }
+    }
+
+    val docClassifierVersionFlow: Flow<Int> = context.dataStore.data
+        .map { preferences -> preferences[DOC_CLASSIFIER_VERSION] ?: 0 }
+
+    suspend fun updateDocClassifierVersion(version: Int) {
+        context.dataStore.edit { preferences -> preferences[DOC_CLASSIFIER_VERSION] = version }
     }
 
 

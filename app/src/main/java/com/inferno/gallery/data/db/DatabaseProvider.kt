@@ -673,9 +673,11 @@ object DatabaseProvider {
         } catch (_: Exception) {}
     }
 
-    suspend fun backfillDocumentClassifications(db: GalleryDatabase) = withContext(Dispatchers.IO) {
+    suspend fun backfillDocumentClassifications(db: GalleryDatabase, forceReclassify: Boolean = false) = withContext(Dispatchers.IO) {
         try {
-            if (db.mediaDao().getDocumentClassificationsCount() > 0) {
+            if (forceReclassify) {
+                db.mediaDao().clearDocumentClassifications()
+            } else if (db.mediaDao().getDocumentClassificationsCount() > 0) {
                 return@withContext
             }
             val rawDb = db.openHelper.readableDatabase
