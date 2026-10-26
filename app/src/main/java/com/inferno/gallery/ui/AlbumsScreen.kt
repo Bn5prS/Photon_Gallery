@@ -572,7 +572,7 @@ fun AlbumsScreen(
             item(key = "header_documents", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeader(
                     title = "Documents",
-                    count = documentBuckets.count { it.itemCount > 0 }.takeIf { it > 0 } ?: documentBuckets.size,
+                    count = documentBuckets.size,
                     isExpanded = documentsExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedDocuments() }
                 )

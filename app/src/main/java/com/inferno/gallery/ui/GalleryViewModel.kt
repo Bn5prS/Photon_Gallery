@@ -1792,16 +1792,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             BucketNames.DOC_RECEIPTS,
             BucketNames.DOC_SOCIAL
         )
-        types.mapIndexed { index, bucketName ->
+        val list = mutableListOf<AlbumBucket>()
+        types.forEachIndexed { index, bucketName ->
             val stats = statsArray[index]
-            AlbumBucket(
-                bucketName = bucketName,
-                coverUri = stats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
-                itemCount = stats.itemCount,
-                totalSizeBytes = stats.totalSizeBytes,
-                maxDate = stats.maxDate
-            )
+            if (stats.itemCount > 0) {
+                list.add(
+                    AlbumBucket(
+                        bucketName = bucketName,
+                        coverUri = stats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
+                        itemCount = stats.itemCount,
+                        totalSizeBytes = stats.totalSizeBytes,
+                        maxDate = stats.maxDate
+                    )
+                )
+            }
         }
+        list
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
 
