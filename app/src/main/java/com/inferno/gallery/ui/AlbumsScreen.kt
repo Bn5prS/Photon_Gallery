@@ -147,6 +147,7 @@ fun AlbumsScreen(
     }
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val placesClusters by viewModel.placesClusters.collectAsState()
+    val documentBuckets by viewModel.documentBuckets.collectAsState()
     val mediaTypeBuckets by viewModel.mediaTypeBuckets.collectAsState()
     val customCovers by viewModel.albumCustomCovers.collectAsState()
     val customShapes by viewModel.albumCustomShapes.collectAsState()
@@ -178,6 +179,7 @@ fun AlbumsScreen(
     val faceProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
     val faceTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
+    val documentsExpanded by viewModel.albumsExpandedDocuments.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -557,6 +559,121 @@ fun AlbumsScreen(
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 3.4 Documents (Books & Magazines, Events, IDs, Notes, Payments, Receipts, Social) ──
+        if (documentBuckets.isNotEmpty()) {
+            item(key = "header_documents", span = { GridItemSpan(maxLineSpan) }) {
+                SectionHeader(
+                    title = "Documents",
+                    count = documentBuckets.count { it.itemCount > 0 }.takeIf { it > 0 } ?: documentBuckets.size,
+                    isExpanded = documentsExpanded,
+                    onToggle = { viewModel.toggleAlbumsExpandedDocuments() }
+                )
+            }
+
+            item(key = "content_documents", span = { GridItemSpan(maxLineSpan) }) {
+                AnimatedVisibility(
+                    visible = documentsExpanded,
+                    enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
+                    exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                ) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                        contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
+                    ) {
+                        items(documentBuckets, key = { "document_${it.bucketName}" }) { docBucket ->
+                            val (title, iconRes) = when (docBucket.bucketName) {
+                                BucketNames.DOC_BOOKS_MAGAZINES -> "Books & Magazines" to R.drawable.ic_ms_menu_book
+                                BucketNames.DOC_EVENTS -> "Events" to R.drawable.ic_ms_confirmation_number
+                                BucketNames.DOC_IDS -> "IDs" to R.drawable.ic_ms_badge
+                                BucketNames.DOC_NOTES -> "Notes" to R.drawable.ic_ms_edit_note
+                                BucketNames.DOC_PAYMENTS -> "Payments / Methods" to R.drawable.ic_ms_payments
+                                BucketNames.DOC_RECEIPTS -> "Receipts" to R.drawable.ic_ms_receipt_long
+                                BucketNames.DOC_SOCIAL -> "Social" to R.drawable.ic_ms_share
+                                else -> "Documents" to R.drawable.ic_ms_description
+                            }
+
+                            Surface(
+                                onClick = { onAlbumClick(docBucket.bucketName) },
+                                shape = ShapeLargeIncreased,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shadowElevation = 0.dp,
+                                modifier = Modifier
+                                    .width(140.dp)
+                                    .height(96.dp)
+                                    .pressScale(pressedScale = 0.96f)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    if (docBucket.coverUri != Uri.EMPTY) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(docBucket.coverUri)
+                                                .size(280)
+                                                .crossfade(true)
+                                                .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .fillMaxWidth()
+                                                .height(48.dp)
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        colors = listOf(
+                                                            Color.Transparent,
+                                                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f)
+                                                        )
+                                                    )
+                                                )
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        )
+                                    }
+
+                                    Column(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(SpacingTokens.S)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(iconRes),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(IconSizeTokens.S),
+                                                tint = if (docBucket.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim else MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                            Text(
+                                                text = title,
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = if (docBucket.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim else MaterialTheme.colorScheme.onSecondaryContainer,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            text = "${docBucket.itemCount} items",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (docBucket.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
