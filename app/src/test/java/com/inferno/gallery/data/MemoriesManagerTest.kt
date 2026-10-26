@@ -80,7 +80,10 @@ class MemoriesManagerTest {
         override suspend fun insertAll(media: List<CoreMediaEntity>) {}
         override suspend fun deleteByIds(ids: List<Long>) {}
         override suspend fun deleteByUri(uriString: String) {}
+        override suspend fun deleteByUris(uris: List<String>) {}
+        override suspend fun getMediaByUrisList(uris: List<String>): List<CoreMediaEntity> = emptyList()
         override suspend fun updateBucketByUri(uriString: String, bucket: String) {}
+        override suspend fun updateBucketByUris(uris: List<String>, bucket: String) {}
         override suspend fun updatePathAndBucket(id: Long, newPath: String, newBucket: String, newName: String) {}
         override suspend fun updateOcrIndexStatus(id: Long, isIndexed: Boolean) {}
         override suspend fun markOcrIndexed(ids: List<Long>) {}
@@ -115,6 +118,11 @@ class MemoriesManagerTest {
         override suspend fun getGeotaggedCount(): Int = 0
         override suspend fun insertPhotoSpheres(entities: List<com.inferno.gallery.data.db.PhotoSphereEntity>) {}
         override suspend fun getUncheckedSphereCandidates(): List<com.inferno.gallery.data.db.SphereCandidate> = emptyList()
+        override fun observeDocumentCategoryStats(category: String): Flow<com.inferno.gallery.data.db.MediaAggregateStats> = emptyFlow()
+        override suspend fun insertDocumentClassifications(items: List<com.inferno.gallery.data.db.DocumentClassificationEntity>) {}
+        override suspend fun deleteDocumentClassificationsForMedia(mediaId: Long) {}
+        override suspend fun clearDocumentClassifications() {}
+        override suspend fun getDocumentClassificationsCount(): Int = 0
     }
 
     @Test

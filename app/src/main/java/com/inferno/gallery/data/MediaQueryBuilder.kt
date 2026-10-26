@@ -85,6 +85,11 @@ object MediaQueryBuilder {
                 conditions.add("cm.id IN (SELECT mediaId FROM geocoded_locations WHERE placeName = ?)")
                 args.add(placeName)
             }
+            bucket?.startsWith("doc:") == true -> {
+                conditions.add("cm.id IN (SELECT mediaId FROM document_classifications WHERE category = ?)")
+                args.add(bucket)
+                conditions.add(NOT_HIDDEN)
+            }
             bucket == BucketNames.MEDIA_TYPE_RAW -> {
                 conditions.add("(cm.mimeType LIKE '%raw%' OR cm.mimeType LIKE '%dng%' OR cm.name LIKE '%.dng' OR cm.name LIKE '%.raw' OR cm.name LIKE '%.cr2' OR cm.name LIKE '%.nef' OR cm.name LIKE '%.arw' OR cm.name LIKE '%.orf' OR cm.name LIKE '%.raf')")
                 conditions.add(NOT_HIDDEN)
