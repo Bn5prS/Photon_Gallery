@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.Brush
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.components.thumbnailMemoryKey
 import com.inferno.gallery.ui.components.thumbnailTargetPx
+import com.inferno.gallery.ui.components.PersonHeadGlowOverlay
+import com.inferno.gallery.ui.people.PersonHeadGlowHelper
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -402,6 +404,15 @@ fun DetailScreen(
     var highlightRects by remember { mutableStateOf<List<android.graphics.Rect>>(emptyList()) }
     var highlightImageSize by remember { mutableStateOf<androidx.compose.ui.geometry.Size?>(null) }
     var highlightOverlayVisible by remember { mutableStateOf(false) }
+
+    val highlightPersonId = remember(bucketName) {
+        if (bucketName?.startsWith("person:") == true) {
+            bucketName.removePrefix("person:").toLongOrNull()
+        } else null
+    }
+    var isPersonGlowVisible by remember(highlightPersonId) { mutableStateOf(highlightPersonId != null) }
+    var personHeadRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var personGlowName by remember { mutableStateOf<String?>(null) }
 
     var hasInitialScrolled by remember(mediaId) { mutableStateOf(false) }
 
@@ -1052,6 +1063,43 @@ fun DetailScreen(
                         }
                     }
 
+                    androidx.compose.runtime.LaunchedEffect(highlightPersonId, page, pagerState.currentPage, item.id, imageAspectRatio) {
+                        if (page == pagerState.currentPage && highlightPersonId != null) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val mediaIdLong = item.id.toLongOrNull() ?: return@withContext
+                                try {
+                                    val db = DatabaseProvider.getDatabase(context)
+                                    val face = db.faceDao().getFaceForMediaAndPerson(mediaIdLong, highlightPersonId)
+                                    val person = db.faceDao().getPersonById(highlightPersonId)
+                                    if (face != null) {
+                                        val imgW = if (imageAspectRatio > 0f) 1000f else parentWidth
+                                        val imgH = if (imageAspectRatio > 0f) 1000f / imageAspectRatio else parentHeight
+                                        val bounds = PersonHeadGlowHelper.calculateHeadBounds(
+                                            bboxLeft = face.bboxLeft,
+                                            bboxTop = face.bboxTop,
+                                            bboxRight = face.bboxRight,
+                                            bboxBottom = face.bboxBottom,
+                                            imageWidth = imgW,
+                                            imageHeight = imgH,
+                                            viewportWidth = parentWidth,
+                                            viewportHeight = parentHeight
+                                        )
+                                        personHeadRect = bounds
+                                        personGlowName = person?.name
+                                        isPersonGlowVisible = true
+                                    } else {
+                                        personHeadRect = null
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("DetailScreen", "Failed to compute person head glow bounds: ${e.message}")
+                                    personHeadRect = null
+                                }
+                            }
+                        } else if (page != pagerState.currentPage) {
+                            personHeadRect = null
+                        }
+                    }
+
                     with(sharedTransitionScope) {
                         AsyncImage(
                             model = request,
@@ -1116,6 +1164,7 @@ fun DetailScreen(
                                             } else {
                                                 activeHighlight = null
                                                 highlightOverlayVisible = false
+                                                isPersonGlowVisible = false
                                                 if (showInfoCard || showUi) {
                                                     showInfoCard = false
                                                     showUi = false
@@ -1125,6 +1174,7 @@ fun DetailScreen(
                                             }
                                         },
                                         onDoubleTap = { centroid ->
+                                            isPersonGlowVisible = false
                                             animJob.value?.cancel()
                                             animJob.value = coroutineScope.launch {
                                                 val composableW = size.width.toFloat()
@@ -1210,6 +1260,7 @@ fun DetailScreen(
                                             }
 
                                             if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero || isMultiTouch)) {
+                                                isPersonGlowVisible = false
                                                 val centroid = event.calculateCentroid(useCurrent = false)
                                                 animJob.value?.cancel()
                                                 val oldScale = scale.floatValue
@@ -1408,6 +1459,17 @@ fun DetailScreen(
                                     )
                                 }
                             }
+                        }
+
+                        if (personHeadRect != null && isPersonGlowVisible && page == pagerState.currentPage) {
+                            PersonHeadGlowOverlay(
+                                headRect = personHeadRect!!,
+                                personName = personGlowName,
+                                scale = scale.floatValue * pagerScale,
+                                offsetX = offsetX.floatValue,
+                                offsetY = offsetY.floatValue,
+                                onDismiss = { isPersonGlowVisible = false }
+                            )
                         }
                     }
                 }
