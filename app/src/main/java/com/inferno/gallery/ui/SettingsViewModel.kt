@@ -836,6 +836,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val viewerZoomMinimapEnabled: StateFlow<Boolean> = repository.viewerZoomMinimapEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setViewerZoomMinimapEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateViewerZoomMinimapEnabled(enabled)
+        }
+    }
+
 
 
     val showAlbumSize: StateFlow<Boolean> = repository.showAlbumSizeFlow.stateIn(

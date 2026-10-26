@@ -75,6 +75,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val VIEWER_BLUR_EFFECT = booleanPreferencesKey("viewer_blur_effect")
         val VIEWER_DYNAMIC_COLOR = booleanPreferencesKey("viewer_dynamic_color")
         val VIEWER_FILMSTRIP_ENABLED = booleanPreferencesKey("viewer_filmstrip_enabled")
+        val VIEWER_ZOOM_MINIMAP_ENABLED = booleanPreferencesKey("viewer_zoom_minimap_enabled")
         val ALBUM_CUSTOM_COVERS = stringPreferencesKey("album_custom_covers")
         val ALBUM_CUSTOM_SHAPES = stringPreferencesKey("album_custom_shapes")
         val SHOW_ALBUM_SIZE = booleanPreferencesKey("show_album_size")
@@ -748,6 +749,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateViewerFilmstripEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[VIEWER_FILMSTRIP_ENABLED] = enabled
+        }
+    }
+
+    val viewerZoomMinimapEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[VIEWER_ZOOM_MINIMAP_ENABLED] ?: true
+        }
+
+    suspend fun updateViewerZoomMinimapEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[VIEWER_ZOOM_MINIMAP_ENABLED] = enabled
         }
     }
 

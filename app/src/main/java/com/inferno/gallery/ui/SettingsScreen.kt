@@ -169,6 +169,7 @@ fun SettingsScreen(
     val hapticsStrength by viewModel.hapticsStrength.collectAsState()
     val viewerBlurEffect by viewModel.viewerBlurEffect.collectAsState()
     val viewerDynamicColor by viewModel.viewerDynamicColor.collectAsState()
+    val viewerZoomMinimapEnabled by viewModel.viewerZoomMinimapEnabled.collectAsState()
     val confirmDelete by viewModel.confirmDeleteEnabled.collectAsState()
     val autoCleanTrash by viewModel.autoCleanTrashEnabled.collectAsState()
     val autoCleanDays by viewModel.autoCleanTrashDays.collectAsState()
@@ -640,6 +641,15 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
                                             checked = viewerBlurEffect,
                                             onCheckedChange = { viewModel.setViewerBlurEffect(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = "Zoom Viewport Navigator",
+                                            subtitle = "Show a mini-thumbnail in the corner to track your position when zoomed in",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
+                                            checked = viewerZoomMinimapEnabled,
+                                            onCheckedChange = { viewModel.setViewerZoomMinimapEnabled(it) }
                                         )
                                     },
                                     {

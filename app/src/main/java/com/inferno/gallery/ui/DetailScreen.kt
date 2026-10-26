@@ -232,6 +232,7 @@ fun DetailScreen(
     val maxBrightnessEnabled by settingsRepo.maxBrightnessEnabledFlow.collectAsState(initial = false)
     val viewerBlurEffect by settingsRepo.viewerBlurEffectFlow.collectAsState(initial = false)
     val viewerDynamicColor by settingsRepo.viewerDynamicColorFlow.collectAsState(initial = false)
+    val viewerZoomMinimapEnabled by settingsRepo.viewerZoomMinimapEnabledFlow.collectAsState(initial = true)
     val viewerFilmstripEnabled = false // Feature backed up: re-bind to settingsRepo.viewerFilmstripEnabledFlow when requested
 
     // Overrides screen brightness to maximum in fullscreen and restores it when leaving
@@ -479,7 +480,11 @@ fun DetailScreen(
             val itemToDelete = pendingDeleteItem
             val deletedUri = itemToDelete?.uri?.toString()
             if (deletedUri != null) {
-                viewModel.removeMediaOptimistically(deletedUri)
+                if (bucketName == "Trash" || itemToDelete?.bucketName == "Trash") {
+                    viewModel.deleteMediaPermanentlyOptimistically(deletedUri)
+                } else {
+                    viewModel.removeMediaOptimistically(deletedUri)
+                }
             }
         }
         pendingDeletePage = null
@@ -580,21 +585,27 @@ fun DetailScreen(
                 androidx.compose.material3.TextButton(
                     onClick = {
                         showDeleteConfirmDialog = false
-                        try {
-                            val trashIntent = MediaStore.createTrashRequest(
-                                context.contentResolver, 
-                                listOf(pendingDeleteItem!!.uri), 
-                                true
-                            )
-                            val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                            launcher.launch(request)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            android.widget.Toast.makeText(
-                                context, 
-                                "Unable to trash this item: ${e.message}", 
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                        val item = pendingDeleteItem ?: return@TextButton
+                        coroutineScope.launch(Dispatchers.IO) {
+                            try {
+                                val trashIntent = MediaStore.createTrashRequest(
+                                    context.contentResolver, 
+                                    listOf(item.uri), 
+                                    true
+                                )
+                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                withContext(Dispatchers.Main) {
+                                    launcher.launch(request)
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    android.widget.Toast.makeText(
+                                        context, 
+                                        "Unable to trash this item: ${e.message}", 
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
                         }
                     }
                 ) {
@@ -1417,7 +1428,7 @@ fun DetailScreen(
 
             // Minimap Overlay — top-right corner
             AnimatedVisibility(
-                visible = scale.floatValue >= 5f,
+                visible = viewerZoomMinimapEnabled && scale.floatValue >= 5f,
                 enter = fadeIn(MotionTokens.gentleSpring()),
                 exit = fadeOut(MotionTokens.gentleSpring()),
                 modifier = Modifier
@@ -1841,8 +1852,19 @@ fun DetailScreen(
                 if (isMediaStoreUri) {
                     pendingDeleteItem = currentItem
                     pendingDeletePage = pagerState.currentPage
-                    val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
-                    restoreLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build())
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                restoreLauncher.launch(request)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Unable to restore: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1853,8 +1875,19 @@ fun DetailScreen(
                 if (isMediaStoreUri) {
                     pendingDeleteItem = currentItem
                     pendingDeletePage = pagerState.currentPage
-                    val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
-                    launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build())
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                launcher.launch(request)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1906,21 +1939,26 @@ fun DetailScreen(
                     if (confirmDeleteEnabled) {
                         showDeleteConfirmDialog = true
                     } else {
-                        try {
-                            val trashIntent = MediaStore.createTrashRequest(
-                                context.contentResolver,
-                                listOf(currentItem.uri),
-                                true
-                            )
-                            val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                            launcher.launch(request)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            android.widget.Toast.makeText(
-                                context,
-                                "Unable to trash this item: ${e.message}",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                        coroutineScope.launch(Dispatchers.IO) {
+                            try {
+                                val trashIntent = MediaStore.createTrashRequest(
+                                    context.contentResolver,
+                                    listOf(currentItem.uri),
+                                    true
+                                )
+                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                withContext(Dispatchers.Main) {
+                                    launcher.launch(request)
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Unable to trash this item: ${e.message}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
                         }
                     }
                 }
