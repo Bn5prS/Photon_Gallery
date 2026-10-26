@@ -169,7 +169,7 @@ private fun formatSpeed(bytesPerSec: Long): String {
  * 3 Guided Expressive Steps with Back & Next navigation dock:
  * - Step 0: Welcome, Privacy Guarantee & Granular Media Permissions
  * - Step 1: Look & Feel Customization with Interactive Live Theme Viewport
- * - Step 2: Semantic AI Smart Search Setup with Live Speed & Model Size Metrics
+ * - Step 2: On-Device AI Setup (Smart Search & Face Recognition) with Live Speed & Model Size Metrics
  */
 @Composable
 fun PermissionOnboardingScreen(
@@ -919,6 +919,17 @@ private fun SetupAiPage(
     val autoIndexEnabled = settingsViewModel?.smartSearchAutoIndex?.collectAsState()?.value ?: true
     val ocrIndexingEnabled = settingsViewModel?.ocrIndexingEnabled?.collectAsState()?.value ?: true
 
+    // Face Recognition & Model Download state
+    val faceRecognitionEnabled = settingsViewModel?.faceRecognitionEnabled?.collectAsState()?.value ?: true
+    val faceModelDownloaded = settingsViewModel?.faceModelDownloaded?.collectAsState()?.value ?: false
+    val faceModelDownloadWorkInfo = settingsViewModel?.faceModelDownloadWorkInfo?.collectAsState(initial = null)?.value
+    val isFaceDownloading = faceModelDownloadWorkInfo?.state == WorkInfo.State.RUNNING
+    val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+    val faceBytesDownloaded = faceModelDownloadWorkInfo?.progress?.getLong("bytesDownloaded", 0L) ?: 0L
+    val faceTotalBytes = faceModelDownloadWorkInfo?.progress?.getLong("totalBytes", 13_600_000L) ?: 13_600_000L
+    val faceSpeedBytesPerSec = faceModelDownloadWorkInfo?.progress?.getLong("speedBytesPerSec", 0L) ?: 0L
+    val faceAutoIndex = settingsViewModel?.faceAutoIndex?.collectAsState()?.value ?: true
+
     // Interactive query simulation playground state
     val sampleQueries = listOf("sunset beach", "latte coffee", "happy puppy", "receipts")
     var selectedQueryIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -939,7 +950,7 @@ private fun SetupAiPage(
         ) {
             Spacer(modifier = Modifier.height(SpacingTokens.S))
 
-            // AI Search Icon
+            // AI Hub Icon
             Surface(
                 shape = OfficialM3Shapes.Cookie9Sided,
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -952,7 +963,7 @@ private fun SetupAiPage(
                 ) {
                     Icon(
                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                        contentDescription = "Smart Search",
+                        contentDescription = "On-Device AI",
                         modifier = Modifier.size(IconSizeTokens.XL)
                     )
                 }
@@ -961,7 +972,7 @@ private fun SetupAiPage(
             Spacer(modifier = Modifier.height(SpacingTokens.M))
 
             Text(
-                text = "Smart Search",
+                text = "On-Device AI",
                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
@@ -970,7 +981,7 @@ private fun SetupAiPage(
             Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
             Text(
-                text = "Search photos with natural concepts and keywords like 'beach sunset' or 'white car' without uploading to the cloud.",
+                text = "Supercharge your gallery with private, 100% offline semantic search and facial recognition — your photos never leave your device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -1417,10 +1428,333 @@ private fun SetupAiPage(
                 }
             }
 
+            Spacer(modifier = Modifier.height(SpacingTokens.L))
+
+            // Face Recognition & People Grouping Container
+            Surface(
+                shape = ShapeLargeIncreased,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(SpacingTokens.L),
+                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = OfficialM3Shapes.Cookie12Sided,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(46.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(IconSizeTokens.L)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "People & Face Grouping",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "On-Device MobileFaceNet • ~13 MB • 100% Offline (CPU)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Surface(
+                            color = if (faceModelDownloaded) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else if (isFaceDownloading) {
+                                MaterialTheme.colorScheme.tertiaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
+                            shape = ShapeFull
+                        ) {
+                            Text(
+                                text = if (faceModelDownloaded) "Ready • 13 MB" else if (isFaceDownloading) "$faceDownloadProgress%" else "~13 MB",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (faceModelDownloaded) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else if (isFaceDownloading) {
+                                    MaterialTheme.colorScheme.onTertiaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
+                            )
+                        }
+                    }
+
+                    // Face Recognition Toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                settingsViewModel?.setFaceRecognitionEnabled(!faceRecognitionEnabled)
+                            }
+                            .padding(vertical = SpacingTokens.XS),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = ShapeMedium,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(IconSizeTokens.M)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Face Recognition & Grouping",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Cluster and organize individuals across your gallery automatically",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(SpacingTokens.S))
+
+                        Switch(
+                            checked = faceRecognitionEnabled,
+                            onCheckedChange = { checked ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                settingsViewModel?.setFaceRecognitionEnabled(checked)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+
+                    if (faceRecognitionEnabled) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                            thickness = 0.75.dp
+                        )
+
+                        // Auto-Index Faces Toggle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    settingsViewModel?.setFaceAutoIndex(!faceAutoIndex)
+                                }
+                                .padding(vertical = SpacingTokens.XS),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = ShapeMedium,
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(IconSizeTokens.M)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Auto-Index New Faces",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Automatically detect and cluster faces when new photos arrive",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(SpacingTokens.S))
+
+                            Switch(
+                                checked = faceAutoIndex,
+                                onCheckedChange = { checked ->
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    settingsViewModel?.setFaceAutoIndex(checked)
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                            thickness = 0.75.dp
+                        )
+
+                        // Download Face Model Action / Progress Area
+                        if (isFaceDownloading) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Downloading: $faceDownloadProgress%",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = if (faceBytesDownloaded > 0L) "${formatBytes(faceBytesDownloaded)} / ${formatBytes(faceTotalBytes)}" else "${formatBytes(faceTotalBytes)}",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                LinearWavyProgressIndicator(
+                                    progress = { faceDownloadProgress / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(10.dp)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
+                                            contentDescription = "Speed",
+                                            tint = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.size(IconSizeTokens.S)
+                                        )
+                                        Text(
+                                            text = "Speed: ${formatSpeed(faceSpeedBytesPerSec)}",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    TextButton(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            settingsViewModel?.cancelFaceModelDownload()
+                                        },
+                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Text("Cancel")
+                                    }
+                                }
+                            }
+                        } else if (faceModelDownloaded) {
+                            Surface(
+                                shape = ShapeMedium,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(IconSizeTokens.M)
+                                    )
+                                    Text(
+                                        text = "Face Model downloaded and verified (13 MB). Ready for offline face clustering.",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    settingsViewModel?.startFaceModelDownload()
+                                },
+                                shape = ShapeFull,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .pressScale()
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(IconSizeTokens.S)
+                                    )
+                                    Text(
+                                        text = "Download Face Model (13 MB)",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(SpacingTokens.XL))
         }
 
         // Bottom Navigation Dock: Back & Start Exploring / Finish Setup Buttons
+        val canExplore = isModelDownloaded || faceModelDownloaded
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(SpacingTokens.S),
@@ -1429,11 +1763,11 @@ private fun SetupAiPage(
             OnboardingNavigationDock(
                 onBack = onBack,
                 onNext = onFinish,
-                nextText = if (isModelDownloaded) "Start Exploring" else "Finish Setup",
-                nextIconRes = if (isModelDownloaded) R.drawable.ic_ms_check else R.drawable.ic_ms_chevron_right
+                nextText = if (canExplore) "Start Exploring" else "Finish Setup",
+                nextIconRes = if (canExplore) R.drawable.ic_ms_check else R.drawable.ic_ms_chevron_right
             )
 
-            if (!isModelDownloaded && !isDownloading) {
+            if (!canExplore && !isDownloading && !isFaceDownloading) {
                 TextButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
