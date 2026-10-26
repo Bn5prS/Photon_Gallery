@@ -421,7 +421,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         scanForDuplicates()
         scanPhotoSpheres()
         viewModelScope.launch(Dispatchers.IO) {
-            val currentVersion = 2
+            val currentVersion = 3
             val storedVersion = settingsRepository.docClassifierVersionFlow.first()
             val force = storedVersion < currentVersion
             DatabaseProvider.backfillDocumentClassifications(database, forceReclassify = force)
