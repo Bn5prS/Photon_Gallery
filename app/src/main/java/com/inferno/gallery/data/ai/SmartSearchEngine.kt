@@ -196,18 +196,28 @@ class SmartSearchEngine(private val context: Context) {
         val trimmed = normalizeQuery(query)
         if (trimmed.isEmpty()) return FloatArray(512)
 
-        val baseVec = encodeSingleText(trimmed)
         if (trimmed.startsWith("a photo of", ignoreCase = true) ||
-            trimmed.startsWith("a picture of", ignoreCase = true)
+            trimmed.startsWith("a picture of", ignoreCase = true) ||
+            trimmed.startsWith("photo of", ignoreCase = true)
         ) {
-            return baseVec
+            return encodeSingleText(trimmed)
         }
 
-        // Prompt ensembling: combine raw prompt and contextual template to maximize retrieval accuracy
-        val templatedVec = encodeSingleText("a photo of $trimmed")
+        // Canonical CLIP multi-template prompt ensembling:
+        // Averages embeddings across multiple descriptive templates to maximize retrieval recall
+        val templates = listOf(
+            trimmed,
+            "a photo of $trimmed",
+            "a photo of the $trimmed",
+            "a close-up photo of $trimmed"
+        )
+
         val ensembled = FloatArray(512)
-        for (i in 0 until 512) {
-            ensembled[i] = baseVec[i] + templatedVec[i]
+        for (tpl in templates) {
+            val vec = encodeSingleText(tpl)
+            for (i in 0 until 512) {
+                ensembled[i] += vec[i]
+            }
         }
         return l2Normalize(ensembled)
     }
@@ -276,7 +286,7 @@ class SmartSearchEngine(private val context: Context) {
             bitmap
         }
 
-        val inputBitmap = prepareLetterboxInputBitmap(softwareBitmap, 224)
+        val inputBitmap = prepareCenterCropInputBitmap(softwareBitmap, 224)
         if (softwareBitmap != bitmap) {
             softwareBitmap.recycle()
         }
@@ -330,6 +340,40 @@ class SmartSearchEngine(private val context: Context) {
         } finally {
             imageTensor.close()
         }
+    }
+
+    /**
+     * Canonical aspect-preserving center crop for CLIP ViT-B/16.
+     * Scales image so min(width, height) = targetSize, then extracts central targetSize x targetSize square.
+     * Prevents artificial black letterbox borders that distort vision transformer attention.
+     */
+    fun prepareCenterCropInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {
+        val sourceWidth = bitmap.width
+        val sourceHeight = bitmap.height
+        if (sourceWidth <= 0 || sourceHeight <= 0) {
+            throw IllegalArgumentException("Bitmap has invalid dimensions: ${sourceWidth}x$sourceHeight")
+        }
+
+        if (sourceWidth == targetSize && sourceHeight == targetSize) {
+            return bitmap
+        }
+
+        val scale = targetSize.toFloat() / minOf(sourceWidth, sourceHeight).toFloat()
+        val scaledWidth = maxOf(targetSize, (sourceWidth * scale).roundToInt())
+        val scaledHeight = maxOf(targetSize, (sourceHeight * scale).roundToInt())
+
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+
+        val xOffset = ((scaledWidth - targetSize) / 2).coerceIn(0, scaledWidth - targetSize)
+        val yOffset = ((scaledHeight - targetSize) / 2).coerceIn(0, scaledHeight - targetSize)
+
+        val output = Bitmap.createBitmap(scaledBitmap, xOffset, yOffset, targetSize, targetSize)
+
+        if (scaledBitmap != bitmap && scaledBitmap != output) {
+            scaledBitmap.recycle()
+        }
+
+        return output
     }
 
     fun prepareLetterboxInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {

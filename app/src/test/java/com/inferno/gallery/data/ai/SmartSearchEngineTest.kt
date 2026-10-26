@@ -84,6 +84,63 @@ class SmartSearchEngineTest {
         assertEquals(1.0f, length, 1e-4f)
     }
 
+    private fun calculateCenterCropDimensions(sourceWidth: Int, sourceHeight: Int, targetSize: Int = 224): Triple<Int, Int, Pair<Int, Int>> {
+        val scale = targetSize.toFloat() / minOf(sourceWidth, sourceHeight).toFloat()
+        val scaledWidth = maxOf(targetSize, (sourceWidth * scale).roundToInt())
+        val scaledHeight = maxOf(targetSize, (sourceHeight * scale).roundToInt())
+        val xOffset = (scaledWidth - targetSize) / 2
+        val yOffset = (scaledHeight - targetSize) / 2
+        return Triple(scaledWidth, scaledHeight, Pair(xOffset, yOffset))
+    }
+
+    @Test
+    fun testCenterCropDimensionsPortraitPhoto() {
+        // Typical portrait 9:16 phone photo: 1080 x 2400
+        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(1080, 2400, 224)
+        assertEquals(224, scaledW)
+        // 2400 * (224 / 1080) = 497.77 -> 498
+        assertEquals(498, scaledH)
+        val (xOffset, yOffset) = offsets
+        assertEquals(0, xOffset)
+        assertEquals((498 - 224) / 2, yOffset)
+    }
+
+    @Test
+    fun testCenterCropDimensionsLandscapePhoto() {
+        // Typical landscape 16:9 photo: 2400 x 1080
+        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(2400, 1080, 224)
+        assertEquals(498, scaledW)
+        assertEquals(224, scaledH)
+        val (xOffset, yOffset) = offsets
+        assertEquals((498 - 224) / 2, xOffset)
+        assertEquals(0, yOffset)
+    }
+
+    @Test
+    fun testCenterCropDimensionsSquarePhoto() {
+        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(500, 500, 224)
+        assertEquals(224, scaledW)
+        assertEquals(224, scaledH)
+        assertEquals(Pair(0, 0), offsets)
+    }
+
+    @Test
+    fun testMultiTemplatePromptEnsemblingMath() {
+        val e1 = l2Normalize(FloatArray(512) { 0.2f })
+        val e2 = l2Normalize(FloatArray(512) { 0.4f })
+        val e3 = l2Normalize(FloatArray(512) { 0.6f })
+        val e4 = l2Normalize(FloatArray(512) { 0.8f })
+
+        val sum = FloatArray(512) { i -> e1[i] + e2[i] + e3[i] + e4[i] }
+        val ensembled = l2Normalize(sum)
+
+        var sumSq = 0f
+        for (v in ensembled) sumSq += v * v
+        val length = sqrt(sumSq)
+
+        assertEquals(1.0f, length, 1e-4f)
+    }
+
     @Test
     fun testNormalizeQueryExpansions() {
         assertEquals("clothes iron steam iron", SmartSearchEngine.normalizeQuery("iron box"))
