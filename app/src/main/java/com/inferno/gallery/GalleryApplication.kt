@@ -12,9 +12,11 @@ import coil3.svg.SvgDecoder
 import coil3.video.VideoFrameDecoder
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.inferno.gallery.workers.FaceIndexWorker
 import com.inferno.gallery.workers.MediaSyncWorker
 import com.inferno.gallery.workers.OcrIndexWorker
 import com.inferno.gallery.workers.ReverseGeocodeWorker
+import com.inferno.gallery.data.db.DatabaseProvider
 
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.MediaStoreThumbnailFetcher
@@ -56,6 +58,31 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
                     .build()
                 WorkManager.getInstance(this@GalleryApplication)
                     .enqueueUniqueWork("OcrIndexWorker", androidx.work.ExistingWorkPolicy.KEEP, ocrIndexRequest)
+            }
+
+            val faceEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
+            val autoIndexFaces = settingsRepo.faceAutoIndexFlow.first()
+            val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(this@GalleryApplication)
+            if (faceEnabled && autoIndexFaces && faceEngine.isModelDownloaded()) {
+                val db = DatabaseProvider.getDatabase(this@GalleryApplication)
+                val prefs = getSharedPreferences("face_scan_meta", android.content.Context.MODE_PRIVATE)
+                val scanVersion = prefs.getInt("scan_version", 1)
+                if (scanVersion < 2) {
+                    db.faceDao().clearZeroFaceStatuses()
+                    prefs.edit().putInt("scan_version", 2).apply()
+                }
+
+                val unindexedFaces = db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                if (unindexedFaces) {
+                    val faceConstraints = androidx.work.Constraints.Builder()
+                        .setRequiresBatteryNotLow(true)
+                        .build()
+                    val faceRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
+                        .setConstraints(faceConstraints)
+                        .build()
+                    WorkManager.getInstance(this@GalleryApplication)
+                        .enqueueUniqueWork("FaceIndexWorker", androidx.work.ExistingWorkPolicy.KEEP, faceRequest)
+                }
             }
 
             // Periodic sync every 6 hours

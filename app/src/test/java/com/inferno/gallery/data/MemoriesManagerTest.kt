@@ -74,6 +74,7 @@ class MemoriesManagerTest {
         override suspend fun getAllMediaCount(): Int = 0
         override suspend fun getMediaById(id: Long): CoreMediaEntity? = null
         override suspend fun getMediaByUri(uriString: String): CoreMediaEntity? = null
+        override suspend fun getMediaByPath(filePath: String): CoreMediaEntity? = null
         override suspend fun getAllMediaIds(): List<Long> = emptyList()
         override suspend fun insert(media: CoreMediaEntity): Long = 0L
         override suspend fun insertAll(media: List<CoreMediaEntity>) {}

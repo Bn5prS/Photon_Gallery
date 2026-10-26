@@ -77,6 +77,9 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE uriString = :uriString LIMIT 1")
     suspend fun getMediaByUri(uriString: String): CoreMediaEntity?
 
+    @Query("SELECT * FROM core_media WHERE filePath = :filePath LIMIT 1")
+    suspend fun getMediaByPath(filePath: String): CoreMediaEntity?
+
     @Query("SELECT id FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMediaIds(): List<Long>
 

@@ -5,6 +5,7 @@ package com.inferno.gallery.ui.people
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,15 +13,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,7 +61,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
 import com.inferno.gallery.R
+import com.inferno.gallery.data.db.CoreMediaEntity
 import com.inferno.gallery.data.db.MergeSuggestionWithPersons
 import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.ui.theme.IconSizeTokens
@@ -663,6 +672,176 @@ private fun PersonAvatarColumn(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
         )
+    }
+}
+
+/**
+ * Bottom sheet allowing the user to select one of this person's photos to be used as their feature/cover photo.
+ */
+@Composable
+fun FeaturePhotoPickerSheet(
+    person: PersonEntity,
+    photos: List<CoreMediaEntity>,
+    onDismissRequest: () -> Unit,
+    onPhotoSelected: (CoreMediaEntity) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val haptic = LocalHapticFeedback.current
+
+    val currentCoverMediaId = remember(person.coverCropPath) {
+        person.coverCropPath?.let { path ->
+            val filename = path.substringAfterLast('/')
+            Regex("""face_(\d+)_""").find(filename)?.groupValues?.getOrNull(1)?.toLongOrNull()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = ShapeEdgeTop,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = SpacingTokens.XXL)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.S),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Change feature photo",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (!person.name.isNullOrBlank()) "Choose a photo to represent ${person.name}" else "Choose a photo to represent this person",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                FilledTonalIconButton(
+                    onClick = onDismissRequest,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                        contentDescription = "Close",
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                }
+            }
+
+            if (photos.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No photos found for this person",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp),
+                    contentPadding = PaddingValues(
+                        start = SpacingTokens.M,
+                        end = SpacingTokens.M,
+                        top = SpacingTokens.S,
+                        bottom = SpacingTokens.L
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
+                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                ) {
+                    items(
+                        count = photos.size,
+                        key = { photos[it].id }
+                    ) { index ->
+                        val media = photos[index]
+                        val isCurrent = currentCoverMediaId == media.id
+                        Surface(
+                            shape = ShapeMedium,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            border = if (isCurrent) {
+                                BorderStroke(2.5.dp, MaterialTheme.colorScheme.primary)
+                            } else null,
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .pressScale(pressedScale = 0.95f)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onPhotoSelected(media)
+                                }
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                AsyncImage(
+                                    model = android.net.Uri.parse(media.uriString),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                if (isCurrent) {
+                                    Surface(
+                                        shape = ShapeFull,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .padding(6.dp)
+                                            .size(24.dp)
+                                            .align(Alignment.TopStart)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                                                contentDescription = "Current feature photo",
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (media.isVideo) {
+                                    Surface(
+                                        shape = ShapeFull,
+                                        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f),
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .align(Alignment.BottomEnd)
+                                            .padding(3.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                                contentDescription = "Video",
+                                                tint = MaterialTheme.colorScheme.surfaceContainerLowest,
+                                                modifier = Modifier.size(IconSizeTokens.S)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

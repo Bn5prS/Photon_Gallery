@@ -122,6 +122,9 @@ interface FaceDao {
     @Query("SELECT cropCachePath FROM faces WHERE mediaId = :mediaId AND personId = :personId LIMIT 1")
     suspend fun getCropCachePathForMedia(mediaId: Long, personId: Long): String?
 
+    @Query("SELECT * FROM faces WHERE mediaId = :mediaId AND personId = :personId LIMIT 1")
+    suspend fun getFaceForMediaAndPerson(mediaId: Long, personId: Long): FaceEntity?
+
     @Query("""
         SELECT DISTINCT p.* FROM persons p
         INNER JOIN faces f ON p.id = f.personId
@@ -262,6 +265,9 @@ interface FaceDao {
 
     @Query("DELETE FROM media_face_status")
     suspend fun clearAllFaceStatuses()
+
+    @Query("DELETE FROM media_face_status WHERE faceCount = 0")
+    suspend fun clearZeroFaceStatuses(): Int
 
     @Query("UPDATE faces SET personId = :targetPersonId WHERE personId = :sourcePersonId")
     suspend fun reassignFaces(sourcePersonId: Long, targetPersonId: Long)

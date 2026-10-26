@@ -55,6 +55,7 @@ import com.inferno.gallery.ui.theme.TechnicalParamLabelStyle
 import com.inferno.gallery.ui.theme.TechnicalParamValueStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -471,12 +472,48 @@ fun ExifDetailsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeepMetadataSheet by remember { mutableStateOf(false) }
 
-    val mediaIdLong = remember(galleryItem.id) { galleryItem.id.toLongOrNull() }
     val db = remember { DatabaseProvider.getDatabase(context) }
-    val peopleInPhoto by remember(mediaIdLong) {
-        if (mediaIdLong != null) db.faceDao().observePeopleForMedia(mediaIdLong)
+    val resolvedMediaId by produceState<Long?>(initialValue = galleryItem.id.toLongOrNull(), galleryItem) {
+        val directId = galleryItem.id.toLongOrNull()
+        if (directId != null && directId > 0) {
+            value = directId
+        } else {
+            value = withContext(Dispatchers.IO) {
+                db.mediaDao().getMediaByUri(galleryItem.uri.toString())?.id
+                    ?: db.mediaDao().getMediaByPath(galleryItem.path)?.id
+            }
+        }
+    }
+    val peopleInPhoto by remember(resolvedMediaId) {
+        if (resolvedMediaId != null) db.faceDao().observePeopleForMedia(resolvedMediaId!!)
         else kotlinx.coroutines.flow.flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+
+    LaunchedEffect(resolvedMediaId, galleryItem.uri, peopleInPhoto.isEmpty()) {
+        val mid = resolvedMediaId ?: return@LaunchedEffect
+        if (galleryItem.isVideo) return@LaunchedEffect
+        if (peopleInPhoto.isNotEmpty()) return@LaunchedEffect
+        if (com.inferno.gallery.data.ai.FaceScanHelper.scannedSessionIds.contains(mid)) return@LaunchedEffect
+
+        withContext(Dispatchers.IO) {
+            val settingsRepo = com.inferno.gallery.data.SettingsRepository.getInstance(context)
+            val faceEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
+            val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(context)
+            if (faceEnabled && engine.isModelDownloaded()) {
+                com.inferno.gallery.data.ai.FaceScanHelper.scannedSessionIds.add(mid)
+                val clusteringManager = com.inferno.gallery.data.ai.FaceClusteringManager.getInstance(context)
+                com.inferno.gallery.data.ai.FaceScanHelper.scanSingleMedia(
+                    context = context,
+                    mediaId = mid,
+                    filePath = galleryItem.path,
+                    uri = galleryItem.uri,
+                    database = db,
+                    engine = engine,
+                    clusteringManager = clusteringManager
+                )
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

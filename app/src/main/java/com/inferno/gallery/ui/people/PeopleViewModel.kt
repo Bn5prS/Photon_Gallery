@@ -10,6 +10,17 @@ import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.data.db.MergeSuggestionWithPersons
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.net.Uri
+import android.util.Log
+import com.inferno.gallery.data.ai.FaceScanHelper
+import java.io.File
+import java.io.FileOutputStream
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceDetection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -132,9 +143,69 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     fun setMediaAsCover(personId: Long, mediaId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             val cropPath = faceDao.getCropCachePathForMedia(mediaId, personId)
-            if (cropPath != null) {
+            if (cropPath != null && File(cropPath).exists()) {
                 faceDao.setPersonCover(personId, cropPath)
                 clusteringManager.invalidateCache()
+                return@launch
+            }
+
+            // Fallback: extract/generate avatar crop dynamically from the selected media
+            val media = database.mediaDao().getMediaById(mediaId) ?: return@launch
+            val uri = Uri.parse(media.uriString)
+            val context = getApplication<Application>()
+            val sampledBitmap = FaceScanHelper.decodeSampledBitmap(context, media.filePath, uri, FaceScanHelper.MAX_THUMBNAIL_DIM) ?: return@launch
+            try {
+                val faceCropDir = FaceScanHelper.getFaceCropDir(context)
+                val cropFile = File(faceCropDir, "face_${mediaId}_cover.webp")
+
+                val face = faceDao.getFaceForMediaAndPerson(mediaId, personId)
+                val targetBox = if (face != null && face.bboxRight > face.bboxLeft && face.bboxBottom > face.bboxTop) {
+                    Rect(
+                        (face.bboxLeft * sampledBitmap.width).toInt().coerceIn(0, sampledBitmap.width),
+                        (face.bboxTop * sampledBitmap.height).toInt().coerceIn(0, sampledBitmap.height),
+                        (face.bboxRight * sampledBitmap.width).toInt().coerceIn(0, sampledBitmap.width),
+                        (face.bboxBottom * sampledBitmap.height).toInt().coerceIn(0, sampledBitmap.height)
+                    )
+                } else {
+                    // Try face detector as fallback
+                    val detector = FaceDetection.getClient(FaceScanHelper.createDetectorOptions())
+                    try {
+                        val inputImage = InputImage.fromBitmap(sampledBitmap, 0)
+                        val detectedFaces: List<Face> = Tasks.await(detector.process(inputImage))
+                        if (detectedFaces.isNotEmpty()) {
+                            val bestFace = detectedFaces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                            bestFace?.boundingBox ?: Rect(0, 0, sampledBitmap.width, sampledBitmap.height)
+                        } else {
+                            Rect(0, 0, sampledBitmap.width, sampledBitmap.height)
+                        }
+                    } catch (_: Exception) {
+                        Rect(0, 0, sampledBitmap.width, sampledBitmap.height)
+                    } finally {
+                        detector.close()
+                    }
+                }
+
+                val avatarBitmap = FaceScanHelper.extractNaturalPortraitCrop(
+                    sampledBitmap,
+                    targetBox,
+                    160
+                )
+                try {
+                    FileOutputStream(cropFile).use { out ->
+                        avatarBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 85, out)
+                    }
+                    faceDao.setPersonCover(personId, cropFile.absolutePath)
+                    if (face != null) {
+                        faceDao.updateFace(face.copy(cropCachePath = cropFile.absolutePath))
+                    }
+                    clusteringManager.invalidateCache()
+                } finally {
+                    avatarBitmap.recycle()
+                }
+            } catch (e: Exception) {
+                Log.w("PeopleViewModel", "Failed to generate cover photo: ${e.message}")
+            } finally {
+                sampledBitmap.recycle()
             }
         }
     }

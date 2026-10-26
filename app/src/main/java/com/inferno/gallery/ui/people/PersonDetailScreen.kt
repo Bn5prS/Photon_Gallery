@@ -6,6 +6,7 @@
 package com.inferno.gallery.ui.people
 
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -99,8 +100,22 @@ fun PersonDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
     var showMergePicker by remember { mutableStateOf(false) }
+    var showFeaturePhotoPicker by remember { mutableStateOf(false) }
     var mergeCandidate by remember { mutableStateOf<PersonEntity?>(null) }
     var collisionTarget by remember { mutableStateOf<PersonEntity?>(null) }
+
+    if (showFeaturePhotoPicker && person != null) {
+        FeaturePhotoPickerSheet(
+            person = person!!,
+            photos = mediaList,
+            onDismissRequest = { showFeaturePhotoPicker = false },
+            onPhotoSelected = { media ->
+                viewModel.setMediaAsCover(personId, media.id)
+                Toast.makeText(context, "Feature photo updated", Toast.LENGTH_SHORT).show()
+                showFeaturePhotoPicker = false
+            }
+        )
+    }
 
     if (showNameDialog && person != null) {
         NamePersonDialog(
@@ -197,23 +212,6 @@ fun PersonDetailScreen(
                 },
                 actions = {
                     if (isSelectionMode) {
-                        if (selectedMediaIds.size == 1) {
-                            IconButton(
-                                onClick = {
-                                    val mediaId = selectedMediaIds.first()
-                                    viewModel.setMediaAsCover(personId, mediaId)
-                                    Toast.makeText(context, "Cover photo updated", Toast.LENGTH_SHORT).show()
-                                    selectedMediaIds = emptySet()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
-                                    contentDescription = "Set as feature photo",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(IconSizeTokens.L)
-                                )
-                            }
-                        }
                         IconButton(
                             onClick = {
                                 viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())
@@ -279,6 +277,27 @@ fun PersonDetailScreen(
                                         onClick = {
                                             showMenu = false
                                             showNameDialog = true
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Change feature photo",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            showFeaturePhotoPicker = true
                                         }
                                     )
 
@@ -357,41 +376,68 @@ fun PersonDetailScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                 ) {
-                    Surface(
-                        shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        tonalElevation = 4.dp,
-                        modifier = Modifier.size(104.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(108.dp)
+                            .clip(CircleShape)
+                            .clickable { showFeaturePhotoPicker = true },
+                        contentAlignment = Alignment.Center
                     ) {
-                        val coverFile = person?.coverCropPath?.let { File(it) }
-                        if (coverFile != null && coverFile.exists()) {
-                            AsyncImage(
-                                model = coverFile,
-                                contentDescription = person?.name ?: "Person",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (!person?.name.isNullOrBlank()) {
-                                    Text(
-                                        text = person?.name!!.take(1).uppercase(),
-                                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(IconSizeTokens.XXL)
-                                    )
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 4.dp,
+                            modifier = Modifier.size(104.dp)
+                        ) {
+                            val coverFile = person?.coverCropPath?.let { File(it) }
+                            if (coverFile != null && coverFile.exists()) {
+                                AsyncImage(
+                                    model = coverFile,
+                                    contentDescription = person?.name ?: "Person",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (!person?.name.isNullOrBlank()) {
+                                        Text(
+                                            text = person?.name!!.take(1).uppercase(),
+                                            style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(IconSizeTokens.XXL)
+                                        )
+                                    }
                                 }
+                            }
+                        }
+
+                        // Floating camera affordance badge
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.surfaceContainerLow),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .align(Alignment.BottomEnd)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
+                                    contentDescription = "Change feature photo",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(IconSizeTokens.S)
+                                )
                             }
                         }
                     }

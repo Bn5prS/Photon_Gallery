@@ -164,8 +164,8 @@ class MediaSyncWorker(
             val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
             val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(applicationContext)
             val unindexedFaceCount = database.faceDao().getUnindexedMediaIds().size
-            if (faceRecognitionEnabled && autoIndexFacesEnabled && faceEngine.isModelDownloaded() && unindexedFaceCount > 0 && newPhotosCount > 0) {
-                Log.d("MediaSyncWorker", "Auto-indexing faces for $newPhotosCount newly arrived images...")
+            if (faceRecognitionEnabled && autoIndexFacesEnabled && faceEngine.isModelDownloaded() && unindexedFaceCount > 0) {
+                Log.d("MediaSyncWorker", "Auto-indexing faces for $unindexedFaceCount unindexed images...")
                 val constraints = androidx.work.Constraints.Builder()
                     .setRequiresBatteryNotLow(true)
                     .build()
