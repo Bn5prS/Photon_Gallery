@@ -57,7 +57,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -120,13 +126,21 @@ fun DuplicateCleanerScreen(
         selectedItemsList.sumOf { it.size }
     }
 
+    var pendingCleanerTrashUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+
     val trashLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
+            val toTrash = pendingCleanerTrashUris
+            if (toTrash.isNotEmpty()) {
+                viewModel.trashSelectedMedia(toTrash)
+            }
             selectedItemIds.clear()
             viewModel.scanForDuplicates()
         }
+        pendingCleanerTrashUris = emptyList()
     }
 
     Scaffold(
@@ -225,11 +239,19 @@ fun DuplicateCleanerScreen(
                             Button(
                                 onClick = {
                                     val urisToDelete = selectedItemsList.map { it.uri }
-                                    try {
-                                        val trashIntent = MediaStore.createTrashRequest(context.contentResolver, urisToDelete, true)
-                                        trashLauncher.launch(IntentSenderRequest.Builder(trashIntent.intentSender).build())
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
+                                    pendingCleanerTrashUris = urisToDelete.map { it.toString() }
+                                    if (urisToDelete.isNotEmpty()) {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                val trashIntent = MediaStore.createTrashRequest(context.contentResolver, urisToDelete, true)
+                                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                                withContext(Dispatchers.Main) {
+                                                    trashLauncher.launch(request)
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
                                     }
                                 },
                                 shape = ShapeFull,

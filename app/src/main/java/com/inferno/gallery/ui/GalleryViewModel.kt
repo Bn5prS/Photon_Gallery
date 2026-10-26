@@ -273,6 +273,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         started = SharingStarted.Eagerly,
         initialValue = true
     )
+    val albumsExpandedDocuments: StateFlow<Boolean> = settingsRepository.albumsExpandedDocumentsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
 
     fun toggleAlbumsExpandedPinned() {
         viewModelScope.launch {
@@ -301,6 +306,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun toggleAlbumsExpandedMediaTypes() {
         viewModelScope.launch {
             settingsRepository.updateAlbumsExpandedMediaTypes(!albumsExpandedMediaTypes.value)
+        }
+    }
+
+    fun toggleAlbumsExpandedDocuments() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedDocuments(!albumsExpandedDocuments.value)
         }
     }
 
@@ -1760,6 +1771,39 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
         list
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val documentBuckets: StateFlow<List<AlbumBucket>> = combine(
+        listOf(
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_BOOKS_MAGAZINES),
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_EVENTS),
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_IDS),
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_NOTES),
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_PAYMENTS),
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_RECEIPTS),
+            database.mediaDao().observeDocumentCategoryStats(BucketNames.DOC_SOCIAL)
+        )
+    ) { statsArray ->
+        val types = listOf(
+            BucketNames.DOC_BOOKS_MAGAZINES,
+            BucketNames.DOC_EVENTS,
+            BucketNames.DOC_IDS,
+            BucketNames.DOC_NOTES,
+            BucketNames.DOC_PAYMENTS,
+            BucketNames.DOC_RECEIPTS,
+            BucketNames.DOC_SOCIAL
+        )
+        types.mapIndexed { index, bucketName ->
+            val stats = statsArray[index]
+            AlbumBucket(
+                bucketName = bucketName,
+                coverUri = stats.coverUriString?.let { Uri.parse(it) } ?: Uri.EMPTY,
+                itemCount = stats.itemCount,
+                totalSizeBytes = stats.totalSizeBytes,
+                maxDate = stats.maxDate
+            )
+        }
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
 
     // User-pinned folders (from Settings, not the hardcoded system buckets)
     val userPinnedFolderNames: StateFlow<Set<String>> = settingsRepository.pinnedFoldersFlow

@@ -289,35 +289,39 @@ fun MainAppLayout(
         updatePermissionStates()
     }
 
+    var pendingTrashUris by remember { mutableStateOf<List<String>>(emptyList()) }
+
     val trashLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val selected = viewModel.selectedUris.value.toList()
-            viewModel.deleteSelectedMediaFromDb(selected)
+            val selected = pendingTrashUris.ifEmpty { viewModel.selectedUris.value.toList() }
+            viewModel.trashSelectedMedia(selected)
             viewModel.clearSelection()
-            triggerSync()
         }
+        pendingTrashUris = emptyList()
     }
 
     val restoreLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val selected = pendingTrashUris.ifEmpty { viewModel.selectedUris.value.toList() }
+            viewModel.restoreSelectedMedia(selected)
             viewModel.clearSelection()
-            triggerSync()
         }
+        pendingTrashUris = emptyList()
     }
 
     val permanentDeleteLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val selected = viewModel.selectedUris.value.toList()
+            val selected = pendingTrashUris.ifEmpty { viewModel.selectedUris.value.toList() }
             viewModel.deleteSelectedMediaFromDb(selected)
             viewModel.clearSelection()
-            triggerSync()
         }
+        pendingTrashUris = emptyList()
     }
 
     val hasRequiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -630,6 +634,13 @@ fun MainAppLayout(
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_PORTRAIT -> "Portraits"
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_MACRO -> "Macro Shots"
                                     albumNameArg == com.inferno.gallery.data.BucketNames.MEDIA_TYPE_TIMELAPSE -> "Time-Lapses"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_BOOKS_MAGAZINES -> "Books & Magazines"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_EVENTS -> "Events"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_IDS -> "IDs"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_NOTES -> "Notes"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_PAYMENTS -> "Payments / Methods"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_RECEIPTS -> "Receipts"
+                                    albumNameArg == com.inferno.gallery.data.BucketNames.DOC_SOCIAL -> "Social"
                                     albumNameArg?.startsWith("place:") == true -> albumNameArg.removePrefix("place:")
                                     else -> albumNameArg ?: "Album"
                                 }
@@ -2158,20 +2169,26 @@ fun MainAppLayout(
                         androidx.compose.material3.TextButton(
                             onClick = {
                                 showMultiDeleteConfirmDialog = false
-                                val uris = selectedUris.map { Uri.parse(it) }
+                                val rawSelected = selectedUris.toList()
+                                pendingTrashUris = rawSelected
+                                val uris = rawSelected.map { Uri.parse(it) }
                                 if (uris.isNotEmpty()) {
-                                    try {
-                                        val trashIntent = android.provider.MediaStore.createTrashRequest(
-                                            context.contentResolver,
-                                            uris,
-                                            true
-                                        )
-                                        trashLauncher.launch(
-                                            androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                        )
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        try {
+                                            val trashIntent = android.provider.MediaStore.createTrashRequest(
+                                                context.contentResolver,
+                                                uris,
+                                                true
+                                            )
+                                            val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                            withContext(Dispatchers.Main) {
+                                                trashLauncher.launch(request)
+                                            }
+                                        } catch (e: Exception) {
+                                            withContext(Dispatchers.Main) {
+                                                android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -2200,20 +2217,26 @@ fun MainAppLayout(
                             androidx.compose.material3.TextButton(
                                 onClick = {
                                     showTrashRestoreConfirmDialog = false
-                                    val uris = selectedUris.map { Uri.parse(it) }
+                                    val rawSelected = selectedUris.toList()
+                                    pendingTrashUris = rawSelected
+                                    val uris = rawSelected.map { Uri.parse(it) }
                                     if (uris.isNotEmpty()) {
-                                        try {
-                                            val restoreIntent = android.provider.MediaStore.createTrashRequest(
-                                                context.contentResolver,
-                                                uris,
-                                                false
-                                            )
-                                            restoreLauncher.launch(
-                                                androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
-                                            )
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                            android.widget.Toast.makeText(context, "Error restoring: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                val restoreIntent = android.provider.MediaStore.createTrashRequest(
+                                                    context.contentResolver,
+                                                    uris,
+                                                    false
+                                                )
+                                                val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
+                                                withContext(Dispatchers.Main) {
+                                                    restoreLauncher.launch(request)
+                                                }
+                                            } catch (e: Exception) {
+                                                withContext(Dispatchers.Main) {
+                                                    android.widget.Toast.makeText(context, "Error restoring: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -2240,19 +2263,25 @@ fun MainAppLayout(
                             androidx.compose.material3.TextButton(
                                 onClick = {
                                     showTrashDeleteConfirmDialog = false
-                                    val uris = selectedUris.map { Uri.parse(it) }
+                                    val rawSelected = selectedUris.toList()
+                                    pendingTrashUris = rawSelected
+                                    val uris = rawSelected.map { Uri.parse(it) }
                                     if (uris.isNotEmpty()) {
-                                        try {
-                                            val deleteIntent = android.provider.MediaStore.createDeleteRequest(
-                                                context.contentResolver,
-                                                uris
-                                            )
-                                            permanentDeleteLauncher.launch(
-                                                androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
-                                            )
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                            android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            try {
+                                                val deleteIntent = android.provider.MediaStore.createDeleteRequest(
+                                                    context.contentResolver,
+                                                    uris
+                                                )
+                                                val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
+                                                withContext(Dispatchers.Main) {
+                                                    permanentDeleteLauncher.launch(request)
+                                                }
+                                            } catch (e: Exception) {
+                                                withContext(Dispatchers.Main) {
+                                                    android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -2393,14 +2422,22 @@ fun MainAppLayout(
                             if (confirmDeleteEnabled) {
                                 showMultiDeleteConfirmDialog = true
                             } else {
-                                val uris = selectedUris.map { Uri.parse(it) }
+                                val rawSelected = selectedUris.toList()
+                                pendingTrashUris = rawSelected
+                                val uris = rawSelected.map { Uri.parse(it) }
                                 if (uris.isNotEmpty()) {
-                                    try {
-                                        val trashIntent = android.provider.MediaStore.createTrashRequest(context.contentResolver, uris, true)
-                                        trashLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build())
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        try {
+                                            val trashIntent = android.provider.MediaStore.createTrashRequest(context.contentResolver, uris, true)
+                                            val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                            withContext(Dispatchers.Main) {
+                                                trashLauncher.launch(request)
+                                            }
+                                        } catch (e: Exception) {
+                                            withContext(Dispatchers.Main) {
+                                                android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
                                     }
                                 }
                             }

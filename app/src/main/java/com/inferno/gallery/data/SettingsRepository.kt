@@ -89,6 +89,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val ALBUMS_EXPANDED_PEOPLE = booleanPreferencesKey("albums_expanded_people")
         val ALBUMS_EXPANDED_PLACES = booleanPreferencesKey("albums_expanded_places")
         val ALBUMS_EXPANDED_MEDIA_TYPES = booleanPreferencesKey("albums_expanded_media_types")
+        val ALBUMS_EXPANDED_DOCUMENTS = booleanPreferencesKey("albums_expanded_documents")
 
         // Theme Customization
         val APP_SEED_COLOR = intPreferencesKey("app_seed_color")
@@ -163,6 +164,9 @@ class SettingsRepository private constructor(private val context: Context) {
     val albumsExpandedMediaTypesFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences -> preferences[ALBUMS_EXPANDED_MEDIA_TYPES] ?: true }
 
+    val albumsExpandedDocumentsFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_DOCUMENTS] ?: true }
+
     suspend fun updateAlbumsExpandedPinned(expanded: Boolean) {
         context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_PINNED] = expanded }
     }
@@ -181,6 +185,10 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateAlbumsExpandedMediaTypes(expanded: Boolean) {
         context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_MEDIA_TYPES] = expanded }
+    }
+
+    suspend fun updateAlbumsExpandedDocuments(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_DOCUMENTS] = expanded }
     }
 
 
