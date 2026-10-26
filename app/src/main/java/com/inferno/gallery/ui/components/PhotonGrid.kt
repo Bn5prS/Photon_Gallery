@@ -121,8 +121,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-
-
+// Hairline gap between thumbnails in the gallery grid
+private val ThumbnailGridSpacing = 1.dp
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -217,8 +217,8 @@ fun PhotonGrid(
                         columns = GridCells.Fixed(mosaicCols),
                         state = lazyGridState,
                         contentPadding = contentPadding,
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing),
+                        horizontalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing),
                         modifier = Modifier
                             .fillMaxSize()
                             .gridDragSelectGesture(
@@ -303,11 +303,11 @@ fun PhotonGrid(
                                     Box(modifier = Modifier.aspectRatio(1.0f)) {
                                         Column(
                                             modifier = Modifier.fillMaxSize(),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            verticalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing)
                                         ) {
                                             Row(
                                                 modifier = Modifier.weight(1f),
-                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing)
                                             ) {
                                                 for (i in 0..1) {
                                                     val subItem = item.items.getOrNull(i)
@@ -339,7 +339,7 @@ fun PhotonGrid(
                                             }
                                             Row(
                                                 modifier = Modifier.weight(1f),
-                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing)
                                             ) {
                                                 for (i in 2..3) {
                                                     val subItem = item.items.getOrNull(i)
@@ -381,7 +381,7 @@ fun PhotonGrid(
                                     Box(modifier = Modifier.aspectRatio(0.5f)) {
                                         Column(
                                             modifier = Modifier.fillMaxSize(),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            verticalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing)
                                         ) {
                                             for (i in 0..1) {
                                                 val subItem = item.items.getOrNull(i)
@@ -447,8 +447,8 @@ fun PhotonGrid(
                     columns = GridCells.Fixed(gridCellsCount),
                     state = lazyGridState,
                     contentPadding = contentPadding,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing),
+                    horizontalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing),
                     modifier = Modifier
                         .fillMaxSize()
                         .gridDragSelectGesture(
@@ -488,14 +488,38 @@ fun PhotonGrid(
                     ) { index ->
                         val listItem = pagedMedia[index]
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
-                            TimelineSectionHeader(title = listItem.title, alignment = dateHeaderAlignment)
+                            TimelineSectionHeader(
+                                title = listItem.title,
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = null,
+                                    fadeOutSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    ),
+                                    placementSpec = spring(
+                                        dampingRatio = 0.85f,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                ),
+                                alignment = dateHeaderAlignment
+                            )
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
                             val isSelected = selectedUris.contains(item.uri.toString())
                             val isFav = favoriteIds.contains(item.id)
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier,
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = null,
+                                    fadeOutSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    ),
+                                    placementSpec = spring(
+                                        dampingRatio = 0.85f,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                ),
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
