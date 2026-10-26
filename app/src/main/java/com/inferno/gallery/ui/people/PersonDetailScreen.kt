@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +42,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -101,8 +104,10 @@ fun PersonDetailScreen(
     var showNameDialog by remember { mutableStateOf(false) }
     var showMergePicker by remember { mutableStateOf(false) }
     var showFeaturePhotoPicker by remember { mutableStateOf(false) }
+    var showMovePhotosPicker by remember { mutableStateOf(false) }
     var mergeCandidate by remember { mutableStateOf<PersonEntity?>(null) }
     var collisionTarget by remember { mutableStateOf<PersonEntity?>(null) }
+    var isMerging by remember { mutableStateOf(false) }
 
     if (showFeaturePhotoPicker && person != null) {
         FeaturePhotoPickerSheet(
@@ -135,15 +140,54 @@ fun PersonDetailScreen(
         )
     }
 
+    if (isMerging) {
+        Dialog(
+            onDismissRequest = { /* prevent cancel while merging */ },
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Surface(
+                shape = ShapeLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.padding(SpacingTokens.L)
+            ) {
+                Row(
+                    modifier = Modifier.padding(SpacingTokens.XL),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.L)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp
+                    )
+                    Text(
+                        text = "Merging groups...",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+
     val currentCollision = collisionTarget
     if (currentCollision != null) {
+        val targetName = currentCollision.name ?: "Person #${currentCollision.id}"
         SamePersonCollisionDialog(
-            existingPersonName = currentCollision.name ?: "Person #${currentCollision.id}",
-            onDismissRequest = { collisionTarget = null },
+            existingPersonName = targetName,
+            onDismissRequest = { if (!isMerging) collisionTarget = null },
             onConfirmMerge = {
-                viewModel.mergePersons(sourcePersonId = personId, targetPersonId = currentCollision.id)
-                collisionTarget = null
-                onBack()
+                isMerging = true
+                viewModel.mergePersons(sourcePersonId = personId, targetPersonId = currentCollision.id) { success ->
+                    isMerging = false
+                    collisionTarget = null
+                    if (success) {
+                        Toast.makeText(context, "Merged into $targetName", Toast.LENGTH_SHORT).show()
+                        onBack()
+                    } else {
+                        Toast.makeText(context, "Failed to merge person", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         )
     }
@@ -167,11 +211,62 @@ fun PersonDetailScreen(
         MergePersonDialog(
             sourceName = sourceName,
             targetName = targetName,
-            onDismissRequest = { mergeCandidate = null },
+            onDismissRequest = { if (!isMerging) mergeCandidate = null },
             onConfirm = {
-                viewModel.mergePersons(sourcePersonId = personId, targetPersonId = currentCandidate.id)
-                mergeCandidate = null
-                onBack()
+                isMerging = true
+                viewModel.mergePersons(sourcePersonId = personId, targetPersonId = currentCandidate.id) { success ->
+                    isMerging = false
+                    mergeCandidate = null
+                    if (success) {
+                        Toast.makeText(context, "Merged into $targetName", Toast.LENGTH_SHORT).show()
+                        onBack()
+                    } else {
+                        Toast.makeText(context, "Failed to merge person", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    if (showMovePhotosPicker) {
+        MergePersonPickerSheet(
+            people = allPeople,
+            currentPersonId = personId,
+            title = "Move photos to...",
+            subtitle = "Select a person to move ${selectedMediaIds.size} photo(s) to.",
+            onDismissRequest = { showMovePhotosPicker = false },
+            onSelectTargetPerson = { target ->
+                showMovePhotosPicker = false
+                val count = selectedMediaIds.size
+                val targetName = target.name ?: "Person #${target.id}"
+                viewModel.moveMediaToPerson(
+                    sourcePersonId = personId,
+                    targetPersonId = target.id,
+                    mediaIds = selectedMediaIds.toList()
+                ) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Moved $count photo(s) to $targetName", Toast.LENGTH_SHORT).show()
+                        selectedMediaIds = emptySet()
+                    } else {
+                        Toast.makeText(context, "Failed to move photos", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onCreateNewPerson = { newName ->
+                showMovePhotosPicker = false
+                val count = selectedMediaIds.size
+                viewModel.createPersonAndMoveMedia(
+                    sourcePersonId = personId,
+                    name = newName,
+                    mediaIds = selectedMediaIds.toList()
+                ) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Moved $count photo(s) to $newName", Toast.LENGTH_SHORT).show()
+                        selectedMediaIds = emptySet()
+                    } else {
+                        Toast.makeText(context, "Failed to move photos", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         )
     }
@@ -212,6 +307,18 @@ fun PersonDetailScreen(
                 },
                 actions = {
                     if (isSelectionMode) {
+                        IconButton(
+                            onClick = {
+                                showMovePhotosPicker = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                                contentDescription = "Move photos to another person",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(IconSizeTokens.L)
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())

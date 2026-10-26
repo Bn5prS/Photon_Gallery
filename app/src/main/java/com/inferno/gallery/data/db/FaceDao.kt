@@ -272,6 +272,9 @@ interface FaceDao {
     @Query("UPDATE faces SET personId = :targetPersonId WHERE personId = :sourcePersonId")
     suspend fun reassignFaces(sourcePersonId: Long, targetPersonId: Long)
 
+    @Query("UPDATE faces SET personId = :targetPersonId WHERE mediaId IN (:mediaIds) AND personId = :sourcePersonId")
+    suspend fun reassignFacesForMedia(mediaIds: List<Long>, sourcePersonId: Long, targetPersonId: Long)
+
     @Query("""
         SELECT COUNT(id) FROM core_media 
         WHERE isVideo = 0 
@@ -288,14 +291,17 @@ interface FaceDao {
         faceCount: Int,
         coverCropPath: String?
     ) {
+        val source = getPersonById(sourcePersonId)
+        val target = getPersonById(targetPersonId) ?: return
         deleteMergeSuggestionsForPerson(sourcePersonId)
         reassignFaces(sourcePersonId, targetPersonId)
-        val target = getPersonById(targetPersonId) ?: return
         val distinctPhotoCount = countDistinctMediaForPerson(targetPersonId)
+        val finalName = if (!target.name.isNullOrBlank()) target.name else source?.name
         val updated = target.copy(
+            name = finalName,
             centroid = mergedCentroid,
             faceCount = distinctPhotoCount,
-            coverCropPath = coverCropPath ?: target.coverCropPath,
+            coverCropPath = coverCropPath ?: target.coverCropPath ?: source?.coverCropPath,
             isPromoted = true
         )
         updatePerson(updated)

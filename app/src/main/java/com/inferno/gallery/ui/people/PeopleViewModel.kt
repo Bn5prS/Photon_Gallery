@@ -22,6 +22,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PeopleViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -242,25 +244,100 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun mergePersons(sourcePersonId: Long, targetPersonId: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                clusteringManager.mergePersons(sourcePersonId, targetPersonId)
-                clearSelection()
-            } catch (e: Exception) {
-                Log.e("PeopleViewModel", "Failed to merge persons: ${e.message}", e)
+    fun mergePersons(
+        sourcePersonId: Long,
+        targetPersonId: Long,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    clusteringManager.mergePersons(sourcePersonId, targetPersonId)
+                    true
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to merge persons: ${e.message}", e)
+                    false
+                }
             }
+            if (success) {
+                clearSelection()
+            }
+            onComplete?.invoke(success)
         }
     }
 
-    fun mergeMultiplePersons(sourcePersonIds: List<Long>, targetPersonId: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                clusteringManager.mergeMultiplePersons(sourcePersonIds, targetPersonId)
-                clearSelection()
-            } catch (e: Exception) {
-                Log.e("PeopleViewModel", "Failed to merge multiple persons: ${e.message}", e)
+    fun mergeMultiplePersons(
+        sourcePersonIds: List<Long>,
+        targetPersonId: Long,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    clusteringManager.mergeMultiplePersons(sourcePersonIds, targetPersonId)
+                    true
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to merge multiple persons: ${e.message}", e)
+                    false
+                }
             }
+            if (success) {
+                clearSelection()
+            }
+            onComplete?.invoke(success)
+        }
+    }
+
+    fun moveMediaToPerson(
+        sourcePersonId: Long,
+        targetPersonId: Long,
+        mediaIds: List<Long>,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    clusteringManager.reassignMediaToPerson(sourcePersonId, targetPersonId, mediaIds)
+                    true
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to move media to person: ${e.message}", e)
+                    false
+                }
+            }
+            onComplete?.invoke(success)
+        }
+    }
+
+    fun createPersonAndMoveMedia(
+        sourcePersonId: Long,
+        name: String,
+        mediaIds: List<Long>,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    val trimmed = name.trim()
+                    val existing = faceDao.findPersonByName(trimmed, excludePersonId = -1L)
+                    val targetPersonId = if (existing != null) {
+                        existing.id
+                    } else {
+                        faceDao.insertPerson(
+                            PersonEntity(
+                                name = trimmed,
+                                isPromoted = true,
+                                createdAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                    clusteringManager.reassignMediaToPerson(sourcePersonId, targetPersonId, mediaIds)
+                    true
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to create person and move media: ${e.message}", e)
+                    false
+                }
+            }
+            onComplete?.invoke(success)
         }
     }
 

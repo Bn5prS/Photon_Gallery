@@ -6,6 +6,7 @@
 
 package com.inferno.gallery.ui.people
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -181,11 +182,18 @@ fun PeopleScreen(
 
     if (collisionPair != null) {
         val (source, target) = collisionPair!!
+        val targetName = target.name ?: "Person #${target.id}"
         SamePersonCollisionDialog(
-            existingPersonName = target.name ?: "Person #${target.id}",
+            existingPersonName = targetName,
             onDismissRequest = { collisionPair = null },
             onConfirmMerge = {
-                viewModel.mergePersons(sourcePersonId = source.id, targetPersonId = target.id)
+                viewModel.mergePersons(sourcePersonId = source.id, targetPersonId = target.id) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Merged into $targetName", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to merge people", Toast.LENGTH_SHORT).show()
+                    }
+                }
                 collisionPair = null
             }
         )
@@ -193,14 +201,25 @@ fun PeopleScreen(
 
     if (mergeDialogPair != null) {
         val (p1, p2) = mergeDialogPair!!
-        val name1 = p1.name ?: "Person #${p1.id}"
-        val name2 = p2.name ?: "Person #${p2.id}"
+        val (target, source) = if (!p1.name.isNullOrBlank() || p1.faceCount >= p2.faceCount) {
+            Pair(p1, p2)
+        } else {
+            Pair(p2, p1)
+        }
+        val sourceName = source.name ?: "Person #${source.id}"
+        val targetName = target.name ?: "Person #${target.id}"
         MergePersonDialog(
-            sourceName = name2,
-            targetName = name1,
+            sourceName = sourceName,
+            targetName = targetName,
             onDismissRequest = { mergeDialogPair = null },
             onConfirm = {
-                viewModel.mergePersons(sourcePersonId = p2.id, targetPersonId = p1.id)
+                viewModel.mergePersons(sourcePersonId = source.id, targetPersonId = target.id) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Merged into $targetName", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to merge people", Toast.LENGTH_SHORT).show()
+                    }
+                }
                 mergeDialogPair = null
             }
         )
@@ -219,7 +238,13 @@ fun PeopleScreen(
             targetName = targetName,
             onDismissRequest = { batchMergeList = null },
             onConfirm = {
-                viewModel.mergeMultiplePersons(sourcePersonIds = sources.map { it.id }, targetPersonId = target.id)
+                viewModel.mergeMultiplePersons(sourcePersonIds = sources.map { it.id }, targetPersonId = target.id) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Merged into $targetName", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to merge people", Toast.LENGTH_SHORT).show()
+                    }
+                }
                 batchMergeList = null
             }
         )

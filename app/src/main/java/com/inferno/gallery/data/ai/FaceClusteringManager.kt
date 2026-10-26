@@ -8,6 +8,7 @@ import com.inferno.gallery.data.db.FaceEntity
 import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.data.db.PersonMergeSuggestionEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -268,7 +269,7 @@ class FaceClusteringManager(private val context: Context) {
      * Merges two person identities into one (e.g. from user action or periodic consolidation).
      */
     suspend fun mergePersons(sourcePersonId: Long, targetPersonId: Long) = mutex.withLock {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + NonCancellable) {
             if (sourcePersonId == targetPersonId) return@withContext
             ensureCacheLoaded()
 
@@ -276,17 +277,15 @@ class FaceClusteringManager(private val context: Context) {
             val target = faceDao.getPersonById(targetPersonId) ?: return@withContext
 
             val totalCount = source.faceCount + target.faceCount
-            val mergedCentroid = if (source.centroid != null && target.centroid != null) {
-                val combined = FloatArray(target.centroid.size)
-                for (i in combined.indices) {
-                    combined[i] = target.centroid[i] * target.faceCount + source.centroid[i] * source.faceCount
-                }
-                FaceRecognitionEngine.normalizeL2(combined)
-            } else {
-                target.centroid ?: source.centroid ?: FloatArray(FaceModelRegistry.EMBEDDING_DIM)
-            }
+            val mergedCentroid = safeCombineCentroids(
+                target.centroid, target.faceCount,
+                source.centroid, source.faceCount
+            )
 
             val cover = target.coverCropPath ?: source.coverCropPath
+            if (target.name.isNullOrBlank() && !source.name.isNullOrBlank()) {
+                faceDao.setPersonName(targetPersonId, source.name)
+            }
             faceDao.mergePersons(
                 sourcePersonId = sourcePersonId,
                 targetPersonId = targetPersonId,
@@ -307,7 +306,7 @@ class FaceClusteringManager(private val context: Context) {
      * Merges multiple person identities into a single target identity.
      */
     suspend fun mergeMultiplePersons(sourcePersonIds: List<Long>, targetPersonId: Long) = mutex.withLock {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + NonCancellable) {
             val validSources = sourcePersonIds.distinct().filter { it != targetPersonId }
             if (validSources.isEmpty()) return@withContext
             ensureCacheLoaded()
@@ -317,15 +316,10 @@ class FaceClusteringManager(private val context: Context) {
                 val target = faceDao.getPersonById(targetPersonId) ?: continue
 
                 val totalCount = source.faceCount + target.faceCount
-                val mergedCentroid = if (source.centroid != null && target.centroid != null) {
-                    val combined = FloatArray(target.centroid.size)
-                    for (i in combined.indices) {
-                        combined[i] = target.centroid[i] * target.faceCount + source.centroid[i] * source.faceCount
-                    }
-                    FaceRecognitionEngine.normalizeL2(combined)
-                } else {
-                    target.centroid ?: source.centroid ?: FloatArray(FaceModelRegistry.EMBEDDING_DIM)
-                }
+                val mergedCentroid = safeCombineCentroids(
+                    target.centroid, target.faceCount,
+                    source.centroid, source.faceCount
+                )
 
                 val cover = target.coverCropPath ?: source.coverCropPath
                 if (target.name.isNullOrBlank() && !source.name.isNullOrBlank()) {
@@ -348,6 +342,123 @@ class FaceClusteringManager(private val context: Context) {
         }
     }
 
+    /**
+     * Moves specific media items (photos/videos) from one person cluster to another.
+     */
+    suspend fun reassignMediaToPerson(
+        sourcePersonId: Long,
+        targetPersonId: Long,
+        mediaIds: List<Long>
+    ) = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            if (sourcePersonId == targetPersonId || mediaIds.isEmpty()) return@withContext
+            ensureCacheLoaded()
+
+            // 1. Reassign in database
+            faceDao.reassignFacesForMedia(mediaIds, sourcePersonId, targetPersonId)
+
+            // 2. Recompute distinct photos and faces for source
+            val sourceFaces = faceDao.getFacesByPersonId(sourcePersonId)
+            val sourceMediaCount = faceDao.countDistinctMediaForPerson(sourcePersonId)
+
+            if (sourceMediaCount == 0 || sourceFaces.isEmpty()) {
+                faceDao.deletePerson(sourcePersonId)
+            } else {
+                val sourceCentroid = computeCentroidFromFaces(sourceFaces)
+                val sourcePerson = faceDao.getPersonById(sourcePersonId)
+                if (sourcePerson != null) {
+                    val cover = if (sourceFaces.any { it.cropCachePath == sourcePerson.coverCropPath }) {
+                        sourcePerson.coverCropPath
+                    } else {
+                        sourceFaces.firstOrNull()?.cropCachePath ?: sourcePerson.coverCropPath
+                    }
+                    faceDao.updatePerson(
+                        sourcePerson.copy(
+                            centroid = sourceCentroid ?: sourcePerson.centroid,
+                            faceCount = sourceMediaCount,
+                            coverCropPath = cover
+                        )
+                    )
+                }
+            }
+
+            // 3. Recompute distinct photos and faces for target
+            val targetFaces = faceDao.getFacesByPersonId(targetPersonId)
+            val targetMediaCount = faceDao.countDistinctMediaForPerson(targetPersonId)
+            val targetPerson = faceDao.getPersonById(targetPersonId)
+
+            if (targetPerson != null) {
+                val targetCentroid = computeCentroidFromFaces(targetFaces) ?: targetPerson.centroid
+                val targetCover = targetPerson.coverCropPath ?: targetFaces.firstOrNull()?.cropCachePath
+                faceDao.updatePerson(
+                    targetPerson.copy(
+                        centroid = targetCentroid,
+                        faceCount = targetMediaCount,
+                        coverCropPath = targetCover,
+                        isPromoted = true
+                    )
+                )
+            }
+
+            faceDao.recalculateAllPersonFaceCounts()
+            isCacheInitialized = false
+            ensureCacheLoaded()
+            Log.d(TAG, "Successfully moved ${mediaIds.size} media from person $sourcePersonId to $targetPersonId")
+        }
+    }
+
+    private fun isZeroVector(vector: FloatArray): Boolean {
+        var sum = 0.0
+        for (v in vector) sum += v * v
+        return sum < 1e-6
+    }
+
+    private fun safeCombineCentroids(
+        centroidA: FloatArray?,
+        weightA: Int,
+        centroidB: FloatArray?,
+        weightB: Int
+    ): FloatArray {
+        if (centroidA == null && centroidB == null) return FloatArray(FaceModelRegistry.EMBEDDING_DIM)
+        if (centroidA == null) return centroidB!!.copyOf()
+        if (centroidB == null) return centroidA.copyOf()
+
+        val wA = maxOf(1, weightA)
+        val wB = maxOf(1, weightB)
+        val denom = (wA + wB).toFloat()
+        val combined = FloatArray(centroidA.size)
+        for (i in combined.indices) {
+            combined[i] = (centroidA[i] * wA + centroidB[i] * wB) / denom
+        }
+        val normalized = FaceRecognitionEngine.normalizeL2(combined)
+        return if (isZeroVector(normalized)) {
+            centroidA.copyOf()
+        } else {
+            normalized
+        }
+    }
+
+    fun computeCentroidFromFaces(faces: List<FaceEntity>): FloatArray? {
+        if (faces.isEmpty()) return null
+        val dim = faces[0].embedding.size
+        val sum = FloatArray(dim)
+        var count = 0
+        for (f in faces) {
+            if (f.embedding.size == dim) {
+                for (i in 0 until dim) {
+                    sum[i] += f.embedding[i]
+                }
+                count++
+            }
+        }
+        if (count == 0) return null
+        for (i in 0 until dim) {
+            sum[i] /= count.toFloat()
+        }
+        val normalized = FaceRecognitionEngine.normalizeL2(sum)
+        return if (isZeroVector(normalized)) null else normalized
+    }
+
     fun invalidateCache() {
         isCacheInitialized = false
     }
@@ -357,7 +468,7 @@ class FaceClusteringManager(private val context: Context) {
      * Consolidates fragmented clusters formed due to lighting/angle/pose variations.
      */
     suspend fun consolidateClusters(threshold: Float = CONSOLIDATION_THRESHOLD): Int = mutex.withLock {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + NonCancellable) {
             isCacheInitialized = false
             ensureCacheLoaded()
 
@@ -398,11 +509,10 @@ class FaceClusteringManager(private val context: Context) {
                     val (target, source) = if (c1.faceCount >= c2.faceCount) Pair(c1, c2) else Pair(c2, c1)
 
                     val totalCount = target.faceCount + source.faceCount
-                    val mergedCentroid = FloatArray(target.centroid.size)
-                    for (k in mergedCentroid.indices) {
-                        mergedCentroid[k] = target.centroid[k] * target.faceCount + source.centroid[k] * source.faceCount
-                    }
-                    val normalizedCentroid = FaceRecognitionEngine.normalizeL2(mergedCentroid)
+                    val normalizedCentroid = safeCombineCentroids(
+                        target.centroid, target.faceCount,
+                        source.centroid, source.faceCount
+                    )
 
                     val targetPerson = faceDao.getPersonById(target.personId)
                     val sourcePerson = faceDao.getPersonById(source.personId)

@@ -83,11 +83,15 @@ import java.io.File
 fun MergePersonPickerSheet(
     people: List<PersonEntity>,
     currentPersonId: Long,
+    title: String = "Merge into...",
+    subtitle: String = "Select who this person is to combine all photos together.",
     onDismissRequest: () -> Unit,
-    onSelectTargetPerson: (PersonEntity) -> Unit
+    onSelectTargetPerson: (PersonEntity) -> Unit,
+    onCreateNewPerson: ((String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searchQuery by remember { mutableStateOf("") }
+    var showCreateNewDialog by remember { mutableStateOf(false) }
 
     val candidatePeople = remember(people, currentPersonId, searchQuery) {
         people.filter { it.id != currentPersonId }
@@ -96,6 +100,17 @@ fun MergePersonPickerSheet(
                 else person.name?.contains(searchQuery, ignoreCase = true) == true ||
                         "Person #${person.id}".contains(searchQuery, ignoreCase = true)
             }
+    }
+
+    if (showCreateNewDialog) {
+        NamePersonDialog(
+            initialName = if (searchQuery.isNotBlank() && candidatePeople.none { it.name.equals(searchQuery, ignoreCase = true) }) searchQuery else null,
+            onDismissRequest = { showCreateNewDialog = false },
+            onConfirm = { newName ->
+                showCreateNewDialog = false
+                onCreateNewPerson?.invoke(newName)
+            }
+        )
     }
 
     ModalBottomSheet(
@@ -116,12 +131,12 @@ fun MergePersonPickerSheet(
                 verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
             ) {
                 Text(
-                    text = "Merge into...",
+                    text = title,
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Select who this person is to combine all photos together.",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -175,6 +190,56 @@ fun MergePersonPickerSheet(
                 contentPadding = PaddingValues(horizontal = SpacingTokens.L, vertical = SpacingTokens.XS),
                 verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
             ) {
+                if (onCreateNewPerson != null) {
+                    item(key = "create_new_person_tile") {
+                        Surface(
+                            shape = ShapeMedium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .pressScale(pressedScale = 0.98f)
+                                .clickable { showCreateNewDialog = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                            ) {
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                                            contentDescription = "New person",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(IconSizeTokens.M)
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "New person...",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = "Create a separate group with a new name",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 items(
                     items = candidatePeople,
                     key = { "target_picker_${it.id}" }
