@@ -137,6 +137,9 @@ class FaceModelDownloadWorker(
 
             var downloadedBytes = 0L
             val buffer = ByteArray(32 * 1024)
+            var lastSpeedTimestamp = System.currentTimeMillis()
+            var lastSpeedBytes = 0L
+            var currentSpeedBytesPerSec = 0L
 
             body.byteStream().use { input: InputStream ->
                 BufferedOutputStream(FileOutputStream(tempFile)).use { output ->
@@ -153,10 +156,27 @@ class FaceModelDownloadWorker(
                         downloadedBytes += bytesRead
 
                         val now = System.currentTimeMillis()
+                        val timeDelta = now - lastSpeedTimestamp
+                        if (timeDelta >= 500L) {
+                            val bytesDelta = downloadedBytes - lastSpeedBytes
+                            if (bytesDelta >= 0) {
+                                currentSpeedBytesPerSec = (bytesDelta * 1000L) / timeDelta
+                            }
+                            lastSpeedTimestamp = now
+                            lastSpeedBytes = downloadedBytes
+                        }
+
                         if (now - lastUpdate > 500) {
                             lastUpdate = now
                             val percent = ((downloadedBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
-                            setProgress(workDataOf("progress" to percent))
+                            setProgress(
+                                workDataOf(
+                                    "progress" to percent,
+                                    "bytesDownloaded" to downloadedBytes,
+                                    "totalBytes" to totalBytes,
+                                    "speedBytesPerSec" to currentSpeedBytesPerSec
+                                )
+                            )
                             try {
                                 setForeground(createForegroundInfo("Downloading MobileFaceNet: $percent%", percent))
                             } catch (_: Exception) {}
