@@ -31,4 +31,13 @@ object BucketNames {
     const val MEDIA_TYPE_PORTRAIT = "mediatype:portrait"
     const val MEDIA_TYPE_MACRO = "mediatype:macro"
     const val MEDIA_TYPE_TIMELAPSE = "mediatype:timelapse"
+
+    // Smart Document Buckets
+    const val DOC_BOOKS_MAGAZINES = "doc:books_magazines"
+    const val DOC_EVENTS = "doc:events"
+    const val DOC_IDS = "doc:ids"
+    const val DOC_NOTES = "doc:notes"
+    const val DOC_PAYMENTS = "doc:payments"
+    const val DOC_RECEIPTS = "doc:receipts"
+    const val DOC_SOCIAL = "doc:social"
 }
