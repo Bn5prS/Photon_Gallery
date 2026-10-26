@@ -1962,7 +1962,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 val allEmbeddings = database.embeddingDao().getAllEmbeddings()
                                 if (allEmbeddings.isEmpty()) return@async emptyList()
 
-                                val minConfidence = 0.278f
+                                val minConfidence = 0.235f
                                 android.util.Log.i(
                                     "GalleryViewModel",
                                     "Smart search for: '$query'. Query vector sample: [${queryVector.take(3).joinToString(", ")}], Total DB embeddings: ${allEmbeddings.size}, MinConfidence: $minConfidence"
@@ -1979,7 +1979,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                     return@async emptyList()
                                 }
 
-                                val adaptiveThreshold = maxOf(minConfidence, topScore - 0.030f)
+                                val adaptiveThreshold = maxOf(minConfidence, topScore - 0.055f)
                                 val maxResults = 200
                                 val matched = scored.filter { it.second >= adaptiveThreshold }.take(maxResults)
                                 android.util.Log.i(
@@ -2000,7 +2000,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                             val (exists, resolved) = resolveItemFields(uri, entity.filePath)
                                             val score = scoreMap[entity.id]
                                             val snippet = score?.let {
-                                                val pct = (((it - 0.278f) / (0.330f - 0.278f)) * 35f + 65f).coerceIn(65f, 99f).toInt()
+                                                val pct = (((it - 0.235f) / (0.330f - 0.235f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
                                                 "$pct% match"
                                             }
                                             GalleryItem(
