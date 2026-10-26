@@ -2190,66 +2190,54 @@ private fun ViewerActionButtonsRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isTrash) {
-            FilledTonalIconButton(
+            IconButton(
                 onClick = onRestore,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
                     contentDescription = "Restore",
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
             }
 
-            FilledTonalIconButton(
+            IconButton(
                 onClick = onPermanentDelete,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = "Permanently Delete",
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp)
                 )
             }
         } else {
             // Share
-            FilledTonalIconButton(
+            IconButton(
                 onClick = onShare,
                 enabled = currentItem?.localExists == true,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
                     contentDescription = "Share",
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
             }
 
             // Edit / Frame extractor
-            FilledTonalIconButton(
+            IconButton(
                 enabled = currentItem?.localExists == true,
                 onClick = onEdit,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
                     contentDescription = if (currentItem?.isVideo == true) "Extract frame" else "Edit",
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -2266,20 +2254,17 @@ private fun ViewerActionButtonsRow(
                 label = "heartScale",
                 finishedListener = { if (heartBounce) heartBounce = false }
             )
-            FilledTonalIconButton(
+            IconButton(
                 onClick = {
                     heartBounce = true
                     onFavorite()
                 },
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = if (isFavorite) favoriteHarmonized.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
                     contentDescription = "Favorite",
+                    tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .size(24.dp)
                         .graphicsLayer {
@@ -2290,35 +2275,29 @@ private fun ViewerActionButtonsRow(
             }
 
             // Delete
-            FilledTonalIconButton(
+            IconButton(
                 onClick = onDelete,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.error
-                ),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp)
                 )
             }
 
             // Google Lens (Images only)
             if (currentItem != null && !currentItem.isVideo) {
-                FilledTonalIconButton(
+                IconButton(
                     onClick = onLens,
                     enabled = currentItem.localExists,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_google_lens),
                         contentDescription = "Google Lens",
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
                     )
                 }
