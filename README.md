@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="screenshots/logo.png" width="96" alt="Photon Gallery Logo" />
+<img src="screenshots/logo.png?v=2" width="96" alt="Photon Gallery Logo" />
 
 # Photon Gallery
 
@@ -23,8 +23,6 @@
 
 <br/><br/>
 
-> An open-source, offline Android gallery designed around privacy, performance, and stunning visuals.  
-> Zero cloud. Zero tracking. Just your photos.
 
 </div>
 

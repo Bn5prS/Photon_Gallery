@@ -135,3 +135,5 @@ fastlane/screenshots/
 /pulled_apks/
 /res/
 /screen.png
+generated_icons/
+reference_apks/
