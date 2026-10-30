@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="white">#FFFFFFFF</color>
+    <color name="launcher_icon_bg">#567AEC</color>
+    <color name="launcher_icon_bg_glow">#9FA0F2</color>
+    <color name="launcher_icon_bg_deep">#3B5CCC</color>
 </resources>
