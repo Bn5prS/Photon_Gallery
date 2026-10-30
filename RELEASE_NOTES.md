@@ -1,56 +1,38 @@
 # Release Notes — v3.0.0
 
-## What's New
-
-### People & Face Grouping (New Feature!)
-Photon Gallery can now automatically recognize and group faces across your photos — running **100% locally on your device with complete privacy (no cloud uploads)**:
-* Dedicated People Section: Browse identified people cards with customizable zoom (2 to 5 columns).
-* Automatic Grouping: Discovers and groups recurring faces into individual identities offline.
-* Smart Merge Suggestions: Recommends merging matching identities with side-by-side comparisons and quick confirmation.
-* Names & Favorites: Assign names, mark favorites, or hide specific people from your library.
-* Photo Count Filter: Filter out casual background faces (3+, 5+, 10+ photos) so only meaningful people appear.
-* Face Tags in Photo Info: Tap any recognized person chip in the details sheet to view all photos of that person.
+### ⚠️ Important Notice for v2.x Users
+* **In-app update not supported from v2.x**: Due to migrating to a permanent official release signing key, updating directly from within the v2.x app will fail with a signature mismatch error.
+* **How to upgrade**: Please uninstall your existing v2.x app from your device, then download and install the v3.0.0 package directly from GitHub Releases.
+* **Future updates**: All future releases from v3.0.0 onward use this permanent key and will update seamlessly inside the app with 1 tap.
 
 ---
 
-### Markup & Paint Tools in Editor (#20)
-* Complete Drawing Suite: Annotate photos inside the built-in editor using pen, highlighter, neon brush, blur redaction, and geometric shapes (arrows, rectangles, circles).
-* Interactive Text Annotations: Add movable, scalable, and rotatable text labels with custom styling and background fills.
-* High-Resolution Export: Annotations and sketches render at full original image resolution upon export.
+### Features
+* **People & Face Grouping**: On-device facial recognition and clustering running 100% locally. Automatically organizes recurring faces into individual identities with support for custom names, favorites, hidden profiles, and smart merge suggestions.
+* **Document Smart Classification**: Automated on-device OCR categorization that sorts photos into 7 document types (Receipts, Invoices, IDs & Cards, Notes, Forms, Whiteboards, and Documents) via a collapsible carousel in the Albums tab.
 
 ---
 
-### Full-Screen Viewer & Timeline Navigation
-* Pinch-to-Filmstrip Overview: Pinch in on any full-screen photo to view an interactive horizontal filmstrip of adjacent photos, and tap any photo to return to full screen.
-* Equidistant Date Headers: Re-aligned date headers in the timeline grid with balanced spacing above and below so headers sit centered between date groups.
-* Immersive Single-Tap View: Single-tap in the photo viewer now toggles both the top and bottom controls and the system status bar.
+### Improvements
+* **Adaptive App Icon**: Redesigned borderless launcher icon with dynamic Material You themed icon support on Android 13+.
+* **Edge-to-Edge Photo Grid**: Reduced thumbnail spacing to 1dp for a cleaner, high-density browsing layout.
+* **Album Sorting**: Added "Date Added" sorting alongside Date Taken, with new album overflow management controls.
+* **Onboarding Setup**: Integrated the offline face model download into the initial setup wizard with real-time transfer speed and byte progress.
+* **Search & OCR Precision**: Upgraded OCR decode resolution to 2560px for improved text detection, paired with refined CLIP semantic search matching thresholds.
+* **Viewer Controls**: Added a Settings toggle to show or hide the floating zoom minimap tracker in the full-screen photo viewer.
 
 ---
 
-### Text & Document Search (OCR)
-* Multi-Word Text Search: Completely restored full-text search across photos containing documents, bills, signs, and receipts, ensuring multi-word queries (e.g., "electric bill", "wifi password") return instant matches.
-* Automatic Text Indexing: Newly taken or imported photos are automatically indexed for text search in the background.
-* Accurate Relevance Ranking: Photos with matching recognized text are prioritized alongside exact filename matches.
+### Bug Fixes
+* **OCR Search Query Syntax**: Resolved query parsing errors to ensure multi-word text searches return accurate matches.
+* **Social Media Routing**: Fixed a category precedence issue where Facebook downloads failed to map into the Social album.
+* **Viewer Face Highlights**: Removed automatic face bounding box overlays from displaying unexpectedly upon opening photos.
+* **Large Group Merges**: Resolved a SQLite `CursorWindow` memory allocation failure when merging large person clusters.
+* **Background Indexing Stability**: Fixed coroutine lifecycle management during background face indexing to prevent interrupted scans and ensure accurate photo reassignments.
+* **Timeline Header Spacing**: Corrected vertical padding and alignment around date headers in the primary timeline grid.
 
 ---
 
-### Privacy & Metadata Sanitization
-* Byte-Level Sanitization: The "Strip metadata when sharing" option strips 100% of metadata bytes across all supported media formats, including JPEG, PNG, WebP, animated GIFs, and MP4/MOV videos.
-* Location & Hardware Scrubbing: Completely eliminates all EXIF, XMP, IPTC records, MakerNotes, camera serial numbers, owner tags, and GPS coordinates.
-* Video Privacy Protection: ISOBMFF user data boxes and QuickTime metadata are scrubbed, and recording/modification timestamps are cleared to prevent leaking coordinates or capture times.
-* Orientation Baking: Images captured at tilted angles are automatically normalized into physical pixels before stripping so shared photos always display upright.
-
----
-
-### Instant Update Notifications
-* Launch Check: Promptly checks for GitHub releases when opening the app so you are notified as soon as a new build is available.
-* Notification Alert: Displays an expansive in-app changelog dialog and posts a status bar notification to update at your convenience.
-
----
-
-### Bug Fixes & Stability
-* Direct / Quick Share Attachments (#17): Resolved an issue where photos shared via Direct Share / Quick Share to messaging apps (such as Google Messages) would not attach properly.
-* `.nomedia` & Vault Media Refresh (#18): Gallery synchronization now immediately hides encrypted files and newly created `.nomedia` folders without requiring an app reinstall.
-* Deletion Transition Crash (#19): Resolved a crash (`IllegalStateException: Cannot transition entry that is not in the back stack`) when deleting photos from within the viewer.
-* Accurate Photo Counts: Corrected face count calculations under person chips and merge suggestion cards to strictly reflect unique photos.
-* Destructive Action Prompts: Added safety confirmation dialogs before rescanning faces, deleting offline AI models, or rebuilding search indexes.
+### Downloads & Assets
+* **PhotonGallery-arm64-v8a.apk** — Recommended for 64-bit ARM devices (Android 12+)
+* **PhotonGallery-universal.apk** — Compatible across all supported architectures
