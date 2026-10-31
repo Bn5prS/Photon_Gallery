@@ -801,20 +801,10 @@ fun AlbumsScreen(
 
         // ── 4. Utilities & Tools ──
         item(key = "header_more_tools", span = { GridItemSpan(maxLineSpan) }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = SpacingTokens.L, bottom = SpacingTokens.XS),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Utilities & Tools",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            SectionHeader(
+                title = "Utilities",
+                isCollapsible = false
+            )
         }
 
         item(key = "row_utilities", span = { GridItemSpan(maxLineSpan) }) {
@@ -1218,7 +1208,7 @@ fun AlbumListRow(
     onLongPress: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val tileShape = customShape ?: ShapeMedium
+    val tileShape = if (customShape == null || customShape == ShapeLarge) ShapeMedium else customShape
 
     var loadFailed by remember(bucket.coverUri) { mutableStateOf(false) }
 
@@ -1357,20 +1347,6 @@ fun AlbumListRow(
                 }
             }
 
-            Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-            // Trailing Count Pill Badge
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ) {
-                Text(
-                    text = "${bucket.itemCount}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 2.dp)
-                )
-            }
         }
     }
 }

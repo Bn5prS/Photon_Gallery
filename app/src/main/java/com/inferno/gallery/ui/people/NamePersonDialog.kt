@@ -28,7 +28,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import com.inferno.gallery.ui.theme.ShapeLarge
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.SpacingTokens
 
@@ -48,7 +48,7 @@ fun NamePersonDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        shape = ShapeLarge,
+        shape = ShapeExtraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         title = {
             Text(

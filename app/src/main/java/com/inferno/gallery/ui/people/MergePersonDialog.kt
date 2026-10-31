@@ -16,7 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import com.inferno.gallery.ui.theme.ShapeLarge
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.SpacingTokens
 
 @Composable
@@ -30,7 +30,7 @@ fun MergePersonDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        shape = ShapeLarge,
+        shape = ShapeExtraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         title = {
             Text(
@@ -100,7 +100,7 @@ fun BatchMergePersonDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        shape = ShapeLarge,
+        shape = ShapeExtraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         title = {
             Text(
@@ -169,7 +169,7 @@ fun SamePersonCollisionDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        shape = ShapeLarge,
+        shape = ShapeExtraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         title = {
             Text(

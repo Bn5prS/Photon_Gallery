@@ -2520,7 +2520,7 @@ fun MainAppLayout(
             }
         ) {
             Surface(
-                shape = MaterialTheme.shapes.large,
+                shape = ShapeExtraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier
                     .fillMaxWidth()

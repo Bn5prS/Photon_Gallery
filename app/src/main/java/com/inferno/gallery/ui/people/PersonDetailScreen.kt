@@ -662,10 +662,11 @@ private fun PersonMediaTile(
                 Surface(
                     shape = ShapeFull,
                     color = MaterialTheme.colorScheme.primary,
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surfaceContainerLowest),
                     modifier = Modifier
                         .padding(6.dp)
                         .size(24.dp)
-                        .align(Alignment.TopStart)
+                        .align(Alignment.TopEnd)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
