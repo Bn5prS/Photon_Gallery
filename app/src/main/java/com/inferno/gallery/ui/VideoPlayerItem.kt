@@ -276,8 +276,8 @@ fun VideoPlayerItemWithResolvedUri(
                                     ) { v, _ -> offsetY.floatValue = v }
                                 }
                             } else {
-                                // Zoom in to tapped point (2.8x)
-                                val targetScale = 2.8f
+                                // Zoom in to tapped point (3.0x)
+                                val targetScale = 3.0f
                                 val targetX = -(centroid.x - composableW / 2f) * (targetScale - 1)
                                 val targetY = -(centroid.y - composableH / 2f) * (targetScale - 1)
                                 val maxX = (composableW * (targetScale - 1)) / 2f

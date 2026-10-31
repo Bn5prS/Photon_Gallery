@@ -18,6 +18,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.animateColorAsState
 import android.graphics.Bitmap
 import coil3.BitmapImage
@@ -151,7 +152,6 @@ import com.inferno.gallery.ui.components.DetailedExifData
 import com.inferno.gallery.ui.components.ExifDetailsSheet
 import com.inferno.gallery.ui.components.extractDetailedExif
 import com.inferno.gallery.ui.components.AlbumPickerSheet
-import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeLarge
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
@@ -562,14 +562,14 @@ fun DetailScreen(
         }
     }
 
-    // Single-tap immersive mode: the status bar follows the viewer chrome toggle.
+    // Single-tap immersive mode: system bars follow the viewer chrome toggle.
     // Skipped when the global full-screen setting already keeps system bars hidden.
     LaunchedEffect(showUi, useFullScreenGlobal) {
         if (insetsController != null && !useFullScreenGlobal) {
             if (showUi) {
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             } else {
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.systemBarsBehavior =
                     androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
@@ -867,7 +867,7 @@ fun DetailScreen(
                                     // Snap back with spring
                                     dismissOffsetY.animateTo(
                                         0f,
-                                        animationSpec = MotionTokens.bouncySpring()
+                                        animationSpec = MotionTokens.snappySpring()
                                     )
                                 }
                             }
@@ -876,10 +876,7 @@ fun DetailScreen(
                             coroutineScope.launch {
                                 dismissOffsetY.animateTo(
                                     0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium
-                                    )
+                                    animationSpec = MotionTokens.snappySpring()
                                 )
                             }
                         }
@@ -1782,6 +1779,11 @@ fun DetailScreen(
         )
 
         // ── Floating Deep Zoom Pill ──
+        val zoomBadgeBottomPadding by animateDpAsState(
+            targetValue = if (showUi) (if (viewerFilmstripEnabled && galleryItems.size > 1) 130.dp else 78.dp) else 24.dp,
+            animationSpec = MotionTokens.snappySpring(),
+            label = "zoomBadgePadding"
+        )
         AnimatedVisibility(
             visible = isZoomBadgeVisible && currentScale > 1.05f,
             enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
@@ -1789,7 +1791,7 @@ fun DetailScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = if (showUi) (if (viewerFilmstripEnabled && galleryItems.size > 1) 130.dp else 78.dp) else 24.dp)
+                .padding(bottom = zoomBadgeBottomPadding)
         ) {
             Surface(
                 shape = ShapeFull,
@@ -2245,10 +2247,7 @@ private fun ViewerActionButtonsRow(
             var heartBounce by remember { mutableStateOf(false) }
             val heartScale by animateFloatAsState(
                 targetValue = if (heartBounce) 1.45f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
+                animationSpec = MotionTokens.bouncySpring(),
                 label = "heartScale",
                 finishedListener = { if (heartBounce) heartBounce = false }
             )
@@ -2304,135 +2303,6 @@ private fun ViewerActionButtonsRow(
     }
 }
 
-
-data class ExifData(
-    val model: String?,
-    val aperture: String?,
-    val iso: String?,
-    val shutterSpeed: String?,
-    val focalLength: String?,
-    val resolution: String?
-)
-
-suspend fun extractExif(context: android.content.Context, uri: Uri): ExifData = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-    var model: String? = null
-    var aperture: String? = null
-    var iso: String? = null
-    var shutterSpeed: String? = null
-    var focalLength: String? = null
-    var resolution: String? = null
-
-    try {
-        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            val exif = androidx.exifinterface.media.ExifInterface(inputStream)
-            model = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_MODEL)
-            aperture = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_F_NUMBER)?.let { "f/$it" }
-            iso = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)?.let { "ISO $it" }
-            shutterSpeed = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_EXPOSURE_TIME)?.let { "${it}s" }
-            focalLength = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_FOCAL_LENGTH)?.let { "${it}mm" }
-            
-            val width = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_IMAGE_WIDTH)
-            val length = exif.getAttribute(androidx.exifinterface.media.ExifInterface.TAG_IMAGE_LENGTH)
-            if (width != null && length != null) {
-                resolution = "${width}x${length}"
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-    
-    ExifData(model, aperture, iso, shutterSpeed, focalLength, resolution)
-}
-
-fun formatExifDate(timestamp: Long): String {
-    return java.text.SimpleDateFormat("dd-MM-yyyy, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
-}
-
-fun formatSizeToMB(sizeBytes: Long): String {
-    return String.format(java.util.Locale.US, "%.2f MB", sizeBytes / (1024.0 * 1024.0))
-}
-
-@Composable
-fun ExifInfoCard(galleryItem: GalleryItem?, exifData: ExifData?, modifier: Modifier = Modifier) {
-    if (galleryItem == null) return
-    Surface(
-        modifier = modifier.widthIn(min = 280.dp, max = 340.dp),
-        shape = ShapeLargeIncreased,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // File Name — full wrap
-            InfoBlock(label = "Name", value = galleryItem.name)
-
-            // Time + Size row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                InfoBlock(
-                    label = "Modified",
-                    value = formatExifDate(galleryItem.dateModified * 1000L),
-                    modifier = Modifier.weight(1f)
-                )
-                InfoBlock(
-                    label = "Size",
-                    value = formatSizeToMB(galleryItem.size),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Resolution + Device row
-            val resolution = exifData?.resolution
-            val device = exifData?.model
-            if (resolution != null || device != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    if (resolution != null) {
-                        InfoBlock(label = "Resolution", value = resolution, modifier = Modifier.weight(1f))
-                    }
-                    if (device != null) {
-                        InfoBlock(label = "Device", value = device, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-
-            // Camera parameters
-            val paramsParts = listOfNotNull(exifData?.focalLength, exifData?.shutterSpeed, exifData?.iso, exifData?.aperture).filter { it.isNotBlank() }
-            if (paramsParts.isNotEmpty()) {
-                InfoBlock(label = "Parameters", value = paramsParts.joinToString("  •  "))
-            }
-
-            // Path — full wrap
-            InfoBlock(label = "Path", value = galleryItem.path)
-        }
-    }
-}
-
-@Composable
-private fun InfoBlock(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall.copy(
-
-                letterSpacing = 0.8.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
 
 private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
     if (drawable is android.graphics.drawable.BitmapDrawable && drawable.bitmap != null) {
