@@ -52,6 +52,31 @@ data class MarkupStroke(
     }
 }
 
+enum class TextHitPart {
+    NONE,
+    HANDLE_TOP_LEFT,
+    HANDLE_TOP_RIGHT,
+    HANDLE_BOTTOM_LEFT,
+    HANDLE_BOTTOM_RIGHT,
+    EDGE_TOP,
+    EDGE_BOTTOM,
+    EDGE_LEFT,
+    EDGE_RIGHT,
+    BODY;
+
+    val isResizeHandle: Boolean
+        get() = this in listOf(
+            HANDLE_TOP_LEFT,
+            HANDLE_TOP_RIGHT,
+            HANDLE_BOTTOM_LEFT,
+            HANDLE_BOTTOM_RIGHT,
+            EDGE_TOP,
+            EDGE_BOTTOM,
+            EDGE_LEFT,
+            EDGE_RIGHT
+        )
+}
+
 data class MarkupText(
     val id: Long = System.nanoTime(),
     val text: String,
@@ -62,13 +87,18 @@ data class MarkupText(
     val rotation: Float = 0f, // Degrees (-180f..180f)
     val hasBackgroundBox: Boolean = true
 ) {
-    fun isHitBy(normPoint: Offset, width: Float, height: Float): Boolean {
+    fun isHitBy(normPoint: Offset, width: Float, height: Float, touchMarginDp: Float = 16f): Boolean {
         if (width <= 0f || height <= 0f) return false
         val baseScale = (width / 420f).coerceIn(0.7f, 3.5f)
         val effScale = baseScale * scale
-        val estimatedCharWidthPx = (fontSize * 0.55f) * effScale
-        val halfWPx = maxOf((text.length * estimatedCharWidthPx + 36f * effScale) / 2f, 28f * effScale)
-        val halfHPx = maxOf((fontSize * 1.4f * effScale + 28f * effScale) / 2f, 24f * effScale)
+        val lines = text.lines()
+        val maxChars = lines.maxOfOrNull { it.length } ?: text.length
+        val lineCount = maxOf(1, lines.size)
+
+        val estimatedCharWidthPx = (fontSize * 0.58f) * effScale
+        val slopPx = touchMarginDp * baseScale
+        val halfWPx = maxOf((maxChars * estimatedCharWidthPx + 40f * effScale) / 2f, 32f * effScale) + slopPx
+        val halfHPx = maxOf((lineCount * fontSize * 1.35f * effScale + 30f * effScale) / 2f, 28f * effScale) + slopPx
 
         val px = (normPoint.x - position.x) * width
         val py = (normPoint.y - position.y) * height

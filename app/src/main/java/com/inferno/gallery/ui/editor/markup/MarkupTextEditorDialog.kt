@@ -6,17 +6,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -24,16 +30,12 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,20 +46,21 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.inferno.gallery.R
-import com.inferno.gallery.ui.theme.IconSizeTokens
-import com.inferno.gallery.ui.theme.ShapeEdgeTop
-import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
-import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -71,121 +74,221 @@ fun MarkupTextEditorDialog(
     var textValue by remember { mutableStateOf(initialText?.text ?: "") }
     var selectedColor by remember { mutableStateOf(initialText?.color ?: Color.White) }
     var hasBackgroundBox by remember { mutableStateOf(initialText?.hasBackgroundBox ?: true) }
-    var textScale by remember { mutableFloatStateOf(initialText?.scale ?: 1.0f) }
-    var textRotation by remember { mutableFloatStateOf(initialText?.rotation ?: 0f) }
     val focusRequester = remember { FocusRequester() }
+    val isEditing = initialText != null
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismissRequest,
-        shape = ShapeExtraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (initialText == null) "Add Text" else "Edit Text",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Background box toggle
-                Surface(
-                    shape = ShapeFull,
-                    color = if (hasBackgroundBox) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                    contentColor = if (hasBackgroundBox) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .pressScale()
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            hasBackgroundBox = !hasBackgroundBox
-                        }
-                ) {
-                    Text(
-                        text = if (hasBackgroundBox) "Box: On" else "Box: Off",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        },
-        text = {
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f))
+                .imePadding()
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
             ) {
-                OutlinedTextField(
-                    value = textValue,
-                    onValueChange = { textValue = it },
-                    placeholder = { Text("Type text here…") },
-                    shape = ShapeExtraLarge,
-                    singleLine = false,
-                    maxLines = 4,
+                // 1. Top Bar: Cancel, Style toggle, Delete, Done
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                )
-
-                // Size & Rotation row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Size: ${(textScale * 100).roundToInt()}%",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(76.dp)
-                    )
-                    Slider(
-                        value = textScale,
-                        onValueChange = { textScale = it },
-                        valueRange = 0.5f..2.5f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
+                    TextButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            textRotation = (textRotation + 45f) % 360f
+                            onDismissRequest()
                         },
-                        modifier = Modifier.size(36.dp)
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
                     ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_rotate_right),
-                            contentDescription = "Rotate",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                        Text(
+                            text = "Cancel",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Background box toggle pill
+                    Surface(
+                        shape = ShapeFull,
+                        color = if (hasBackgroundBox) MaterialTheme.colorScheme.primaryContainer else Color.White.copy(alpha = 0.18f),
+                        contentColor = if (hasBackgroundBox) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                        modifier = Modifier
+                            .pressScale()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                hasBackgroundBox = !hasBackgroundBox
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_border_all),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (hasBackgroundBox) "Box: Fill" else "Box: None",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+
+                    if (isEditing && onDelete != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onDelete(initialText.id)
+                                onDismissRequest()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Done Button
+                    FilledTonalButton(
+                        onClick = {
+                            val trimmed = textValue.trim()
+                            if (trimmed.isNotEmpty()) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                val textItem = initialText?.copy(
+                                    text = trimmed,
+                                    color = selectedColor,
+                                    hasBackgroundBox = hasBackgroundBox
+                                ) ?: MarkupText(
+                                    text = trimmed,
+                                    position = Offset(0.5f, 0.45f),
+                                    color = selectedColor,
+                                    scale = 1.0f,
+                                    rotation = 0f,
+                                    hasBackgroundBox = hasBackgroundBox
+                                )
+                                onConfirm(textItem)
+                            } else if (initialText != null && onDelete != null) {
+                                onDelete(initialText.id)
+                                onDismissRequest()
+                            } else {
+                                onDismissRequest()
+                            }
+                        },
+                        shape = ShapeFull,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Text(
+                            text = "Done",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                         )
                     }
                 }
 
-                // Color row
+                // 2. Center Area: Unobstructed, live styled text field
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val isDark = (0.299 * selectedColor.red + 0.587 * selectedColor.green + 0.114 * selectedColor.blue) < 0.5
+                    val boxBg = if (isDark) Color.White.copy(alpha = 0.92f) else Color.Black.copy(alpha = 0.85f)
+
+                    Box(
+                        modifier = Modifier
+                            .wrapContentSize()
+                            .then(
+                                if (hasBackgroundBox) {
+                                    Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(boxBg)
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                } else {
+                                    Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicTextField(
+                            value = textValue,
+                            onValueChange = { textValue = it },
+                            textStyle = TextStyle(
+                                color = selectedColor,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            ),
+                            cursorBrush = SolidColor(selectedColor),
+                            modifier = Modifier
+                                .fillMaxWidth(0.92f)
+                                .focusRequester(focusRequester),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (textValue.isEmpty()) {
+                                        Text(
+                                            text = "Type text here…",
+                                            style = TextStyle(
+                                                color = if (hasBackgroundBox) selectedColor.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.55f),
+                                                fontSize = 28.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // 3. Bottom Bar: ONLY the horizontal color palette directly above the keyboard
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items(MarkupPalette.COLORS) { color ->
                         val isSelected = color == selectedColor
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(36.dp)
                                 .pressScale()
                                 .clip(CircleShape)
                                 .background(color)
                                 .border(
-                                    width = if (isSelected) 2.5.dp else 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.2f),
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.35f),
                                     shape = CircleShape
                                 )
                                 .clickable {
@@ -200,78 +303,13 @@ fun MarkupTextEditorDialog(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
                                     contentDescription = null,
                                     tint = checkTint,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            FilledTonalButton(
-                onClick = {
-                    val trimmed = textValue.trim()
-                    if (trimmed.isNotEmpty()) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        val textItem = initialText?.copy(
-                            text = trimmed,
-                            color = selectedColor,
-                            scale = textScale,
-                            rotation = textRotation,
-                            hasBackgroundBox = hasBackgroundBox
-                        ) ?: MarkupText(
-                            text = trimmed,
-                            position = Offset(0.5f, 0.5f),
-                            color = selectedColor,
-                            scale = textScale,
-                            rotation = textRotation,
-                            hasBackgroundBox = hasBackgroundBox
-                        )
-                        onConfirm(textItem)
-                    } else if (initialText != null && onDelete != null) {
-                        onDelete(initialText.id)
-                    }
-                    onDismissRequest()
-                },
-                shape = ShapeFull,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Text(
-                    text = "Done",
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-        },
-        dismissButton = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (initialText != null && onDelete != null) {
-                    TextButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onDelete(initialText.id)
-                            onDismissRequest()
-                        }
-                    ) {
-                        Text(
-                            text = "Delete",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(SpacingTokens.S))
-                }
-
-                TextButton(onClick = onDismissRequest) {
-                    Text(
-                        text = "Cancel",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
         }
-    )
+    }
 }

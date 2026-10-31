@@ -14,8 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -87,9 +87,12 @@ fun MarkupCanvasOverlay(
                 )
 
                 if (currentActiveTool == MarkupTool.TEXT) {
-                    // Text manipulation mode (drag, 2-finger scale, 2-finger twist rotation, tap)
                     val currentSelected = currentMarkupState.texts.find { it.id == currentSelectedTextId }
-                    val hitText = if (currentSelected != null && currentSelected.isHitBy(normDown, canvasW, canvasH)) {
+                    val hitInfo = if (currentSelected != null) {
+                        getTextHitInfo(currentSelected, down.position, canvasW, canvasH, textMeasurer)
+                    } else Pair(TextHitPart.NONE, Offset.Zero)
+
+                    val hitText = if (hitInfo.first != TextHitPart.NONE) {
                         currentSelected
                     } else {
                         currentMarkupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
@@ -99,11 +102,22 @@ fun MarkupCanvasOverlay(
                         var targetText: MarkupText = hitText
                         var totalMovement = 0f
                         var isTransforming = false
+                        val isInitialSelected = currentSelectedTextId == hitText.id
 
-                        if (currentSelectedTextId != hitText.id) {
+                        if (!isInitialSelected) {
                             currentOnSelectText(hitText.id)
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
+
+                        val hitPart = if (isInitialSelected) hitInfo.first else TextHitPart.BODY
+                        val isResizeMode = hitPart.isResizeHandle
+                        val initialScale = targetText.scale
+                        val localStart = hitInfo.second
+                        val initialDist = sqrt(localStart.x * localStart.x + localStart.y * localStart.y).coerceAtLeast(15f)
+
+                        val rad = Math.toRadians(-targetText.rotation.toDouble())
+                        val cos = kotlin.math.cos(rad).toFloat()
+                        val sin = kotlin.math.sin(rad).toFloat()
 
                         while (true) {
                             val event = awaitPointerEvent()
@@ -114,19 +128,36 @@ fun MarkupCanvasOverlay(
                             if (pointerCount == 1) {
                                 val pan = event.calculatePan()
                                 totalMovement += pan.getDistance()
-                                if (totalMovement > 6f || isTransforming) {
+                                if (totalMovement > 4f || isTransforming) {
                                     isTransforming = true
                                     event.changes.forEach { it.consume() }
-                                    val normPanX = pan.x / canvasW
-                                    val normPanY = pan.y / canvasH
-                                    val newPos = Offset(
-                                        (targetText.position.x + normPanX).coerceIn(0.05f, 0.95f),
-                                        (targetText.position.y + normPanY).coerceIn(0.05f, 0.95f)
-                                    )
-                                    targetText = targetText.copy(position = newPos)
-                                    currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
+
+                                    if (isResizeMode) {
+                                        // Dragging corner handle or edge line -> scale size smoothly
+                                        val pt = activePointers.first().position
+                                        val curDx = pt.x - (targetText.position.x * canvasW)
+                                        val curDy = pt.y - (targetText.position.y * canvasH)
+                                        val curLocalX = cos * curDx - sin * curDy
+                                        val curLocalY = sin * curDx + cos * curDy
+                                        val curDist = sqrt(curLocalX * curLocalX + curLocalY * curLocalY)
+                                        val scaleRatio = curDist / initialDist
+                                        val newScale = (initialScale * scaleRatio).coerceIn(0.4f, 4.0f)
+                                        targetText = targetText.copy(scale = newScale)
+                                        currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
+                                    } else {
+                                        // Dragging body -> move position
+                                        val normPanX = pan.x / canvasW
+                                        val normPanY = pan.y / canvasH
+                                        val newPos = Offset(
+                                            (targetText.position.x + normPanX).coerceIn(0.05f, 0.95f),
+                                            (targetText.position.y + normPanY).coerceIn(0.05f, 0.95f)
+                                        )
+                                        targetText = targetText.copy(position = newPos)
+                                        currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
+                                    }
                                 }
                             } else if (pointerCount >= 2) {
+                                // 2-finger gesture: pinch zoom, rotate, pan
                                 isTransforming = true
                                 event.changes.forEach { it.consume() }
 
@@ -153,7 +184,7 @@ fun MarkupCanvasOverlay(
                         }
 
                         if (!isTransforming && totalMovement < 10f) {
-                            if (currentSelectedTextId == hitText.id) {
+                            if (isInitialSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 currentOnEditTextRequest(hitText)
                             } else {
@@ -162,16 +193,48 @@ fun MarkupCanvasOverlay(
                             }
                         }
                     } else {
-                        // Touched blank canvas space in Text mode
+                        // Touched outside any text
                         var totalMovement = 0f
+                        var isTransforming = false
+                        var targetText = currentSelected
+
                         while (true) {
                             val event = awaitPointerEvent()
                             val activePointers = event.changes.filter { it.pressed }
                             if (activePointers.isEmpty()) break
-                            val pan = event.calculatePan()
-                            totalMovement += pan.getDistance()
+
+                            val pointerCount = activePointers.size
+                            if (pointerCount >= 2 && targetText != null) {
+                                // 2-finger pinch/rotation anywhere while text is selected!
+                                isTransforming = true
+                                event.changes.forEach { it.consume() }
+
+                                val zoom = event.calculateZoom()
+                                val rotation = event.calculateRotation()
+                                val pan = event.calculatePan()
+
+                                val normPanX = pan.x / canvasW
+                                val normPanY = pan.y / canvasH
+                                val newPos = Offset(
+                                    (targetText.position.x + normPanX).coerceIn(0.05f, 0.95f),
+                                    (targetText.position.y + normPanY).coerceIn(0.05f, 0.95f)
+                                )
+                                val newScale = (targetText.scale * zoom).coerceIn(0.4f, 4.0f)
+                                val newRotation = (targetText.rotation + rotation) % 360f
+
+                                targetText = targetText.copy(
+                                    position = newPos,
+                                    scale = newScale,
+                                    rotation = newRotation
+                                )
+                                currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
+                            } else {
+                                val pan = event.calculatePan()
+                                totalMovement += pan.getDistance()
+                            }
                         }
-                        if (totalMovement < 10f) {
+
+                        if (!isTransforming && totalMovement < 10f) {
                             if (currentSelectedTextId != null) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 currentOnSelectText(null)
@@ -188,7 +251,6 @@ fun MarkupCanvasOverlay(
                     eraserCursorPoint = down.position
                     down.consume()
 
-                    // Check initial touch point
                     val initialStrokeHit = currentLocalState.strokes.findLast { it.isHitBy(normDown, eraserRadius) }
                     if (initialStrokeHit != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -217,7 +279,6 @@ fun MarkupCanvasOverlay(
                             (pt.y / canvasH).coerceIn(0f, 1f)
                         )
 
-                        // Interpolate between lastNorm and currentNorm to catch fast finger sweeps
                         val dx = currentNorm.x - lastNorm.x
                         val dy = currentNorm.y - lastNorm.y
                         val dist = sqrt(dx * dx + dy * dy)
@@ -360,6 +421,81 @@ fun MarkupCanvasOverlay(
     }
 }
 
+private fun getTextHitInfo(
+    textElem: MarkupText,
+    touchPoint: Offset,
+    canvasW: Float,
+    canvasH: Float,
+    textMeasurer: TextMeasurer
+): Pair<TextHitPart, Offset> {
+    if (canvasW <= 0f || canvasH <= 0f) return Pair(TextHitPart.NONE, Offset.Zero)
+
+    val baseScale = (canvasW / 420f).coerceIn(0.7f, 3.5f)
+    val fontSize = (textElem.fontSize * baseScale).sp
+    val layout = textMeasurer.measure(
+        text = textElem.text,
+        style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Bold)
+    )
+
+    val padX = 22f * baseScale
+    val padY = 16f * baseScale
+    val halfW = (layout.size.width / 2f + padX) * textElem.scale
+    val halfH = (layout.size.height / 2f + padY) * textElem.scale
+
+    val centerX = textElem.position.x * canvasW
+    val centerY = textElem.position.y * canvasH
+
+    val dx = touchPoint.x - centerX
+    val dy = touchPoint.y - centerY
+
+    val rad = Math.toRadians(-textElem.rotation.toDouble())
+    val cos = kotlin.math.cos(rad).toFloat()
+    val sin = kotlin.math.sin(rad).toFloat()
+    val localX = cos * dx - sin * dy
+    val localY = sin * dx + cos * dy
+    val localTouch = Offset(localX, localY)
+
+    val cornerRadius = (32f * baseScale).coerceIn(36f, 80f)
+    val edgeThickness = (24f * baseScale).coerceIn(28f, 60f)
+
+    // 1. Check 4 corners
+    val dTL = sqrt((localX - (-halfW)) * (localX - (-halfW)) + (localY - (-halfH)) * (localY - (-halfH)))
+    val dTR = sqrt((localX - halfW) * (localX - halfW) + (localY - (-halfH)) * (localY - (-halfH)))
+    val dBL = sqrt((localX - (-halfW)) * (localX - (-halfW)) + (localY - halfH) * (localY - halfH))
+    val dBR = sqrt((localX - halfW) * (localX - halfW) + (localY - halfH) * (localY - halfH))
+
+    val minCorner = minOf(dTL, dTR, dBL, dBR)
+    if (minCorner <= cornerRadius) {
+        val part = when (minCorner) {
+            dTL -> TextHitPart.HANDLE_TOP_LEFT
+            dTR -> TextHitPart.HANDLE_TOP_RIGHT
+            dBL -> TextHitPart.HANDLE_BOTTOM_LEFT
+            else -> TextHitPart.HANDLE_BOTTOM_RIGHT
+        }
+        return Pair(part, localTouch)
+    }
+
+    // 2. Check 4 edges
+    val slopX = halfW + edgeThickness
+    val slopY = halfH + edgeThickness
+    val nearTop = kotlin.math.abs(localY - (-halfH)) <= edgeThickness && localX in -slopX..slopX
+    val nearBottom = kotlin.math.abs(localY - halfH) <= edgeThickness && localX in -slopX..slopX
+    val nearLeft = kotlin.math.abs(localX - (-halfW)) <= edgeThickness && localY in -slopY..slopY
+    val nearRight = kotlin.math.abs(localX - halfW) <= edgeThickness && localY in -slopY..slopY
+
+    if (nearTop) return Pair(TextHitPart.EDGE_TOP, localTouch)
+    if (nearBottom) return Pair(TextHitPart.EDGE_BOTTOM, localTouch)
+    if (nearLeft) return Pair(TextHitPart.EDGE_LEFT, localTouch)
+    if (nearRight) return Pair(TextHitPart.EDGE_RIGHT, localTouch)
+
+    // 3. Check body
+    if (kotlin.math.abs(localX) <= halfW && kotlin.math.abs(localY) <= halfH) {
+        return Pair(TextHitPart.BODY, localTouch)
+    }
+
+    return Pair(TextHitPart.NONE, localTouch)
+}
+
 private fun DrawScope.drawStrokeItem(stroke: MarkupStroke, width: Float, height: Float) {
     if (stroke.points.isEmpty()) return
     val strokePx = (stroke.strokeWidth * width).coerceAtLeast(3f)
@@ -495,7 +631,7 @@ private fun DrawScope.drawArrowStrokeAndHead(
     val rightX = baseCenterX - perpX * halfWidth
     val rightY = baseCenterY - perpY * halfWidth
 
-    // 1. Draw shaft line terminating cleanly at notch (hiding round cap inside arrowhead)
+    // 1. Draw shaft line terminating cleanly at notch
     val shaftPath = Path()
     shaftPath.moveTo(points[0].x * width, points[0].y * height)
     for (i in 1 until points.size - 1) {
@@ -513,7 +649,7 @@ private fun DrawScope.drawArrowStrokeAndHead(
         )
     )
 
-    // 2. Draw sharp stealth arrowhead
+    // 2. Draw sharp arrowhead
     val headPath = Path().apply {
         moveTo(tipX, tipY)
         lineTo(leftX, leftY)
@@ -583,25 +719,27 @@ private fun DrawScope.drawTextItem(
         )
 
         if (isSelected) {
-            val selPad = 6f * baseScale
+            val selPad = 8f * baseScale
             val selLeft = rectLeft - selPad
             val selTop = rectTop - selPad
             val selW = rectW + selPad * 2f
             val selH = rectH + selPad * 2f
-            val strokeWidthPx = 2f * baseScale
+            val strokeWidthPx = 2.5f * baseScale
 
+            // 1. Dashed selection rounded box
             drawRoundRect(
                 color = selectionColor,
                 topLeft = Offset(selLeft, selTop),
                 size = Size(selW, selH),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f * baseScale, 12f * baseScale),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(10f * baseScale, 10f * baseScale),
                 style = Stroke(
                     width = strokeWidthPx,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f)
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
                 )
             )
 
-            val handleRadius = 4.5f * baseScale
+            // 2. 4 Prominent corner handles with drop shadow
+            val handleRadius = 8f * baseScale
             val corners = listOf(
                 Offset(selLeft, selTop),
                 Offset(selLeft + selW, selTop),
@@ -609,6 +747,11 @@ private fun DrawScope.drawTextItem(
                 Offset(selLeft + selW, selTop + selH)
             )
             for (corner in corners) {
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.35f),
+                    radius = handleRadius + 1.5f * baseScale,
+                    center = corner + Offset(0f, 1f * baseScale)
+                )
                 drawCircle(
                     color = Color.White,
                     radius = handleRadius,
@@ -619,6 +762,46 @@ private fun DrawScope.drawTextItem(
                     radius = handleRadius,
                     center = corner,
                     style = Stroke(width = strokeWidthPx)
+                )
+            }
+
+            // 3. 4 Edge midpoint pill indicators showing lines are draggable
+            val edgeHandleLen = 18f * baseScale
+            val edgeHandleThick = 4.5f * baseScale
+            val midTop = Offset(selLeft + selW / 2f, selTop)
+            val midBottom = Offset(selLeft + selW / 2f, selTop + selH)
+            val midLeft = Offset(selLeft, selTop + selH / 2f)
+            val midRight = Offset(selLeft + selW, selTop + selH / 2f)
+
+            for (pt in listOf(midTop, midBottom)) {
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(pt.x - edgeHandleLen / 2f, pt.y - edgeHandleThick / 2f),
+                    size = Size(edgeHandleLen, edgeHandleThick),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(edgeHandleThick / 2f, edgeHandleThick / 2f)
+                )
+                drawRoundRect(
+                    color = selectionColor,
+                    topLeft = Offset(pt.x - edgeHandleLen / 2f, pt.y - edgeHandleThick / 2f),
+                    size = Size(edgeHandleLen, edgeHandleThick),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(edgeHandleThick / 2f, edgeHandleThick / 2f),
+                    style = Stroke(width = 1.5f * baseScale)
+                )
+            }
+
+            for (pt in listOf(midLeft, midRight)) {
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(pt.x - edgeHandleThick / 2f, pt.y - edgeHandleLen / 2f),
+                    size = Size(edgeHandleThick, edgeHandleLen),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(edgeHandleThick / 2f, edgeHandleThick / 2f)
+                )
+                drawRoundRect(
+                    color = selectionColor,
+                    topLeft = Offset(pt.x - edgeHandleThick / 2f, pt.y - edgeHandleLen / 2f),
+                    size = Size(edgeHandleThick, edgeHandleLen),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(edgeHandleThick / 2f, edgeHandleThick / 2f),
+                    style = Stroke(width = 1.5f * baseScale)
                 )
             }
         }

@@ -236,14 +236,19 @@ object MarkupRasterizer {
             color = textElem.color.toArgb()
         }
 
-        val bounds = Rect()
-        textPaint.getTextBounds(textElem.text, 0, textElem.text.length, bounds)
+        val lines = textElem.text.lines()
+        val lineBounds = lines.map { line ->
+            val b = Rect()
+            textPaint.getTextBounds(line, 0, line.length, b)
+            b
+        }
+        val maxLineWidth = lineBounds.maxOfOrNull { it.width().toFloat() } ?: 0f
+        val fontMetrics = textPaint.fontMetrics
+        val lineHeight = (fontMetrics.descent - fontMetrics.ascent) * 1.15f
+        val totalTextHeight = lines.size * lineHeight
 
         val centerX = textElem.position.x * width
         val centerY = textElem.position.y * height
-
-        val textWidth = bounds.width().toFloat()
-        val textHeight = bounds.height().toFloat()
 
         canvas.save()
         canvas.translate(centerX, centerY)
@@ -254,10 +259,10 @@ object MarkupRasterizer {
         if (textElem.hasBackgroundBox) {
             val padX = textSizePx * 0.45f
             val padY = textSizePx * 0.30f
-            val rectLeft = -textWidth / 2f - padX
-            val rectTop = -textHeight / 2f - padY
-            val rectRight = textWidth / 2f + padX
-            val rectBottom = textHeight / 2f + padY
+            val rectLeft = -maxLineWidth / 2f - padX
+            val rectTop = -totalTextHeight / 2f - padY
+            val rectRight = maxLineWidth / 2f + padX
+            val rectBottom = totalTextHeight / 2f + padY
 
             val isDarkText = isColorDark(textElem.color)
             val bgArgb = if (isDarkText) 0xDDFFFFFF.toInt() else 0xCC000000.toInt()
@@ -275,9 +280,14 @@ object MarkupRasterizer {
             )
         }
 
-        val drawX = -textWidth / 2f - bounds.left
-        val drawY = textHeight / 2f - bounds.bottom
-        canvas.drawText(textElem.text, drawX, drawY, textPaint)
+        val firstBaselineY = -totalTextHeight / 2f - fontMetrics.ascent + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f
+        for (i in lines.indices) {
+            val line = lines[i]
+            val lw = textPaint.measureText(line)
+            val drawX = -lw / 2f
+            val drawY = firstBaselineY + i * lineHeight
+            canvas.drawText(line, drawX, drawY, textPaint)
+        }
         canvas.restore()
     }
 
