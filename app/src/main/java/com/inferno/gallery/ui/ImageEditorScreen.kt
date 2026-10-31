@@ -98,6 +98,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -119,6 +120,8 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
+import com.inferno.gallery.ui.editor.crop.CropGeometryHelper
+import com.inferno.gallery.ui.editor.crop.CropHandle
 import com.inferno.gallery.ui.editor.markup.MarkupBottomDock
 import com.inferno.gallery.ui.editor.markup.MarkupCanvasOverlay
 import com.inferno.gallery.ui.editor.markup.MarkupPalette
@@ -133,28 +136,33 @@ import com.inferno.gallery.ui.components.FloatingTipCard
 // ── Data Models ──────────────────────────────────────────────────────────────
 
 enum class EditorTool(val label: String, @androidx.annotation.DrawableRes val iconRes: Int) {
-    TUNE("Tune", R.drawable.ic_ms_tune),
+    SUGGESTIONS("Enhance", R.drawable.ic_ms_auto_fix_high),
     CROP("Crop", R.drawable.ic_ms_crop),
+    ADJUST("Adjust", R.drawable.ic_ms_tune),
     FILTERS("Filters", R.drawable.ic_ms_palette),
-    VIGNETTE("Vignette", R.drawable.ic_ms_photo_camera),
     MARKUP("Markup", R.drawable.ic_ms_edit)
 }
 
 data class TuneValues(
     val brightness: Float = 0f,    // -100..100
     val contrast: Float = 0f,      // -100..100
+    val highlights: Float = 0f,    // -100..100
+    val shadows: Float = 0f,       // -100..100
+    val whitePoint: Float = 0f,    // -100..100
+    val blackPoint: Float = 0f,    // -100..100
     val saturation: Float = 0f,    // -100..100
     val warmth: Float = 0f,        // -100..100
-    val shadows: Float = 0f,       // -100..100
-    val highlights: Float = 0f     // -100..100
+    val tint: Float = 0f,          // -100..100 (green <-> magenta)
+    val vignette: Float = 0f       // 0..100
 )
 
 data class CropState(
     val rotation: Int = 0,           // 0, 90, 180, 270
+    val straightenAngle: Float = 0f, // -45f..+45f fine angle
     val flipH: Boolean = false,
     val flipV: Boolean = false,
     val cropRect: Rect? = null,      // Normalized 0..1
-    val aspectLabel: String = "Free"
+    val aspectLabel: String = "Free" // "Free", "Original", "1:1", "5:4", "4:3", "3:2", "16:9"
 )
 
 data class FilterPreset(
@@ -166,7 +174,6 @@ data class EditorState(
     val tune: TuneValues = TuneValues(),
     val crop: CropState = CropState(),
     val filterIndex: Int = 0,
-    val vignetteStrength: Float = 0f,
     val markup: MarkupState = MarkupState()
 )
 
@@ -306,18 +313,29 @@ private fun buildCombinedMatrix(tune: TuneValues, filterMatrix: ColorMatrix): Co
         )))
     }
 
-    // 5. Shadows (lift dark tones)
-    if (tune.shadows != 0f) {
-        val sh = tune.shadows * 0.5f
+    // 5. Tint (shift green vs magenta)
+    if (tune.tint != 0f) {
+        val t = tune.tint * 0.6f
         result.postConcat(ColorMatrix(floatArrayOf(
-            1f, 0f, 0f, 0f, sh.coerceAtLeast(0f),
-            0f, 1f, 0f, 0f, sh.coerceAtLeast(0f),
-            0f, 0f, 1f, 0f, sh.coerceAtLeast(0f),
+            1f, 0f, 0f, 0f, t,
+            0f, 1f, 0f, 0f, -t,
+            0f, 0f, 1f, 0f, t,
             0f, 0f, 0f, 1f, 0f
         )))
     }
 
-    // 6. Highlights
+    // 6. Shadows (lift/darken dark tones)
+    if (tune.shadows != 0f) {
+        val sh = tune.shadows * 0.5f
+        result.postConcat(ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, sh,
+            0f, 1f, 0f, 0f, sh,
+            0f, 0f, 1f, 0f, sh,
+            0f, 0f, 0f, 1f, 0f
+        )))
+    }
+
+    // 7. Highlights
     if (tune.highlights != 0f) {
         val hl = tune.highlights * 0.3f
         val scale = 1f + hl / 255f
@@ -329,7 +347,29 @@ private fun buildCombinedMatrix(tune: TuneValues, filterMatrix: ColorMatrix): Co
         )))
     }
 
-    // 7. Filter preset on top
+    // 8. White Point
+    if (tune.whitePoint != 0f) {
+        val wp = 1f + (tune.whitePoint / 200f)
+        result.postConcat(ColorMatrix(floatArrayOf(
+            wp, 0f, 0f, 0f, 0f,
+            0f, wp, 0f, 0f, 0f,
+            0f, 0f, wp, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f
+        )))
+    }
+
+    // 9. Black Point
+    if (tune.blackPoint != 0f) {
+        val bp = tune.blackPoint * 0.8f
+        result.postConcat(ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, bp,
+            0f, 1f, 0f, 0f, bp,
+            0f, 0f, 1f, 0f, bp,
+            0f, 0f, 0f, 1f, 0f
+        )))
+    }
+
+    // 10. Filter preset on top
     result.postConcat(filterMatrix)
 
     return result
@@ -381,7 +421,37 @@ fun ImageEditorScreen(
         }
     }
 
-    // ── Editor state + undo/redo ─────────────────────────────────────────
+    val bmp = originalBitmap
+    if (bmp == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                ContainedLoadingIndicator(
+                    modifier = Modifier.size(56.dp)
+                )
+                Text(
+                    text = "Loading editor…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        return
+    }
+
+    val imageAspect = bmp.width.toFloat() / bmp.height.toFloat()
+
+    // ── Filter presets ───────────────────────────────────────────────────
+    val filterPresets = remember { buildFilterPresets() }
+
+    // ── Editor State + Undo/Redo Stacks ──────────────────────────────────
     var currentState by remember { mutableStateOf(EditorState()) }
     val undoStack = remember { mutableStateListOf<EditorState>() }
     val redoStack = remember { mutableStateListOf<EditorState>() }
@@ -394,38 +464,46 @@ fun ImageEditorScreen(
 
     fun undo() {
         if (undoStack.isNotEmpty()) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            val prev = undoStack.removeAt(undoStack.lastIndex)
             redoStack.add(currentState)
-            currentState = undoStack.removeAt(undoStack.lastIndex)
+            currentState = prev
         }
     }
 
     fun redo() {
         if (redoStack.isNotEmpty()) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            val next = redoStack.removeAt(redoStack.lastIndex)
             undoStack.add(currentState)
-            currentState = redoStack.removeAt(redoStack.lastIndex)
+            currentState = next
         }
     }
 
-    // ── Tool state ───────────────────────────────────────────────────────
+    // ── Active Tool ──────────────────────────────────────────────────────
     var activeTool by remember { mutableStateOf<EditorTool?>(null) }
     var isSaving by remember { mutableStateOf(false) }
-    var showSaveOptions by remember { mutableStateOf(false) }
+    var showSaveMenu by remember { mutableStateOf(false) }
 
-    // ── Markup tool state ────────────────────────────────────────────────
+    // ── Markup Tool State ────────────────────────────────────────────────
     var activeMarkupTool by remember { mutableStateOf(MarkupTool.PEN) }
-    var markupColor by remember { mutableStateOf(MarkupPalette.COLORS[2]) } // Red default
-    var penStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_PEN_WIDTH) }
-    var highlighterStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_HIGHLIGHTER_WIDTH) }
-    var arrowStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_ARROW_WIDTH) }
-    var eraserRadius by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_ERASER_RADIUS) }
+    var markupColor by remember { mutableStateOf(MarkupPalette.COLORS[0]) }
+    var penStrokeWidth by remember { mutableFloatStateOf(6f) }
+    var highlighterStrokeWidth by remember { mutableFloatStateOf(24f) }
+    var arrowStrokeWidth by remember { mutableFloatStateOf(8f) }
+    var eraserRadius by remember { mutableFloatStateOf(24f) }
+
+    // Text Editor Dialog State
+    var showTextDialog by remember { mutableStateOf(false) }
     var editingTextItem by remember { mutableStateOf<MarkupText?>(null) }
     var selectedMarkupTextId by remember { mutableStateOf<Long?>(null) }
-    var showTextDialog by remember { mutableStateOf(false) }
 
-    // ── Filter presets ───────────────────────────────────────────────────
-    val filterPresets = remember { buildFilterPresets() }
+    // Back handler
+    BackHandler {
+        if (activeTool != null) {
+            activeTool = null
+        } else {
+            onBack()
+        }
+    }
 
     // ── Combined color matrix ────────────────────────────────────────────
     val combinedMatrix = remember(currentState.tune, currentState.filterIndex) {
@@ -441,13 +519,12 @@ fun ImageEditorScreen(
 
     // ── Save function ────────────────────────────────────────────────────
     fun saveImage(overwrite: Boolean) {
-        val bmp = originalBitmap ?: return
+        val b = originalBitmap ?: return
         isSaving = true
         coroutineScope.launch(Dispatchers.Default) {
             try {
-                // Apply crop
                 val crop = currentState.crop
-                var workBitmap = bmp
+                var workBitmap = b
 
                 // Apply markup onto high-res bitmap
                 if (currentState.markup.strokes.isNotEmpty() || currentState.markup.texts.isNotEmpty()) {
@@ -462,14 +539,15 @@ fun ImageEditorScreen(
                     workBitmap = annotated
                 }
 
-                // Apply rotation/flip
-                if (crop.rotation != 0 || crop.flipH || crop.flipV) {
+                // Apply rotation/flip/straighten
+                val totalRotation = crop.rotation.toFloat() + crop.straightenAngle
+                if (totalRotation != 0f || crop.flipH || crop.flipV) {
                     val matrix = android.graphics.Matrix()
                     if (crop.flipH) matrix.preScale(-1f, 1f)
                     if (crop.flipV) matrix.preScale(1f, -1f)
-                    if (crop.rotation != 0) matrix.postRotate(crop.rotation.toFloat())
+                    if (totalRotation != 0f) matrix.postRotate(totalRotation)
                     val rotated = Bitmap.createBitmap(workBitmap, 0, 0, workBitmap.width, workBitmap.height, matrix, true)
-                    if (workBitmap != bmp) workBitmap.recycle()
+                    if (workBitmap != b) workBitmap.recycle()
                     workBitmap = rotated
                 }
 
@@ -481,7 +559,7 @@ fun ImageEditorScreen(
                     val w = ((cropRect.right - cropRect.left) * workBitmap.width).toInt().coerceIn(1, workBitmap.width - x)
                     val h = ((cropRect.bottom - cropRect.top) * workBitmap.height).toInt().coerceIn(1, workBitmap.height - y)
                     val cropped = Bitmap.createBitmap(workBitmap, x, y, w, h)
-                    if (workBitmap != bmp) workBitmap.recycle()
+                    if (workBitmap != b) workBitmap.recycle()
                     workBitmap = cropped
                 }
 
@@ -492,19 +570,19 @@ fun ImageEditorScreen(
                     colorFilter = ColorMatrixColorFilter(combinedMatrix)
                 }
                 canvas.drawBitmap(workBitmap, 0f, 0f, paint)
-                if (workBitmap != bmp) workBitmap.recycle()
+                if (workBitmap != b) workBitmap.recycle()
 
                 // Apply vignette
-                if (currentState.vignetteStrength > 0f) {
+                if (currentState.tune.vignette > 0f) {
                     val cx = resultBitmap.width / 2f
                     val cy = resultBitmap.height / 2f
                     val radius = kotlin.math.max(cx, cy) * 1.2f
-                    val alpha = (currentState.vignetteStrength / 100f * 200).toInt().coerceIn(0, 200)
+                    val alpha = (currentState.tune.vignette / 100f * 200).toInt().coerceIn(0, 200)
                     val vignettePaint = Paint().apply {
                         shader = RadialGradient(
                             cx, cy, radius,
                             intArrayOf(0x00000000, 0x00000000, android.graphics.Color.argb(alpha, 0, 0, 0)),
-                            floatArrayOf(0f, 0.5f, 1f),
+                            floatArrayOf(0f, 0.45f, 1f),
                             Shader.TileMode.CLAMP
                         )
                     }
@@ -535,68 +613,27 @@ fun ImageEditorScreen(
                         }
                     }
                 }
-                resultBitmap.recycle()
 
                 withContext(Dispatchers.Main) {
+                    isSaving = false
                     view.thud()
-                    Toast.makeText(context, if (overwrite) "Saved" else "Saved as copy", Toast.LENGTH_SHORT).show()
-                    isSaving = false
+                    Toast.makeText(context, if (overwrite) "Saved changes" else "Saved as copy", Toast.LENGTH_SHORT).show()
                     onSaved()
-                    onBack()
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                e.printStackTrace()
+            } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error saving: ${e.message ?: "Out of memory"}", Toast.LENGTH_SHORT).show()
                     isSaving = false
+                    Toast.makeText(context, "Error saving: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    BackHandler {
-        if (activeTool != null) {
-            activeTool = null
-        } else {
-            onBack()
-        }
-    }
-
-    // ── UI ────────────────────────────────────────────────────────────────
-
-    if (originalBitmap == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                ContainedLoadingIndicator(
-                    modifier = Modifier.size(56.dp)
-                )
-                Text(
-                    text = "Loading photo…",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        return
-    }
-
-    val bmp = originalBitmap!!
-    val imageAspect = bmp.width.toFloat() / bmp.height.toFloat()
-
+    // ── Layout ───────────────────────────────────────────────────────────
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // ── Image Preview Area ───────────────────────────────────────
@@ -637,8 +674,10 @@ fun ImageEditorScreen(
                             (maxH * effectiveAspect) to maxH
                         }
 
-                        val density = androidx.compose.ui.platform.LocalDensity.current.density
+                        val density = LocalDensity.current.density
                         val (drawW, drawH) = if (isRotated90) imgH to imgW else imgW to imgH
+
+                        val totalRot = currentState.crop.rotation.toFloat() + currentState.crop.straightenAngle
 
                         Box(
                             modifier = Modifier
@@ -647,7 +686,7 @@ fun ImageEditorScreen(
                                     height = (drawH / density).dp
                                 )
                                 .graphicsLayer {
-                                    rotationZ = currentState.crop.rotation.toFloat()
+                                    rotationZ = totalRot
                                     scaleX = if (currentState.crop.flipH) -1f else 1f
                                     scaleY = if (currentState.crop.flipV) -1f else 1f
                                 },
@@ -661,10 +700,10 @@ fun ImageEditorScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .then(
-                                        if (currentState.vignetteStrength > 0f) {
+                                        if (currentState.tune.vignette > 0f) {
                                             Modifier.drawWithContent {
                                                 drawContent()
-                                                val alpha = currentState.vignetteStrength / 100f * 0.8f
+                                                val alpha = currentState.tune.vignette / 100f * 0.8f
                                                 drawRect(
                                                     brush = Brush.radialGradient(
                                                         colors = listOf(
@@ -749,7 +788,7 @@ fun ImageEditorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(top = 12.dp, bottom = 8.dp)
+                        .padding(top = 10.dp, bottom = 8.dp)
                 ) {
                     // Active tool panel
                     AnimatedContent(
@@ -761,10 +800,10 @@ fun ImageEditorScreen(
                         label = "toolPanel"
                     ) { tool ->
                         when (tool) {
-                            EditorTool.TUNE -> TunePanel(
-                                values = currentState.tune,
-                                onValuesChanged = { newValues ->
-                                    pushState(currentState.copy(tune = newValues))
+                            EditorTool.SUGGESTIONS -> SuggestionsPanel(
+                                currentTune = currentState.tune,
+                                onTuneChanged = { newTune ->
+                                    pushState(currentState.copy(tune = newTune))
                                 }
                             )
                             EditorTool.CROP -> CropToolPanel(
@@ -774,18 +813,18 @@ fun ImageEditorScreen(
                                     pushState(currentState.copy(crop = newCrop))
                                 }
                             )
+                            EditorTool.ADJUST -> AdjustPanel(
+                                values = currentState.tune,
+                                onValuesChanged = { newValues ->
+                                    pushState(currentState.copy(tune = newValues))
+                                }
+                            )
                             EditorTool.FILTERS -> FiltersPanel(
                                 presets = filterPresets,
                                 selectedIndex = currentState.filterIndex,
                                 originalBitmap = bmp,
                                 onFilterSelected = { index ->
                                     pushState(currentState.copy(filterIndex = index))
-                                }
-                            )
-                            EditorTool.VIGNETTE -> VignettePanel(
-                                strength = currentState.vignetteStrength,
-                                onStrengthChanged = { s ->
-                                    pushState(currentState.copy(vignetteStrength = s))
                                 }
                             )
                             EditorTool.MARKUP -> {
@@ -812,85 +851,85 @@ fun ImageEditorScreen(
 
                                     MarkupBottomDock(
                                         activeTool = activeMarkupTool,
-                                    selectedColor = currentSelectedText?.color ?: markupColor,
-                                    penStrokeWidth = penStrokeWidth,
-                                    highlighterStrokeWidth = highlighterStrokeWidth,
-                                    arrowStrokeWidth = arrowStrokeWidth,
-                                    eraserRadius = eraserRadius,
-                                    selectedText = currentSelectedText,
-                                    onToolSelected = { selectedTool ->
-                                        activeMarkupTool = selectedTool
-                                        if (selectedTool == MarkupTool.TEXT) {
-                                            if (currentState.markup.texts.isEmpty()) {
-                                                editingTextItem = null
+                                        selectedColor = currentSelectedText?.color ?: markupColor,
+                                        penStrokeWidth = penStrokeWidth,
+                                        highlighterStrokeWidth = highlighterStrokeWidth,
+                                        arrowStrokeWidth = arrowStrokeWidth,
+                                        eraserRadius = eraserRadius,
+                                        selectedText = currentSelectedText,
+                                        onToolSelected = { selectedTool ->
+                                            activeMarkupTool = selectedTool
+                                            if (selectedTool == MarkupTool.TEXT) {
+                                                if (currentState.markup.texts.isEmpty()) {
+                                                    editingTextItem = null
+                                                    showTextDialog = true
+                                                } else if (selectedMarkupTextId == null) {
+                                                    selectedMarkupTextId = currentState.markup.texts.last().id
+                                                }
+                                            }
+                                        },
+                                        onColorSelected = { newColor ->
+                                            markupColor = newColor
+                                            if (activeMarkupTool == MarkupTool.TEXT && currentSelectedText != null) {
+                                                val updated = currentSelectedText.copy(color = newColor)
+                                                pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
+                                            }
+                                        },
+                                        onPenStrokeWidthChanged = { penStrokeWidth = it },
+                                        onHighlighterStrokeWidthChanged = { highlighterStrokeWidth = it },
+                                        onArrowStrokeWidthChanged = { arrowStrokeWidth = it },
+                                        onEraserRadiusChanged = { eraserRadius = it },
+                                        onClearAllClick = {
+                                            if (currentState.markup.strokes.isNotEmpty() || currentState.markup.texts.isNotEmpty()) {
+                                                pushState(currentState.copy(markup = MarkupState()))
+                                                selectedMarkupTextId = null
+                                            }
+                                        },
+                                        onAddTextClick = {
+                                            editingTextItem = null
+                                            showTextDialog = true
+                                        },
+                                        onRotateTextClick = {
+                                            if (currentSelectedText != null) {
+                                                val newRotation = (currentSelectedText.rotation + 45f) % 360f
+                                                val updated = currentSelectedText.copy(rotation = newRotation)
+                                                pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
+                                            }
+                                        },
+                                        onDeleteTextClick = {
+                                            if (currentSelectedText != null) {
+                                                pushState(currentState.copy(markup = currentState.markup.withRemovedText(currentSelectedText.id)))
+                                                selectedMarkupTextId = null
+                                            }
+                                        },
+                                        onEditTextClick = {
+                                            if (currentSelectedText != null) {
+                                                editingTextItem = currentSelectedText
                                                 showTextDialog = true
-                                            } else if (selectedMarkupTextId == null) {
-                                                selectedMarkupTextId = currentState.markup.texts.last().id
+                                            }
+                                        },
+                                        onToggleBoxClick = {
+                                            if (currentSelectedText != null) {
+                                                val updated = currentSelectedText.copy(hasBackgroundBox = !currentSelectedText.hasBackgroundBox)
+                                                pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
+                                            }
+                                        },
+                                        onTextScaleChanged = { newScale ->
+                                            if (currentSelectedText != null) {
+                                                val updated = currentSelectedText.copy(scale = newScale)
+                                                pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
                                             }
                                         }
-                                    },
-                                    onColorSelected = { newColor ->
-                                        markupColor = newColor
-                                        if (activeMarkupTool == MarkupTool.TEXT && currentSelectedText != null) {
-                                            val updated = currentSelectedText.copy(color = newColor)
-                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
-                                        }
-                                    },
-                                    onPenStrokeWidthChanged = { penStrokeWidth = it },
-                                    onHighlighterStrokeWidthChanged = { highlighterStrokeWidth = it },
-                                    onArrowStrokeWidthChanged = { arrowStrokeWidth = it },
-                                    onEraserRadiusChanged = { eraserRadius = it },
-                                    onClearAllClick = {
-                                        if (currentState.markup.strokes.isNotEmpty() || currentState.markup.texts.isNotEmpty()) {
-                                            pushState(currentState.copy(markup = MarkupState()))
-                                            selectedMarkupTextId = null
-                                        }
-                                    },
-                                    onAddTextClick = {
-                                        editingTextItem = null
-                                        showTextDialog = true
-                                    },
-                                    onRotateTextClick = {
-                                        if (currentSelectedText != null) {
-                                            val newRotation = (currentSelectedText.rotation + 45f) % 360f
-                                            val updated = currentSelectedText.copy(rotation = newRotation)
-                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
-                                        }
-                                    },
-                                    onDeleteTextClick = {
-                                        if (currentSelectedText != null) {
-                                            pushState(currentState.copy(markup = currentState.markup.withRemovedText(currentSelectedText.id)))
-                                            selectedMarkupTextId = null
-                                        }
-                                    },
-                                    onEditTextClick = {
-                                        if (currentSelectedText != null) {
-                                            editingTextItem = currentSelectedText
-                                            showTextDialog = true
-                                        }
-                                    },
-                                    onToggleBoxClick = {
-                                        if (currentSelectedText != null) {
-                                            val updated = currentSelectedText.copy(hasBackgroundBox = !currentSelectedText.hasBackgroundBox)
-                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
-                                        }
-                                    },
-                                    onTextScaleChanged = { newScale ->
-                                        if (currentSelectedText != null) {
-                                            val updated = currentSelectedText.copy(scale = newScale)
-                                            pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updated)))
-                                        }
-                                    }
-                                )
+                                    )
+                                }
                             }
-                        }
                             null -> Spacer(modifier = Modifier.height(0.dp))
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // ── Main Tool Selector Row ────────────────────────────
+                    // ── Main Tool Selector Row (Google Photos Style Tabs) ──
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -956,9 +995,9 @@ fun ImageEditorScreen(
                 modifier = Modifier.height(48.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     FilledTonalIconButton(
                         onClick = { undo() },
@@ -967,7 +1006,7 @@ fun ImageEditorScreen(
                             containerColor = Color.Transparent,
                             contentColor = MaterialTheme.colorScheme.onSurface,
                             disabledContainerColor = Color.Transparent,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                         )
                     ) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_ms_undo), contentDescription = "Undo")
@@ -980,50 +1019,46 @@ fun ImageEditorScreen(
                             containerColor = Color.Transparent,
                             contentColor = MaterialTheme.colorScheme.onSurface,
                             disabledContainerColor = Color.Transparent,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                         )
                     ) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_ms_redo), contentDescription = "Redo")
                     }
 
+                    // Save dropdown
                     Box {
                         FilledTonalButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showSaveOptions = !showSaveOptions
-                            },
+                            onClick = { showSaveMenu = true },
                             shape = ShapeFull,
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                            modifier = Modifier.height(38.dp)
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_check), contentDescription = "Save", modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Save", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+                            Text(
+                                "Save",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                            )
                         }
 
                         DropdownMenu(
-                            expanded = showSaveOptions,
-                            onDismissRequest = { showSaveOptions = false },
-                            shape = ShapeLarge,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            expanded = showSaveMenu,
+                            onDismissRequest = { showSaveMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Save", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)) },
-                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_save), contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                text = { Text("Save as Copy") },
                                 onClick = {
-                                    showSaveOptions = false
-                                    saveImage(overwrite = true)
+                                    showSaveMenu = false
+                                    saveImage(overwrite = false)
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Save as copy", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)) },
-                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                text = { Text("Overwrite Original") },
                                 onClick = {
-                                    showSaveOptions = false
-                                    saveImage(overwrite = false)
+                                    showSaveMenu = false
+                                    saveImage(overwrite = true)
                                 }
                             )
                         }
@@ -1032,40 +1067,32 @@ fun ImageEditorScreen(
             }
         }
 
+        // Text editing dialog
         if (showTextDialog) {
             MarkupTextEditorDialog(
                 initialText = editingTextItem,
-                onDismissRequest = {
+                onDismissRequest = { showTextDialog = false },
+                onConfirm = { updatedOrNewText ->
                     showTextDialog = false
-                    editingTextItem = null
-                },
-                onConfirm = { updatedItem ->
-                    val exists = currentState.markup.texts.any { it.id == updatedItem.id }
-                    val newMarkup = if (exists) {
-                        currentState.markup.withUpdatedText(updatedItem)
+                    markupColor = updatedOrNewText.color
+                    if (editingTextItem != null) {
+                        pushState(currentState.copy(markup = currentState.markup.withUpdatedText(updatedOrNewText)))
                     } else {
-                        currentState.markup.withAddedText(updatedItem)
+                        pushState(currentState.copy(markup = currentState.markup.withAddedText(updatedOrNewText)))
+                        selectedMarkupTextId = updatedOrNewText.id
                     }
-                    pushState(currentState.copy(markup = newMarkup))
-                    selectedMarkupTextId = updatedItem.id
-                    activeMarkupTool = MarkupTool.TEXT
-                    showTextDialog = false
-                    editingTextItem = null
                 },
-                onDelete = { id ->
-                    pushState(currentState.copy(markup = currentState.markup.withRemovedText(id)))
-                    if (selectedMarkupTextId == id) {
-                        selectedMarkupTextId = null
-                    }
+                onDelete = { idToDelete ->
                     showTextDialog = false
-                    editingTextItem = null
+                    pushState(currentState.copy(markup = currentState.markup.withRemovedText(idToDelete)))
+                    selectedMarkupTextId = null
                 }
             )
         }
     }
 }
 
-// ── Tool Chip ────────────────────────────────────────────────────────────────
+// ── Editor Tool Chip ─────────────────────────────────────────────────────────
 
 @Composable
 private fun EditorToolChip(
@@ -1074,47 +1101,26 @@ private fun EditorToolChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val containerColor = if (isSelected)
-        MaterialTheme.colorScheme.primaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceContainerHigh
-
-    val contentColor = if (isSelected)
-        MaterialTheme.colorScheme.onPrimaryContainer
-    else
-        MaterialTheme.colorScheme.onSurfaceVariant
-
     Surface(
         shape = ShapeFull,
-        color = containerColor,
-        contentColor = contentColor,
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
         shadowElevation = 0.dp,
         modifier = Modifier
             .minimumInteractiveComponentSize()
-            .height(40.dp)
-            .scale(if (isPressed) 0.94f else 1f)
             .clip(ShapeFull)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
+            .clickable(onClick = onClick)
     ) {
         Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
             Text(
-                text = label,
+                label,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                 )
@@ -1123,43 +1129,193 @@ private fun EditorToolChip(
     }
 }
 
-// ── Tune Panel ───────────────────────────────────────────────────────────────
+// ── Suggestions Panel ────────────────────────────────────────────────────────
 
 @Composable
-private fun TunePanel(
+private fun SuggestionsPanel(
+    currentTune: TuneValues,
+    onTuneChanged: (TuneValues) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    data class SuggestionItem(
+        val id: String,
+        val title: String,
+        val subtitle: String,
+        val tune: TuneValues
+    )
+
+    val suggestions = remember {
+        listOf(
+            SuggestionItem(
+                id = "enhance",
+                title = "Enhance",
+                subtitle = "Auto balanced",
+                tune = TuneValues(
+                    brightness = 5f,
+                    contrast = 15f,
+                    highlights = -8f,
+                    shadows = 18f,
+                    saturation = 14f,
+                    warmth = 4f
+                )
+            ),
+            SuggestionItem(
+                id = "warm",
+                title = "Warm",
+                subtitle = "Golden hour",
+                tune = TuneValues(
+                    warmth = 28f,
+                    saturation = 10f,
+                    contrast = 8f
+                )
+            ),
+            SuggestionItem(
+                id = "cool",
+                title = "Cool",
+                subtitle = "Crisp chill",
+                tune = TuneValues(
+                    warmth = -28f,
+                    saturation = 6f,
+                    contrast = 10f
+                )
+            ),
+            SuggestionItem(
+                id = "dynamic",
+                title = "Dynamic",
+                subtitle = "High pop",
+                tune = TuneValues(
+                    contrast = 24f,
+                    highlights = -14f,
+                    shadows = 20f,
+                    saturation = 20f,
+                    whitePoint = 10f,
+                    blackPoint = -10f
+                )
+            )
+        )
+    }
+
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        itemsIndexed(suggestions) { _, item ->
+            val isApplied = currentTune == item.tune
+            Surface(
+                shape = ShapeLarge,
+                color = if (isApplied) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = if (isApplied) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                border = if (isApplied) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                modifier = Modifier
+                    .clip(ShapeLarge)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (isApplied) {
+                            onTuneChanged(TuneValues())
+                        } else {
+                            onTuneChanged(item.tune)
+                        }
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                color = if (isApplied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                            contentDescription = null,
+                            tint = if (isApplied) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = item.subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Adjust Panel (Full Suite) ────────────────────────────────────────────────
+
+@Composable
+private fun AdjustPanel(
     values: TuneValues,
     onValuesChanged: (TuneValues) -> Unit
 ) {
-    data class TuneParam(val label: String, val icon: ImageVector, val value: Float, val setter: (Float) -> TuneValues)
+    data class AdjustParam(
+        val label: String,
+        val icon: ImageVector,
+        val value: Float,
+        val minVal: Float = -100f,
+        val maxVal: Float = 100f,
+        val setter: (Float) -> TuneValues
+    )
+
     val params = listOf(
-        TuneParam("Brightness", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.brightness) { values.copy(brightness = it) },
-        TuneParam("Contrast", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.contrast) { values.copy(contrast = it) },
-        TuneParam("Saturation", ImageVector.vectorResource(R.drawable.ic_ms_palette), values.saturation) { values.copy(saturation = it) },
-        TuneParam("Warmth", ImageVector.vectorResource(R.drawable.ic_ms_wb_twilight), values.warmth) { values.copy(warmth = it) },
+        AdjustParam("Brightness", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.brightness) { values.copy(brightness = it) },
+        AdjustParam("Contrast", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.contrast) { values.copy(contrast = it) },
+        AdjustParam("Highlights", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.highlights) { values.copy(highlights = it) },
+        AdjustParam("Shadows", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.shadows) { values.copy(shadows = it) },
+        AdjustParam("White Point", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.whitePoint) { values.copy(whitePoint = it) },
+        AdjustParam("Black Point", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.blackPoint) { values.copy(blackPoint = it) },
+        AdjustParam("Saturation", ImageVector.vectorResource(R.drawable.ic_ms_palette), values.saturation) { values.copy(saturation = it) },
+        AdjustParam("Warmth", ImageVector.vectorResource(R.drawable.ic_ms_wb_twilight), values.warmth) { values.copy(warmth = it) },
+        AdjustParam("Tint", ImageVector.vectorResource(R.drawable.ic_ms_tune), values.tint) { values.copy(tint = it) },
+        AdjustParam("Vignette", ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), values.vignette, minVal = 0f, maxVal = 100f) { values.copy(vignette = it) }
     )
 
     var selectedParam by remember { mutableIntStateOf(0) }
-    val param = params[selectedParam]
+    val param = params[selectedParam.coerceIn(0, params.lastIndex)]
     val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        // Parameter selector chips
+        // 1. Parameter selector chips
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             itemsIndexed(params) { index, p ->
                 val isSelected = selectedParam == index
+                val isModified = p.value != 0f
                 Surface(
                     shape = ShapeFull,
-                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.primaryContainer
+                        isModified -> MaterialTheme.colorScheme.secondaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    contentColor = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                        isModified -> MaterialTheme.colorScheme.onSecondaryContainer
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     shadowElevation = 0.dp,
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
@@ -1170,8 +1326,8 @@ private fun TunePanel(
                         }
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(p.icon, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -1181,7 +1337,7 @@ private fun TunePanel(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                         )
-                        if (p.value != 0f) {
+                        if (isModified) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
                                 shape = ShapeFull,
@@ -1200,9 +1356,9 @@ private fun TunePanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Slider Row
+        // 2. Centered Slider Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1212,7 +1368,7 @@ private fun TunePanel(
                 shape = ShapeFull,
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.width(52.dp)
+                modifier = Modifier.width(54.dp)
             ) {
                 Text(
                     text = "${if (param.value > 0) "+" else ""}${param.value.roundToInt()}",
@@ -1222,10 +1378,18 @@ private fun TunePanel(
                 )
             }
 
+            var lastValInt by remember { mutableIntStateOf(param.value.roundToInt()) }
             Slider(
                 value = param.value,
-                onValueChange = { onValuesChanged(param.setter(it)) },
-                valueRange = -100f..100f,
+                onValueChange = { newVal ->
+                    val rounded = newVal.roundToInt()
+                    if (rounded == 0 && lastValInt != 0) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    lastValInt = rounded
+                    onValuesChanged(param.setter(newVal))
+                },
+                valueRange = param.minVal..param.maxVal,
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -1255,29 +1419,6 @@ private fun TunePanel(
     }
 }
 
-// ── Aspect Ratio Helper ──────────────────────────────────────────────────────
-
-private fun calculateCropRect(aspectLabel: String, effectiveAspect: Float): Rect {
-    val targetRatio = when (aspectLabel) {
-        "1:1" -> 1.0f
-        "4:3" -> 4f / 3f
-        "3:4" -> 3f / 4f
-        "16:9" -> 16f / 9f
-        "9:16" -> 9f / 16f
-        else -> return Rect(0f, 0f, 1f, 1f)
-    }
-
-    val r = targetRatio / effectiveAspect
-    return if (r <= 1f) {
-        val left = ((1f - r) / 2f).coerceIn(0f, 1f)
-        Rect(left = left, top = 0f, right = (left + r).coerceIn(0f, 1f), bottom = 1f)
-    } else {
-        val h = 1f / r
-        val top = ((1f - h) / 2f).coerceIn(0f, 1f)
-        Rect(left = 0f, top = top, right = 1f, bottom = (top + h).coerceIn(0f, 1f))
-    }
-}
-
 // ── Crop Tool Panel ──────────────────────────────────────────────────────────
 
 @Composable
@@ -1287,16 +1428,16 @@ private fun CropToolPanel(
     onCropStateChanged: (CropState) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val aspects = listOf("Free", "1:1", "4:3", "3:4", "16:9", "9:16")
+    val aspects = listOf("Free", "Original", "1:1", "5:4", "4:3", "3:2", "16:9")
     val isRotated90 = cropState.rotation % 180 != 0
     val effectiveAspect = if (isRotated90) 1f / imageAspect else imageAspect
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        // Aspect ratio row
+        // 1. Aspect ratio row
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
@@ -1314,7 +1455,7 @@ private fun CropToolPanel(
                         .clip(ShapeFull)
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            val newRect = calculateCropRect(label, effectiveAspect)
+                            val newRect = CropGeometryHelper.calculateInitialAspectRect(label, effectiveAspect)
                             onCropStateChanged(cropState.copy(aspectLabel = label, cropRect = newRect))
                         }
                 ) {
@@ -1329,9 +1470,72 @@ private fun CropToolPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Action buttons
+        // 2. Straighten Angle Slider (-45°..+45°)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.width(58.dp)
+            ) {
+                Text(
+                    text = "${if (cropState.straightenAngle > 0) "+" else ""}${String.format(java.util.Locale.US, "%.1f", cropState.straightenAngle)}°",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
+            }
+
+            var lastAngleInt by remember { mutableIntStateOf(cropState.straightenAngle.roundToInt()) }
+            Slider(
+                value = cropState.straightenAngle,
+                onValueChange = { angle ->
+                    val rounded = (angle * 2f).roundToInt() / 2f
+                    val intAngle = rounded.roundToInt()
+                    if (intAngle == 0 && lastAngleInt != 0) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    lastAngleInt = intAngle
+                    onCropStateChanged(cropState.copy(straightenAngle = rounded))
+                },
+                valueRange = -45f..45f,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                ),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Reset angle button
+            FilledTonalIconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCropStateChanged(cropState.copy(straightenAngle = 0f))
+                },
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                    contentDescription = "Reset Angle",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 3. Action buttons: Rotate, Flip H, Flip V, Reset
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1343,7 +1547,7 @@ private fun CropToolPanel(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         val newRotation = (cropState.rotation + 90) % 360
                         val newEffectiveAspect = if (newRotation % 180 != 0) 1f / imageAspect else imageAspect
-                        val newRect = calculateCropRect(cropState.aspectLabel, newEffectiveAspect)
+                        val newRect = CropGeometryHelper.calculateInitialAspectRect(cropState.aspectLabel, newEffectiveAspect)
                         onCropStateChanged(cropState.copy(rotation = newRotation, cropRect = newRect))
                     },
                     shape = ShapeLarge,
@@ -1351,7 +1555,7 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = "Rotate")
                 }
@@ -1368,7 +1572,7 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz), contentDescription = "Flip H")
                 }
@@ -1385,7 +1589,7 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
@@ -1406,7 +1610,7 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Reset")
                 }
@@ -1430,6 +1634,10 @@ private fun CropPreview(
     val effectiveAspect = if (isRotated90) 1f / imageAspect else imageAspect
     var imageRect by remember { mutableStateOf(Rect.Zero) }
     val cropRect = cropState.cropRect ?: Rect(0f, 0f, 1f, 1f)
+    var activeHandle by remember { mutableStateOf(CropHandle.NONE) }
+    val haptic = LocalHapticFeedback.current
+
+    val totalRotation = cropState.rotation.toFloat() + cropState.straightenAngle
 
     BoxWithConstraints(
         modifier = Modifier
@@ -1453,7 +1661,7 @@ private fun CropPreview(
             imageRect = Rect(imgLeft, imgTop, imgLeft + imgW, imgTop + imgH)
         }
 
-        val density = androidx.compose.ui.platform.LocalDensity.current.density
+        val density = LocalDensity.current.density
         val (drawW, drawH) = if (isRotated90) imgH to imgW else imgW to imgH
 
         // Draw image
@@ -1468,7 +1676,7 @@ private fun CropPreview(
                     height = (drawH / density).dp
                 )
                 .graphicsLayer {
-                    rotationZ = cropState.rotation.toFloat()
+                    rotationZ = totalRotation
                     scaleX = if (cropState.flipH) -1f else 1f
                     scaleY = if (cropState.flipV) -1f else 1f
                 }
@@ -1476,6 +1684,8 @@ private fun CropPreview(
 
         // Crop overlay
         if (imageRect != Rect.Zero) {
+            val isDragging = activeHandle != CropHandle.NONE
+
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val left = imageRect.left + cropRect.left * imageRect.width
                 val top = imageRect.top + cropRect.top * imageRect.height
@@ -1483,10 +1693,10 @@ private fun CropPreview(
                 val bottom = imageRect.top + cropRect.bottom * imageRect.height
 
                 // Dim area outside crop
-                drawRect(Color.Black.copy(alpha = 0.5f), Offset.Zero, Size(size.width, top))
-                drawRect(Color.Black.copy(alpha = 0.5f), Offset(0f, bottom), Size(size.width, size.height - bottom))
-                drawRect(Color.Black.copy(alpha = 0.5f), Offset(0f, top), Size(left, bottom - top))
-                drawRect(Color.Black.copy(alpha = 0.5f), Offset(right, top), Size(size.width - right, bottom - top))
+                drawRect(Color.Black.copy(alpha = 0.55f), Offset.Zero, Size(size.width, top))
+                drawRect(Color.Black.copy(alpha = 0.55f), Offset(0f, bottom), Size(size.width, size.height - bottom))
+                drawRect(Color.Black.copy(alpha = 0.55f), Offset(0f, top), Size(left, bottom - top))
+                drawRect(Color.Black.copy(alpha = 0.55f), Offset(right, top), Size(size.width - right, bottom - top))
 
                 // Crop border
                 drawRect(
@@ -1496,52 +1706,126 @@ private fun CropPreview(
                     style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx())
                 )
 
-                // Rule of thirds lines
+                // Rule of thirds lines (brighter when dragging)
+                val gridAlpha = if (isDragging) 0.65f else 0.25f
                 val thirdW = (right - left) / 3f
                 val thirdH = (bottom - top) / 3f
                 for (i in 1..2) {
-                    drawLine(Color.White.copy(alpha = 0.3f), Offset(left + thirdW * i, top), Offset(left + thirdW * i, bottom), 1.dp.toPx())
-                    drawLine(Color.White.copy(alpha = 0.3f), Offset(left, top + thirdH * i), Offset(right, top + thirdH * i), 1.dp.toPx())
+                    drawLine(Color.White.copy(alpha = gridAlpha), Offset(left + thirdW * i, top), Offset(left + thirdW * i, bottom), 1.dp.toPx())
+                    drawLine(Color.White.copy(alpha = gridAlpha), Offset(left, top + thirdH * i), Offset(right, top + thirdH * i), 1.dp.toPx())
                 }
 
-                // Corner handles
-                val handleLen = 24.dp.toPx()
-                val handleWidth = 3.dp.toPx()
+                // Corner bracket handles
+                val handleLen = 22.dp.toPx()
+                val handleThickness = 3.5.dp.toPx()
                 val corners = listOf(
-                    Offset(left, top), Offset(right, top),
-                    Offset(left, bottom), Offset(right, bottom)
+                    Triple(CropHandle.TOP_LEFT, Offset(left, top), Pair(1f, 1f)),
+                    Triple(CropHandle.TOP_RIGHT, Offset(right, top), Pair(-1f, 1f)),
+                    Triple(CropHandle.BOTTOM_LEFT, Offset(left, bottom), Pair(1f, -1f)),
+                    Triple(CropHandle.BOTTOM_RIGHT, Offset(right, bottom), Pair(-1f, -1f))
                 )
-                corners.forEachIndexed { idx, corner ->
-                    val hDir = if (idx % 2 == 0) 1f else -1f
-                    val vDir = if (idx < 2) 1f else -1f
-                    drawLine(Color.White, corner, Offset(corner.x + handleLen * hDir, corner.y), handleWidth)
-                    drawLine(Color.White, corner, Offset(corner.x, corner.y + handleLen * vDir), handleWidth)
+                corners.forEach { (handle, pt, dirs) ->
+                    val isCornerActive = activeHandle == handle
+                    val cornerColor = if (isCornerActive) Color(0xFF64B5F6) else Color.White
+                    val thickness = if (isCornerActive) handleThickness * 1.5f else handleThickness
+                    drawLine(cornerColor, pt, Offset(pt.x + handleLen * dirs.first, pt.y), thickness)
+                    drawLine(cornerColor, pt, Offset(pt.x, pt.y + handleLen * dirs.second), thickness)
+                }
+
+                // Edge handles (for Free mode)
+                if (cropState.aspectLabel == "Free") {
+                    val edgeLen = 20.dp.toPx()
+                    val edgeThickness = 3.dp.toPx()
+                    val midX = (left + right) / 2f
+                    val midY = (top + bottom) / 2f
+
+                    // Top
+                    val isTopActive = activeHandle == CropHandle.TOP
+                    drawLine(
+                        if (isTopActive) Color(0xFF64B5F6) else Color.White,
+                        Offset(midX - edgeLen / 2, top),
+                        Offset(midX + edgeLen / 2, top),
+                        if (isTopActive) edgeThickness * 1.5f else edgeThickness
+                    )
+                    // Bottom
+                    val isBottomActive = activeHandle == CropHandle.BOTTOM
+                    drawLine(
+                        if (isBottomActive) Color(0xFF64B5F6) else Color.White,
+                        Offset(midX - edgeLen / 2, bottom),
+                        Offset(midX + edgeLen / 2, bottom),
+                        if (isBottomActive) edgeThickness * 1.5f else edgeThickness
+                    )
+                    // Left
+                    val isLeftActive = activeHandle == CropHandle.LEFT
+                    drawLine(
+                        if (isLeftActive) Color(0xFF64B5F6) else Color.White,
+                        Offset(left, midY - edgeLen / 2),
+                        Offset(left, midY + edgeLen / 2),
+                        if (isLeftActive) edgeThickness * 1.5f else edgeThickness
+                    )
+                    // Right
+                    val isRightActive = activeHandle == CropHandle.RIGHT
+                    drawLine(
+                        if (isRightActive) Color(0xFF64B5F6) else Color.White,
+                        Offset(right, midY - edgeLen / 2),
+                        Offset(right, midY + edgeLen / 2),
+                        if (isRightActive) edgeThickness * 1.5f else edgeThickness
+                    )
                 }
             }
 
-            // Drag to move crop rect
+            // Interactive Gesture detector
+            val cornerRadiusPx = with(LocalDensity.current) { 44.dp.toPx() }
+            val edgeMarginPx = with(LocalDensity.current) { 28.dp.toPx() }
+            val minSizePx = with(LocalDensity.current) { 48.dp.toPx() }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(imageRect, cropRect) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            if (imageRect.width > 0 && imageRect.height > 0) {
-                                val dx = dragAmount.x / imageRect.width
-                                val dy = dragAmount.y / imageRect.height
-                                val width = cropRect.width
-                                val height = cropRect.height
-                                val newLeft = (cropRect.left + dx).coerceIn(0f, (1f - width).coerceAtLeast(0f))
-                                val newTop = (cropRect.top + dy).coerceIn(0f, (1f - height).coerceAtLeast(0f))
-                                val newRect = Rect(
-                                    left = newLeft,
-                                    top = newTop,
-                                    right = (newLeft + width).coerceIn(0f, 1f),
-                                    bottom = (newTop + height).coerceIn(0f, 1f)
+                    .pointerInput(imageRect, cropRect, cropState.aspectLabel, effectiveAspect) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                val handle = CropGeometryHelper.hitTest(
+                                    touchX = offset.x,
+                                    touchY = offset.y,
+                                    cropRect = cropRect,
+                                    imageRect = imageRect,
+                                    cornerHitRadiusPx = cornerRadiusPx,
+                                    edgeHitMarginPx = edgeMarginPx
                                 )
-                                onCropRectChanged(newRect)
+                                activeHandle = handle
+                                if (handle != CropHandle.NONE) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            },
+                            onDragEnd = {
+                                activeHandle = CropHandle.NONE
+                            },
+                            onDragCancel = {
+                                activeHandle = CropHandle.NONE
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                if (activeHandle != CropHandle.NONE && imageRect.width > 0 && imageRect.height > 0) {
+                                    val dx = dragAmount.x / imageRect.width
+                                    val dy = dragAmount.y / imageRect.height
+                                    val minWNorm = minSizePx / imageRect.width
+                                    val minHNorm = minSizePx / imageRect.height
+
+                                    val newRect = CropGeometryHelper.updateCropRect(
+                                        currentRect = cropRect,
+                                        handle = activeHandle,
+                                        deltaXNormalized = dx,
+                                        deltaYNormalized = dy,
+                                        aspectLabel = cropState.aspectLabel,
+                                        effectiveAspect = effectiveAspect,
+                                        minWidthNormalized = minWNorm,
+                                        minHeightNormalized = minHNorm
+                                    )
+                                    onCropRectChanged(newRect)
+                                }
                             }
-                        }
+                        )
                     }
             )
         }
@@ -1644,63 +1928,5 @@ private fun FiltersPanel(
                 )
             }
         }
-    }
-}
-
-// ── Vignette Panel ───────────────────────────────────────────────────────────
-
-@Composable
-private fun VignettePanel(
-    strength: Float,
-    onStrengthChanged: (Float) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "Vignette strength",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            ) {
-                Text(
-                    text = "${strength.roundToInt()}%",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Slider(
-            value = strength,
-            onValueChange = onStrengthChanged,
-            valueRange = 0f..100f,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
