@@ -1055,7 +1055,7 @@ fun ImageEditorScreen(
                             )
                         ) {
                             Icon(
-                                ImageVector.vectorResource(R.drawable.ic_ms_visibility),
+                                ImageVector.vectorResource(R.drawable.ic_ms_compare),
                                 contentDescription = "Hold to compare with original"
                             )
                         }
@@ -1151,7 +1151,7 @@ fun ImageEditorScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        ImageVector.vectorResource(R.drawable.ic_ms_visibility),
+                        ImageVector.vectorResource(R.drawable.ic_ms_compare),
                         contentDescription = null,
                         modifier = Modifier.size(15.dp),
                         tint = Color.White
@@ -1489,11 +1489,25 @@ private fun AdjustPanel(
                 )
             }
 
-            BipolarSlider(
+            var lastParamInt by remember(selectedParam) { mutableIntStateOf(param.value.roundToInt()) }
+
+            Slider(
                 value = param.value,
-                onValueChange = { onValuesChanged(param.setter(it)) },
-                minVal = param.minVal,
-                maxVal = param.maxVal,
+                onValueChange = { newValue ->
+                    val rounded = newValue.roundToInt().toFloat()
+                    val intVal = rounded.roundToInt()
+                    if (intVal == 0 && lastParamInt != 0) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    lastParamInt = intVal
+                    onValuesChanged(param.setter(rounded))
+                },
+                valueRange = param.minVal..param.maxVal,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                ),
                 modifier = Modifier.weight(1f)
             )
 
@@ -2040,106 +2054,4 @@ private fun FiltersPanel(
 }
 
 
-// ── Bipolar Center-Origin Slider ─────────────────────────────────────────────
 
-@Composable
-private fun BipolarSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    minVal: Float = -100f,
-    maxVal: Float = 100f,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-    val isBipolar = minVal < 0f
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val trackBgColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val notchColor = MaterialTheme.colorScheme.outlineVariant
-
-    var lastIntVal by remember { mutableIntStateOf(value.roundToInt()) }
-
-    BoxWithConstraints(
-        modifier = modifier
-            .height(44.dp)
-            .pointerInput(minVal, maxVal) {
-                detectDragGestures { change, _ ->
-                    change.consume()
-                    val totalW = size.width.toFloat()
-                    if (totalW > 0f) {
-                        val touchX = change.position.x.coerceIn(0f, totalW)
-                        val fraction = touchX / totalW
-                        val rawValue = minVal + fraction * (maxVal - minVal)
-                        val rounded = if (isBipolar && kotlin.math.abs(rawValue) < 3.5f) 0f else rawValue.roundToInt().toFloat()
-                        val intVal = rounded.roundToInt()
-                        if (intVal == 0 && lastIntVal != 0) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                        lastIntVal = intVal
-                        onValueChange(rounded)
-                    }
-                }
-            },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        val thumbRadiusPx = with(LocalDensity.current) { 10.dp.toPx() }
-        val trackHeightPx = with(LocalDensity.current) { 6.dp.toPx() }
-
-        val fraction = ((value - minVal) / (maxVal - minVal)).coerceIn(0f, 1f)
-        val centerFraction = ((0f - minVal) / (maxVal - minVal)).coerceIn(0f, 1f)
-
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val trackY = size.height / 2f
-
-            // 1. Inactive background track
-            drawLine(
-                color = trackBgColor,
-                start = Offset(thumbRadiusPx, trackY),
-                end = Offset(size.width - thumbRadiusPx, trackY),
-                strokeWidth = trackHeightPx,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-
-            // 2. Center Zero Notch for Bipolar
-            if (isBipolar) {
-                val centerX = thumbRadiusPx + centerFraction * (size.width - 2 * thumbRadiusPx)
-                drawLine(
-                    color = notchColor,
-                    start = Offset(centerX, trackY - 8.dp.toPx()),
-                    end = Offset(centerX, trackY + 8.dp.toPx()),
-                    strokeWidth = 2.dp.toPx(),
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round
-                )
-            }
-
-            // 3. Active fill track (from center to thumb for bipolar, or from left for unipolar)
-            val thumbX = thumbRadiusPx + fraction * (size.width - 2 * thumbRadiusPx)
-            val startX = if (isBipolar) {
-                thumbRadiusPx + centerFraction * (size.width - 2 * thumbRadiusPx)
-            } else {
-                thumbRadiusPx
-            }
-
-            if (kotlin.math.abs(thumbX - startX) > 1f) {
-                drawLine(
-                    color = primaryColor,
-                    start = Offset(startX, trackY),
-                    end = Offset(thumbX, trackY),
-                    strokeWidth = trackHeightPx,
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round
-                )
-            }
-
-            // 4. Thumb circle
-            drawCircle(
-                color = Color.White,
-                radius = thumbRadiusPx,
-                center = Offset(thumbX, trackY)
-            )
-            drawCircle(
-                color = primaryColor,
-                radius = thumbRadiusPx * 0.55f,
-                center = Offset(thumbX, trackY)
-            )
-        }
-    }
-}

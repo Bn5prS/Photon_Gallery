@@ -1542,7 +1542,8 @@ fun DetailScreen(
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 12.dp),
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (currentItem != null) {
                             val timestamp = remember(currentItem) {
@@ -1558,6 +1559,8 @@ fun DetailScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1565,6 +1568,8 @@ fun DetailScreen(
                                 text = currentItem.name,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1605,22 +1610,7 @@ fun DetailScreen(
                         }
                     }
 
-                    FilledTonalIconButton(
-                        onClick = { showInfoCard = true },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                            contentDescription = "Info",
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.width(8.dp))
 
                     Box {
                         FilledTonalIconButton(
@@ -1644,6 +1634,14 @@ fun DetailScreen(
                         shape = MaterialTheme.shapes.large,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Info") },
+                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
+                            onClick = {
+                                showMoreMenu = false
+                                showInfoCard = true
+                            }
+                        )
                         if (currentItem != null && motionPhotoInfo?.isMotionPhoto == true) {
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("Export Motion Video (MP4)") },
