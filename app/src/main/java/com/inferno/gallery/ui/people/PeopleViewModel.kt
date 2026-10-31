@@ -54,6 +54,44 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val faceModelDownloadWorkInfo: StateFlow<WorkInfo?> = WorkManager.getInstance(application)
+        .getWorkInfosForUniqueWorkFlow("FaceModelDownloadWorker")
+        .map { it.firstOrNull() }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val isFaceModelDownloaded: StateFlow<Boolean> = combine(
+        faceModelDownloadWorkInfo,
+        flow {
+            val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(application)
+            while (true) {
+                emit(engine.isModelDownloaded())
+                kotlinx.coroutines.delay(3000)
+            }
+        }
+    ) { _, _ ->
+        val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(application)
+        engine.isModelDownloaded()
+    }.flowOn(Dispatchers.IO).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(application).isModelDownloaded()
+    )
+
+    fun startFaceModelDownload() {
+        val request = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+            .build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "FaceModelDownloadWorker",
+            androidx.work.ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun cancelFaceModelDownload() {
+        WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceModelDownloadWorker")
+    }
+
     val faceProgress = com.inferno.gallery.data.IndexingProgressManager.faceProgress
 
     private val _searchQuery = MutableStateFlow("")
@@ -378,6 +416,11 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startFaceIndexing(forceRescan: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
+            val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+            if (!engine.isModelDownloaded()) {
+                startFaceModelDownload()
+                return@launch
+            }
             if (forceRescan) {
                 faceDao.clearAllFaceStatuses()
             }

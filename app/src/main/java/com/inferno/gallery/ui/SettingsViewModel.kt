@@ -664,6 +664,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun startFaceIndexing(forceRescan: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
+            val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+            if (!engine.isModelDownloaded()) {
+                startFaceModelDownload()
+                return@launch
+            }
             if (forceRescan) {
                 db.faceDao().clearAllFaceStatuses()
             }

@@ -1255,7 +1255,11 @@ fun MainAppLayout(
                 com.inferno.gallery.ui.people.PeopleScreen(
                     onBack = { nestedNavController.popBackStackSafely() },
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
-                    onStartScan = { settingsViewModel.startFaceIndexing() }
+                    onStartScan = { settingsViewModel.startFaceIndexing() },
+                    onNavigateToSettings = {
+                        settingsActiveSection = "Smart Search & OCR"
+                        nestedNavController.navigate("settings")
+                    }
                 )
             }
 
@@ -1277,7 +1281,11 @@ fun MainAppLayout(
                 com.inferno.gallery.ui.people.PeopleScreen(
                     onBack = { nestedNavController.popBackStackSafely() },
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
-                    onStartScan = { settingsViewModel.startFaceIndexing() }
+                    onStartScan = { settingsViewModel.startFaceIndexing() },
+                    onNavigateToSettings = {
+                        settingsActiveSection = "Smart Search & OCR"
+                        nestedNavController.navigate("settings")
+                    }
                 )
             }
 

@@ -56,6 +56,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
@@ -115,6 +118,7 @@ fun PeopleScreen(
     onBack: () -> Unit,
     onPersonClick: (Long) -> Unit,
     onStartScan: () -> Unit,
+    onNavigateToSettings: (() -> Unit)? = null,
     viewModel: PeopleViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
@@ -129,6 +133,22 @@ fun PeopleScreen(
             faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
     val scanProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
     val scanTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
+
+    val isModelDownloaded by viewModel.isFaceModelDownloaded.collectAsState()
+    val faceModelDownloadWorkInfo by viewModel.faceModelDownloadWorkInfo.collectAsState()
+    val isDownloadingModel = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+            faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+    val modelDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+    var wasDownloading by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(isDownloadingModel, isModelDownloaded) {
+        if (isDownloadingModel) {
+            wasDownloading = true
+        } else if (wasDownloading && isModelDownloaded) {
+            wasDownloading = false
+            onStartScan()
+        }
+    }
 
     var minPhotosThreshold by rememberSaveable { mutableIntStateOf(1) }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -401,6 +421,26 @@ fun PeopleScreen(
                                         }
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text(if (isModelDownloaded) "Rescan all faces" else "Download face model") },
+                                    onClick = {
+                                        showMenu = false
+                                        if (isModelDownloaded) {
+                                            onStartScan()
+                                        } else {
+                                            viewModel.startFaceModelDownload()
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(
+                                                if (isModelDownloaded) R.drawable.ic_ms_refresh else R.drawable.ic_ms_download
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Merge Similar Faces") },
                                     onClick = {
@@ -765,56 +805,189 @@ fun PeopleScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(SpacingTokens.L)
+                        verticalArrangement = Arrangement.spacedBy(SpacingTokens.L),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Surface(
-                            shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(80.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
+                        if (!isModelDownloaded) {
+                            if (isDownloadingModel) {
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier.size(80.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.size(IconSizeTokens.XL)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Downloading Face Model…",
+                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Text(
+                                    text = "Downloading MobileFaceNet model (~13 MB) for on-device face recognition. Scanning will begin automatically once complete.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.L)
+                                )
+
+                                LinearWavyProgressIndicator(
+                                    progress = { (modelDownloadProgress / 100f).coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.7f)
+                                        .height(10.dp)
+                                )
+
+                                Text(
+                                    text = "$modelDownloadProgress%",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                TextButton(
+                                    onClick = { viewModel.cancelFaceModelDownload() },
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    )
+                                ) {
+                                    Text("Cancel")
+                                }
+                            } else {
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier.size(80.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.size(IconSizeTokens.XL)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Face Recognition Model Required",
+                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Text(
+                                    text = "Face clustering runs 100% on-device for total privacy, but requires downloading the face recognition model (~13 MB).",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.L)
+                                )
+
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                                ) {
+                                    FilledTonalButton(
+                                        onClick = { viewModel.startFaceModelDownload() },
+                                        shape = ShapeFull,
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(IconSizeTokens.M)
+                                        )
+                                        Spacer(modifier = Modifier.width(SpacingTokens.S))
+                                        Text(
+                                            text = "Download Face Model (13 MB)",
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                    }
+
+                                    if (onNavigateToSettings != null) {
+                                        OutlinedButton(
+                                            onClick = onNavigateToSettings,
+                                            shape = ShapeFull,
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = MaterialTheme.colorScheme.primary
+                                            )
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_settings),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                            Spacer(modifier = Modifier.width(SpacingTokens.S))
+                                            Text(
+                                                text = "Download in Settings",
+                                                style = MaterialTheme.typography.labelLarge
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(80.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(IconSizeTokens.XL)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "No people recognized yet",
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "Photon Gallery clusters faces automatically in the background when charging. Only people appearing in at least 3 photos are grouped here to eliminate clutter.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = SpacingTokens.L)
+                            )
+
+                            FilledTonalButton(
+                                onClick = onStartScan,
+                                shape = ShapeFull,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            ) {
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(IconSizeTokens.XL)
+                                    modifier = Modifier.size(IconSizeTokens.M)
+                                )
+                                Spacer(modifier = Modifier.width(SpacingTokens.S))
+                                Text(
+                                    text = "Scan Faces Now",
+                                    style = MaterialTheme.typography.labelLarge
                                 )
                             }
-                        }
-
-                        Text(
-                            text = "No people recognized yet",
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Text(
-                            text = "Photon Gallery clusters faces automatically in the background when charging. Only people appearing in at least 3 photos are grouped here to eliminate clutter.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = SpacingTokens.L)
-                        )
-
-                        FilledTonalButton(
-                            onClick = onStartScan,
-                            shape = ShapeFull,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.M)
-                            )
-                            Spacer(modifier = Modifier.width(SpacingTokens.S))
-                            Text(
-                                text = "Scan Faces Now",
-                                style = MaterialTheme.typography.labelLarge
-                            )
                         }
                     }
                 }

@@ -12,6 +12,12 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.inferno.gallery.data.ai.FaceModelRegistry
+import com.inferno.gallery.data.SettingsRepository
+import com.inferno.gallery.data.db.DatabaseProvider
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -106,6 +112,7 @@ class FaceModelDownloadWorker(
                 if (verifyChecksum(targetFile, FaceModelRegistry.MODEL_SHA256)) {
                     Log.d(TAG, "Copied face model from assets.")
                     setProgress(workDataOf("progress" to 100))
+                    triggerAutoFaceIndexing(context)
                     return@withContext Result.success()
                 }
             }
@@ -194,12 +201,12 @@ class FaceModelDownloadWorker(
 
             if (tempFile.renameTo(targetFile)) {
                 Log.d(TAG, "Face model downloaded and verified successfully.")
-                Result.success()
             } else {
                 tempFile.copyTo(targetFile, overwrite = true)
                 tempFile.delete()
-                Result.success()
             }
+            triggerAutoFaceIndexing(context)
+            Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Face model download failed: ${e.message}", e)
             tempFile.delete()
@@ -223,4 +230,23 @@ class FaceModelDownloadWorker(
             false
         }
     }
+
+    private suspend fun triggerAutoFaceIndexing(context: Context) {
+        try {
+            val db = DatabaseProvider.getDatabase(context)
+            val shouldAutoIndex = withContext(Dispatchers.IO) {
+                val settingsRepo = SettingsRepository.getInstance(context)
+                settingsRepo.faceAutoIndexFlow.first() && db.faceDao().getUnindexedMediaIds().isNotEmpty()
+            }
+            if (shouldAutoIndex) {
+                val indexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>().build()
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    "FaceIndexWorker",
+                    ExistingWorkPolicy.KEEP,
+                    indexRequest
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
 }

@@ -365,7 +365,10 @@ fun NavigationGraph(
                 com.inferno.gallery.ui.people.PeopleScreen(
                     onBack = { navController.popBackStackSafely() },
                     onPersonClick = { personId -> navController.navigate("person/$personId") },
-                    onStartScan = { settingsViewModel.startFaceIndexing() }
+                    onStartScan = { settingsViewModel.startFaceIndexing() },
+                    onNavigateToSettings = {
+                        navController.navigate("settings")
+                    }
                 )
             }
 
