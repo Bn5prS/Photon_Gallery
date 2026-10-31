@@ -48,6 +48,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -80,6 +81,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.inferno.gallery.ui.components.PhotonEmptyState
 import com.inferno.gallery.ui.components.PhotonSectionHeader
+import com.inferno.gallery.ui.theme.ExpressiveShapes
+import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
@@ -124,7 +127,7 @@ fun SearchScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .height(56.dp),
-            shape = ShapeExtraLarge,
+            shape = ShapeFull,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shadowElevation = 0.dp
         ) {
@@ -395,53 +398,16 @@ private fun SearchingState() {
 
 @Composable
 private fun NoResultsState(query: String, onClear: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Surface(
-                shape = ShapeExtraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shadowElevation = 0.dp,
-                modifier = Modifier.size(80.dp)
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-            }
-
-            Text(
-                text = "No results for “$query”",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
-
-            Text(
-                text = "Try different keywords, dates, or visual scene descriptions.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
+    PhotonEmptyState(
+        icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
+        title = "No results for “$query”",
+        subtitle = "Try different keywords, dates, or visual scene descriptions.",
+        shape = ExpressiveShapes.Clover8Leaf,
+        modifier = Modifier.fillMaxSize(),
+        action = {
             FilledTonalButton(
                 onClick = onClear,
-                shape = ShapeFull,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                shape = ShapeFull
             ) {
                 Text(
                     text = "Clear search",
@@ -449,7 +415,7 @@ private fun NoResultsState(query: String, onClear: () -> Unit) {
                 )
             }
         }
-    }
+    )
 }
 
 private data class SearchFilterCategory(
@@ -674,7 +640,7 @@ private fun SearchResultsList(
                                     imageVector = ImageVector.vectorResource(cat.iconRes),
                                     contentDescription = null,
                                     tint = contentColor,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(IconSizeTokens.S)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
@@ -693,8 +659,7 @@ private fun SearchResultsList(
                                     Text(
                                         text = "${cat.count}",
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 9.5.sp
+                                            fontWeight = FontWeight.Bold
                                         ),
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                                     )
@@ -820,7 +785,10 @@ private fun SearchResultsList(
                 // Separator
                 if (ftsResults.isNotEmpty() && smartResults.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
                     }
                 }
 
@@ -863,13 +831,13 @@ private fun SearchResultsList(
                                     },
                                     shape = ShapeFull,
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "Show all semantic matches",
+                                        text = "Show all semantic matches (${smartResults.size})",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                                     )
                                 }
@@ -1126,14 +1094,14 @@ private fun AlbumSearchCard(
                     Text(
                         text = album.bucketName,
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "${album.itemCount} items",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.85f),
                         maxLines = 1
                     )
                 }
