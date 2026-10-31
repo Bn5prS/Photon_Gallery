@@ -691,23 +691,14 @@ fun OptimizedThumbnailCell(
         )
     }
 
-    val selectionModifier = if (isSelected) {
-        // Read inside the graphicsLayer block (draw phase) rather than via `by`. Delegating to
-        // a State read in composition made every selected cell RECOMPOSE on each frame of the
-        // spring; reading it here drives only the layer. Identical visuals, no per-frame
-        // recomposition — which is what made drag-select across many cells look "gittery".
-        val selectionScale = animateFloatAsState(
-            targetValue = 0.88f,
-            animationSpec = MotionTokens.bouncySpring(),
-            label = "cellSelectionScale"
-        )
-        Modifier.graphicsLayer {
-            val scale = selectionScale.value
-            scaleX = scale
-            scaleY = scale
-        }
-    } else {
-        Modifier
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 0.88f else 1.0f,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "itemSelectionScale"
+    )
+    val selectionModifier = Modifier.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
     }
 
     // Single unified Box — provides the M3 surfaceContainer skeleton canvas tile

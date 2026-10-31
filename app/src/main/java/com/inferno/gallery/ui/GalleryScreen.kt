@@ -598,7 +598,7 @@ fun GalleryScreen(
                 .align(Alignment.TopEnd)
                 .padding(
                     top = contentPadding.calculateTopPadding(),
-                    bottom = contentPadding.calculateBottomPadding() + 56.dp
+                    bottom = contentPadding.calculateBottomPadding()
                 )
         )
 

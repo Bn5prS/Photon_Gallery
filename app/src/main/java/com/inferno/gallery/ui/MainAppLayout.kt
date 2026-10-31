@@ -34,6 +34,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -403,8 +407,8 @@ fun MainAppLayout(
         return
     }
 
-    val isGalleryRoute = currentRoute == "photos" || currentRoute == "videos" || currentRoute?.startsWith("album/") == true
-    val isCollapsibleTopBarActive = isGalleryRoute && !isSelectionMode
+    val isRootTab = currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "search"
+    val isCollapsibleTopBarActive = isRootTab && !isSelectionMode
 
     var topBarOffsetY by remember { mutableFloatStateOf(0f) }
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
@@ -1062,6 +1066,24 @@ fun MainAppLayout(
             }
         }
     ) { innerPadding ->
+        val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val targetBottomPadding = if (isSelectionMode) {
+            76.dp + navBarBottomInset
+        } else {
+            innerPadding.calculateBottomPadding()
+        }
+        val animatedBottomPadding by animateDpAsState(
+            targetValue = targetBottomPadding,
+            animationSpec = MotionTokens.snappySpring(),
+            label = "scaffoldBottomPadding"
+        )
+        val layoutDirection = LocalLayoutDirection.current
+        val effectivePadding = PaddingValues(
+            start = innerPadding.calculateStartPadding(layoutDirection),
+            top = innerPadding.calculateTopPadding(),
+            end = innerPadding.calculateEndPadding(layoutDirection),
+            bottom = animatedBottomPadding
+        )
         NavHost(
             navController = nestedNavController,
             startDestination = "photos",
@@ -1076,7 +1098,7 @@ fun MainAppLayout(
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     viewModel = viewModel,
-                    contentPadding = innerPadding,
+                    contentPadding = effectivePadding,
                     isMainTab = true,
                     topBarCollapseFractionProvider = {
                         if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
@@ -1098,7 +1120,7 @@ fun MainAppLayout(
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     viewModel = viewModel,
-                    contentPadding = innerPadding,
+                    contentPadding = effectivePadding,
                     bucketName = com.inferno.gallery.data.BucketNames.VIDEOS,
                     isMainTab = true,
                     topBarCollapseFractionProvider = {
@@ -1163,7 +1185,7 @@ fun MainAppLayout(
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = this,
                     viewModel = viewModel,
-                    contentPadding = innerPadding,
+                    contentPadding = effectivePadding,
                     onAlbumClick = { bucketName -> 
                         viewModel.resetGridScrollPosition(bucketName)
                         viewModel.setBucket(bucketName)
@@ -1381,7 +1403,7 @@ fun MainAppLayout(
                             animatedVisibilityScope = animatedVisibilityScope,
                             onPhotoClick = onPhotoClick,
                             viewModel = viewModel,
-                            contentPadding = innerPadding,
+                            contentPadding = effectivePadding,
                             bucketName = bucketName,
                             topBarCollapseFractionProvider = {
                                 if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
@@ -1398,7 +1420,7 @@ fun MainAppLayout(
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     viewModel = viewModel,
-                    contentPadding = innerPadding,
+                    contentPadding = effectivePadding,
                     onAlbumClick = { bucketName ->
                         viewModel.resetGridScrollPosition(bucketName)
                         viewModel.setBucket(bucketName)
@@ -1412,7 +1434,7 @@ fun MainAppLayout(
             }
             composable("settings") {
                 SettingsScreen(
-                    contentPadding = innerPadding,
+                    contentPadding = effectivePadding,
                     galleryViewModel = viewModel,
                     onBackClick = { nestedNavController.popBackStackSafely() },
                     onNavigateToVault = onNavigateToVault,
