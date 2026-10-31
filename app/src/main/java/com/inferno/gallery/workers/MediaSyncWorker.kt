@@ -38,6 +38,7 @@ class MediaSyncWorker(
             val dbMap = dbList.associateBy { it.id }
             
             val allMediaStoreIds = mediaRepository.getAllMediaIds()
+            val trashedMediaIds = mediaRepository.getTrashedMediaIds()
             val deltaIds = deltaList.map { it.id }.toSet()
             
             // Safety net: If there are IDs in MediaStore that are neither in our local DB nor in the delta,
@@ -62,7 +63,9 @@ class MediaSyncWorker(
                 if (vaultUris.contains(media.uri.toString()) || vaultPaths.contains(media.path)) {
                     continue
                 }
-                if (media.path.isNotBlank()) {
+                // Trashed files in MediaStore Scoped Storage are renamed to .trashed-... on disk
+                // and protected from direct File access, so bypass File.exists() and .nomedia for Trash items.
+                if (media.bucketName != "Trash" && media.path.isNotBlank()) {
                     val file = java.io.File(media.path)
                     if (!file.exists()) {
                         continue
@@ -106,11 +109,60 @@ class MediaSyncWorker(
                 )
             }
 
+            // Check if any items in Room have out-of-sync trash status
+            val dbTrashIds = dbList.filter { it.bucketName == "Trash" }.map { it.id }.toSet()
+            val newlyTrashedIds = trashedMediaIds.filter { dbMap.containsKey(it) && !dbTrashIds.contains(it) }
+            if (newlyTrashedIds.isNotEmpty()) {
+                database.mediaDao().updateBucketByIds(newlyTrashedIds, "Trash")
+            }
+            val missingTrashIds = trashedMediaIds.filter { !dbMap.containsKey(it) && !deltaIds.contains(it) }
+            if (missingTrashIds.isNotEmpty()) {
+                val trashedItems = mediaRepository.getImagesListForSync("Trash", null)
+                for (media in trashedItems) {
+                    if (!dbMap.containsKey(media.id)) {
+                        toInsert.add(
+                            CoreMediaEntity(
+                                id = media.id,
+                                uriString = media.uri.toString(),
+                                filePath = media.path,
+                                bucketName = "Trash",
+                                dateAdded = media.dateAdded,
+                                dateModified = media.dateModified,
+                                size = media.size,
+                                name = media.name,
+                                mimeType = null,
+                                isVideo = media.isVideo,
+                                durationMs = media.durationMs,
+                                isIndexedOcr = false,
+                                pHash = null,
+                                latitude = null,
+                                longitude = null,
+                                fileHash = null
+                            )
+                        )
+                    }
+                }
+            }
+
             val newPhotosCount = toInsert.count { !dbMap.containsKey(it.id) }
 
             // Find deletions: compare DB against lightweight ID list, active vault items, disk existence, and .nomedia
             val deadPathsToRescan = mutableListOf<String>()
             for (dbItem in dbList) {
+                if (dbItem.bucketName == "Trash") {
+                    // Trashed items do NOT exist on disk at their original file path because MediaStore renamed them.
+                    // They should only be deleted from Room if MediaStore no longer has them (permanently deleted/expired).
+                    if (!allMediaStoreIds.contains(dbItem.id)) {
+                        toDelete.add(dbItem.id)
+                    } else if (!trashedMediaIds.contains(dbItem.id)) {
+                        // It was restored in MediaStore! Restore its original parent bucket.
+                        val parentName = if (dbItem.filePath.isNotBlank()) java.io.File(dbItem.filePath).parentFile?.name else null
+                        val originalBucket = if (parentName != null && !parentName.startsWith(".")) parentName else "Camera"
+                        database.mediaDao().updateBucketById(dbItem.id, originalBucket)
+                    }
+                    continue
+                }
+
                 val file = if (dbItem.filePath.isNotBlank()) java.io.File(dbItem.filePath) else null
                 val fileExists = file != null && file.exists()
                 val isHiddenByNoMedia = !showHiddenAlbums && dbItem.filePath.isNotBlank() &&

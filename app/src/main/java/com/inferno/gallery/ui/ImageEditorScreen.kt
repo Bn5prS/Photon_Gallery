@@ -28,6 +28,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +84,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -480,6 +485,7 @@ fun ImageEditorScreen(
 
     // ── Active Tool ──────────────────────────────────────────────────────
     var activeTool by remember { mutableStateOf<EditorTool?>(null) }
+    var isComparingOriginal by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showSaveMenu by remember { mutableStateOf(false) }
 
@@ -679,6 +685,8 @@ fun ImageEditorScreen(
 
                         val totalRot = currentState.crop.rotation.toFloat() + currentState.crop.straightenAngle
 
+                        val canTouchToCompare = activeTool != EditorTool.MARKUP && activeTool != EditorTool.CROP
+
                         Box(
                             modifier = Modifier
                                 .size(
@@ -689,21 +697,38 @@ fun ImageEditorScreen(
                                     rotationZ = totalRot
                                     scaleX = if (currentState.crop.flipH) -1f else 1f
                                     scaleY = if (currentState.crop.flipV) -1f else 1f
-                                },
+                                }
+                                .then(
+                                    if (canTouchToCompare) {
+                                        Modifier.pointerInput(Unit) {
+                                            awaitEachGesture {
+                                                awaitFirstDown(requireUnconsumed = false)
+                                                isComparingOriginal = true
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                waitForUpOrCancellation()
+                                                isComparingOriginal = false
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            }
+                                        }
+                                    } else Modifier
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
+                            val effectiveColorFilter = if (isComparingOriginal) null else combinedColorFilter
+                            val effectiveVignette = if (isComparingOriginal) 0f else currentState.tune.vignette
+
                             Image(
                                 bitmap = imageBitmap,
                                 contentDescription = "Preview",
                                 contentScale = ContentScale.FillBounds,
-                                colorFilter = combinedColorFilter,
+                                colorFilter = effectiveColorFilter,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .then(
                                         if (currentState.tune.vignette > 0f) {
                                             Modifier.drawWithContent {
                                                 drawContent()
-                                                val alpha = currentState.tune.vignette / 100f * 0.8f
+                                                val alpha = effectiveVignette / 100f * 0.8f
                                                 drawRect(
                                                     brush = Brush.radialGradient(
                                                         colors = listOf(
@@ -939,10 +964,18 @@ fun ImageEditorScreen(
                     ) {
                         itemsIndexed(EditorTool.entries.toList()) { _, tool ->
                             val isSelected = activeTool == tool
+                            val hasModifications = when (tool) {
+                                EditorTool.SUGGESTIONS -> currentState.tune != TuneValues()
+                                EditorTool.CROP -> currentState.crop.rotation != 0 || currentState.crop.straightenAngle != 0f || currentState.crop.flipH || currentState.crop.flipV || currentState.crop.cropRect != null
+                                EditorTool.ADJUST -> currentState.tune != TuneValues()
+                                EditorTool.FILTERS -> currentState.filterIndex > 0
+                                EditorTool.MARKUP -> currentState.markup.strokes.isNotEmpty() || currentState.markup.texts.isNotEmpty()
+                            }
                             EditorToolChip(
                                 label = tool.label,
                                 icon = ImageVector.vectorResource(tool.iconRes),
                                 isSelected = isSelected,
+                                hasModifications = hasModifications,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     activeTool = if (activeTool == tool) null else tool
@@ -999,6 +1032,35 @@ fun ImageEditorScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    // Hold to compare with original
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeFull)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    isComparingOriginal = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    waitForUpOrCancellation()
+                                    isComparingOriginal = false
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = {},
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = if (isComparingOriginal) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                contentColor = if (isComparingOriginal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Icon(
+                                ImageVector.vectorResource(R.drawable.ic_ms_visibility),
+                                contentDescription = "Hold to compare with original"
+                            )
+                        }
+                    }
+
                     FilledTonalIconButton(
                         onClick = { undo() },
                         enabled = undoStack.isNotEmpty(),
@@ -1067,6 +1129,44 @@ fun ImageEditorScreen(
             }
         }
 
+        // Floating "ORIGINAL" pill indicator during compare
+        AnimatedVisibility(
+            visible = isComparingOriginal,
+            enter = fadeIn(MotionTokens.snappySpring()) + slideInVertically(MotionTokens.snappySpring()) { -it },
+            exit = fadeOut(MotionTokens.snappySpring()) + slideOutVertically(MotionTokens.snappySpring()) { -it },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 64.dp)
+        ) {
+            Surface(
+                shape = ShapeFull,
+                color = Color.Black.copy(alpha = 0.8f),
+                contentColor = Color.White,
+                shadowElevation = 6.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        ImageVector.vectorResource(R.drawable.ic_ms_visibility),
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = Color.White
+                    )
+                    Text(
+                        "ORIGINAL",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                    )
+                }
+            }
+        }
+
         // Text editing dialog
         if (showTextDialog) {
             MarkupTextEditorDialog(
@@ -1099,6 +1199,7 @@ private fun EditorToolChip(
     label: String,
     icon: ImageVector,
     isSelected: Boolean,
+    hasModifications: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
@@ -1125,6 +1226,16 @@ private fun EditorToolChip(
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                 )
             )
+            if (hasModifications) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                            shape = CircleShape
+                        )
+                )
+            }
         }
     }
 }
@@ -1277,14 +1388,14 @@ private fun AdjustPanel(
     val params = listOf(
         AdjustParam("Brightness", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.brightness) { values.copy(brightness = it) },
         AdjustParam("Contrast", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.contrast) { values.copy(contrast = it) },
-        AdjustParam("Highlights", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.highlights) { values.copy(highlights = it) },
-        AdjustParam("Shadows", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.shadows) { values.copy(shadows = it) },
-        AdjustParam("White Point", ImageVector.vectorResource(R.drawable.ic_ms_light_mode), values.whitePoint) { values.copy(whitePoint = it) },
+        AdjustParam("Highlights", ImageVector.vectorResource(R.drawable.ic_ms_bolt), values.highlights) { values.copy(highlights = it) },
+        AdjustParam("Shadows", ImageVector.vectorResource(R.drawable.ic_ms_dark_mode), values.shadows) { values.copy(shadows = it) },
+        AdjustParam("White Point", ImageVector.vectorResource(R.drawable.ic_ms_circle), values.whitePoint) { values.copy(whitePoint = it) },
         AdjustParam("Black Point", ImageVector.vectorResource(R.drawable.ic_ms_contrast), values.blackPoint) { values.copy(blackPoint = it) },
         AdjustParam("Saturation", ImageVector.vectorResource(R.drawable.ic_ms_palette), values.saturation) { values.copy(saturation = it) },
         AdjustParam("Warmth", ImageVector.vectorResource(R.drawable.ic_ms_wb_twilight), values.warmth) { values.copy(warmth = it) },
         AdjustParam("Tint", ImageVector.vectorResource(R.drawable.ic_ms_tune), values.tint) { values.copy(tint = it) },
-        AdjustParam("Vignette", ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), values.vignette, minVal = 0f, maxVal = 100f) { values.copy(vignette = it) }
+        AdjustParam("Vignette", ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong), values.vignette, minVal = 0f, maxVal = 100f) { values.copy(vignette = it) }
     )
 
     var selectedParam by remember { mutableIntStateOf(0) }
@@ -1378,23 +1489,11 @@ private fun AdjustPanel(
                 )
             }
 
-            var lastValInt by remember { mutableIntStateOf(param.value.roundToInt()) }
-            Slider(
+            BipolarSlider(
                 value = param.value,
-                onValueChange = { newVal ->
-                    val rounded = newVal.roundToInt()
-                    if (rounded == 0 && lastValInt != 0) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    }
-                    lastValInt = rounded
-                    onValuesChanged(param.setter(newVal))
-                },
-                valueRange = param.minVal..param.maxVal,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                ),
+                onValueChange = { onValuesChanged(param.setter(it)) },
+                minVal = param.minVal,
+                maxVal = param.maxVal,
                 modifier = Modifier.weight(1f)
             )
 
@@ -1428,7 +1527,7 @@ private fun CropToolPanel(
     onCropStateChanged: (CropState) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val aspects = listOf("Free", "Original", "1:1", "5:4", "4:3", "3:2", "16:9")
+    val aspects = listOf("Free", "Original", "1:1", "4:5", "5:4", "3:4", "4:3", "2:3", "3:2", "9:16", "16:9")
     val isRotated90 = cropState.rotation % 180 != 0
     val effectiveAspect = if (isRotated90) 1f / imageAspect else imageAspect
 
@@ -1779,17 +1878,25 @@ private fun CropPreview(
             val edgeMarginPx = with(LocalDensity.current) { 28.dp.toPx() }
             val minSizePx = with(LocalDensity.current) { 48.dp.toPx() }
 
+            val currentCropRect by rememberUpdatedState(cropRect)
+            val currentAspectLabel by rememberUpdatedState(cropState.aspectLabel)
+            val currentEffectiveAspect by rememberUpdatedState(effectiveAspect)
+            val currentOnCropRectChanged by rememberUpdatedState(onCropRectChanged)
+            val currentImageRect by rememberUpdatedState(imageRect)
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(imageRect, cropRect, cropState.aspectLabel, effectiveAspect) {
+                    .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { offset ->
+                                val imgRect = currentImageRect
+                                val cRect = currentCropRect
                                 val handle = CropGeometryHelper.hitTest(
                                     touchX = offset.x,
                                     touchY = offset.y,
-                                    cropRect = cropRect,
-                                    imageRect = imageRect,
+                                    cropRect = cRect,
+                                    imageRect = imgRect,
                                     cornerHitRadiusPx = cornerRadiusPx,
                                     edgeHitMarginPx = edgeMarginPx
                                 )
@@ -1806,23 +1913,24 @@ private fun CropPreview(
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                if (activeHandle != CropHandle.NONE && imageRect.width > 0 && imageRect.height > 0) {
-                                    val dx = dragAmount.x / imageRect.width
-                                    val dy = dragAmount.y / imageRect.height
-                                    val minWNorm = minSizePx / imageRect.width
-                                    val minHNorm = minSizePx / imageRect.height
+                                val imgRect = currentImageRect
+                                if (activeHandle != CropHandle.NONE && imgRect.width > 0 && imgRect.height > 0) {
+                                    val dx = dragAmount.x / imgRect.width
+                                    val dy = dragAmount.y / imgRect.height
+                                    val minWNorm = minSizePx / imgRect.width
+                                    val minHNorm = minSizePx / imgRect.height
 
                                     val newRect = CropGeometryHelper.updateCropRect(
-                                        currentRect = cropRect,
+                                        currentRect = currentCropRect,
                                         handle = activeHandle,
                                         deltaXNormalized = dx,
                                         deltaYNormalized = dy,
-                                        aspectLabel = cropState.aspectLabel,
-                                        effectiveAspect = effectiveAspect,
+                                        aspectLabel = currentAspectLabel,
+                                        effectiveAspect = currentEffectiveAspect,
                                         minWidthNormalized = minWNorm,
                                         minHeightNormalized = minHNorm
                                     )
-                                    onCropRectChanged(newRect)
+                                    currentOnCropRectChanged(newRect)
                                 }
                             }
                         )
@@ -1927,6 +2035,111 @@ private fun FiltersPanel(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+
+// ── Bipolar Center-Origin Slider ─────────────────────────────────────────────
+
+@Composable
+private fun BipolarSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    minVal: Float = -100f,
+    maxVal: Float = 100f,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val isBipolar = minVal < 0f
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val trackBgColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val notchColor = MaterialTheme.colorScheme.outlineVariant
+
+    var lastIntVal by remember { mutableIntStateOf(value.roundToInt()) }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .height(44.dp)
+            .pointerInput(minVal, maxVal) {
+                detectDragGestures { change, _ ->
+                    change.consume()
+                    val totalW = size.width.toFloat()
+                    if (totalW > 0f) {
+                        val touchX = change.position.x.coerceIn(0f, totalW)
+                        val fraction = touchX / totalW
+                        val rawValue = minVal + fraction * (maxVal - minVal)
+                        val rounded = if (isBipolar && kotlin.math.abs(rawValue) < 3.5f) 0f else rawValue.roundToInt().toFloat()
+                        val intVal = rounded.roundToInt()
+                        if (intVal == 0 && lastIntVal != 0) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                        lastIntVal = intVal
+                        onValueChange(rounded)
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        val thumbRadiusPx = with(LocalDensity.current) { 10.dp.toPx() }
+        val trackHeightPx = with(LocalDensity.current) { 6.dp.toPx() }
+
+        val fraction = ((value - minVal) / (maxVal - minVal)).coerceIn(0f, 1f)
+        val centerFraction = ((0f - minVal) / (maxVal - minVal)).coerceIn(0f, 1f)
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val trackY = size.height / 2f
+
+            // 1. Inactive background track
+            drawLine(
+                color = trackBgColor,
+                start = Offset(thumbRadiusPx, trackY),
+                end = Offset(size.width - thumbRadiusPx, trackY),
+                strokeWidth = trackHeightPx,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+
+            // 2. Center Zero Notch for Bipolar
+            if (isBipolar) {
+                val centerX = thumbRadiusPx + centerFraction * (size.width - 2 * thumbRadiusPx)
+                drawLine(
+                    color = notchColor,
+                    start = Offset(centerX, trackY - 8.dp.toPx()),
+                    end = Offset(centerX, trackY + 8.dp.toPx()),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+
+            // 3. Active fill track (from center to thumb for bipolar, or from left for unipolar)
+            val thumbX = thumbRadiusPx + fraction * (size.width - 2 * thumbRadiusPx)
+            val startX = if (isBipolar) {
+                thumbRadiusPx + centerFraction * (size.width - 2 * thumbRadiusPx)
+            } else {
+                thumbRadiusPx
+            }
+
+            if (kotlin.math.abs(thumbX - startX) > 1f) {
+                drawLine(
+                    color = primaryColor,
+                    start = Offset(startX, trackY),
+                    end = Offset(thumbX, trackY),
+                    strokeWidth = trackHeightPx,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+
+            // 4. Thumb circle
+            drawCircle(
+                color = Color.White,
+                radius = thumbRadiusPx,
+                center = Offset(thumbX, trackY)
+            )
+            drawCircle(
+                color = primaryColor,
+                radius = thumbRadiusPx * 0.55f,
+                center = Offset(thumbX, trackY)
+            )
         }
     }
 }

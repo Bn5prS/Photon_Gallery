@@ -58,6 +58,13 @@ android {
             // Install alongside the release app so device testing never touches real app data
             applicationIdSuffix = ".debug"
         }
+        create("optimizedDebug") {
+            initWith(buildTypes.getByName("release"))
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".debug"
+            isDebuggable = false
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -198,4 +205,4 @@ dependencies {
     implementation(libs.lottie.compose)
 
     implementation(libs.material)
-}
+}

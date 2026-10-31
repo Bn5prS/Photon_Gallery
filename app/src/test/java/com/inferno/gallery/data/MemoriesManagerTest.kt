@@ -84,6 +84,8 @@ class MemoriesManagerTest {
         override suspend fun getMediaByUrisList(uris: List<String>): List<CoreMediaEntity> = emptyList()
         override suspend fun updateBucketByUri(uriString: String, bucket: String) {}
         override suspend fun updateBucketByUris(uris: List<String>, bucket: String) {}
+        override suspend fun updateBucketById(id: Long, bucket: String) {}
+        override suspend fun updateBucketByIds(ids: List<Long>, bucket: String) {}
         override suspend fun updatePathAndBucket(id: Long, newPath: String, newBucket: String, newName: String) {}
         override suspend fun updateOcrIndexStatus(id: Long, isIndexed: Boolean) {}
         override suspend fun markOcrIndexed(ids: List<Long>) {}

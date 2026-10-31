@@ -468,9 +468,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     /**
      * Resolves localExists and resolvedUri for a GalleryItem.
      */
-    private fun resolveFileUri(uri: Uri, path: String): Uri {
-        return if (path.isNotEmpty()) {
-            Uri.fromFile(java.io.File(path))
+    private fun resolveFileUri(uri: Uri, path: String, bucketName: String? = null): Uri {
+        if (bucketName == "Trash") return uri
+        val file = if (path.isNotEmpty()) java.io.File(path) else null
+        return if (file != null && file.exists()) {
+            Uri.fromFile(file)
         } else {
             uri
         }
@@ -478,9 +480,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private fun resolveItemFields(
         uri: Uri,
-        path: String
+        path: String,
+        bucketName: String? = null
     ): Pair<Boolean, Uri> {
-        return true to resolveFileUri(uri, path)
+        if (bucketName == "Trash") {
+            return false to uri
+        }
+        val file = if (path.isNotEmpty()) java.io.File(path) else null
+        val exists = file != null && file.exists()
+        val resolved = if (exists) Uri.fromFile(file) else uri
+        return exists to resolved
     }
 
     // ── Shared SQL Query Builder ──
@@ -761,7 +770,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 .map { entities ->
                     entities.map { entity ->
                         val uri = Uri.parse(entity.uriString)
-                        val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                        val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                         GalleryItem(
                             id = entity.id.toString(),
                             uri = uri,
@@ -908,7 +917,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
                 val items = entities.map { entity ->
                     val uri = Uri.parse(entity.uriString)
-                    val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                    val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                     GalleryItem(
                         id = entity.id.toString(),
                         uri = uri,
@@ -937,7 +946,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val entities = database.faceDao().getMediaForPerson(personId)
                     val items = entities.map { entity ->
                         val uri = Uri.parse(entity.uriString)
-                        val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                        val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                         GalleryItem(
                             id = entity.id.toString(),
                             uri = uri,
@@ -986,7 +995,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
             val items = entities.map { entity ->
                 val uri = Uri.parse(entity.uriString)
-                val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                 GalleryItem(
                     id = entity.id.toString(),
                     uri = uri,
@@ -1018,7 +1027,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     ?: database.mediaDao().getMediaByUri(mediaId)
                 if (entity != null) {
                     val uri = Uri.parse(entity.uriString)
-                    val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                    val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                     val fallbackItem = GalleryItem(
                         id = entity.id.toString(),
                         uri = uri,
@@ -1551,7 +1560,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     isVideo = entity.isVideo,
                     durationMs = entity.durationMs,
                     localExists = exists,
-                    resolvedUri = resolveFileUri(uri, entity.filePath),
+                    resolvedUri = resolveFileUri(uri, entity.filePath, entity.bucketName),
                     pHash = entity.pHash,
                     latitude = entity.latitude,
                     longitude = entity.longitude,
@@ -1721,7 +1730,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             isVideo = entity.isVideo,
                             durationMs = entity.durationMs,
                             localExists = true,
-                            resolvedUri = resolveFileUri(uri, entity.filePath),
+                            resolvedUri = resolveFileUri(uri, entity.filePath, entity.bucketName),
                             latitude = entity.latitude,
                             longitude = entity.longitude
                         )
@@ -1985,7 +1994,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             ftsEntities.map { searchRes ->
                                 val entity = searchRes.entity
                                 val uri = Uri.parse(entity.uriString)
-                                val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                                val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                                 GalleryItem(
                                     id = entity.id.toString(),
                                     uri = uri,
@@ -2056,7 +2065,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
                                         orderedEntities.map { entity ->
                                             val uri = Uri.parse(entity.uriString)
-                                            val (exists, resolved) = resolveItemFields(uri, entity.filePath)
+                                            val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                                             val score = scoreMap[entity.id]
                                             val snippet = score?.let {
                                                 val pct = (((it - 0.235f) / (0.330f - 0.235f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
@@ -2269,8 +2278,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             // Fast Room bucket restoration: restore to parent folder album immediately
             val entity = database.mediaDao().getMediaByUri(uriString)
-            val originalBucket = if (entity != null && entity.filePath.isNotBlank()) {
-                java.io.File(entity.filePath).parentFile?.name ?: "Camera"
+            val parentName = if (entity != null && entity.filePath.isNotBlank()) {
+                java.io.File(entity.filePath).parentFile?.name
+            } else null
+            val originalBucket = if (parentName != null && !parentName.startsWith(".")) {
+                parentName
             } else "Camera"
             database.mediaDao().updateBucketByUri(uriString, originalBucket)
             withContext(Dispatchers.Main) {
@@ -2636,8 +2648,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             for (chunk in uris.chunked(500)) {
                 val entities = database.mediaDao().getMediaByUrisList(chunk)
                 for (entity in entities) {
-                    val originalBucket = if (entity.filePath.isNotBlank()) {
-                        java.io.File(entity.filePath).parentFile?.name ?: "Camera"
+                    val parentName = if (entity.filePath.isNotBlank()) {
+                        java.io.File(entity.filePath).parentFile?.name
+                    } else null
+                    val originalBucket = if (parentName != null && !parentName.startsWith(".")) {
+                        parentName
                     } else "Camera"
                     database.mediaDao().updateBucketByUri(entity.uriString, originalBucket)
                 }
@@ -2834,7 +2849,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 isVideo = entity.isVideo,
                 durationMs = entity.durationMs,
                 localExists = true,
-                resolvedUri = resolveFileUri(uri, entity.filePath),
+                resolvedUri = resolveFileUri(uri, entity.filePath, entity.bucketName),
                 latitude = entity.latitude,
                 longitude = entity.longitude,
                 matchType = matchInfo?.first,

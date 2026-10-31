@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -62,8 +63,18 @@ fun MarkupCanvasOverlay(
     // Visual cursor circle while erasing
     var eraserCursorPoint by remember { mutableStateOf<Offset?>(null) }
 
+    val currentMarkupState by rememberUpdatedState(markupState)
+    val currentActiveTool by rememberUpdatedState(activeTool)
+    val currentColorState by rememberUpdatedState(currentColor)
+    val currentStrokeWidthState by rememberUpdatedState(currentStrokeWidth)
+    val currentEraserRadiusState by rememberUpdatedState(eraserRadius)
+    val currentSelectedTextId by rememberUpdatedState(selectedTextId)
+    val currentOnSelectText by rememberUpdatedState(onSelectText)
+    val currentOnStateChanged by rememberUpdatedState(onStateChanged)
+    val currentOnEditTextRequest by rememberUpdatedState(onEditTextRequest)
+
     val interactiveModifier = if (isInteractive) {
-        Modifier.pointerInput(activeTool, markupState, currentColor, currentStrokeWidth, eraserRadius, selectedTextId) {
+        Modifier.pointerInput(activeTool) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val canvasW = size.width.toFloat()
@@ -75,13 +86,13 @@ fun MarkupCanvasOverlay(
                     (down.position.y / canvasH).coerceIn(0f, 1f)
                 )
 
-                if (activeTool == MarkupTool.TEXT) {
+                if (currentActiveTool == MarkupTool.TEXT) {
                     // Text manipulation mode (drag, 2-finger scale, 2-finger twist rotation, tap)
-                    val currentSelected = markupState.texts.find { it.id == selectedTextId }
+                    val currentSelected = currentMarkupState.texts.find { it.id == currentSelectedTextId }
                     val hitText = if (currentSelected != null && currentSelected.isHitBy(normDown, canvasW, canvasH)) {
                         currentSelected
                     } else {
-                        markupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
+                        currentMarkupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
                     }
 
                     if (hitText != null) {
@@ -89,8 +100,8 @@ fun MarkupCanvasOverlay(
                         var totalMovement = 0f
                         var isTransforming = false
 
-                        if (selectedTextId != hitText.id) {
-                            onSelectText(hitText.id)
+                        if (currentSelectedTextId != hitText.id) {
+                            currentOnSelectText(hitText.id)
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
 
@@ -113,7 +124,7 @@ fun MarkupCanvasOverlay(
                                         (targetText.position.y + normPanY).coerceIn(0.05f, 0.95f)
                                     )
                                     targetText = targetText.copy(position = newPos)
-                                    onStateChanged(markupState.withUpdatedText(targetText))
+                                    currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
                                 }
                             } else if (pointerCount >= 2) {
                                 isTransforming = true
@@ -137,17 +148,17 @@ fun MarkupCanvasOverlay(
                                     scale = newScale,
                                     rotation = newRotation
                                 )
-                                onStateChanged(markupState.withUpdatedText(targetText))
+                                currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
                             }
                         }
 
                         if (!isTransforming && totalMovement < 10f) {
-                            if (selectedTextId == hitText.id) {
+                            if (currentSelectedTextId == hitText.id) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onEditTextRequest(hitText)
+                                currentOnEditTextRequest(hitText)
                             } else {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onSelectText(hitText.id)
+                                currentOnSelectText(hitText.id)
                             }
                         }
                     } else {
@@ -161,18 +172,18 @@ fun MarkupCanvasOverlay(
                             totalMovement += pan.getDistance()
                         }
                         if (totalMovement < 10f) {
-                            if (selectedTextId != null) {
+                            if (currentSelectedTextId != null) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onSelectText(null)
+                                currentOnSelectText(null)
                             } else {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onEditTextRequest(null)
+                                currentOnEditTextRequest(null)
                             }
                         }
                     }
                 } else if (activeTool == MarkupTool.ERASER) {
                     // Continuous interpolated erasing with visual cursor
-                    var currentLocalState = markupState
+                    var currentLocalState = currentMarkupState
                     var lastNorm = normDown
                     eraserCursorPoint = down.position
                     down.consume()
@@ -182,13 +193,13 @@ fun MarkupCanvasOverlay(
                     if (initialStrokeHit != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         currentLocalState = currentLocalState.withRemovedStroke(initialStrokeHit.id)
-                        onStateChanged(currentLocalState)
+                        currentOnStateChanged(currentLocalState)
                     }
                     val initialTextHit = currentLocalState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
                     if (initialTextHit != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         currentLocalState = currentLocalState.withRemovedText(initialTextHit.id)
-                        onStateChanged(currentLocalState)
+                        currentOnStateChanged(currentLocalState)
                     }
 
                     while (true) {
@@ -234,7 +245,7 @@ fun MarkupCanvasOverlay(
                         }
 
                         if (stateChanged) {
-                            onStateChanged(currentLocalState)
+                            currentOnStateChanged(currentLocalState)
                         }
 
                         lastNorm = currentNorm
@@ -242,7 +253,7 @@ fun MarkupCanvasOverlay(
                     }
                 } else {
                     // Drawing tools (PEN, HIGHLIGHTER, ARROW)
-                    val hitText = markupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
+                    val hitText = currentMarkupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
                     livePoints.clear()
                     livePoints.add(normDown)
                     down.consume()
@@ -267,15 +278,15 @@ fun MarkupCanvasOverlay(
                     if (hitText != null && totalMovement < 10f && livePoints.size <= 2) {
                         livePoints.clear()
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSelectText(hitText.id)
+                        currentOnSelectText(hitText.id)
                     } else if (livePoints.isNotEmpty()) {
                         val stroke = MarkupStroke(
                             points = livePoints.toList(),
-                            color = currentColor,
-                            strokeWidth = currentStrokeWidth,
-                            tool = activeTool
+                            color = currentColorState,
+                            strokeWidth = currentStrokeWidthState,
+                            tool = currentActiveTool
                         )
-                        onStateChanged(markupState.withAddedStroke(stroke))
+                        currentOnStateChanged(currentMarkupState.withAddedStroke(stroke))
                         livePoints.clear()
                     }
                 }
@@ -301,9 +312,9 @@ fun MarkupCanvasOverlay(
             if (livePoints.isNotEmpty()) {
                 val liveStroke = MarkupStroke(
                     points = livePoints.toList(),
-                    color = currentColor,
-                    strokeWidth = currentStrokeWidth,
-                    tool = activeTool
+                    color = currentColorState,
+                    strokeWidth = currentStrokeWidthState,
+                    tool = currentActiveTool
                 )
                 drawStrokeItem(liveStroke, canvasW, canvasH)
             }

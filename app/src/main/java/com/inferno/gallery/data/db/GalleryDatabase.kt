@@ -107,6 +107,12 @@ interface MediaDao {
     @Query("UPDATE core_media SET bucketName = :bucket WHERE uriString IN (:uris)")
     suspend fun updateBucketByUris(uris: List<String>, bucket: String)
 
+    @Query("UPDATE core_media SET bucketName = :bucket WHERE id = :id")
+    suspend fun updateBucketById(id: Long, bucket: String)
+
+    @Query("UPDATE core_media SET bucketName = :bucket WHERE id IN (:ids)")
+    suspend fun updateBucketByIds(ids: List<Long>, bucket: String)
+
     @androidx.room.Transaction
     suspend fun updateBucketByUrisChunked(uris: List<String>, bucket: String) {
         uris.chunked(500).forEach { chunk ->

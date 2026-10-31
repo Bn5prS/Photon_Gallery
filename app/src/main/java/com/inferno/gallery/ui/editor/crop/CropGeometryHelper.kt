@@ -30,11 +30,13 @@ object CropGeometryHelper {
             "Original" -> effectiveAspect
             "1:1" -> 1.0f
             "5:4" -> 5f / 4f
+            "4:5" -> 4f / 5f
             "4:3" -> 4f / 3f
+            "3:4" -> 3f / 4f
             "3:2" -> 3f / 2f
+            "2:3" -> 2f / 3f
             "16:9" -> 16f / 9f
             "9:16" -> 9f / 16f
-            "3:4" -> 3f / 4f
             else -> null // "Free" or unconstrained
         }
     }

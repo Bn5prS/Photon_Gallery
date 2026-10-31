@@ -67,7 +67,8 @@ class LocalMediaRepository(
             MediaStore.Files.FileColumns.MEDIA_TYPE,
             MediaStore.MediaColumns.DURATION,
             MediaStore.MediaColumns.IS_TRASHED,
-            MediaStore.MediaColumns.IS_FAVORITE
+            MediaStore.MediaColumns.IS_FAVORITE,
+            MediaStore.MediaColumns.VOLUME_NAME
         )
 
         val baseSelection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
@@ -156,10 +157,13 @@ class LocalMediaRepository(
                         durationMs = durationStr?.toLongOrNull()
                     }
                     
-                    val baseUri = if (isVideo) {
-                        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                    } else {
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    val volumeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.VOLUME_NAME)
+                    val volumeName = if (volumeColumn >= 0) cursor.getString(volumeColumn) else null
+                    val baseUri = when {
+                        volumeName != null && isVideo -> MediaStore.Video.Media.getContentUri(volumeName)
+                        volumeName != null -> MediaStore.Images.Media.getContentUri(volumeName)
+                        isVideo -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                        else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                     }
                     
                     val uri = ContentUris.withAppendedId(baseUri, id)
@@ -201,6 +205,35 @@ class LocalMediaRepository(
             }
         } catch (e: SecurityException) {
             // Permissions revoked or restricted
+        }
+        ids
+    }
+
+    suspend fun getTrashedMediaIds(): Set<Long> = withContext(Dispatchers.IO) {
+        val ids = mutableSetOf<Long>()
+        val projection = arrayOf(MediaStore.Images.Media._ID)
+        val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
+        
+        val bundle = android.os.Bundle().apply {
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
+            putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+        }
+
+        try {
+            contentResolver.query(
+                MediaStore.Files.getContentUri("external"),
+                projection,
+                bundle,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                if (idCol >= 0) {
+                    while (cursor.moveToNext()) {
+                        ids.add(cursor.getLong(idCol))
+                    }
+                }
+            }
+        } catch (_: SecurityException) {
         }
         ids
     }
