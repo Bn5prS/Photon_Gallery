@@ -865,16 +865,16 @@ fun AlbumsScreen(
                 utilities.forEachIndexed { index, item ->
                     val cardShape = when (index) {
                         0 -> RoundedCornerShape(
-                            topStart = 28.dp,
-                            bottomStart = 28.dp,
+                            topStart = 16.dp,
+                            bottomStart = 16.dp,
                             topEnd = 12.dp,
                             bottomEnd = 12.dp
                         )
                         utilities.lastIndex -> RoundedCornerShape(
                             topStart = 12.dp,
                             bottomStart = 12.dp,
-                            topEnd = 28.dp,
-                            bottomEnd = 28.dp
+                            topEnd = 16.dp,
+                            bottomEnd = 16.dp
                         )
                         else -> ShapeMedium
                     }

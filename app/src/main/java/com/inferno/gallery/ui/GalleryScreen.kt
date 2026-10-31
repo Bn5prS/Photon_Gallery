@@ -568,6 +568,7 @@ fun GalleryScreen(
             }
         }
 
+        val isCenterAlignment = dateHeaderAlignment == "CENTER"
         DynamicDateBadge(
             // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
             // composition subscribed the whole GalleryScreen to state that is written every
@@ -575,11 +576,12 @@ fun GalleryScreen(
             // happen inside DynamicDateBadge's own (small) restart scope.
             visible = { showDateBadge },
             dateText = { activeDateBadge },
+            isCenter = isCenterAlignment,
             modifier = Modifier
-                .align(if (dateHeaderAlignment == "CENTER") Alignment.TopCenter else Alignment.TopStart)
+                .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
                 .padding(
                     top = topBarContentPadding + 12.dp,
-                    start = if (dateHeaderAlignment == "CENTER") 0.dp else 16.dp
+                    start = if (isCenterAlignment) 0.dp else 4.dp
                 )
                 .graphicsLayer {
                     translationY = -topBarCollapseFractionProvider() * maxUpwardShiftPx
@@ -687,6 +689,7 @@ fun FastScroller(
 private fun DynamicDateBadge(
     visible: () -> Boolean,
     dateText: () -> String?,
+    isCenter: Boolean,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -714,7 +717,12 @@ private fun DynamicDateBadge(
                 text = dateText() ?: "",
                 style = com.inferno.gallery.ui.theme.TimelineDateHeaderStyle,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+                modifier = Modifier.padding(
+                    start = if (isCenter) 16.dp else 12.dp,
+                    end = 16.dp,
+                    top = 7.dp,
+                    bottom = 7.dp
+                )
             )
         }
     }
