@@ -484,7 +484,7 @@ fun ImageEditorScreen(
     }
 
     // ── Active Tool ──────────────────────────────────────────────────────
-    var activeTool by remember { mutableStateOf<EditorTool?>(null) }
+    var activeTool by remember { mutableStateOf(EditorTool.SUGGESTIONS) }
     var isComparingOriginal by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showSaveMenu by remember { mutableStateOf(false) }
@@ -492,10 +492,10 @@ fun ImageEditorScreen(
     // ── Markup Tool State ────────────────────────────────────────────────
     var activeMarkupTool by remember { mutableStateOf(MarkupTool.PEN) }
     var markupColor by remember { mutableStateOf(MarkupPalette.COLORS[0]) }
-    var penStrokeWidth by remember { mutableFloatStateOf(6f) }
-    var highlighterStrokeWidth by remember { mutableFloatStateOf(24f) }
-    var arrowStrokeWidth by remember { mutableFloatStateOf(8f) }
-    var eraserRadius by remember { mutableFloatStateOf(24f) }
+    var penStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_PEN_WIDTH) }
+    var highlighterStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_HIGHLIGHTER_WIDTH) }
+    var arrowStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_ARROW_WIDTH) }
+    var eraserRadius by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_ERASER_RADIUS) }
 
     // Text Editor Dialog State
     var showTextDialog by remember { mutableStateOf(false) }
@@ -504,11 +504,7 @@ fun ImageEditorScreen(
 
     // Back handler
     BackHandler {
-        if (activeTool != null) {
-            activeTool = null
-        } else {
-            onBack()
-        }
+        onBack()
     }
 
     // ── Combined color matrix ────────────────────────────────────────────
@@ -948,7 +944,6 @@ fun ImageEditorScreen(
                                     )
                                 }
                             }
-                            null -> Spacer(modifier = Modifier.height(0.dp))
                         }
                     }
 
@@ -978,7 +973,7 @@ fun ImageEditorScreen(
                                 hasModifications = hasModifications,
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    activeTool = if (activeTool == tool) null else tool
+                                    activeTool = tool
                                 }
                             )
                         }
@@ -1521,7 +1516,9 @@ private fun AdjustPanel(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .size(48.dp)
             ) {
                 Icon(
                     ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Reset",
@@ -1565,6 +1562,7 @@ private fun CropToolPanel(
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     shadowElevation = 0.dp,
                     modifier = Modifier
+                        .minimumInteractiveComponentSize()
                         .clip(ShapeFull)
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1636,7 +1634,9 @@ private fun CropToolPanel(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .size(48.dp)
             ) {
                 Icon(
                     ImageVector.vectorResource(R.drawable.ic_ms_refresh),
@@ -1668,7 +1668,9 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .size(48.dp)
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = "Rotate")
                 }
@@ -1685,7 +1687,9 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .size(48.dp)
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz), contentDescription = "Flip H")
                 }
@@ -1702,7 +1706,9 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .size(48.dp)
                 ) {
                     Icon(
                         ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
@@ -1723,7 +1729,9 @@ private fun CropToolPanel(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         contentColor = MaterialTheme.colorScheme.onSurface
                     ),
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .size(48.dp)
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Reset")
                 }
@@ -1798,6 +1806,7 @@ private fun CropPreview(
         // Crop overlay
         if (imageRect != Rect.Zero) {
             val isDragging = activeHandle != CropHandle.NONE
+            val primaryColor = MaterialTheme.colorScheme.primary
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val left = imageRect.left + cropRect.left * imageRect.width
@@ -1839,7 +1848,7 @@ private fun CropPreview(
                 )
                 corners.forEach { (handle, pt, dirs) ->
                     val isCornerActive = activeHandle == handle
-                    val cornerColor = if (isCornerActive) Color(0xFF64B5F6) else Color.White
+                    val cornerColor = if (isCornerActive) primaryColor else Color.White
                     val thickness = if (isCornerActive) handleThickness * 1.5f else handleThickness
                     drawLine(cornerColor, pt, Offset(pt.x + handleLen * dirs.first, pt.y), thickness)
                     drawLine(cornerColor, pt, Offset(pt.x, pt.y + handleLen * dirs.second), thickness)
@@ -1855,7 +1864,7 @@ private fun CropPreview(
                     // Top
                     val isTopActive = activeHandle == CropHandle.TOP
                     drawLine(
-                        if (isTopActive) Color(0xFF64B5F6) else Color.White,
+                        if (isTopActive) primaryColor else Color.White,
                         Offset(midX - edgeLen / 2, top),
                         Offset(midX + edgeLen / 2, top),
                         if (isTopActive) edgeThickness * 1.5f else edgeThickness
@@ -1863,7 +1872,7 @@ private fun CropPreview(
                     // Bottom
                     val isBottomActive = activeHandle == CropHandle.BOTTOM
                     drawLine(
-                        if (isBottomActive) Color(0xFF64B5F6) else Color.White,
+                        if (isBottomActive) primaryColor else Color.White,
                         Offset(midX - edgeLen / 2, bottom),
                         Offset(midX + edgeLen / 2, bottom),
                         if (isBottomActive) edgeThickness * 1.5f else edgeThickness
@@ -1871,7 +1880,7 @@ private fun CropPreview(
                     // Left
                     val isLeftActive = activeHandle == CropHandle.LEFT
                     drawLine(
-                        if (isLeftActive) Color(0xFF64B5F6) else Color.White,
+                        if (isLeftActive) primaryColor else Color.White,
                         Offset(left, midY - edgeLen / 2),
                         Offset(left, midY + edgeLen / 2),
                         if (isLeftActive) edgeThickness * 1.5f else edgeThickness
@@ -1879,7 +1888,7 @@ private fun CropPreview(
                     // Right
                     val isRightActive = activeHandle == CropHandle.RIGHT
                     drawLine(
-                        if (isRightActive) Color(0xFF64B5F6) else Color.White,
+                        if (isRightActive) primaryColor else Color.White,
                         Offset(right, midY - edgeLen / 2),
                         Offset(right, midY + edgeLen / 2),
                         if (isRightActive) edgeThickness * 1.5f else edgeThickness
