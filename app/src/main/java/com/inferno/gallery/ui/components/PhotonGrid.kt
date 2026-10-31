@@ -603,13 +603,18 @@ fun TimelineSectionHeader(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = 8.dp
+            ),
         contentAlignment = if (isCenter) Alignment.Center else Alignment.CenterStart
     ) {
         Text(
             text = title,
             style = TimelineDateHeaderStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = if (isCenter) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
         )
     }

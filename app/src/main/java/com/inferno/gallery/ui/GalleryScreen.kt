@@ -336,7 +336,6 @@ fun GalleryScreen(
     // collector (and its SimpleDateFormat) on every 120-item page append. The body reads
     // itemCount directly, which inside a coroutine is not a composition subscription.
     LaunchedEffect(lazyGridState) {
-        val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
         var cachedDateSeconds = -1L
         var cachedDateString = ""
 
@@ -354,7 +353,7 @@ fun GalleryScreen(
                                 val dayStart = (seconds / 86400) * 86400
                                 if (dayStart != cachedDateSeconds) {
                                     cachedDateSeconds = dayStart
-                                    cachedDateString = dateFormat.format(Date(seconds * 1000L))
+                                    cachedDateString = GalleryViewModel.formatGroupHeader(seconds)
                                 }
                                 cachedDateString
                             } else null
@@ -713,9 +712,9 @@ private fun DynamicDateBadge(
         ) {
             Text(
                 text = dateText() ?: "",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                style = com.inferno.gallery.ui.theme.TimelineDateHeaderStyle,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
             )
         }
     }

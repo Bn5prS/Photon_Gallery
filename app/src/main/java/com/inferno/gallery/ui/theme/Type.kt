@@ -98,14 +98,14 @@ val TechnicalMinimalistTitle = TextStyle(
 )
 
 /**
- * Timeline date group header style (Google Sans Flex Bold 17.5sp, tracking 0sp).
+ * Timeline date group header style (Google Sans Flex SemiBold 15.5sp, tracking 0.1sp).
  */
 val TimelineDateHeaderStyle = TextStyle(
-    fontFamily = googleSansFlex(weight = 700, width = 100f, opticalSize = 18f, roundness = 100f),
-    fontWeight = FontWeight.Bold,
-    fontSize = 17.5.sp,
-    lineHeight = 22.5.sp,
-    letterSpacing = 0.sp
+    fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 16f, roundness = 100f),
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 15.5.sp,
+    lineHeight = 20.sp,
+    letterSpacing = 0.1.sp
 )
 
 /**

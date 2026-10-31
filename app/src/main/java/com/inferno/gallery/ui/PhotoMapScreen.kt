@@ -78,8 +78,8 @@ private fun formatGroupHeader(dateAddedSeconds: Long): String {
     val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
     
     return when (itemDate) {
-        today -> "Today, ${today.year}"
-        yesterday -> "Yesterday, ${yesterday.year}"
+        today -> "Today"
+        yesterday -> "Yesterday"
         else -> itemDate.format(formatter)
     }
 }

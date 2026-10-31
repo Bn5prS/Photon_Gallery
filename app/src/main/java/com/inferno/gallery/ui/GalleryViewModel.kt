@@ -2861,22 +2861,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     companion object {
         private val headerFormatterWithYear = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
         private val headerCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
-    }
 
-    private fun formatGroupHeader(dateAddedSeconds: Long): String {
-        val timeMs = dateAddedSeconds * 1000L
-        val offsetMs = java.util.TimeZone.getDefault().getOffset(timeMs).toLong()
-        val localDay = (timeMs + offsetMs) / 86400000L
+        fun formatGroupHeader(dateAddedSeconds: Long): String {
+            val timeMs = dateAddedSeconds * 1000L
+            val offsetMs = java.util.TimeZone.getDefault().getOffset(timeMs).toLong()
+            val localDay = (timeMs + offsetMs) / 86400000L
 
-        return headerCache.getOrPut(localDay) {
-            val itemDate = java.time.LocalDate.ofEpochDay(localDay)
-            val today = java.time.LocalDate.now()
-            val yesterday = today.minusDays(1)
+            return headerCache.getOrPut(localDay) {
+                val itemDate = java.time.LocalDate.ofEpochDay(localDay)
+                val today = java.time.LocalDate.now()
+                val yesterday = today.minusDays(1)
 
-            when (itemDate) {
-                today -> "Today, ${today.year}"
-                yesterday -> "Yesterday, ${yesterday.year}"
-                else -> itemDate.format(headerFormatterWithYear)
+                when (itemDate) {
+                    today -> "Today"
+                    yesterday -> "Yesterday"
+                    else -> itemDate.format(headerFormatterWithYear)
+                }
             }
         }
     }
