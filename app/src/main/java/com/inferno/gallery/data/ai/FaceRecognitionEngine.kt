@@ -98,6 +98,7 @@ class FaceRecognitionEngine(private val context: Context) {
 
     @Synchronized
     fun extractEmbedding(aligned112: Bitmap): FloatArray? {
+        if (aligned112.isRecycled) return null
         if (!isLoaded) {
             loadModel()
             if (!isLoaded) return null

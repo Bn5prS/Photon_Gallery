@@ -240,12 +240,16 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     clusteringManager.invalidateCache()
                 } finally {
-                    avatarBitmap.recycle()
+                    if (avatarBitmap !== sampledBitmap && !avatarBitmap.isRecycled) {
+                        avatarBitmap.recycle()
+                    }
                 }
             } catch (e: Exception) {
                 Log.w("PeopleViewModel", "Failed to generate cover photo: ${e.message}")
             } finally {
-                sampledBitmap.recycle()
+                if (!sampledBitmap.isRecycled) {
+                    sampledBitmap.recycle()
+                }
             }
         }
     }

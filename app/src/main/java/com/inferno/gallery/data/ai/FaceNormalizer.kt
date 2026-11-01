@@ -127,16 +127,32 @@ object FaceNormalizer {
         source: Bitmap,
         landmarks: List<FacePoint>
     ): Bitmap? {
+        if (source.isRecycled) return null
         if (landmarks.size < 2) return null
         return try {
             val transform = computeTransform(landmarks)
+            if (transform.a.isNaN() || transform.b.isNaN() || transform.tx.isNaN() || transform.ty.isNaN() ||
+                transform.a.isInfinite() || transform.b.isInfinite() || transform.tx.isInfinite() || transform.ty.isInfinite()
+            ) {
+                return null
+            }
             val matrix = transform.toMatrix()
+            val safeSource = if (source.config == Bitmap.Config.HARDWARE) {
+                source.copy(Bitmap.Config.ARGB_8888, false)
+            } else {
+                source
+            } ?: return null
+            if (safeSource.isRecycled) return null
+
             val aligned = Bitmap.createBitmap(CROP_SIZE, CROP_SIZE, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(aligned)
             val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-            canvas.drawBitmap(source, matrix, paint)
+            canvas.drawBitmap(safeSource, matrix, paint)
+            if (safeSource !== source && !safeSource.isRecycled) {
+                safeSource.recycle()
+            }
             aligned
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }

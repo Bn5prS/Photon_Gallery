@@ -65,7 +65,7 @@ object FaceScanHelper {
 
         val faceCropDir = getFaceCropDir(context)
         val sampledBitmap = decodeSampledBitmap(context, filePath, uri, MAX_THUMBNAIL_DIM)
-        if (sampledBitmap == null || sampledBitmap.width < 24 || sampledBitmap.height < 24) {
+        if (sampledBitmap == null || sampledBitmap.isRecycled || sampledBitmap.width < 24 || sampledBitmap.height < 24) {
             faceDao.insertFaceStatus(
                 MediaFaceStatusEntity(
                     mediaId = mediaId,
@@ -73,7 +73,9 @@ object FaceScanHelper {
                     scannedAt = System.currentTimeMillis()
                 )
             )
-            sampledBitmap?.recycle()
+            if (sampledBitmap != null && !sampledBitmap.isRecycled) {
+                sampledBitmap.recycle()
+            }
             if (ownDetector) {
                 runCatching { activeDetector.close() }
             }
@@ -86,6 +88,7 @@ object FaceScanHelper {
             var savedFaceCount = 0
 
             for ((faceIndex, face) in detectedFaces.withIndex()) {
+                if (sampledBitmap.isRecycled) break
                 val box = face.boundingBox
                 if (box.width() < 20 || box.height() < 20) continue
                 // Relaxed angle thresholds for natural candid shots (yaw 60°, pitch 48°)
@@ -109,7 +112,7 @@ object FaceScanHelper {
                 } else {
                     cropFaceBoundingBox(sampledBitmap, box)
                 }
-                if (aligned112 == null) continue
+                if (aligned112 == null || aligned112.isRecycled) continue
 
                 try {
                     val embedding = engine.extractEmbedding(aligned112) ?: continue
@@ -121,7 +124,9 @@ object FaceScanHelper {
                             avatarBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 85, out)
                         }
                     } finally {
-                        avatarBitmap.recycle()
+                        if (avatarBitmap !== sampledBitmap && !avatarBitmap.isRecycled) {
+                            avatarBitmap.recycle()
+                        }
                     }
 
                     val normBboxLeft = (box.left.toFloat() / sampledBitmap.width).coerceIn(0f, 1f)
@@ -144,7 +149,9 @@ object FaceScanHelper {
                     )
                     savedFaceCount++
                 } finally {
-                    aligned112.recycle()
+                    if (aligned112 !== sampledBitmap && !aligned112.isRecycled) {
+                        aligned112.recycle()
+                    }
                 }
             }
 
@@ -167,7 +174,9 @@ object FaceScanHelper {
             )
             0
         } finally {
-            sampledBitmap.recycle()
+            if (!sampledBitmap.isRecycled) {
+                sampledBitmap.recycle()
+            }
             if (ownDetector) {
                 runCatching { activeDetector.close() }
             }
@@ -175,6 +184,7 @@ object FaceScanHelper {
     }
 
     fun cropFaceBoundingBox(source: Bitmap, box: Rect): Bitmap? {
+        if (source.isRecycled) return null
         return try {
             val marginX = (box.width() * 0.15f).toInt()
             val marginY = (box.height() * 0.15f).toInt()
@@ -187,14 +197,23 @@ object FaceScanHelper {
             if (cropWidth < 20 || cropHeight < 20) return null
             val cropped = Bitmap.createBitmap(source, left, top, cropWidth, cropHeight)
             val scaled = Bitmap.createScaledBitmap(cropped, FaceNormalizer.CROP_SIZE, FaceNormalizer.CROP_SIZE, true)
-            if (scaled != cropped) cropped.recycle()
-            scaled
+            if (scaled !== cropped && cropped !== source && !cropped.isRecycled) {
+                cropped.recycle()
+            }
+            if (scaled === source) {
+                scaled.copy(Bitmap.Config.ARGB_8888, false)
+            } else {
+                scaled
+            }
         } catch (_: Exception) {
             null
         }
     }
 
     fun extractNaturalPortraitCrop(bitmap: Bitmap, box: Rect, targetSize: Int = 160): Bitmap {
+        if (bitmap.isRecycled) {
+            return Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+        }
         return try {
             val centerX = box.centerX()
             val centerY = box.centerY()
@@ -208,15 +227,29 @@ object FaceScanHelper {
             val width = right - left
             val height = bottom - top
             if (width <= 0 || height <= 0) {
-                Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
+                Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true).let {
+                    if (it === bitmap) it.copy(Bitmap.Config.ARGB_8888, false) else it
+                }
             } else {
                 val cropped = Bitmap.createBitmap(bitmap, left, top, width, height)
                 val scaled = Bitmap.createScaledBitmap(cropped, targetSize, targetSize, true)
-                if (scaled != cropped) cropped.recycle()
-                scaled
+                if (scaled !== cropped && cropped !== bitmap && !cropped.isRecycled) {
+                    cropped.recycle()
+                }
+                if (scaled === bitmap) {
+                    scaled.copy(Bitmap.Config.ARGB_8888, false)
+                } else {
+                    scaled
+                }
             }
         } catch (_: Exception) {
-            Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
+            if (!bitmap.isRecycled) {
+                Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true).let {
+                    if (it === bitmap) it.copy(Bitmap.Config.ARGB_8888, false) else it
+                }
+            } else {
+                Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+            }
         }
     }
 
@@ -273,7 +306,7 @@ object FaceScanHelper {
 
         return try {
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            if (rotated != bitmap) bitmap.recycle()
+            if (rotated !== bitmap && !bitmap.isRecycled) bitmap.recycle()
             rotated
         } catch (_: Exception) {
             bitmap
