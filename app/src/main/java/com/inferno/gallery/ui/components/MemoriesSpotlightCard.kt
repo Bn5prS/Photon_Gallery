@@ -162,159 +162,91 @@ fun MemoriesSpotlightCard(
                                 )
                         )
 
-                        // Top Row: Category Pill & Dismiss Button
+                        // Top Row: Minimal story bars (if multi) & Dismiss Button
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.M),
+                                .padding(start = SpacingTokens.M, end = SpacingTokens.S, top = SpacingTokens.S),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Flashback chip
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                tonalElevation = 1.dp
-                            ) {
+                            if (memoryGroups.size > 1) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = SpacingTokens.S),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    val badgeText = when {
-                                        group.yearsAgo == 0 -> "HIGHLIGHTS"
-                                        group.isExactDay -> "ON THIS DAY"
-                                        else -> "FLASHBACK"
-                                    }
-                                    Text(
-                                        text = badgeText,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.8.sp
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                if (memoryGroups.size > 1) {
-                                    Surface(
-                                        shape = ShapeFull,
-                                        color = Color.Black.copy(alpha = 0.45f),
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = "${page + 1}/${memoryGroups.size}",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    memoryGroups.forEachIndexed { index, _ ->
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(3.dp)
+                                                .clip(ShapeFull)
+                                                .background(
+                                                    if (index == page) Color.White
+                                                    else if (index < page) Color.White.copy(alpha = 0.65f)
+                                                    else Color.White.copy(alpha = 0.25f)
+                                                )
                                         )
                                     }
                                 }
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
 
-                                // Dismiss Button (collapses into ambient timeline banner)
-                                IconButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onDismiss()
-                                    },
-                                    modifier = Modifier.size(48.dp)
+                            // Dismiss Button (collapses into ambient timeline banner)
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    contentColor = Color.White,
+                                    modifier = Modifier.size(26.dp)
                                 ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color.Black.copy(alpha = 0.45f),
-                                        contentColor = Color.White,
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                                contentDescription = "Hide memories to banner",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                            contentDescription = "Hide memories to banner",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
                                     }
                                 }
                             }
                         }
 
-                        // Bottom Row: Title, Date, and Play Button
-                        Row(
+                        // Bottom Row: Clean Title & Date (entire card is clickable)
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .align(Alignment.BottomStart)
                                 .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.M),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(
-                                    text = group.title,
-                                    style = MaterialTheme.typography.headlineSmall.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "${group.formattedDate} • ${group.items.size} moments",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                            // Action pill
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                                shadowElevation = 2.dp,
-                                modifier = Modifier
-                                    .pressScale(pressedScale = 0.94f)
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onOpenMemory(group)
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = "View",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-                            }
+                            Text(
+                                text = group.title,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = group.formattedDate,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = Color.White.copy(alpha = 0.85f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -323,9 +255,9 @@ fun MemoriesSpotlightCard(
             // Ambient Collapsed Memories Banner Pill
             val firstGroup = memoryGroups.first()
             val bannerText = if (memoryGroups.size > 1) {
-                "${firstGroup.title} +${memoryGroups.size - 1} • ${memoryGroups.sumOf { it.items.size }} moments"
+                "${firstGroup.title} (+${memoryGroups.size - 1})"
             } else {
-                "${firstGroup.title} • ${firstGroup.items.size} moments"
+                firstGroup.title
             }
 
             Surface(
