@@ -32,11 +32,11 @@
 
 | Home | Albums | Viewer | Video |
 |:---:|:---:|:---:|:---:|
-| <img src="screenshots/01-home-screen.jpg?v=2" width="180" /> | <img src="screenshots/02-album-screen.jpg" width="180" /> | <img src="screenshots/03-image-viewer.jpg" width="180" /> | <img src="screenshots/04-video-player.jpg" width="180" /> |
+| <img src="screenshots/01-home-screen.jpg?v=4" width="180" /> | <img src="screenshots/02-album-screen.jpg" width="180" /> | <img src="screenshots/03-image-viewer.jpg" width="180" /> | <img src="screenshots/04-video-player.jpg" width="180" /> |
 
-| Smart Search | Collage | Settings |
-|:---:|:---:|:---:|
-| <img src="screenshots/06-search.jpg?v=2" width="180" /> | <img src="screenshots/07-collage.jpg?v=2" width="180" /> | <img src="screenshots/08-settings.jpg?v=3" width="180" /> |
+| Multi-Select | Photo Editor | Stitch Tool | Settings |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/05-multi-select.jpg?v=4" width="180" /> | <img src="screenshots/06-photo-editor.jpg?v=4" width="180" /> | <img src="screenshots/07-stitch-tool.jpg?v=4" width="180" /> | <img src="screenshots/08-settings.jpg?v=4" width="180" /> |
 
 ---
 
