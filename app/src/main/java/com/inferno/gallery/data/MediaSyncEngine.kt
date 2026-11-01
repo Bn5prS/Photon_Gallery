@@ -19,9 +19,9 @@ import com.inferno.gallery.workers.OcrIndexWorker
 import com.inferno.gallery.workers.ReverseGeocodeWorker
 import com.inferno.gallery.workers.SmartSearchIndexWorker
 import java.io.File
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -102,44 +102,24 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     }
                 }
 
-                // ── 2. Add common media directories on manual refresh or when dead paths detected ──
-                if (forceFullSync || deadPaths.isNotEmpty()) {
-                    val standardDirs = listOf(
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-                    )
-                    for (stdDir in standardDirs) {
-                        if (stdDir != null && stdDir.exists() && stdDir.isDirectory) {
-                            foldersToCheck.add(stdDir)
-                            try {
-                                stdDir.listFiles()?.forEach { sub ->
-                                    if (sub.isDirectory && !sub.name.startsWith(".")) {
-                                        foldersToCheck.add(sub)
-                                    }
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    }
-                }
-
-                // ── 3. Find newly created or renamed media files on disk not yet indexed ──
+                // ── 2. Check for renamed/modified files in affected folders only ──
                 val newOrModifiedPaths = mutableListOf<String>()
-                for (folder in foldersToCheck) {
-                    if (!folder.exists() || !folder.isDirectory) continue
-                    val files = folder.listFiles() ?: continue
-                    for (file in files) {
-                        if (!file.isFile || file.name.startsWith(".")) continue
-                        if (!isMediaFile(file.name)) continue
-                        val path = file.absolutePath
-                        val known = dbPathToItem[path]
-                        if (known == null) {
-                            newOrModifiedPaths.add(path)
-                        } else {
-                            val diskModifiedSec = file.lastModified() / 1000L
-                            if (diskModifiedSec > known.dateModified + 2L) {
+                if (foldersToCheck.isNotEmpty()) {
+                    for (folder in foldersToCheck) {
+                        if (!folder.exists() || !folder.isDirectory) continue
+                        val files = folder.listFiles() ?: continue
+                        for (file in files) {
+                            if (!file.isFile || file.name.startsWith(".")) continue
+                            if (!isMediaFile(file.name)) continue
+                            val path = file.absolutePath
+                            val known = dbPathToItem[path]
+                            if (known == null) {
                                 newOrModifiedPaths.add(path)
+                            } else {
+                                val diskModifiedSec = file.lastModified() / 1000L
+                                if (diskModifiedSec > known.dateModified + 2L) {
+                                    newOrModifiedPaths.add(path)
+                                }
                             }
                         }
                     }
@@ -345,21 +325,24 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     geocodeRequest
                 )
 
-                try {
-                    val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
-                    if (sphereCandidates.isNotEmpty()) {
-                        val sphereEntities = sphereCandidates.map { candidate ->
-                            val isSphere = PhotoSphereHelper.isPhotoSphere(
-                                context = appContext,
-                                filePath = candidate.filePath,
-                                uriString = candidate.uriString
-                            )
-                            PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                // Background photo sphere classification so refresh is instantaneous
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
+                        if (sphereCandidates.isNotEmpty()) {
+                            val sphereEntities = sphereCandidates.map { candidate ->
+                                val isSphere = PhotoSphereHelper.isPhotoSphere(
+                                    context = appContext,
+                                    filePath = candidate.filePath,
+                                    uriString = candidate.uriString
+                                )
+                                PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                            }
+                            database.mediaDao().insertPhotoSpheres(sphereEntities)
                         }
-                        database.mediaDao().insertPhotoSpheres(sphereEntities)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Photo sphere check failed", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Photo sphere check failed", e)
                 }
 
                 val currentGen = try {
@@ -382,20 +365,19 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
         }
     }
 
-    private suspend fun scanFilesAsync(paths: List<String>) = withContext(Dispatchers.IO) {
-        if (paths.isEmpty()) return@withContext
-        for (chunk in paths.chunked(200)) {
-            val latch = CountDownLatch(chunk.size)
-            MediaScannerConnection.scanFile(
-                appContext,
-                chunk.toTypedArray(),
-                null
-            ) { _, _ ->
-                latch.countDown()
+    private fun scanFilesAsync(paths: List<String>) {
+        if (paths.isEmpty()) return
+        try {
+            for (chunk in paths.chunked(200)) {
+                MediaScannerConnection.scanFile(
+                    appContext,
+                    chunk.toTypedArray(),
+                    null,
+                    null
+                )
             }
-            try {
-                latch.await(3, TimeUnit.SECONDS)
-            } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Error triggering MediaScanner", e)
         }
     }
 }
