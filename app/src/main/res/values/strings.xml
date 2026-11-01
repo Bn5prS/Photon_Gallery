@@ -87,8 +87,10 @@
 
     <!-- General Settings -->
     <string name="default_gallery">Default Gallery App</string>
-    <string name="default_gallery_desc">Set Photon Gallery as the primary photo and video viewer</string>
+    <string name="default_gallery_desc">Manage default apps in system settings</string>
     <string name="set_as_default">Set as Default</string>
+    <string name="open_supported_links">Open Supported Links</string>
+    <string name="open_supported_links_desc">Configure Android to open supported media links in Photon Gallery</string>
     <string name="confirm_delete">Confirm Deletion</string>
     <string name="confirm_delete_desc">Ask before moving items to the recycle bin</string>
     <string name="auto_clean_trash">Auto-clean Recycle Bin</string>

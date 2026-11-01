@@ -919,7 +919,7 @@ fun SettingsScreen(
 
                         "General" -> {
                             SettingsGroupCard(
-                                title = "Default App",
+                                title = "Default App & Links",
                                 items = listOf(
                                     {
                                         ClickableSettingItem(
@@ -928,6 +928,16 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
                                             onClick = {
                                                 openDefaultGallerySettings(context)
+                                            }
+                                        )
+                                    },
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.open_supported_links),
+                                            subtitle = stringResource(R.string.open_supported_links_desc),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                            onClick = {
+                                                openSupportedLinksSettings(context)
                                             }
                                         )
                                     }
@@ -2951,6 +2961,7 @@ private fun safeStartActivity(context: android.content.Context, intent: Intent):
 }
 
 fun openDefaultGallerySettings(context: android.content.Context) {
+    // 1. Try OEM / Platform RoleManager if available
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = context.getSystemService(RoleManager::class.java)
         val roleGallery = "android.app.role.GALLERY"
@@ -2962,6 +2973,20 @@ fun openDefaultGallerySettings(context: android.content.Context) {
         }
     }
 
+    // 2. Open System Manage Default Apps Settings (where Xiaomi, Samsung, and AOSP manage default apps)
+    val defaultAppsIntent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+    if (safeStartActivity(context, defaultAppsIntent)) return
+
+    // 3. Fallback to Application Details Settings
+    val appDetailsIntent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${context.packageName}")
+    )
+    safeStartActivity(context, appDetailsIntent)
+}
+
+fun openSupportedLinksSettings(context: android.content.Context) {
+    // Android 12+ (API 31+) Open By Default settings for supported web links and verified domains
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val intent = Intent(
             Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
@@ -2969,9 +2994,6 @@ fun openDefaultGallerySettings(context: android.content.Context) {
         )
         if (safeStartActivity(context, intent)) return
     }
-
-    val defaultAppsIntent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-    if (safeStartActivity(context, defaultAppsIntent)) return
 
     val appDetailsIntent = Intent(
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
