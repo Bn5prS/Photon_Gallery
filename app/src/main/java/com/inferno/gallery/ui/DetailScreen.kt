@@ -219,8 +219,60 @@ fun DetailScreen(
     val initialDetailItem by viewModel.initialDetailItem.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
 
-    val galleryItems = remember(rawGalleryItems, initialDetailItem) {
-        if (rawGalleryItems.isNotEmpty()) {
+    val externalItem = remember(mediaId) {
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://") || mediaId.startsWith("http://") || mediaId.startsWith("https://")) {
+            val parsedUri = android.net.Uri.parse(mediaId)
+            val isVid = try {
+                val mime = context.contentResolver.getType(parsedUri)
+                mime?.startsWith("video/") == true ||
+                    parsedUri.lastPathSegment?.lowercase()?.let { 
+                        it.endsWith(".mp4") || it.endsWith(".mkv") || it.endsWith(".mov") || it.endsWith(".webm") || it.endsWith(".avi") || it.endsWith(".3gp")
+                    } == true
+            } catch (_: Exception) {
+                false
+            }
+            val fileName = try {
+                var name: String? = null
+                if (parsedUri.scheme == "content") {
+                    context.contentResolver.query(parsedUri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (nameIdx >= 0) name = cursor.getString(nameIdx)
+                        }
+                    }
+                }
+                name ?: parsedUri.lastPathSegment ?: "Media"
+            } catch (_: Exception) {
+                parsedUri.lastPathSegment ?: "Media"
+            }
+            GalleryItem(
+                id = mediaId,
+                uri = parsedUri,
+                bucketName = "External",
+                dateAdded = System.currentTimeMillis() / 1000L,
+                size = 0L,
+                name = fileName,
+                dateModified = System.currentTimeMillis() / 1000L,
+                path = if (parsedUri.scheme == "file") (parsedUri.path ?: "") else "",
+                isVideo = isVid,
+                localExists = true
+            )
+        } else {
+            null
+        }
+    }
+
+    val galleryItems = remember(rawGalleryItems, initialDetailItem, externalItem) {
+        if (externalItem != null) {
+            val existingIndex = rawGalleryItems.indexOfFirst {
+                it.id == mediaId || it.uri.toString() == mediaId || it.path == mediaId || it.uri == externalItem.uri
+            }
+            if (existingIndex >= 0) {
+                rawGalleryItems
+            } else {
+                listOf(externalItem)
+            }
+        } else if (rawGalleryItems.isNotEmpty()) {
             rawGalleryItems
         } else if (initialDetailItem != null) {
             listOf(initialDetailItem!!)
@@ -274,7 +326,7 @@ fun DetailScreen(
 
     val initialPage = remember(mediaId, galleryItems) {
         val index = galleryItems.indexOfFirst { 
-            it.id == mediaId || it.uri.toString() == mediaId || it.path == mediaId 
+            it.id == mediaId || it.uri.toString() == mediaId || it.path == mediaId || (externalItem != null && it.uri == externalItem.uri)
         }
         if (index >= 0) index else 0
     }
@@ -283,6 +335,17 @@ fun DetailScreen(
         initialPage = initialPage,
         pageCount = { galleryItems.size }
     )
+
+    LaunchedEffect(galleryItems) {
+        if (externalItem != null && galleryItems.size > 1) {
+            val targetIndex = galleryItems.indexOfFirst {
+                it.id == mediaId || it.uri.toString() == mediaId || it.path == mediaId || it.uri == externalItem.uri
+            }
+            if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
+                pagerState.scrollToPage(targetIndex)
+            }
+        }
+    }
 
     LaunchedEffect(pagerState.currentPage) {
         val imageLoader = context.imageLoader

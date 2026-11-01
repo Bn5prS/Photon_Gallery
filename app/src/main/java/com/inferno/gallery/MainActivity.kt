@@ -204,11 +204,25 @@ class MainActivity : FragmentActivity() {
 
     private fun handleViewMediaIntent(intent: Intent?) {
         val action = intent?.action
+        val type = intent?.type
+        val uri = intent?.data
+
+        // If intent is opening a media collection directory (e.g. from camera app tapping gallery shortcut,
+        // or system gallery directory intent), we stay on the gallery overview grid (Photos tab).
+        if (type?.startsWith("vnd.android.cursor.dir") == true ||
+            uri == android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI ||
+            uri == android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI ||
+            uri?.toString() == "content://media/external/images/media" ||
+            uri?.toString() == "content://media/external/video/media"
+        ) {
+            _viewIntentUri.value = null
+            return
+        }
+
         if (action == Intent.ACTION_VIEW ||
             action == "com.android.camera.action.REVIEW" ||
             action == android.provider.MediaStore.ACTION_REVIEW
         ) {
-            val uri = intent.data
             if (uri != null) {
                 _viewIntentUri.value = uri
             }

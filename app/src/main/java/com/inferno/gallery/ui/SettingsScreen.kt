@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.app.role.RoleManager
+import androidx.compose.ui.res.stringResource
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -916,6 +918,22 @@ fun SettingsScreen(
                         }
 
                         "General" -> {
+                            SettingsGroupCard(
+                                title = "Default App",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.default_gallery),
+                                            subtitle = stringResource(R.string.default_gallery_desc),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                            onClick = {
+                                                openDefaultGallerySettings(context)
+                                            }
+                                        )
+                                    }
+                                )
+                            )
+
                             SettingsGroupCard(
                                 title = "Albums & Library",
                                 items = listOf(
@@ -2920,4 +2938,45 @@ private fun getSampleColor(seed: Int): Color {
     }
 }
 
+private fun safeStartActivity(context: android.content.Context, intent: Intent): Boolean {
+    return try {
+        if (context !is android.app.Activity) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
+
+fun openDefaultGallerySettings(context: android.content.Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        val roleGallery = "android.app.role.GALLERY"
+        if (roleManager != null && roleManager.isRoleAvailable(roleGallery)) {
+            try {
+                val intent = roleManager.createRequestRoleIntent(roleGallery)
+                if (safeStartActivity(context, intent)) return
+            } catch (_: Exception) {}
+        }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val intent = Intent(
+            Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
+            Uri.parse("package:${context.packageName}")
+        )
+        if (safeStartActivity(context, intent)) return
+    }
+
+    val defaultAppsIntent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+    if (safeStartActivity(context, defaultAppsIntent)) return
+
+    val appDetailsIntent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${context.packageName}")
+    )
+    safeStartActivity(context, appDetailsIntent)
+}
 

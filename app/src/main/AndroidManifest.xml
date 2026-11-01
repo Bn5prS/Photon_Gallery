@@ -55,12 +55,34 @@
             android:label="@string/app_name"
             android:configChanges="uiMode|screenSize|orientation"
             android:theme="@style/Theme.App.Starting">
-            <!-- Qualifies Photon Gallery for Launcher and RoleManager.ROLE_GALLERY (Default Gallery App) -->
+            <!-- Launcher qualification -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Default Gallery App qualification for system / RoleManager.ROLE_GALLERY -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.APP_GALLERY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Gallery directory viewer (e.g. camera shortcut, default gallery picker) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.dir/image" />
+                <data android:mimeType="vnd.android.cursor.dir/video" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="vnd.android.cursor.dir/image" />
+                <data android:mimeType="vnd.android.cursor.dir/video" />
             </intent-filter>
 
             <!-- Standard image and video viewer from other apps / file managers -->
@@ -80,6 +102,67 @@
                 <data android:scheme="file" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <!-- Open supported web links for direct media -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <!-- Direct media file extension path patterns (Web links) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.jpg" />
+                <data android:pathPattern=".*\\.jpeg" />
+                <data android:pathPattern=".*\\.png" />
+                <data android:pathPattern=".*\\.webp" />
+                <data android:pathPattern=".*\\.gif" />
+                <data android:pathPattern=".*\\.bmp" />
+                <data android:pathPattern=".*\\.heic" />
+                <data android:pathPattern=".*\\.heif" />
+                <data android:pathPattern=".*\\.dng" />
+                <data android:pathPattern=".*\\.mp4" />
+                <data android:pathPattern=".*\\.mkv" />
+                <data android:pathPattern=".*\\.mov" />
+                <data android:pathPattern=".*\\.webm" />
+                <data android:pathPattern=".*\\.avi" />
+                <data android:pathPattern=".*\\.3gp" />
+            </intent-filter>
+
+            <!-- Direct media file extension path patterns (Content and File schemes) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.jpg" />
+                <data android:pathPattern=".*\\.jpeg" />
+                <data android:pathPattern=".*\\.png" />
+                <data android:pathPattern=".*\\.webp" />
+                <data android:pathPattern=".*\\.gif" />
+                <data android:pathPattern=".*\\.bmp" />
+                <data android:pathPattern=".*\\.heic" />
+                <data android:pathPattern=".*\\.heif" />
+                <data android:pathPattern=".*\\.dng" />
+                <data android:pathPattern=".*\\.mp4" />
+                <data android:pathPattern=".*\\.mkv" />
+                <data android:pathPattern=".*\\.mov" />
+                <data android:pathPattern=".*\\.webm" />
+                <data android:pathPattern=".*\\.avi" />
+                <data android:pathPattern=".*\\.3gp" />
             </intent-filter>
 
             <!-- Camera app photo review intents (AOSP Camera, LineageOS Camera, Google Camera, Moto Camera, etc.) -->
