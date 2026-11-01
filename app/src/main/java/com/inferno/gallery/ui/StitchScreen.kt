@@ -24,7 +24,21 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -167,7 +181,9 @@ fun StitchScreen(
                         items = stitchItems,
                         orientation = orientation,
                         spacingDp = spacingDp,
-                        bgColor = bgColor
+                        bgColor = bgColor,
+                        alignment = alignment,
+                        scaleMode = scaleMode
                     )
                 }
             }
@@ -368,57 +384,394 @@ private fun StitchPreview(
     items: List<StitchItem>,
     orientation: StitchOrientation,
     spacingDp: Float,
-    bgColor: Color
+    bgColor: Color,
+    alignment: StitchAlignment = StitchAlignment.CENTER,
+    scaleMode: StitchScaleMode = StitchScaleMode.FILL
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
 
-    Box(
+    // Decode aspect ratios for instant, shift-free layout measurements
+    val itemAspectRatios = remember { mutableStateMapOf<Uri, Float>() }
+    LaunchedEffect(items) {
+        withContext(Dispatchers.IO) {
+            items.forEach { item ->
+                if (!itemAspectRatios.containsKey(item.uri)) {
+                    val ratio = try {
+                        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        context.contentResolver.openInputStream(item.uri)?.use { stream ->
+                            BitmapFactory.decodeStream(stream, null, opts)
+                        }
+                        if (opts.outWidth > 0 && opts.outHeight > 0) {
+                            opts.outWidth.toFloat() / opts.outHeight.toFloat()
+                        } else 1f
+                    } catch (e: Exception) {
+                        1f
+                    }
+                    itemAspectRatios[item.uri] = ratio
+                }
+            }
+        }
+    }
+
+    var contentWidthPx by remember { mutableFloatStateOf(0f) }
+    var contentHeightPx by remember { mutableFloatStateOf(0f) }
+    var viewportWidthPx by remember { mutableFloatStateOf(0f) }
+    var viewportHeightPx by remember { mutableFloatStateOf(0f) }
+
+    // Padding around the stitched canvas when fitted to screen
+    val fitMarginPx = with(density) { 32.dp.toPx() }
+    val availW = (viewportWidthPx - fitMarginPx).coerceAtLeast(10f)
+    val availH = (viewportHeightPx - fitMarginPx).coerceAtLeast(10f)
+
+    val fitScale = remember(contentWidthPx, contentHeightPx, availW, availH) {
+        if (contentWidthPx > 0f && contentHeightPx > 0f) {
+            minOf(availW / contentWidthPx, availH / contentHeightPx, 1.0f)
+        } else 1.0f
+    }
+
+    val minAllowedScale = minOf(fitScale * 0.4f, 0.05f)
+    val maxAllowedScale = 5.0f
+
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var hasInitializedFit by remember { mutableStateOf(false) }
+
+    val animScope = rememberCoroutineScope()
+    var animJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    fun animateTo(targetScale: Float, targetX: Float = 0f, targetY: Float = 0f) {
+        animJob?.cancel()
+        animJob = animScope.launch {
+            launch {
+                androidx.compose.animation.core.animate(
+                    initialValue = scale,
+                    targetValue = targetScale,
+                    animationSpec = MotionTokens.gentleSpring()
+                ) { v, _ -> scale = v }
+            }
+            launch {
+                androidx.compose.animation.core.animate(
+                    initialValue = offsetX,
+                    targetValue = targetX,
+                    animationSpec = MotionTokens.gentleSpring()
+                ) { v, _ -> offsetX = v }
+            }
+            launch {
+                androidx.compose.animation.core.animate(
+                    initialValue = offsetY,
+                    targetValue = targetY,
+                    animationSpec = MotionTokens.gentleSpring()
+                ) { v, _ -> offsetY = v }
+            }
+        }
+    }
+
+    // Auto-fit initial view or adapt when orientation / items change while fitted
+    LaunchedEffect(fitScale, orientation, items.size) {
+        if (fitScale > 0.001f && fitScale < 1.0f) {
+            if (!hasInitializedFit || kotlin.math.abs(scale - fitScale) < 0.05f) {
+                scale = fitScale
+                offsetX = 0f
+                offsetY = 0f
+                hasInitializedFit = true
+            }
+        } else if (!hasInitializedFit && fitScale >= 1.0f) {
+            hasInitializedFit = true
+        }
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(bgColor),
+            .clipToBounds()
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .pointerInput(items, orientation, fitScale) {
+                detectTapGestures(
+                    onDoubleTap = { centroid ->
+                        val isNearFit = kotlin.math.abs(scale - fitScale) < 0.05f
+                        if (isNearFit || scale < 0.95f) {
+                            // Zoom to 1.0f focused around centroid
+                            val targetScale = 1.0f
+                            val focalX = centroid.x - viewportWidthPx / 2f
+                            val focalY = centroid.y - viewportHeightPx / 2f
+                            val effectiveZoom = if (scale > 0f) targetScale / scale else 1f
+                            val targetX = (offsetX - focalX) * effectiveZoom + focalX
+                            val targetY = (offsetY - focalY) * effectiveZoom + focalY
+
+                            val scaledW = contentWidthPx * targetScale
+                            val scaledH = contentHeightPx * targetScale
+                            val maxX = maxOf(0f, (scaledW - viewportWidthPx) / 2f)
+                            val maxY = maxOf(0f, (scaledH - viewportHeightPx) / 2f)
+
+                            val clampedX = if (scaledW <= viewportWidthPx) 0f else targetX.coerceIn(-maxX, maxX)
+                            val clampedY = if (scaledH <= viewportHeightPx) 0f else targetY.coerceIn(-maxY, maxY)
+                            animateTo(targetScale, clampedX, clampedY)
+                        } else {
+                            // Zoom out to full fit
+                            animateTo(fitScale, 0f, 0f)
+                        }
+                    }
+                )
+            }
+            .pointerInput(items, orientation, fitScale, contentWidthPx, contentHeightPx) {
+                awaitEachGesture {
+                    val firstDown = awaitFirstDown(requireUnconsumed = false)
+                    var accumulatedZoom = 1f
+                    var accumulatedPan = Offset.Zero
+                    val touchSlop = viewConfiguration.touchSlop
+                    var pastTouchSlop = false
+                    val velocityTracker = VelocityTracker()
+                    var pointerCount = 0
+
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        pointerCount = maxOf(pointerCount, pressed.size)
+
+                        if (pressed.size == 1) {
+                            velocityTracker.addPointerInputChange(pressed[0])
+                        }
+
+                        val zoomChange = event.calculateZoom()
+                        val panChange = event.calculatePan()
+
+                        if (!pastTouchSlop) {
+                            accumulatedZoom *= zoomChange
+                            accumulatedPan += panChange
+                            val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                            val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
+                            val panMotion = accumulatedPan.getDistance()
+                            if (zoomMotion > touchSlop || panMotion > touchSlop || pressed.size >= 2) {
+                                pastTouchSlop = true
+                            }
+                        }
+
+                        if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero || pressed.size >= 2)) {
+                            animJob?.cancel()
+                            val centroid = event.calculateCentroid(useCurrent = false)
+                            val oldScale = scale
+                            val newScale = (oldScale * zoomChange).coerceIn(minAllowedScale, maxAllowedScale)
+                            val effectiveZoom = if (oldScale > 0f) newScale / oldScale else 1f
+
+                            val focalX = centroid.x - viewportWidthPx / 2f
+                            val focalY = centroid.y - viewportHeightPx / 2f
+
+                            val newX = (offsetX - focalX) * effectiveZoom + focalX + panChange.x
+                            val newY = (offsetY - focalY) * effectiveZoom + focalY + panChange.y
+
+                            val scaledW = contentWidthPx * newScale
+                            val scaledH = contentHeightPx * newScale
+                            val maxX = maxOf(0f, (scaledW - viewportWidthPx) / 2f)
+                            val maxY = maxOf(0f, (scaledH - viewportHeightPx) / 2f)
+
+                            val rubberX = if (scaledW <= viewportWidthPx) 0f else newX.coerceIn(-maxX - 80f, maxX + 80f)
+                            val rubberY = if (scaledH <= viewportHeightPx) 0f else newY.coerceIn(-maxY - 80f, maxY + 80f)
+
+                            scale = newScale
+                            offsetX = rubberX
+                            offsetY = rubberY
+
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+
+                    // Gesture ended: snap back rubber-band or fling
+                    if (scale < fitScale * 0.98f) {
+                        animateTo(fitScale, 0f, 0f)
+                    } else if (scale > maxAllowedScale) {
+                        animateTo(maxAllowedScale, offsetX, offsetY)
+                    } else {
+                        val scaledW = contentWidthPx * scale
+                        val scaledH = contentHeightPx * scale
+                        val maxX = maxOf(0f, (scaledW - viewportWidthPx) / 2f)
+                        val maxY = maxOf(0f, (scaledH - viewportHeightPx) / 2f)
+
+                        if (pointerCount == 1 && (scaledW > viewportWidthPx || scaledH > viewportHeightPx)) {
+                            val velocity = velocityTracker.calculateVelocity()
+                            val flingFactor = 0.25f
+                            val targetFlingX = (offsetX + velocity.x * flingFactor).coerceIn(-maxX, maxX)
+                            val targetFlingY = (offsetY + velocity.y * flingFactor).coerceIn(-maxY, maxY)
+                            animateTo(scale, targetFlingX, targetFlingY)
+                        } else {
+                            val clampedX = if (scaledW <= viewportWidthPx) 0f else offsetX.coerceIn(-maxX, maxX)
+                            val clampedY = if (scaledH <= viewportHeightPx) 0f else offsetY.coerceIn(-maxY, maxY)
+                            if (clampedX != offsetX || clampedY != offsetY) {
+                                animateTo(scale, clampedX, clampedY)
+                            }
+                        }
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
+        viewportWidthPx = with(density) { maxWidth.toPx() }
+        viewportHeightPx = with(density) { maxHeight.toPx() }
+
+        // ── Canvas Artboard ──────────────────────────────────────────────────
         if (orientation == StitchOrientation.VERTICAL) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(spacingDp.dp)
-            ) {
-                items.forEach { item ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(item.uri)
-                            .size(900, 1800)
-                            .memoryCachePolicy(CachePolicy.ENABLED)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        modifier = Modifier.fillMaxWidth()
+                    .align(Alignment.Center)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    }
+                    .width(maxWidth)
+                    .wrapContentHeight(unbounded = true)
+                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(2.dp))
+                    .border(
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                        shape = RoundedCornerShape(2.dp)
                     )
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(bgColor)
+                    .onSizeChanged {
+                        if (it.width > 0) contentWidthPx = it.width.toFloat()
+                        if (it.height > 0) contentHeightPx = it.height.toFloat()
+                    }
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(spacingDp.dp),
+                    horizontalAlignment = when (alignment) {
+                        StitchAlignment.START -> Alignment.Start
+                        StitchAlignment.CENTER -> Alignment.CenterHorizontally
+                        StitchAlignment.END -> Alignment.End
+                    }
+                ) {
+                    items.forEach { item ->
+                        val ratio = itemAspectRatios[item.uri] ?: 1f
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(item.uri)
+                                .size(1080, 2400)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            onSuccess = { state ->
+                                val w = state.painter.intrinsicSize.width
+                                val h = state.painter.intrinsicSize.height
+                                if (w > 0f && h > 0f) {
+                                    itemAspectRatios[item.uri] = w / h
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(ratio)
+                        )
+                    }
                 }
             }
         } else {
-            Row(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(spacingDp.dp)
-            ) {
-                items.forEach { item ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(item.uri)
-                            .size(1800, 900)
-                            .memoryCachePolicy(CachePolicy.ENABLED)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillHeight,
-                        modifier = Modifier.fillMaxHeight()
+                    .align(Alignment.Center)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    }
+                    .height(maxHeight)
+                    .wrapContentWidth(unbounded = true)
+                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(2.dp))
+                    .border(
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                        shape = RoundedCornerShape(2.dp)
                     )
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(bgColor)
+                    .onSizeChanged {
+                        if (it.width > 0) contentWidthPx = it.width.toFloat()
+                        if (it.height > 0) contentHeightPx = it.height.toFloat()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxHeight(),
+                    horizontalArrangement = Arrangement.spacedBy(spacingDp.dp),
+                    verticalAlignment = when (alignment) {
+                        StitchAlignment.START -> Alignment.Top
+                        StitchAlignment.CENTER -> Alignment.CenterVertically
+                        StitchAlignment.END -> Alignment.Bottom
+                    }
+                ) {
+                    items.forEach { item ->
+                        val ratio = itemAspectRatios[item.uri] ?: 1f
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(item.uri)
+                                .size(2400, 1080)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillHeight,
+                            onSuccess = { state ->
+                                val w = state.painter.intrinsicSize.width
+                                val h = state.painter.intrinsicSize.height
+                                if (w > 0f && h > 0f) {
+                                    itemAspectRatios[item.uri] = w / h
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(ratio, matchHeightConstraintsFirst = true)
+                        )
+                    }
                 }
+            }
+        }
+
+        // ── Floating scale / fit indicator pill ──────────────────────────────
+        val isFitted = kotlin.math.abs(scale - fitScale) < 0.03f
+        val isFull = kotlin.math.abs(scale - 1.0f) < 0.03f
+
+        Surface(
+            shape = ShapeFull,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 4.dp,
+            shadowElevation = 6.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp)
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (isFitted) {
+                        animateTo(1.0f, 0f, 0f)
+                    } else {
+                        animateTo(fitScale, 0f, 0f)
+                    }
+                }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_aspect_ratio),
+                    contentDescription = "Toggle Fit / 100%",
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isFitted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = when {
+                        isFitted -> "Fit • ${(scale * 100).roundToInt()}%"
+                        isFull -> "100%"
+                        else -> "${(scale * 100).roundToInt()}%"
+                    },
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (isFitted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }
