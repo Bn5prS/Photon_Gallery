@@ -194,6 +194,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _isInitialSyncRunning = MutableStateFlow(false)
     val isInitialSyncRunning: StateFlow<Boolean> = _isInitialSyncRunning.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _isTopBarCollapsed = MutableStateFlow(false)
     val isTopBarCollapsed: StateFlow<Boolean> = _isTopBarCollapsed.asStateFlow()
 
@@ -243,6 +246,33 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 _onThisDayMemories.value = groups
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Failed to load On This Day memories", e)
+            }
+        }
+    }
+
+    fun refreshMedia(onComplete: (() -> Unit)? = null) {
+        if (_isRefreshing.value) return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                val syncResult = withContext(Dispatchers.IO) {
+                    val engine = com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication())
+                    engine.sync(forceFullSync = true)
+                }
+                refreshMemories()
+                scanPhotoSpheres()
+                val message = if (syncResult.deleted > 0 || syncResult.inserted > 0) {
+                    "Gallery refreshed: +${syncResult.inserted}, -${syncResult.deleted}"
+                } else {
+                    "Gallery is up to date"
+                }
+                showToast(message)
+            } catch (e: Exception) {
+                Log.e("GalleryViewModel", "Refresh failed", e)
+                showToast("Failed to refresh gallery")
+            } finally {
+                _isRefreshing.value = false
+                onComplete?.invoke()
             }
         }
     }
@@ -391,6 +421,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     _isInitialSyncRunning.value = false
                     refreshMemories()
                     scanPhotoSpheres()
+                } else {
+                    try {
+                        com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
+                        refreshMemories()
+                        scanPhotoSpheres()
+                    } catch (e: Exception) {
+                        Log.e("GalleryViewModel", "Startup sync failed: ${e.message}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")

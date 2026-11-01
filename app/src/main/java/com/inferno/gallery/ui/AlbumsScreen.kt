@@ -1,7 +1,8 @@
 @file:OptIn(
     ExperimentalMaterial3ExpressiveApi::class,
     ExperimentalSharedTransitionApi::class,
-    androidx.compose.foundation.ExperimentalFoundationApi::class
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
 )
 
 package com.inferno.gallery.ui
@@ -207,6 +208,24 @@ fun AlbumsScreen(
                 }
             }
 
+            val isRefreshing by viewModel.isRefreshing.collectAsState()
+            val pullToRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refreshMedia() },
+                modifier = Modifier.fillMaxSize(),
+                state = pullToRefreshState,
+                indicator = {
+                    androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                        state = pullToRefreshState,
+                        isRefreshing = isRefreshing,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = contentPadding.calculateTopPadding())
+                    )
+                }
+            ) {
             LazyVerticalGrid(
                 columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
                 state = lazyGridState,
@@ -970,6 +989,7 @@ fun AlbumsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
     }
 }
 

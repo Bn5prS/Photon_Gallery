@@ -167,7 +167,7 @@ class MainActivity : FragmentActivity() {
             val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
             androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
                 "MediaSyncWorker_Foreground",
-                androidx.work.ExistingWorkPolicy.KEEP,
+                androidx.work.ExistingWorkPolicy.REPLACE,
                 syncRequest
             )
         } catch (_: Exception) {}

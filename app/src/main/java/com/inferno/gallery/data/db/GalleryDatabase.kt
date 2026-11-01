@@ -127,6 +127,20 @@ interface MediaDao {
         }
     }
 
+    @androidx.room.Transaction
+    suspend fun deleteByIdsChunked(ids: List<Long>) {
+        ids.chunked(500).forEach { chunk ->
+            deleteByIds(chunk)
+        }
+    }
+
+    @androidx.room.Transaction
+    suspend fun insertAllChunked(media: List<CoreMediaEntity>) {
+        media.chunked(500).forEach { chunk ->
+            insertAll(chunk)
+        }
+    }
+
     @Query("UPDATE core_media SET filePath = :newPath, bucketName = :newBucket, name = :newName WHERE id = :id")
     suspend fun updatePathAndBucket(id: Long, newPath: String, newBucket: String, newName: String)
 

@@ -862,6 +862,15 @@ fun MainAppLayout(
                                         ) {
                                             if (overflowState == "main") {
                                                 DropdownMenuItem(
+                                                    text = { Text("Refresh") },
+                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = null) },
+                                                    onClick = {
+                                                        showOverflowMenu = false
+                                                        overflowState = "main"
+                                                        viewModel.refreshMedia()
+                                                    }
+                                                )
+                                                DropdownMenuItem(
                                                     text = { Text("Settings") },
                                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
                                                     onClick = {

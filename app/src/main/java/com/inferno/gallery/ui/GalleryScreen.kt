@@ -187,7 +187,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 // Profiling switch for the prefetch pipeline (kept false to prevent thread competition during fling deceleration)
 private const val PREFETCH_EXPERIMENT_ENABLED = false
 
-@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
     sharedTransitionScope: SharedTransitionScope,
@@ -434,9 +434,43 @@ fun GalleryScreen(
         derivedStateOf { pagedMedia.itemCount == 0 }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val pullToRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+
+    LaunchedEffect(isRefreshing) {
+        if (!isRefreshing) {
+            val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
+            if (savedIndex > 0 && pagedMedia.itemCount > savedIndex) {
+                lazyGridState.scrollToItem(savedIndex, savedOffset)
+            }
+        }
+    }
+
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            viewModel.saveGridScrollPosition(
+                bucketName,
+                lazyGridState.firstVisibleItemIndex,
+                lazyGridState.firstVisibleItemScrollOffset
+            )
+            viewModel.refreshMedia()
+        },
+        modifier = Modifier.fillMaxSize(),
+        state = pullToRefreshState,
+        indicator = {
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                state = pullToRefreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = contentPadding.calculateTopPadding())
+            )
+        }
     ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
         com.inferno.gallery.ui.components.PhotonGrid(
             pagedMedia = pagedMedia,
             lazyGridState = lazyGridState,
@@ -617,6 +651,7 @@ fun GalleryScreen(
                 stripMetadataFlow = viewModel.settingsRepository.stripMetadataOnShareFlow
             )
         }
+    }
     }
 }
 
