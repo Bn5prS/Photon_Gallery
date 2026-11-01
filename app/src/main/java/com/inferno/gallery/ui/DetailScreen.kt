@@ -1854,7 +1854,7 @@ fun DetailScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = zoomBadgeBottomPadding)
+                .padding(bottom = zoomBadgeBottomPadding.coerceAtLeast(0.dp))
         ) {
             Surface(
                 shape = ShapeFull,

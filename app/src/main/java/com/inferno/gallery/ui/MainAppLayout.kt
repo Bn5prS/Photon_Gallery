@@ -1073,16 +1073,19 @@ fun MainAppLayout(
             innerPadding.calculateBottomPadding()
         }
         val animatedBottomPadding by animateDpAsState(
-            targetValue = targetBottomPadding,
-            animationSpec = MotionTokens.snappySpring(),
+            targetValue = targetBottomPadding.coerceAtLeast(0.dp),
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            ),
             label = "scaffoldBottomPadding"
         )
         val layoutDirection = LocalLayoutDirection.current
         val effectivePadding = PaddingValues(
-            start = innerPadding.calculateStartPadding(layoutDirection),
-            top = innerPadding.calculateTopPadding(),
-            end = innerPadding.calculateEndPadding(layoutDirection),
-            bottom = animatedBottomPadding
+            start = innerPadding.calculateStartPadding(layoutDirection).coerceAtLeast(0.dp),
+            top = innerPadding.calculateTopPadding().coerceAtLeast(0.dp),
+            end = innerPadding.calculateEndPadding(layoutDirection).coerceAtLeast(0.dp),
+            bottom = animatedBottomPadding.coerceAtLeast(0.dp)
         )
         NavHost(
             navController = nestedNavController,
