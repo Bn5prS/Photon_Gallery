@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -100,6 +101,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.inferno.gallery.R
@@ -365,29 +367,34 @@ fun PeopleScreen(
                     } else {
                         var showMenu by remember { mutableStateOf(false) }
                         if (pendingSuggestions.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    isMergeCardDismissedByUser = !isMergeCardDismissedByUser
-                                }
-                            ) {
-                                BadgedBox(
-                                    badge = {
-                                        Badge(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        ) {
-                                            Text(
-                                                text = "${pendingSuggestions.size}",
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        }
+                            Box {
+                                IconButton(
+                                    onClick = {
+                                        isMergeCardDismissedByUser = !isMergeCardDismissedByUser
                                     }
                                 ) {
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_face),
                                         contentDescription = if (isMergeCardDismissedByUser) "Show merge suggestions" else "Hide merge suggestions",
                                         tint = if (!isMergeCardDismissedByUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(IconSizeTokens.L)
+                                    )
+                                }
+                                Badge(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = (-4).dp, y = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "${pendingSuggestions.size}",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.sp,
+                                            lineHeight = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 4.dp)
                                     )
                                 }
                             }
@@ -416,7 +423,7 @@ fun PeopleScreen(
                                         },
                                         leadingIcon = {
                                             Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_face),
                                                 contentDescription = null,
                                                 modifier = Modifier.size(20.dp)
                                             )
