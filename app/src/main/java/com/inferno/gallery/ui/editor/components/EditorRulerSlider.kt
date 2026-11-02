@@ -70,7 +70,8 @@ fun EditorRulerSlider(
     title: String? = null,
     valueFormatter: (Float) -> String = { it.toInt().toString() },
     onReset: () -> Unit = { onValueChange(defaultValue) },
-    onDone: () -> Unit,
+    onDone: () -> Unit = {},
+    showDoneButton: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val currentValue by rememberUpdatedState(value)
@@ -303,21 +304,23 @@ fun EditorRulerSlider(
         }
 
         // Bottom Pill: "Done" Action Button
-        FilledTonalButton(
-            onClick = currentOnDone,
-            shape = CircleShape,
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            ),
-            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 10.dp)
-        ) {
-            Text(
-                text = "Done",
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.Bold
+        if (showDoneButton) {
+            FilledTonalButton(
+                onClick = currentOnDone,
+                shape = CircleShape,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = "Done",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    )
                 )
-            )
+            }
         }
     }
 }

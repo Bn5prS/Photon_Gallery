@@ -2,6 +2,7 @@ package com.inferno.gallery.ui.editor.crop
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import com.inferno.gallery.ui.editor.model.AspectRatioOption
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -21,6 +22,75 @@ enum class CropHandle {
 }
 
 object CropGeometryHelper {
+
+    /**
+     * Resolves target aspect ratio for a strongly typed [AspectRatioOption].
+     */
+    fun targetAspectRatio(option: AspectRatioOption, effectiveAspect: Float): Float? {
+        return option.resolveTargetRatio(effectiveAspect)
+    }
+
+    /**
+     * Calculates default centered crop rect for an [AspectRatioOption] within image bounds.
+     */
+    fun calculateInitialAspectRect(option: AspectRatioOption, effectiveAspect: Float): Rect {
+        val targetRatio = targetAspectRatio(option, effectiveAspect) ?: return Rect(0f, 0f, 1f, 1f)
+        if (effectiveAspect <= 0f || targetRatio <= 0f) return Rect(0f, 0f, 1f, 1f)
+        val r = targetRatio / effectiveAspect
+        return if (r <= 1f) {
+            val left = ((1f - r) / 2f).coerceIn(0f, 1f)
+            Rect(left = left, top = 0f, right = (left + r).coerceIn(0f, 1f), bottom = 1f)
+        } else {
+            val h = 1f / r
+            val top = ((1f - h) / 2f).coerceIn(0f, 1f)
+            Rect(left = 0f, top = top, right = 1f, bottom = (top + h).coerceIn(0f, 1f))
+        }
+    }
+
+    /**
+     * Normalizes rotation in degrees to canonical 0, 90, 180, or 270.
+     */
+    fun normalizeRotation(degrees: Int): Int {
+        return ((degrees % 360) + 360) % 360
+    }
+
+    /**
+     * Rotates by 90 degrees counter-clockwise (Counter-clockwise rotation standard).
+     */
+    fun rotateCounterClockwise(currentRotation: Int): Int {
+        return normalizeRotation(currentRotation - 90)
+    }
+
+    /**
+     * Rotates by 90 degrees clockwise.
+     */
+    fun rotateClockwise(currentRotation: Int): Int {
+        return normalizeRotation(currentRotation + 90)
+    }
+
+    /**
+     * Calculates the effective aspect ratio of an image given its rotation.
+     * When rotated 90 or 270 degrees, width and height swap so aspect ratio inverts.
+     */
+    fun effectiveAspectRatio(originalAspect: Float, rotationDegrees: Int): Float {
+        if (originalAspect <= 0f) return 1f
+        val normRot = normalizeRotation(rotationDegrees)
+        return if (normRot % 180 != 0) {
+            1f / originalAspect
+        } else {
+            originalAspect
+        }
+    }
+
+    /**
+     * Clamps straighten fine-angle within [-45f..+45f] range.
+     */
+    fun clampStraighten(angle: Float): Float = angle.coerceIn(-45f, 45f)
+
+    /**
+     * Clamps keystone tilt angle within [-30f..+30f] range.
+     */
+    fun clampTilt(tilt: Float): Float = tilt.coerceIn(-30f, 30f)
 
     /**
      * Resolves aspect ratio as target width / target height in image pixel coordinates.
