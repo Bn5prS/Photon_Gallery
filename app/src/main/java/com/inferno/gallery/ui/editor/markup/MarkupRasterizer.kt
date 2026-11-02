@@ -1,13 +1,24 @@
 package com.inferno.gallery.ui.editor.markup
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import kotlin.math.sqrt
+
+data class MosaicTile(
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int,
+    val gridX: Int,
+    val gridY: Int
+)
 
 object MarkupRasterizer {
 
@@ -15,7 +26,8 @@ object MarkupRasterizer {
         canvas: Canvas,
         bitmapWidth: Int,
         bitmapHeight: Int,
-        markup: MarkupState
+        markup: MarkupState,
+        sourceBitmap: Bitmap? = null
     ) {
         if (bitmapWidth <= 0 || bitmapHeight <= 0) return
 
@@ -56,6 +68,25 @@ object MarkupRasterizer {
                     drawArrowElement(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, stroke.color.toArgb())
                 }
 
+                MarkupTool.REDACT -> {
+                    val mode = stroke.redactMode ?: RedactMode.MOSAIC
+                    if (mode == RedactMode.BLACKOUT) {
+                        val paint = Paint().apply {
+                            isAntiAlias = true
+                            style = Paint.Style.STROKE
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            color = android.graphics.Color.BLACK
+                            strokeWidth = strokePx
+                        }
+                        drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
+                    } else {
+                        val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
+                        val tiles = calculateMosaicTiles(stroke.points, bitmapWidth, bitmapHeight, strokePx, tileSizePx)
+                        drawMosaicTiles(canvas, tiles, sourceBitmap)
+                    }
+                }
+
                 else -> {}
             }
         }
@@ -67,9 +98,133 @@ object MarkupRasterizer {
         }
     }
 
+    /**
+     * Calculates the mosaic grid tiles intersecting the stroke path.
+     */
+    fun calculateMosaicTiles(
+        points: List<Offset>,
+        width: Int,
+        height: Int,
+        strokePx: Float,
+        tileSizePx: Float = (strokePx * 0.45f).coerceIn(10f, 60f)
+    ): List<MosaicTile> {
+        if (points.isEmpty() || width <= 0 || height <= 0 || tileSizePx <= 0f) return emptyList()
+
+        val radius = strokePx / 2f
+        val maxGridX = (width / tileSizePx).toInt() + 1
+        val maxGridY = (height / tileSizePx).toInt() + 1
+
+        val tileSet = LinkedHashSet<Long>()
+
+        fun addTilesAround(cx: Float, cy: Float) {
+            val minGx = ((cx - radius) / tileSizePx).toInt().coerceIn(0, maxGridX)
+            val maxGx = ((cx + radius) / tileSizePx).toInt().coerceIn(0, maxGridX)
+            val minGy = ((cy - radius) / tileSizePx).toInt().coerceIn(0, maxGridY)
+            val maxGy = ((cy + radius) / tileSizePx).toInt().coerceIn(0, maxGridY)
+
+            for (gx in minGx..maxGx) {
+                for (gy in minGy..maxGy) {
+                    val tileCenterX = (gx + 0.5f) * tileSizePx
+                    val tileCenterY = (gy + 0.5f) * tileSizePx
+                    val dx = tileCenterX - cx
+                    val dy = tileCenterY - cy
+                    val dist = sqrt(dx * dx + dy * dy)
+                    if (dist <= radius + tileSizePx * 0.6f) {
+                        val key = (gx.toLong() shl 32) or (gy.toLong() and 0xFFFFFFFFL)
+                        tileSet.add(key)
+                    }
+                }
+            }
+        }
+
+        if (points.size == 1) {
+            addTilesAround(points[0].x * width, points[0].y * height)
+        } else {
+            for (i in 0 until points.size - 1) {
+                val p1 = points[i]
+                val p2 = points[i + 1]
+                val x1 = p1.x * width
+                val y1 = p1.y * height
+                val x2 = p2.x * width
+                val y2 = p2.y * height
+
+                val segDx = x2 - x1
+                val segDy = y2 - y1
+                val segLen = sqrt(segDx * segDx + segDy * segDy)
+                val step = (tileSizePx * 0.5f).coerceIn(4f, 20f)
+                val steps = maxOf(1, (segLen / step).toInt())
+
+                for (s in 0..steps) {
+                    val ratio = s.toFloat() / steps
+                    val cx = x1 + segDx * ratio
+                    val cy = y1 + segDy * ratio
+                    addTilesAround(cx, cy)
+                }
+            }
+        }
+
+        return tileSet.mapNotNull { key ->
+            val gx = (key ushr 32).toInt()
+            val gy = (key and 0xFFFFFFFFL).toInt()
+            val left = (gx * tileSizePx).toInt().coerceIn(0, width)
+            val top = (gy * tileSizePx).toInt().coerceIn(0, height)
+            val right = ((gx + 1) * tileSizePx).toInt().coerceIn(0, width)
+            val bottom = ((gy + 1) * tileSizePx).toInt().coerceIn(0, height)
+            if (right > left && bottom > top) {
+                MosaicTile(left, top, right, bottom, gx, gy)
+            } else null
+        }
+    }
+
+    private fun drawMosaicTiles(
+        canvas: Canvas,
+        tiles: List<MosaicTile>,
+        sourceBitmap: Bitmap?
+    ) {
+        val fillPaint = Paint().apply {
+            isAntiAlias = false
+            style = Paint.Style.FILL
+        }
+        val borderPaint = Paint().apply {
+            isAntiAlias = false
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+            color = 0x22000000.toInt()
+        }
+
+        for (tile in tiles) {
+            val color = if (sourceBitmap != null && !sourceBitmap.isRecycled) {
+                val sampleX = ((tile.left + tile.right) / 2).coerceIn(0, sourceBitmap.width - 1)
+                val sampleY = ((tile.top + tile.bottom) / 2).coerceIn(0, sourceBitmap.height - 1)
+                sourceBitmap.getPixel(sampleX, sampleY)
+            } else {
+                // Procedural pixelation shade
+                val h = ((tile.gridX * 73856093) xor (tile.gridY * 19349663)) and 0x7FFFFFFF
+                val gray = 100 + (h % 65)
+                (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+            }
+
+            fillPaint.color = color
+            canvas.drawRect(
+                tile.left.toFloat(),
+                tile.top.toFloat(),
+                tile.right.toFloat(),
+                tile.bottom.toFloat(),
+                fillPaint
+            )
+            canvas.drawRect(
+                tile.left.toFloat(),
+                tile.top.toFloat(),
+                tile.right.toFloat(),
+                tile.bottom.toFloat(),
+                borderPaint
+            )
+        }
+    }
+
     private fun drawStrokePath(
         canvas: Canvas,
-        points: List<androidx.compose.ui.geometry.Offset>,
+        points: List<Offset>,
         width: Int,
         height: Int,
         strokePx: Float,
@@ -105,8 +260,8 @@ object MarkupRasterizer {
     )
 
     internal fun calculateArrowhead(
-        tip: androidx.compose.ui.geometry.Offset,
-        anchor: androidx.compose.ui.geometry.Offset,
+        tip: Offset,
+        anchor: Offset,
         width: Int,
         height: Int,
         strokePx: Float
@@ -147,7 +302,7 @@ object MarkupRasterizer {
 
     private fun drawArrowElement(
         canvas: Canvas,
-        points: List<androidx.compose.ui.geometry.Offset>,
+        points: List<Offset>,
         width: Int,
         height: Int,
         strokePx: Float,

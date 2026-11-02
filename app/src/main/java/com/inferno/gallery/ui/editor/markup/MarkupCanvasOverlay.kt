@@ -45,6 +45,7 @@ fun MarkupCanvasOverlay(
     activeTool: MarkupTool,
     currentColor: Color,
     currentStrokeWidth: Float,
+    redactMode: RedactMode = RedactMode.MOSAIC,
     eraserRadius: Float = MarkupPalette.DEFAULT_ERASER_RADIUS,
     selectedTextId: Long? = null,
     onSelectText: (Long?) -> Unit = {},
@@ -67,6 +68,7 @@ fun MarkupCanvasOverlay(
     val currentActiveTool by rememberUpdatedState(activeTool)
     val currentColorState by rememberUpdatedState(currentColor)
     val currentStrokeWidthState by rememberUpdatedState(currentStrokeWidth)
+    val currentRedactModeState by rememberUpdatedState(redactMode)
     val currentEraserRadiusState by rememberUpdatedState(eraserRadius)
     val currentSelectedTextId by rememberUpdatedState(selectedTextId)
     val currentOnSelectText by rememberUpdatedState(onSelectText)
@@ -345,7 +347,8 @@ fun MarkupCanvasOverlay(
                             points = livePoints.toList(),
                             color = currentColorState,
                             strokeWidth = currentStrokeWidthState,
-                            tool = currentActiveTool
+                            tool = currentActiveTool,
+                            redactMode = if (currentActiveTool == MarkupTool.REDACT) currentRedactModeState else null
                         )
                         currentOnStateChanged(currentMarkupState.withAddedStroke(stroke))
                         livePoints.clear()
@@ -375,7 +378,8 @@ fun MarkupCanvasOverlay(
                     points = livePoints.toList(),
                     color = currentColorState,
                     strokeWidth = currentStrokeWidthState,
-                    tool = currentActiveTool
+                    tool = currentActiveTool,
+                    redactMode = if (currentActiveTool == MarkupTool.REDACT) currentRedactModeState else null
                 )
                 drawStrokeItem(liveStroke, canvasW, canvasH)
             }
@@ -531,7 +535,64 @@ private fun DrawScope.drawStrokeItem(stroke: MarkupStroke, width: Float, height:
             )
         }
 
+        MarkupTool.REDACT -> {
+            val mode = stroke.redactMode ?: RedactMode.MOSAIC
+            if (mode == RedactMode.BLACKOUT) {
+                drawPathLine(
+                    points = stroke.points,
+                    width = width,
+                    height = height,
+                    color = Color.Black,
+                    strokePx = strokePx
+                )
+            } else {
+                drawMosaicStroke(
+                    points = stroke.points,
+                    width = width,
+                    height = height,
+                    strokePx = strokePx
+                )
+            }
+        }
+
         else -> {}
+    }
+}
+
+private fun DrawScope.drawMosaicStroke(
+    points: List<Offset>,
+    width: Float,
+    height: Float,
+    strokePx: Float
+) {
+    val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
+    val tiles = MarkupRasterizer.calculateMosaicTiles(
+        points = points,
+        width = width.toInt(),
+        height = height.toInt(),
+        strokePx = strokePx,
+        tileSizePx = tileSizePx
+    )
+
+    for (tile in tiles) {
+        val h = ((tile.gridX * 73856093) xor (tile.gridY * 19349663)) and 0x7FFFFFFF
+        val gray = (100 + (h % 65)) / 255f
+        val tileColor = Color(gray, gray, gray, 1f)
+        val topLeft = Offset(tile.left.toFloat(), tile.top.toFloat())
+        val size = Size((tile.right - tile.left).toFloat(), (tile.bottom - tile.top).toFloat())
+
+        drawRect(
+            color = tileColor,
+            topLeft = topLeft,
+            size = size,
+            style = Fill
+        )
+        drawRect(
+            color = Color.Black.copy(alpha = 0.15f),
+            topLeft = topLeft,
+            size = size,
+            style = Stroke(width = 1f)
+        )
     }
 }
 

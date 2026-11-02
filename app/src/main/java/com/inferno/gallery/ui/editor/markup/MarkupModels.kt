@@ -1,6 +1,7 @@
 package com.inferno.gallery.ui.editor.markup
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import kotlin.math.sqrt
 
@@ -9,7 +10,13 @@ enum class MarkupTool(val label: String) {
     HIGHLIGHTER("Highlighter"),
     ARROW("Arrow"),
     ERASER("Eraser"),
-    TEXT("Text")
+    TEXT("Text"),
+    REDACT("Redact")
+}
+
+enum class RedactMode {
+    MOSAIC,
+    BLACKOUT
 }
 
 data class MarkupStroke(
@@ -17,7 +24,8 @@ data class MarkupStroke(
     val points: List<Offset>,
     val color: Color,
     val strokeWidth: Float, // Normalized relative to container width (e.g. 0.005f to 0.04f)
-    val tool: MarkupTool
+    val tool: MarkupTool,
+    val redactMode: RedactMode? = null
 ) {
     /**
      * Hit-test whether a normalized touch point is within [threshold] distance of any segment in this stroke.
@@ -38,6 +46,31 @@ data class MarkupStroke(
         return false
     }
 
+    /**
+     * Computes the bounding rectangle in normalized 0..1 coordinates.
+     * Optionally pads by half the stroke width.
+     */
+    fun computeBounds(strokePadding: Boolean = true): Rect? {
+        if (points.isEmpty()) return null
+        var minX = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        for (pt in points) {
+            if (pt.x < minX) minX = pt.x
+            if (pt.x > maxX) maxX = pt.x
+            if (pt.y < minY) minY = pt.y
+            if (pt.y > maxY) maxY = pt.y
+        }
+        val pad = if (strokePadding) strokeWidth / 2f else 0f
+        return Rect(
+            left = minX - pad,
+            top = minY - pad,
+            right = maxX + pad,
+            bottom = maxY + pad
+        )
+    }
+
     private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
         val ab = b - a
         val ap = p - a
@@ -49,6 +82,41 @@ data class MarkupStroke(
         val proj = a + Offset(ab.x * t, ab.y * t)
         val diff = p - proj
         return sqrt(diff.x * diff.x + diff.y * diff.y)
+    }
+}
+
+object MarkupModelsHelper {
+    fun serializeStroke(stroke: MarkupStroke): String {
+        val pointsStr = stroke.points.joinToString(";") { "${it.x},${it.y}" }
+        val redactStr = stroke.redactMode?.name ?: ""
+        val argb = stroke.color.value.toLong()
+        return "${stroke.id}|${stroke.tool.name}|$argb|${stroke.strokeWidth}|$redactStr|$pointsStr"
+    }
+
+    fun deserializeStroke(data: String): MarkupStroke? {
+        return try {
+            val parts = data.split("|")
+            if (parts.size < 6) return null
+            val id = parts[0].toLong()
+            val tool = MarkupTool.valueOf(parts[1])
+            val argb = parts[2].toLong()
+            val strokeWidth = parts[3].toFloat()
+            val redactMode = if (parts[4].isNotEmpty()) RedactMode.valueOf(parts[4]) else null
+            val points = if (parts[5].isEmpty()) emptyList() else parts[5].split(";").mapNotNull {
+                val coords = it.split(",")
+                if (coords.size == 2) Offset(coords[0].toFloat(), coords[1].toFloat()) else null
+            }
+            MarkupStroke(
+                id = id,
+                points = points,
+                color = Color(argb.toULong()),
+                strokeWidth = strokeWidth,
+                tool = tool,
+                redactMode = redactMode
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 
@@ -137,7 +205,7 @@ object MarkupPalette {
     val COLORS = listOf(
         Color(0xFFFFFFFF), // White
         Color(0xFF000000), // Black
-        Color(0xFFE53935), // Red
+        Color(0xFFE53935), // Red / Coral
         Color(0xFFFB8C00), // Orange
         Color(0xFFFFD600), // Yellow
         Color(0xFF43A047), // Green
@@ -150,5 +218,6 @@ object MarkupPalette {
     const val DEFAULT_PEN_WIDTH = 0.010f
     const val DEFAULT_HIGHLIGHTER_WIDTH = 0.040f
     const val DEFAULT_ARROW_WIDTH = 0.014f
+    const val DEFAULT_REDACT_WIDTH = 0.045f
     const val DEFAULT_ERASER_RADIUS = 0.045f
 }
