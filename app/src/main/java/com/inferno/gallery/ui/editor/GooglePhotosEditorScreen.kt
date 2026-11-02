@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
+import java.io.InputStream
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -150,29 +151,44 @@ fun GooglePhotosEditorScreen(
         loadError = null
         originalBitmap = withContext(Dispatchers.IO) {
             try {
+                fun openStream(): InputStream? {
+                    return try {
+                        context.contentResolver.openInputStream(imageUri)
+                    } catch (e: Exception) {
+                        null
+                    } ?: try {
+                        val path = imageUri.path ?: imageUri.toString()
+                        val file = java.io.File(path)
+                        if (file.exists() && file.canRead()) file.inputStream() else null
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
                 val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                openStream()?.use { stream ->
                     BitmapFactory.decodeStream(stream, null, boundsOpts)
-                } ?: return@withContext null
+                }
 
                 val maxDim = maxOf(boundsOpts.outWidth, boundsOpts.outHeight)
                 var sampleSize = 1
-                // Target ~2560px for smooth 60fps GPU preview
                 val targetMax = 2560
-                while (maxDim / (sampleSize * 2) >= targetMax) {
-                    sampleSize *= 2
+                if (maxDim > 0) {
+                    while (maxDim / (sampleSize * 2) >= targetMax) {
+                        sampleSize *= 2
+                    }
                 }
 
                 val decodeOpts = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
-                val rawBmp = context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                val rawBmp = openStream()?.use { stream ->
                     BitmapFactory.decodeStream(stream, null, decodeOpts)
                 } ?: return@withContext null
 
                 val exifOrientation = try {
-                    context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                    openStream()?.use { stream ->
                         ExifInterface(stream).getAttributeInt(
                             ExifInterface.TAG_ORIENTATION,
                             ExifInterface.ORIENTATION_NORMAL
@@ -184,6 +200,7 @@ fun GooglePhotosEditorScreen(
 
                 applyExifOrientation(rawBmp, exifOrientation)
             } catch (e: Exception) {
+                android.util.Log.e("GooglePhotosEditor", "Failed to load bitmap from $imageUri", e)
                 null
             }
         }
