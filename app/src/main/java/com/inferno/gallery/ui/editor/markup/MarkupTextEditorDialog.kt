@@ -74,6 +74,7 @@ fun MarkupTextEditorDialog(
     var textValue by remember { mutableStateOf(initialText?.text ?: "") }
     var selectedColor by remember { mutableStateOf(initialText?.color ?: Color.White) }
     var hasBackgroundBox by remember { mutableStateOf(initialText?.hasBackgroundBox ?: true) }
+    var textAlign by remember { mutableStateOf(initialText?.textAlign ?: TextAlign.Center) }
     val focusRequester = remember { FocusRequester() }
     val isEditing = initialText != null
 
@@ -100,7 +101,7 @@ fun MarkupTextEditorDialog(
                     .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                // 1. Top Bar: Cancel, Style toggle, Delete, Done
+                // 1. Top Bar: Cancel, Delete (if editing), Done
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -122,37 +123,7 @@ fun MarkupTextEditorDialog(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // Background box toggle pill
-                    Surface(
-                        shape = ShapeFull,
-                        color = if (hasBackgroundBox) MaterialTheme.colorScheme.primaryContainer else Color.White.copy(alpha = 0.18f),
-                        contentColor = if (hasBackgroundBox) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
-                        modifier = Modifier
-                            .pressScale()
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                hasBackgroundBox = !hasBackgroundBox
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_border_all),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = if (hasBackgroundBox) "Box: Fill" else "Box: None",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    }
-
                     if (isEditing && onDelete != null) {
-                        Spacer(modifier = Modifier.width(8.dp))
                         IconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -167,9 +138,8 @@ fun MarkupTextEditorDialog(
                                 modifier = Modifier.size(22.dp)
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
-
-                    Spacer(modifier = Modifier.weight(1f))
 
                     // Done Button
                     FilledTonalButton(
@@ -180,14 +150,16 @@ fun MarkupTextEditorDialog(
                                 val textItem = initialText?.copy(
                                     text = trimmed,
                                     color = selectedColor,
-                                    hasBackgroundBox = hasBackgroundBox
+                                    hasBackgroundBox = hasBackgroundBox,
+                                    textAlign = textAlign
                                 ) ?: MarkupText(
                                     text = trimmed,
                                     position = Offset(0.5f, 0.45f),
                                     color = selectedColor,
                                     scale = 1.0f,
                                     rotation = 0f,
-                                    hasBackgroundBox = hasBackgroundBox
+                                    hasBackgroundBox = hasBackgroundBox,
+                                    textAlign = textAlign
                                 )
                                 onConfirm(textItem)
                             } else if (initialText != null && onDelete != null) {
@@ -243,7 +215,7 @@ fun MarkupTextEditorDialog(
                                 color = selectedColor,
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
+                                textAlign = textAlign
                             ),
                             cursorBrush = SolidColor(selectedColor),
                             modifier = Modifier
@@ -258,7 +230,7 @@ fun MarkupTextEditorDialog(
                                                 color = if (hasBackgroundBox) selectedColor.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.55f),
                                                 fontSize = 28.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                textAlign = TextAlign.Center
+                                                textAlign = textAlign
                                             )
                                         )
                                     }
@@ -269,7 +241,88 @@ fun MarkupTextEditorDialog(
                     }
                 }
 
-                // 3. Bottom Bar: ONLY the horizontal color palette directly above the keyboard
+                // 3. Middle Options Row: Alignment and Background Box Toggle directly above colors
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Text Alignment toggle button (Left -> Center -> Right -> Left)
+                    Surface(
+                        shape = ShapeFull,
+                        color = Color.White.copy(alpha = 0.18f),
+                        contentColor = Color.White,
+                        modifier = Modifier
+                            .pressScale()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                textAlign = when (textAlign) {
+                                    TextAlign.Left -> TextAlign.Center
+                                    TextAlign.Center -> TextAlign.Right
+                                    else -> TextAlign.Left
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(
+                                    when (textAlign) {
+                                        TextAlign.Left -> R.drawable.ic_ms_format_align_left
+                                        TextAlign.Right -> R.drawable.ic_ms_format_align_right
+                                        else -> R.drawable.ic_ms_format_align_center
+                                    }
+                                ),
+                                contentDescription = "Text Alignment",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = when (textAlign) {
+                                    TextAlign.Left -> "Align: Left"
+                                    TextAlign.Right -> "Align: Right"
+                                    else -> "Align: Center"
+                                },
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+
+                    // Background box toggle pill (in the bottom!)
+                    Surface(
+                        shape = ShapeFull,
+                        color = if (hasBackgroundBox) MaterialTheme.colorScheme.primaryContainer else Color.White.copy(alpha = 0.18f),
+                        contentColor = if (hasBackgroundBox) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                        modifier = Modifier
+                            .pressScale()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                hasBackgroundBox = !hasBackgroundBox
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_border_all),
+                                contentDescription = "Background Box",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = if (hasBackgroundBox) "Box: Fill" else "Box: None",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+                }
+
+                // 4. Bottom Bar: Horizontal color palette directly above the keyboard
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()

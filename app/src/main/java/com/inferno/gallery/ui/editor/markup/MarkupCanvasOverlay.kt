@@ -36,13 +36,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import kotlin.math.sqrt
 
 @Composable
 fun MarkupCanvasOverlay(
     markupState: MarkupState,
-    activeTool: MarkupTool,
+    activeTool: MarkupTool? = null,
     currentColor: Color,
     currentStrokeWidth: Float,
     redactMode: RedactMode = RedactMode.MOSAIC,
@@ -51,6 +52,7 @@ fun MarkupCanvasOverlay(
     onSelectText: (Long?) -> Unit = {},
     onStateChanged: (MarkupState) -> Unit,
     onEditTextRequest: (MarkupText?) -> Unit,
+    onZoomPan: ((zoomChange: Float, panChange: Offset) -> Unit)? = null,
     isInteractive: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -74,6 +76,7 @@ fun MarkupCanvasOverlay(
     val currentOnSelectText by rememberUpdatedState(onSelectText)
     val currentOnStateChanged by rememberUpdatedState(onStateChanged)
     val currentOnEditTextRequest by rememberUpdatedState(onEditTextRequest)
+    val currentOnZoomPan by rememberUpdatedState(onZoomPan)
 
     val interactiveModifier = if (isInteractive) {
         Modifier.pointerInput(activeTool) {
@@ -88,7 +91,34 @@ fun MarkupCanvasOverlay(
                     (down.position.y / canvasH).coerceIn(0f, 1f)
                 )
 
-                if (currentActiveTool == MarkupTool.TEXT) {
+                if (currentActiveTool == null) {
+                    // Main Markup Carousel mode (no drawing tool active)
+                    val hitText = currentMarkupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
+                    var totalMovement = 0f
+                    var isTransforming = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val activePointers = event.changes.filter { it.pressed }
+                        if (activePointers.isEmpty()) break
+
+                        if (activePointers.size >= 2) {
+                            isTransforming = true
+                            event.changes.forEach { it.consume() }
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            currentOnZoomPan?.invoke(zoom, pan)
+                        } else {
+                            val pan = event.calculatePan()
+                            totalMovement += pan.getDistance()
+                        }
+                    }
+
+                    if (!isTransforming && totalMovement < 10f && hitText != null) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        currentOnSelectText(hitText.id)
+                    }
+                } else if (currentActiveTool == MarkupTool.TEXT) {
                     val currentSelected = currentMarkupState.texts.find { it.id == currentSelectedTextId }
                     val hitInfo = if (currentSelected != null) {
                         getTextHitInfo(currentSelected, down.position, canvasW, canvasH, textMeasurer)
@@ -113,6 +143,7 @@ fun MarkupCanvasOverlay(
 
                         val hitPart = if (isInitialSelected) hitInfo.first else TextHitPart.BODY
                         val isResizeMode = hitPart.isResizeHandle
+                        val isRotateMode = hitPart == TextHitPart.HANDLE_ROTATE
                         val initialScale = targetText.scale
                         val localStart = hitInfo.second
                         val initialDist = sqrt(localStart.x * localStart.x + localStart.y * localStart.y).coerceAtLeast(15f)
@@ -134,7 +165,23 @@ fun MarkupCanvasOverlay(
                                     isTransforming = true
                                     event.changes.forEach { it.consume() }
 
-                                    if (isResizeMode) {
+                                    if (isRotateMode) {
+                                        // Dragging rotation stalk handle -> rotate around text center!
+                                        val pt = activePointers.first().position
+                                        val curDx = pt.x - (targetText.position.x * canvasW)
+                                        val curDy = pt.y - (targetText.position.y * canvasH)
+                                        val rawAngle = (Math.toDegrees(kotlin.math.atan2(curDy.toDouble(), curDx.toDouble())).toFloat() + 90f) % 360f
+                                        val cleanAngle = if (rawAngle < 0f) rawAngle + 360f else rawAngle
+                                        val snappedAngle = when {
+                                            kotlin.math.abs(cleanAngle - 0f) < 4f || kotlin.math.abs(cleanAngle - 360f) < 4f -> 0f
+                                            kotlin.math.abs(cleanAngle - 90f) < 4f -> 90f
+                                            kotlin.math.abs(cleanAngle - 180f) < 4f -> 180f
+                                            kotlin.math.abs(cleanAngle - 270f) < 4f -> 270f
+                                            else -> cleanAngle
+                                        }
+                                        targetText = targetText.copy(rotation = snappedAngle)
+                                        currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
+                                    } else if (isResizeMode) {
                                         // Dragging corner handle or edge line -> scale size smoothly
                                         val pt = activePointers.first().position
                                         val curDx = pt.x - (targetText.position.x * canvasW)
@@ -159,7 +206,7 @@ fun MarkupCanvasOverlay(
                                     }
                                 }
                             } else if (pointerCount >= 2) {
-                                // 2-finger gesture: pinch zoom, rotate, pan
+                                // 2-finger gesture on text: pinch zoom, rotate, pan
                                 isTransforming = true
                                 event.changes.forEach { it.consume() }
 
@@ -198,7 +245,6 @@ fun MarkupCanvasOverlay(
                         // Touched outside any text
                         var totalMovement = 0f
                         var isTransforming = false
-                        var targetText = currentSelected
 
                         while (true) {
                             val event = awaitPointerEvent()
@@ -206,30 +252,13 @@ fun MarkupCanvasOverlay(
                             if (activePointers.isEmpty()) break
 
                             val pointerCount = activePointers.size
-                            if (pointerCount >= 2 && targetText != null) {
-                                // 2-finger pinch/rotation anywhere while text is selected!
+                            if (pointerCount >= 2) {
+                                // 2-finger pinch/pan anywhere outside text: ZOOM/PAN THE IMAGE!
                                 isTransforming = true
                                 event.changes.forEach { it.consume() }
-
                                 val zoom = event.calculateZoom()
-                                val rotation = event.calculateRotation()
                                 val pan = event.calculatePan()
-
-                                val normPanX = pan.x / canvasW
-                                val normPanY = pan.y / canvasH
-                                val newPos = Offset(
-                                    (targetText.position.x + normPanX).coerceIn(0.05f, 0.95f),
-                                    (targetText.position.y + normPanY).coerceIn(0.05f, 0.95f)
-                                )
-                                val newScale = (targetText.scale * zoom).coerceIn(0.4f, 4.0f)
-                                val newRotation = (targetText.rotation + rotation) % 360f
-
-                                targetText = targetText.copy(
-                                    position = newPos,
-                                    scale = newScale,
-                                    rotation = newRotation
-                                )
-                                currentOnStateChanged(currentMarkupState.withUpdatedText(targetText))
+                                currentOnZoomPan?.invoke(zoom, pan)
                             } else {
                                 val pan = event.calculatePan()
                                 totalMovement += pan.getDistance()
@@ -246,7 +275,7 @@ fun MarkupCanvasOverlay(
                             }
                         }
                     }
-                } else if (activeTool == MarkupTool.ERASER) {
+                } else if (currentActiveTool == MarkupTool.ERASER) {
                     // Continuous interpolated erasing with visual cursor
                     var currentLocalState = currentMarkupState
                     var lastNorm = normDown
@@ -272,6 +301,15 @@ fun MarkupCanvasOverlay(
                         if (active.isEmpty()) {
                             eraserCursorPoint = null
                             break
+                        }
+
+                        if (active.size >= 2) {
+                            eraserCursorPoint = null
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            currentOnZoomPan?.invoke(zoom, pan)
+                            event.changes.forEach { it.consume() }
+                            continue
                         }
 
                         val pt = active.first().position
@@ -315,17 +353,34 @@ fun MarkupCanvasOverlay(
                         event.changes.forEach { it.consume() }
                     }
                 } else {
-                    // Drawing tools (PEN, HIGHLIGHTER, ARROW)
+                    // Drawing tools (PEN, HIGHLIGHTER, ARROW, REDACT)
                     val hitText = currentMarkupState.texts.findLast { it.isHitBy(normDown, canvasW, canvasH) }
                     livePoints.clear()
                     livePoints.add(normDown)
                     down.consume()
                     var totalMovement = 0f
+                    var isZooming = false
 
                     while (true) {
                         val event = awaitPointerEvent()
                         val active = event.changes.filter { it.pressed }
                         if (active.isEmpty()) break
+
+                        if (active.size >= 2) {
+                            isZooming = true
+                            livePoints.clear()
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            currentOnZoomPan?.invoke(zoom, pan)
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
+
+                        if (isZooming) {
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
+
                         val pt = active.first().position
                         val norm = Offset((pt.x / canvasW).coerceIn(0f, 1f), (pt.y / canvasH).coerceIn(0f, 1f))
                         val pan = event.calculatePan()
@@ -338,17 +393,20 @@ fun MarkupCanvasOverlay(
                         event.changes.forEach { it.consume() }
                     }
 
-                    if (hitText != null && totalMovement < 10f && livePoints.size <= 2) {
+                    if (isZooming) {
+                        livePoints.clear()
+                    } else if (hitText != null && totalMovement < 10f && livePoints.size <= 2) {
                         livePoints.clear()
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         currentOnSelectText(hitText.id)
                     } else if (livePoints.isNotEmpty()) {
+                        val tool = currentActiveTool ?: MarkupTool.PEN
                         val stroke = MarkupStroke(
                             points = livePoints.toList(),
                             color = currentColorState,
                             strokeWidth = currentStrokeWidthState,
-                            tool = currentActiveTool,
-                            redactMode = if (currentActiveTool == MarkupTool.REDACT) currentRedactModeState else null
+                            tool = tool,
+                            redactMode = if (tool == MarkupTool.REDACT) currentRedactModeState else null
                         )
                         currentOnStateChanged(currentMarkupState.withAddedStroke(stroke))
                         livePoints.clear()
@@ -374,12 +432,13 @@ fun MarkupCanvasOverlay(
 
             // 2. Draw live stroke in progress
             if (livePoints.isNotEmpty()) {
+                val tool = currentActiveTool ?: MarkupTool.PEN
                 val liveStroke = MarkupStroke(
                     points = livePoints.toList(),
                     color = currentColorState,
                     strokeWidth = currentStrokeWidthState,
-                    tool = currentActiveTool,
-                    redactMode = if (currentActiveTool == MarkupTool.REDACT) currentRedactModeState else null
+                    tool = tool,
+                    redactMode = if (tool == MarkupTool.REDACT) currentRedactModeState else null
                 )
                 drawStrokeItem(liveStroke, canvasW, canvasH)
             }
@@ -462,6 +521,15 @@ private fun getTextHitInfo(
     val cornerRadius = (32f * baseScale).coerceIn(36f, 80f)
     val edgeThickness = (24f * baseScale).coerceIn(28f, 60f)
 
+    // 0. Check top rotation handle stalk
+    val rotateStalkLength = 32f * baseScale
+    val rotateHandleRadius = (28f * baseScale).coerceIn(32f, 65f)
+    val rotHandleY = -halfH - rotateStalkLength
+    val dRot = sqrt(localX * localX + (localY - rotHandleY) * (localY - rotHandleY))
+    if (dRot <= rotateHandleRadius) {
+        return Pair(TextHitPart.HANDLE_ROTATE, localTouch)
+    }
+
     // 1. Check 4 corners
     val dTL = sqrt((localX - (-halfW)) * (localX - (-halfW)) + (localY - (-halfH)) * (localY - (-halfH)))
     val dTR = sqrt((localX - halfW) * (localX - halfW) + (localY - (-halfH)) * (localY - (-halfH)))
@@ -537,21 +605,32 @@ private fun DrawScope.drawStrokeItem(stroke: MarkupStroke, width: Float, height:
 
         MarkupTool.REDACT -> {
             val mode = stroke.redactMode ?: RedactMode.MOSAIC
-            if (mode == RedactMode.BLACKOUT) {
-                drawPathLine(
-                    points = stroke.points,
-                    width = width,
-                    height = height,
-                    color = Color.Black,
-                    strokePx = strokePx
-                )
-            } else {
-                drawMosaicStroke(
-                    points = stroke.points,
-                    width = width,
-                    height = height,
-                    strokePx = strokePx
-                )
+            when (mode) {
+                RedactMode.BLACKOUT -> {
+                    drawPathLine(
+                        points = stroke.points,
+                        width = width,
+                        height = height,
+                        color = Color.Black,
+                        strokePx = strokePx
+                    )
+                }
+                RedactMode.BLUR -> {
+                    drawBlurStroke(
+                        points = stroke.points,
+                        width = width,
+                        height = height,
+                        strokePx = strokePx
+                    )
+                }
+                RedactMode.MOSAIC -> {
+                    drawMosaicStroke(
+                        points = stroke.points,
+                        width = width,
+                        height = height,
+                        strokePx = strokePx
+                    )
+                }
             }
         }
 
@@ -592,6 +671,30 @@ private fun DrawScope.drawMosaicStroke(
             topLeft = topLeft,
             size = size,
             style = Stroke(width = 1f)
+        )
+    }
+}
+
+private fun DrawScope.drawBlurStroke(
+    points: List<Offset>,
+    width: Float,
+    height: Float,
+    strokePx: Float
+) {
+    if (points.isEmpty()) return
+    val layers = listOf(
+        Pair(1.4f, Color(0x55DDDDDD)),
+        Pair(1.0f, Color(0x66EEEEEE)),
+        Pair(0.7f, Color(0x77FFFFFF)),
+        Pair(0.4f, Color(0x88FFFFFF))
+    )
+    for ((multiplier, color) in layers) {
+        drawPathLine(
+            points = points,
+            width = width,
+            height = height,
+            color = color,
+            strokePx = strokePx * multiplier
         )
     }
 }
@@ -737,7 +840,8 @@ private fun DrawScope.drawTextItem(
         style = TextStyle(
             color = textElem.color,
             fontSize = fontSize,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            textAlign = textElem.textAlign
         )
     )
 
@@ -786,6 +890,33 @@ private fun DrawScope.drawTextItem(
             val selW = rectW + selPad * 2f
             val selH = rectH + selPad * 2f
             val strokeWidthPx = 2.5f * baseScale
+            val handleRadius = 8f * baseScale
+
+            // 0. Rotation stalk line & circular handle at top center
+            val stalkLen = 30f * baseScale
+            val rotCenter = Offset(0f, selTop - stalkLen)
+            drawLine(
+                color = selectionColor,
+                start = Offset(0f, selTop),
+                end = rotCenter,
+                strokeWidth = strokeWidthPx
+            )
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.35f),
+                radius = handleRadius + 1.5f * baseScale,
+                center = rotCenter + Offset(0f, 1f * baseScale)
+            )
+            drawCircle(
+                color = Color.White,
+                radius = handleRadius,
+                center = rotCenter
+            )
+            drawCircle(
+                color = selectionColor,
+                radius = handleRadius,
+                center = rotCenter,
+                style = Stroke(width = strokeWidthPx)
+            )
 
             // 1. Dashed selection rounded box
             drawRoundRect(
@@ -800,7 +931,6 @@ private fun DrawScope.drawTextItem(
             )
 
             // 2. 4 Prominent corner handles with drop shadow
-            val handleRadius = 8f * baseScale
             val corners = listOf(
                 Offset(selLeft, selTop),
                 Offset(selLeft + selW, selTop),

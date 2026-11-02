@@ -167,10 +167,18 @@ fun CropStudio(
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             val newRotation = CropGeometryHelper.rotateCounterClockwise(cropState.rotation)
                             val newEffectiveAspect = CropGeometryHelper.effectiveAspectRatio(imageAspect, newRotation)
+                            val old = cropState.cropRect
                             val newRect = if (cropState.aspectOption != AspectRatioOption.FREEFORM) {
                                 CropGeometryHelper.calculateInitialAspectRect(cropState.aspectOption, newEffectiveAspect)
+                            } else if (old != androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)) {
+                                androidx.compose.ui.geometry.Rect(
+                                    left = old.top,
+                                    top = (1f - old.right).coerceIn(0f, 1f),
+                                    right = old.bottom,
+                                    bottom = (1f - old.left).coerceIn(0f, 1f)
+                                )
                             } else {
-                                cropState.cropRect
+                                old
                             }
                             onCropStateChange(cropState.copy(rotation = newRotation, cropRect = newRect))
                         },

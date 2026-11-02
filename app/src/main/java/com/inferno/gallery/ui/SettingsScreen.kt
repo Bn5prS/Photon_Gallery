@@ -704,7 +704,7 @@ fun SettingsScreen(
                                                 text = if (dateHeaderAlignment == "LEFT") {
                                                     "Left-aligned timeline date headers and floating scroll badge"
                                                 } else {
-                                                    "Center-aligned timeline date headers and floating scroll badge (Google Photos style)"
+                                                    "Center-aligned timeline date headers and floating scroll badge (Center-aligned style)"
                                                 },
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1000,6 +1000,39 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
                                             checked = autoplayWithSound,
                                             onCheckedChange = { viewModel.setAutoplayWithSoundEnabled(it) }
+                                        )
+                                    }
+                                )
+                            )
+
+                            SettingsGroupCard(
+                                title = "Language & Locale",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = "App Language",
+                                            subtitle = "Change app language (English, Español, Português, Français, Deutsch)",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_menu_book),
+                                            onClick = {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                    try {
+                                                        val intent = Intent(Settings.ACTION_APP_LOCALE_SETTINGS).apply {
+                                                            data = Uri.fromParts("package", context.packageName, null)
+                                                        }
+                                                        context.startActivity(intent)
+                                                    } catch (e: Exception) {
+                                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                            data = Uri.fromParts("package", context.packageName, null)
+                                                        }
+                                                        context.startActivity(intent)
+                                                    }
+                                                } else {
+                                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                        data = Uri.fromParts("package", context.packageName, null)
+                                                    }
+                                                    context.startActivity(intent)
+                                                }
+                                            }
                                         )
                                     }
                                 )

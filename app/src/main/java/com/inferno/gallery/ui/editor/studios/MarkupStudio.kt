@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -49,10 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.inferno.gallery.R
 import com.inferno.gallery.ui.editor.markup.MarkupPalette
 import com.inferno.gallery.ui.editor.markup.MarkupState
+import com.inferno.gallery.ui.editor.markup.MarkupText
 import com.inferno.gallery.ui.editor.markup.MarkupTool
 import com.inferno.gallery.ui.editor.markup.RedactMode
 import com.inferno.gallery.ui.theme.ShapeFull
@@ -98,6 +102,9 @@ fun MarkupStudio(
     onRedactStrokeWidthChange: ((Float) -> Unit)? = null,
     redactMode: RedactMode = RedactMode.MOSAIC,
     onRedactModeChange: ((RedactMode) -> Unit)? = null,
+    selectedTextId: Long? = null,
+    onSelectTextId: ((Long?) -> Unit)? = null,
+    onEditText: ((MarkupText) -> Unit)? = null,
     onOpenTextDialog: (() -> Unit)? = null,
     onDone: (() -> Unit)? = null
 ) {
@@ -171,6 +178,8 @@ fun MarkupStudio(
                     markupState = markupState,
                     onSelectTool = { selected ->
                         if (selected == MarkupTool.TEXT) {
+                            entryMarkupState = markupState
+                            setTool(MarkupTool.TEXT)
                             onOpenTextDialog?.invoke()
                         } else {
                             entryMarkupState = markupState
@@ -179,8 +188,28 @@ fun MarkupStudio(
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
+            } else if (tool == MarkupTool.TEXT) {
+                // 2. Active Text Mode View (Move, Scale, Rotate, Add, Edit, Delete)
+                ActiveTextModeView(
+                    selectedText = markupState.texts.find { it.id == selectedTextId },
+                    onAddText = { onOpenTextDialog?.invoke() },
+                    onEditText = { textToEdit -> onEditText?.invoke(textToEdit) },
+                    onDeleteText = { textToDelete ->
+                        onMarkupStateChange(markupState.withRemovedText(textToDelete.id))
+                        onSelectTextId?.invoke(null)
+                    },
+                    onCancel = {
+                        onMarkupStateChange(entryMarkupState)
+                        setTool(null)
+                    },
+                    onApply = {
+                        setTool(null)
+                        onDone?.invoke()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
-                // 2. Active Drawing Mode View (Pen, Highlighter, Redact)
+                // 3. Active Drawing Mode View (Pen, Highlighter, Redact)
                 val (currentWidth, onWidthChange, widthRange) = when (tool) {
                     MarkupTool.HIGHLIGHTER -> Triple(effectiveHighlighterWidth, setHighlighterWidth, 0.020f..0.080f)
                     MarkupTool.REDACT -> Triple(effectiveRedactWidth, setRedactWidth, 0.020f..0.090f)
@@ -411,6 +440,15 @@ private fun ActiveDrawingModeView(
                         }
                     )
                     RedactModePill(
+                        label = "Blur",
+                        iconRes = R.drawable.ic_ms_blur_on,
+                        isSelected = redactMode == RedactMode.BLUR,
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            onRedactModeChange(RedactMode.BLUR)
+                        }
+                    )
+                    RedactModePill(
                         label = "Blackout",
                         iconRes = R.drawable.ic_ms_visibility_off,
                         isSelected = redactMode == RedactMode.BLACKOUT,
@@ -430,6 +468,7 @@ private fun ActiveDrawingModeView(
             range = strokeWidthRange,
             activeColor = when {
                 activeTool == MarkupTool.REDACT && redactMode == RedactMode.BLACKOUT -> Color.Black
+                activeTool == MarkupTool.REDACT && redactMode == RedactMode.BLUR -> MaterialTheme.colorScheme.primary
                 activeTool == MarkupTool.REDACT -> MaterialTheme.colorScheme.primary
                 activeTool == MarkupTool.HIGHLIGHTER -> selectedColor.copy(alpha = 0.65f)
                 else -> selectedColor
@@ -494,7 +533,12 @@ private fun ActiveDrawingModeView(
                 }
             }
         } else {
-            // In Redact Mosaic mode: show privacy guidance pill
+            // In Redact Mosaic or Blur mode: show privacy guidance pill
+            val guidanceText = if (redactMode == RedactMode.BLUR) {
+                "Draw over faces or sensitive info to smoothly blur"
+            } else {
+                "Draw over faces, IDs, numbers or sensitive info to pixelate"
+            }
             Surface(
                 shape = ShapeFull,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -508,13 +552,13 @@ private fun ActiveDrawingModeView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_shield),
+                        painter = painterResource(id = if (redactMode == RedactMode.BLUR) R.drawable.ic_ms_blur_on else R.drawable.ic_ms_shield),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Draw over faces, IDs, numbers or sensitive info to pixelate",
+                        text = guidanceText,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -558,6 +602,183 @@ private fun ActiveDrawingModeView(
             FilledIconButton(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    onApply()
+                },
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_ms_check),
+                    contentDescription = "Apply",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveTextModeView(
+    selectedText: MarkupText?,
+    onAddText: () -> Unit,
+    onEditText: (MarkupText) -> Unit,
+    onDeleteText: (MarkupText) -> Unit,
+    onCancel: () -> Unit,
+    onApply: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val view = LocalView.current
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 1. Text Action Row: Add Text, Edit Text (if selected), Delete Text (if selected)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // "Add Text" Button
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .pressScale()
+                    .clickable {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        onAddText()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                        contentDescription = "Add Text",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Add Text",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                }
+            }
+
+            if (selectedText != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // "Edit" Button
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier
+                        .pressScale()
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            onEditText(selectedText)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                            contentDescription = "Edit Text",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Edit",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // "Delete" Button
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier
+                        .pressScale()
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            onDeleteText(selectedText)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                            contentDescription = "Delete Text",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Delete",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Bottom Action Row: Cancel `X`, "Text", Apply `✓`
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FilledTonalIconButton(
+                onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    onCancel()
+                },
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_ms_close),
+                    contentDescription = "Cancel",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Text(
+                text = "Text",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            FilledIconButton(
+                onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                     onApply()
                 },
                 modifier = Modifier.size(44.dp),

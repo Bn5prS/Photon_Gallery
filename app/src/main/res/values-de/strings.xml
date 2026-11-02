@@ -1,0 +1,101 @@
+<resources>
+    <!-- Application Brand -->
+    <string name="app_name">Photon Gallery</string>
+    <string name="app_description">Eine quelloffene Offline-Android-Galerie für Privatsphäre, Performance und beeindruckende Optik.</string>
+
+    <!-- Navigation & Tabs -->
+    <string name="nav_photos">Fotos</string>
+    <string name="nav_albums">Alben</string>
+    <string name="nav_search">Suche</string>
+    <string name="nav_settings">Einstellungen</string>
+
+    <!-- Common Actions -->
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_confirm">Bestätigen</string>
+    <string name="action_delete">Löschen</string>
+    <string name="action_share">Teilen</string>
+    <string name="action_edit">Bearbeiten</string>
+    <string name="action_details">Details</string>
+    <string name="action_save">Speichern</string>
+    <string name="action_copy">Kopieren</string>
+    <string name="action_move">Verschieben</string>
+    <string name="action_select_all">Alle auswählen</string>
+    <string name="action_deselect_all">Auswahl aufheben</string>
+    <string name="action_close">Schließen</string>
+    <string name="action_done">Fertig</string>
+    <string name="action_retry">Wiederholen</string>
+    <string name="action_download">Herunterladen</string>
+    <string name="action_set_as">Festlegen als</string>
+    <string name="action_favorite">Favorit</string>
+    <string name="action_unfavorite">Aus Favoriten entfernen</string>
+    <string name="action_restore">Wiederherstellen</string>
+
+    <!-- Gallery & Media Grid -->
+    <string name="today">Heute</string>
+    <string name="yesterday">Gestern</string>
+    <string name="empty_gallery_title">Keine Fotos oder Videos</string>
+    <string name="empty_gallery_subtitle">Aufgenommene Momente und heruntergeladene Medien erscheinen hier</string>
+    <string name="media_count_single">%1$d Element</string>
+    <string name="media_count_multiple">%1$d Elemente</string>
+    <string name="selected_count">%1$d ausgewählt</string>
+
+    <!-- Albums -->
+    <string name="album_camera">Kamera</string>
+    <string name="album_screenshots">Screenshots</string>
+    <string name="album_favorites">Favoriten</string>
+    <string name="album_videos">Videos</string>
+    <string name="album_trash">Papierkorb</string>
+    <string name="album_archive">Archiv</string>
+    <string name="album_vault">Privater Tresor</string>
+    <string name="pinned_albums">Angeheftet</string>
+    <string name="all_albums">Alle Alben</string>
+    <string name="media_types">Medientypen</string>
+    <string name="new_album">Neues Album</string>
+    <string name="album_name_hint">Albumname</string>
+
+    <!-- Search & AI -->
+    <string name="search_hint">Fotos, Orte, Daten, Texte suchen...</string>
+    <string name="smart_search">Intelligente Suche</string>
+    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by CLIP ViT-B/16</string>
+    <string name="recent_searches">Letzte Suchanfragen</string>
+    <string name="clear_search_history">Suchverlauf löschen</string>
+    <string name="no_search_results">Keine Ergebnisse gefunden</string>
+
+    <!-- Settings Categories -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="category_general">Allgemein</string>
+    <string name="category_theme_display">Design &amp; Anzeige</string>
+    <string name="category_layout_navigation">Layout &amp; Navigation</string>
+    <string name="category_security_privacy">Sicherheit &amp; Datenschutz</string>
+    <string name="category_about">Über</string>
+
+    <!-- Theme & Display Settings -->
+    <string name="theme_mode">Designmodus</string>
+    <string name="theme_mode_system">System</string>
+    <string name="theme_mode_light">Hell</string>
+    <string name="theme_mode_dark">Dunkel</string>
+    <string name="material_you">Material You</string>
+    <string name="material_you_desc">Dynamische Farben basierend auf Ihrem Hintergrundbild</string>
+    <string name="amoled_black">Tiefes AMOLED-Schwarz</string>
+    <string name="amoled_black_desc">Pechschwarzer Hintergrund im dunklen Modus</string>
+    <string name="color_scheme">Farbschema &amp; Stil</string>
+    <string name="full_screen_mode">Vollbildmodus</string>
+    <string name="full_screen_mode_desc">Status- und Navigationsleiste beim Stöbern ausblenden</string>
+    <string name="motion_style">Animationsstil</string>
+    <string name="motion_expressive">Ausdrucksstark</string>
+    <string name="motion_standard">Standard</string>
+
+    <!-- General Settings -->
+    <string name="confirm_delete">Löschen bestätigen</string>
+    <string name="confirm_delete_desc">Vor dem Verschieben in den Papierkorb nachfragen</string>
+    <string name="auto_clean_trash">Papierkorb automatisch bereinigen</string>
+    <string name="auto_clean_trash_desc">Alte Elemente im Papierkorb automatisch löschen</string>
+
+    <!-- About & Community -->
+    <string name="check_updates">Nach Updates suchen</string>
+    <string name="source_code">Quellcode auf GitHub</string>
+    <string name="report_issue">Problem melden &amp; Feedback</string>
+    <string name="open_source_licenses">Open-Source-Lizenzen</string>
+    <string name="privacy_guarantee">Datenschutzrichtlinie &amp; Garantie</string>
+</resources>
+

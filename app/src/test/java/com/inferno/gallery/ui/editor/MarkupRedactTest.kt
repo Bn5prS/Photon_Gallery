@@ -26,8 +26,9 @@ class MarkupRedactTest {
 
     @Test
     fun testRedactModeEnum() {
-        assertEquals(2, RedactMode.entries.size)
+        assertEquals(3, RedactMode.entries.size)
         assertTrue(RedactMode.entries.contains(RedactMode.MOSAIC))
+        assertTrue(RedactMode.entries.contains(RedactMode.BLUR))
         assertTrue(RedactMode.entries.contains(RedactMode.BLACKOUT))
     }
 

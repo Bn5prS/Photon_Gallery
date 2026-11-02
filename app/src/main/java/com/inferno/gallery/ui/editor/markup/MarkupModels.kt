@@ -3,6 +3,7 @@ package com.inferno.gallery.ui.editor.markup
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import kotlin.math.sqrt
 
 enum class MarkupTool(val label: String) {
@@ -16,6 +17,7 @@ enum class MarkupTool(val label: String) {
 
 enum class RedactMode {
     MOSAIC,
+    BLUR,
     BLACKOUT
 }
 
@@ -126,6 +128,7 @@ enum class TextHitPart {
     HANDLE_TOP_RIGHT,
     HANDLE_BOTTOM_LEFT,
     HANDLE_BOTTOM_RIGHT,
+    HANDLE_ROTATE,
     EDGE_TOP,
     EDGE_BOTTOM,
     EDGE_LEFT,
@@ -153,7 +156,8 @@ data class MarkupText(
     val fontSize: Float = 22f, // Sp-equivalent
     val scale: Float = 1.0f, // Multiplier (0.5f..4.0f)
     val rotation: Float = 0f, // Degrees (-180f..180f)
-    val hasBackgroundBox: Boolean = true
+    val hasBackgroundBox: Boolean = true,
+    val textAlign: TextAlign = TextAlign.Center
 ) {
     fun isHitBy(normPoint: Offset, width: Float, height: Float, touchMarginDp: Float = 16f): Boolean {
         if (width <= 0f || height <= 0f) return false

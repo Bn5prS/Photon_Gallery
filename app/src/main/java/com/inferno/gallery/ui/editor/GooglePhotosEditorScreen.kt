@@ -273,6 +273,19 @@ fun GooglePhotosEditorScreen(
     var editingTextItem by remember { mutableStateOf<MarkupText?>(null) }
     var showTextDialog by rememberSaveable { mutableStateOf(false) }
 
+    // Markup pinch-to-zoom & pan state for pinpoint drawing accuracy
+    var markupZoom by rememberSaveable { mutableFloatStateOf(1f) }
+    var markupPanX by rememberSaveable { mutableFloatStateOf(0f) }
+    var markupPanY by rememberSaveable { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab != EditorTab.MARKUP) {
+            markupZoom = 1f
+            markupPanX = 0f
+            markupPanY = 0f
+        }
+    }
+
     val hasModifications = historyState.canUndo || currentSnapshot.isModified
 
     val handleSave: (Boolean) -> Unit = { overwrite ->
@@ -314,6 +327,11 @@ fun GooglePhotosEditorScreen(
             isSearchOpen -> isSearchOpen = false
             cropSubMode != CropSubMode.CAROUSEL -> cropSubMode = CropSubMode.CAROUSEL
             activeAdjustTool != null -> activeAdjustTool = null
+            selectedTab == EditorTab.MARKUP && markupZoom > 1.05f -> {
+                markupZoom = 1f
+                markupPanX = 0f
+                markupPanY = 0f
+            }
             hasModifications -> showDiscardDialog = true
             else -> onBack()
         }
@@ -412,16 +430,6 @@ fun GooglePhotosEditorScreen(
                     val maxH = constraints.maxHeight.toFloat()
                     val containerAspect = if (maxH > 0f) maxW / maxH else 1f
 
-                    val (dispW, dispH) = if (effectiveAspect > containerAspect) {
-                        maxW to (maxW / effectiveAspect)
-                    } else {
-                        (maxH * effectiveAspect) to maxH
-                    }
-
-                    val isQuarterRotated = !isComparingOriginal && (currentSnapshot.cropState.rotation % 180 != 0)
-                    val boxW = if (isQuarterRotated) dispH else dispW
-                    val boxH = if (isQuarterRotated) dispW else dispH
-
                     val density = LocalDensity.current
 
                     val canTouchImageToCompare = selectedTab != EditorTab.CROP &&
@@ -492,18 +500,23 @@ fun GooglePhotosEditorScreen(
                         Rect(photoScreenLeft, photoScreenTop, photoScreenLeft + photoScreenW, photoScreenTop + photoScreenH)
                     }
 
-                    val baseWDp = with(density) { baseW.toDp() }
-                    val baseHDp = with(density) { baseH.toDp() }
+                    val isQuarterRotated = !isComparingOriginal && (currentSnapshot.cropState.rotation % 180 != 0)
+                    val unrotatedBaseW = if (isQuarterRotated) baseH else baseW
+                    val unrotatedBaseH = if (isQuarterRotated) baseW else baseH
+                    val boxWDp = with(density) { unrotatedBaseW.toDp() }
+                    val boxHDp = with(density) { unrotatedBaseH.toDp() }
 
                     // Image container with live geometry transforms applied via graphicsLayer
                     Box(
                         modifier = Modifier
-                            .size(width = baseWDp, height = baseHDp)
+                            .align(Alignment.Center)
+                            .size(width = boxWDp, height = boxHDp)
                             .graphicsLayer {
-                                translationX = baseLeft + liveTransX
-                                translationY = baseTop + liveTransY
-                                scaleX = liveScale
-                                scaleY = liveScale
+                                val isMarkupActive = selectedTab == EditorTab.MARKUP
+                                translationX = liveTransX + (if (isMarkupActive) markupPanX else 0f)
+                                translationY = liveTransY + (if (isMarkupActive) markupPanY else 0f)
+                                scaleX = liveScale * (if (isMarkupActive) markupZoom else 1f)
+                                scaleY = liveScale * (if (isMarkupActive) markupZoom else 1f)
                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
                                 if (!isComparingOriginal) {
                                     val crop = currentSnapshot.cropState
@@ -571,10 +584,10 @@ fun GooglePhotosEditorScreen(
 
                         // 3. Markup Overlay (interactive in Markup tab, persistent display elsewhere)
                         if (!isComparingOriginal && (selectedTab == EditorTab.MARKUP || currentSnapshot.markupState.strokes.isNotEmpty() || currentSnapshot.markupState.texts.isNotEmpty())) {
-                            val markupActive = selectedTab == EditorTab.MARKUP && activeMarkupTool != null
+                            val markupActive = selectedTab == EditorTab.MARKUP
                             MarkupCanvasOverlay(
                                 markupState = currentSnapshot.markupState,
-                                activeTool = activeMarkupTool ?: MarkupTool.PEN,
+                                activeTool = activeMarkupTool,
                                 currentColor = markupColor,
                                 currentStrokeWidth = when (activeMarkupTool) {
                                     MarkupTool.PEN -> penStrokeWidth
@@ -591,6 +604,19 @@ fun GooglePhotosEditorScreen(
                                 onEditTextRequest = { textItem ->
                                     editingTextItem = textItem
                                     showTextDialog = true
+                                },
+                                onZoomPan = { zoomChange, panChange ->
+                                    val newZoom = (markupZoom * zoomChange).coerceIn(1f, 5f)
+                                    markupZoom = newZoom
+                                    if (newZoom > 1f) {
+                                        val maxPanX = (maxW * (newZoom - 1f)) / 2f
+                                        val maxPanY = (maxH * (newZoom - 1f)) / 2f
+                                        markupPanX = (markupPanX + panChange.x).coerceIn(-maxPanX, maxPanX)
+                                        markupPanY = (markupPanY + panChange.y).coerceIn(-maxPanY, maxPanY)
+                                    } else {
+                                        markupPanX = 0f
+                                        markupPanY = 0f
+                                    }
                                 },
                                 isInteractive = markupActive,
                                 modifier = Modifier.fillMaxSize()
@@ -740,6 +766,46 @@ fun GooglePhotosEditorScreen(
                             }
                         }
                     }
+
+                    // 7. Floating Markup Zoom Reset Pill (top-start corner)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = selectedTab == EditorTab.MARKUP && markupZoom > 1.05f,
+                        enter = fadeIn(tween(150)),
+                        exit = fadeOut(tween(150)),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(top = 12.dp, start = 12.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                markupZoom = 1f
+                                markupPanX = 0f
+                                markupPanY = 0f
+                            },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 2.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_ms_refresh),
+                                    contentDescription = "Reset zoom",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "${(markupZoom * 100).toInt()}% \u2022 Reset",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
                 } else if (isLoadingBitmap) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.primary,
@@ -822,6 +888,12 @@ fun GooglePhotosEditorScreen(
                             onRedactStrokeWidthChange = { redactStrokeWidth = it },
                             redactMode = redactMode,
                             onRedactModeChange = { redactMode = it },
+                            selectedTextId = selectedMarkupTextId,
+                            onSelectTextId = { selectedMarkupTextId = it },
+                            onEditText = { textToEdit ->
+                                editingTextItem = textToEdit
+                                showTextDialog = true
+                            },
                             onOpenTextDialog = {
                                 editingTextItem = null
                                 showTextDialog = true
@@ -892,10 +964,18 @@ fun GooglePhotosEditorScreen(
                                 val rawAspect = originalBitmap?.let { it.width.toFloat() / it.height.toFloat() } ?: 1f
                                 val newRotation = CropGeometryHelper.rotateCounterClockwise(currentSnapshot.cropState.rotation)
                                 val newEffAspect = CropGeometryHelper.effectiveAspectRatio(rawAspect, newRotation)
+                                val old = currentSnapshot.cropState.cropRect
                                 val newRect = if (currentSnapshot.cropState.aspectOption != com.inferno.gallery.ui.editor.model.AspectRatioOption.FREEFORM) {
                                     CropGeometryHelper.calculateInitialAspectRect(currentSnapshot.cropState.aspectOption, newEffAspect)
+                                } else if (old != Rect(0f, 0f, 1f, 1f)) {
+                                    Rect(
+                                        left = old.top,
+                                        top = (1f - old.right).coerceIn(0f, 1f),
+                                        right = old.bottom,
+                                        bottom = (1f - old.left).coerceIn(0f, 1f)
+                                    )
                                 } else {
-                                    currentSnapshot.cropState.cropRect
+                                    old
                                 }
                                 commitSnapshot(
                                     currentSnapshot.copy(

@@ -1,6 +1,7 @@
 package com.inferno.gallery.ui.editor.studios
 
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -73,20 +75,30 @@ fun AdjustStudio(
     onDone: (() -> Unit)? = null
 ) {
     var activeTool by rememberSaveable { mutableStateOf(initialTool) }
+    var lastSelectedTool by rememberSaveable { mutableStateOf<AdjustTool?>(initialTool) }
     LaunchedEffect(initialTool) {
         if (initialTool != null) {
             activeTool = initialTool
+            lastSelectedTool = initialTool
         }
     }
     val tools = remember { AdjustTool.entries }
     val listState = rememberLazyListState()
     val view = LocalView.current
 
-    // Scroll selected tool into view when returning to carousel
+    // Handle system back button to exit scrubbing view back to carousel
+    BackHandler(enabled = activeTool != null) {
+        activeTool = null
+        onDone?.invoke()
+    }
+
+    // Scroll last selected tool into view when returning to carousel
     LaunchedEffect(activeTool) {
-        if (activeTool == null && initialTool != null) {
-            val index = tools.indexOf(initialTool).coerceAtLeast(0)
-            listState.animateScrollToItem(index)
+        if (activeTool != null) {
+            lastSelectedTool = activeTool
+        } else if (lastSelectedTool != null) {
+            val index = tools.indexOf(lastSelectedTool).coerceAtLeast(0)
+            listState.animateScrollToItem((index - 1).coerceAtLeast(0))
         }
     }
 
@@ -116,8 +128,10 @@ fun AdjustStudio(
                     tuneValues = tuneValues,
                     onSelectTool = { tool ->
                         view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        lastSelectedTool = tool
                         activeTool = tool
                     },
+                    state = listState,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
@@ -129,6 +143,7 @@ fun AdjustStudio(
                     onTuneValuesChange = onTuneValuesChange,
                     onSelectTool = { newTool ->
                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        lastSelectedTool = newTool
                         activeTool = newTool
                     },
                     onDone = {
@@ -150,9 +165,11 @@ private fun AdjustToolsCarousel(
     tools: List<AdjustTool>,
     tuneValues: TuneValues,
     onSelectTool: (AdjustTool) -> Unit,
+    state: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
     LazyRow(
+        state = state,
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp)

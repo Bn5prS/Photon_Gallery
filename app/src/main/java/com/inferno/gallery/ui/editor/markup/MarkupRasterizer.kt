@@ -9,6 +9,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.style.TextAlign
 import kotlin.math.sqrt
 
 data class MosaicTile(
@@ -70,20 +71,26 @@ object MarkupRasterizer {
 
                 MarkupTool.REDACT -> {
                     val mode = stroke.redactMode ?: RedactMode.MOSAIC
-                    if (mode == RedactMode.BLACKOUT) {
-                        val paint = Paint().apply {
-                            isAntiAlias = true
-                            style = Paint.Style.STROKE
-                            strokeCap = Paint.Cap.ROUND
-                            strokeJoin = Paint.Join.ROUND
-                            color = android.graphics.Color.BLACK
-                            strokeWidth = strokePx
+                    when (mode) {
+                        RedactMode.BLACKOUT -> {
+                            val paint = Paint().apply {
+                                isAntiAlias = true
+                                style = Paint.Style.STROKE
+                                strokeCap = Paint.Cap.ROUND
+                                strokeJoin = Paint.Join.ROUND
+                                color = android.graphics.Color.BLACK
+                                strokeWidth = strokePx
+                            }
+                            drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
                         }
-                        drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
-                    } else {
-                        val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
-                        val tiles = calculateMosaicTiles(stroke.points, bitmapWidth, bitmapHeight, strokePx, tileSizePx)
-                        drawMosaicTiles(canvas, tiles, sourceBitmap)
+                        RedactMode.BLUR -> {
+                            drawBlurStroke(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, sourceBitmap)
+                        }
+                        RedactMode.MOSAIC -> {
+                            val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
+                            val tiles = calculateMosaicTiles(stroke.points, bitmapWidth, bitmapHeight, strokePx, tileSizePx)
+                            drawMosaicTiles(canvas, tiles, sourceBitmap)
+                        }
                     }
                 }
 
@@ -439,11 +446,79 @@ object MarkupRasterizer {
         for (i in lines.indices) {
             val line = lines[i]
             val lw = textPaint.measureText(line)
-            val drawX = -lw / 2f
+            val drawX = when (textElem.textAlign) {
+                TextAlign.Left -> -maxLineWidth / 2f
+                TextAlign.Right -> maxLineWidth / 2f - lw
+                else -> -lw / 2f
+            }
             val drawY = firstBaselineY + i * lineHeight
             canvas.drawText(line, drawX, drawY, textPaint)
         }
         canvas.restore()
+    }
+
+    private fun drawBlurStroke(
+        canvas: Canvas,
+        points: List<Offset>,
+        bitmapWidth: Int,
+        bitmapHeight: Int,
+        strokePx: Float,
+        sourceBitmap: Bitmap?
+    ) {
+        if (points.isEmpty() || sourceBitmap == null) return
+        val path = Path()
+        val p0 = points[0]
+        path.moveTo(p0.x * bitmapWidth, p0.y * bitmapHeight)
+        for (i in 1 until points.size) {
+            val p = points[i]
+            path.lineTo(p.x * bitmapWidth, p.y * bitmapHeight)
+        }
+
+        val bounds = RectF()
+        path.computeBounds(bounds, true)
+        val inset = strokePx
+        bounds.inset(-inset, -inset)
+
+        val left = bounds.left.toInt().coerceIn(0, bitmapWidth - 1)
+        val top = bounds.top.toInt().coerceIn(0, bitmapHeight - 1)
+        val right = bounds.right.toInt().coerceIn(left + 1, bitmapWidth)
+        val bottom = bounds.bottom.toInt().coerceIn(top + 1, bitmapHeight)
+        val patchW = right - left
+        val patchH = bottom - top
+        if (patchW <= 0 || patchH <= 0) return
+
+        try {
+            val patch = Bitmap.createBitmap(sourceBitmap, left, top, patchW, patchH)
+            val downW = (patchW / 12).coerceAtLeast(2)
+            val downH = (patchH / 12).coerceAtLeast(2)
+            val small = Bitmap.createScaledBitmap(patch, downW, downH, true)
+            val blurred = Bitmap.createScaledBitmap(small, patchW, patchH, true)
+
+            val strokePaint = Paint().apply {
+                isAntiAlias = true
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                strokeWidth = strokePx
+            }
+            val strokePath = Path()
+            strokePaint.getFillPath(path, strokePath)
+
+            canvas.save()
+            canvas.clipPath(strokePath)
+            canvas.drawBitmap(blurred, left.toFloat(), top.toFloat(), null)
+            canvas.restore()
+        } catch (e: Exception) {
+            val fallbackPaint = Paint().apply {
+                isAntiAlias = true
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                color = android.graphics.Color.argb(200, 230, 230, 230)
+                strokeWidth = strokePx
+            }
+            drawStrokePath(canvas, points, bitmapWidth, bitmapHeight, strokePx, fallbackPaint)
+        }
     }
 
     internal fun isColorDark(color: androidx.compose.ui.graphics.Color): Boolean {
