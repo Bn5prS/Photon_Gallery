@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -42,6 +43,11 @@ fun EditorCornerBrackets(
     onDragStateChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val currentCropRect by rememberUpdatedState(cropRect)
+    val currentAspectRatio by rememberUpdatedState(aspectRatio)
+    val currentOnCropRectChange by rememberUpdatedState(onCropRectChange)
+    val currentOnDragStateChange by rememberUpdatedState(onDragStateChange)
+
     val density = LocalDensity.current
     val touchRadiusPx = with(density) { 32.dp.toPx() } // 64dp hit target diameter
     val armLengthPx = with(density) { 24.dp.toPx() }
@@ -60,20 +66,20 @@ fun EditorCornerBrackets(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(aspectRatio, cropRect) {
+            .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         val hit = EditorCornerBracketsMath.hitTest(
                             touchX = offset.x,
                             touchY = offset.y,
-                            cropRect = cropRect,
+                            cropRect = currentCropRect,
                             canvasWidth = size.width.toFloat(),
                             canvasHeight = size.height.toFloat(),
                             touchRadiusPx = touchRadiusPx
                         )
                         activeHandle = hit
                         if (hit != CornerHandle.NONE) {
-                            onDragStateChange(true)
+                            currentOnDragStateChange(true)
                         }
                     },
                     onDrag = { change, dragAmount ->
@@ -83,27 +89,27 @@ fun EditorCornerBrackets(
                             val deltaYNorm = dragAmount.y / size.height.toFloat()
 
                             val updated = EditorCornerBracketsMath.updateCropRect(
-                                currentRect = cropRect,
+                                currentRect = currentCropRect,
                                 handle = activeHandle,
                                 deltaXNormalized = deltaXNorm,
                                 deltaYNormalized = deltaYNorm,
-                                aspectRatio = aspectRatio,
+                                aspectRatio = currentAspectRatio,
                                 canvasWidth = size.width.toFloat(),
                                 canvasHeight = size.height.toFloat()
                             )
-                            onCropRectChange(updated)
+                            currentOnCropRectChange(updated)
                         }
                     },
                     onDragEnd = {
                         if (activeHandle != CornerHandle.NONE) {
                             activeHandle = CornerHandle.NONE
-                            onDragStateChange(false)
+                            currentOnDragStateChange(false)
                         }
                     },
                     onDragCancel = {
                         if (activeHandle != CornerHandle.NONE) {
                             activeHandle = CornerHandle.NONE
-                            onDragStateChange(false)
+                            currentOnDragStateChange(false)
                         }
                     }
                 )
@@ -255,3 +261,4 @@ private fun DrawScope.drawCornerLBracket(
         cap = StrokeCap.Square
     )
 }
+

@@ -90,20 +90,28 @@ object EditorCornerBracketsMath {
 
             when (handle) {
                 CornerHandle.TOP_LEFT -> {
-                    l = (l + deltaXNormalized).coerceIn(0f, r - minDimensionNormalized)
-                    t = (t + deltaYNormalized).coerceIn(0f, b - minDimensionNormalized)
+                    val maxL = (r - minDimensionNormalized).coerceAtLeast(0f)
+                    val maxT = (b - minDimensionNormalized).coerceAtLeast(0f)
+                    l = (l + deltaXNormalized).coerceIn(0f, maxL)
+                    t = (t + deltaYNormalized).coerceIn(0f, maxT)
                 }
                 CornerHandle.TOP_RIGHT -> {
-                    r = (r + deltaXNormalized).coerceIn(l + minDimensionNormalized, 1f)
-                    t = (t + deltaYNormalized).coerceIn(0f, b - minDimensionNormalized)
+                    val minR = (l + minDimensionNormalized).coerceAtMost(1f)
+                    val maxT = (b - minDimensionNormalized).coerceAtLeast(0f)
+                    r = (r + deltaXNormalized).coerceIn(minR, 1f)
+                    t = (t + deltaYNormalized).coerceIn(0f, maxT)
                 }
                 CornerHandle.BOTTOM_LEFT -> {
-                    l = (l + deltaXNormalized).coerceIn(0f, r - minDimensionNormalized)
-                    b = (b + deltaYNormalized).coerceIn(t + minDimensionNormalized, 1f)
+                    val maxL = (r - minDimensionNormalized).coerceAtLeast(0f)
+                    val minB = (t + minDimensionNormalized).coerceAtMost(1f)
+                    l = (l + deltaXNormalized).coerceIn(0f, maxL)
+                    b = (b + deltaYNormalized).coerceIn(minB, 1f)
                 }
                 CornerHandle.BOTTOM_RIGHT -> {
-                    r = (r + deltaXNormalized).coerceIn(l + minDimensionNormalized, 1f)
-                    b = (b + deltaYNormalized).coerceIn(t + minDimensionNormalized, 1f)
+                    val minR = (l + minDimensionNormalized).coerceAtMost(1f)
+                    val minB = (t + minDimensionNormalized).coerceAtMost(1f)
+                    r = (r + deltaXNormalized).coerceIn(minR, 1f)
+                    b = (b + deltaYNormalized).coerceIn(minB, 1f)
                 }
                 else -> {}
             }
@@ -122,9 +130,9 @@ object EditorCornerBracketsMath {
             CornerHandle.BOTTOM_RIGHT -> {
                 val anchorX = currentRect.left
                 val anchorY = currentRect.top
-                val maxAllowedW = 1f - anchorX
-                val maxAllowedH = 1f - anchorY
-                val maxH = min(maxAllowedH, maxAllowedW / rNorm)
+                val maxAllowedW = (1f - anchorX).coerceAtLeast(0f)
+                val maxAllowedH = (1f - anchorY).coerceAtLeast(0f)
+                val maxH = min(maxAllowedH, if (rNorm > 0f) maxAllowedW / rNorm else maxAllowedH).coerceAtLeast(minH)
 
                 val candW = currentRect.right + deltaXNormalized - anchorX
                 val candH = currentRect.bottom + deltaYNormalized - anchorY
@@ -139,9 +147,9 @@ object EditorCornerBracketsMath {
             CornerHandle.BOTTOM_LEFT -> {
                 val anchorX = currentRect.right
                 val anchorY = currentRect.top
-                val maxAllowedW = anchorX
-                val maxAllowedH = 1f - anchorY
-                val maxH = min(maxAllowedH, maxAllowedW / rNorm)
+                val maxAllowedW = anchorX.coerceAtLeast(0f)
+                val maxAllowedH = (1f - anchorY).coerceAtLeast(0f)
+                val maxH = min(maxAllowedH, if (rNorm > 0f) maxAllowedW / rNorm else maxAllowedH).coerceAtLeast(minH)
 
                 val candW = anchorX - (currentRect.left + deltaXNormalized)
                 val candH = currentRect.bottom + deltaYNormalized - anchorY
@@ -156,9 +164,9 @@ object EditorCornerBracketsMath {
             CornerHandle.TOP_RIGHT -> {
                 val anchorX = currentRect.left
                 val anchorY = currentRect.bottom
-                val maxAllowedW = 1f - anchorX
-                val maxAllowedH = anchorY
-                val maxH = min(maxAllowedH, maxAllowedW / rNorm)
+                val maxAllowedW = (1f - anchorX).coerceAtLeast(0f)
+                val maxAllowedH = anchorY.coerceAtLeast(0f)
+                val maxH = min(maxAllowedH, if (rNorm > 0f) maxAllowedW / rNorm else maxAllowedH).coerceAtLeast(minH)
 
                 val candW = currentRect.right + deltaXNormalized - anchorX
                 val candH = anchorY - (currentRect.top + deltaYNormalized)
@@ -173,9 +181,9 @@ object EditorCornerBracketsMath {
             CornerHandle.TOP_LEFT -> {
                 val anchorX = currentRect.right
                 val anchorY = currentRect.bottom
-                val maxAllowedW = anchorX
-                val maxAllowedH = anchorY
-                val maxH = min(maxAllowedH, maxAllowedW / rNorm)
+                val maxAllowedW = anchorX.coerceAtLeast(0f)
+                val maxAllowedH = anchorY.coerceAtLeast(0f)
+                val maxH = min(maxAllowedH, if (rNorm > 0f) maxAllowedW / rNorm else maxAllowedH).coerceAtLeast(minH)
 
                 val candW = anchorX - (currentRect.left + deltaXNormalized)
                 val candH = anchorY - (currentRect.top + deltaYNormalized)
@@ -191,3 +199,4 @@ object EditorCornerBracketsMath {
         }
     }
 }
+

@@ -302,4 +302,39 @@ class EditorRulerSliderMathTest {
         assertEquals(initial.width, moved.width, 0.001f)
         assertEquals(initial.height, moved.height, 0.001f)
     }
+
+    @Test
+    fun testSnapThresholdAllowsPlusMinusOne() {
+        val step = 1f
+        val snapThreshold = step * 0.4f
+        val defaultValue = 0f
+
+        // Near 0 (<= 0.4) -> snaps to 0
+        assertEquals(0f, EditorRulerSliderMath.snapToDefault(0.35f, defaultValue, snapThreshold), 0.001f)
+        assertEquals(0f, EditorRulerSliderMath.snapToDefault(-0.35f, defaultValue, snapThreshold), 0.001f)
+
+        // Exact +1 and -1 (> 0.4) are preserved and NOT snapped to 0
+        assertEquals(1f, EditorRulerSliderMath.snapToDefault(1f, defaultValue, snapThreshold), 0.001f)
+        assertEquals(-1f, EditorRulerSliderMath.snapToDefault(-1f, defaultValue, snapThreshold), 0.001f)
+        assertEquals(2f, EditorRulerSliderMath.snapToDefault(2f, defaultValue, snapThreshold), 0.001f)
+        assertEquals(-2f, EditorRulerSliderMath.snapToDefault(-2f, defaultValue, snapThreshold), 0.001f)
+    }
+
+    @Test
+    fun testCornerFreeformBoundaryDegenerateRange() {
+        // When r is smaller than minDimensionNormalized, maxL shouldn't throw IllegalArgumentException
+        val degenerateRect = Rect(0.01f, 0.01f, 0.02f, 0.02f)
+        val result = EditorCornerBracketsMath.updateCropRect(
+            currentRect = degenerateRect,
+            handle = CornerHandle.TOP_LEFT,
+            deltaXNormalized = -0.05f,
+            deltaYNormalized = -0.05f,
+            aspectRatio = null,
+            canvasWidth = 1000f,
+            canvasHeight = 1000f,
+            minDimensionNormalized = 0.05f
+        )
+        assertTrue(result.left >= 0f)
+        assertTrue(result.top >= 0f)
+    }
 }

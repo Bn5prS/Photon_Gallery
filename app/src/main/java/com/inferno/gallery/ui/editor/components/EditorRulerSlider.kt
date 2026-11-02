@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +73,14 @@ fun EditorRulerSlider(
     onDone: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val currentValue by rememberUpdatedState(value)
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    val currentRange by rememberUpdatedState(range)
+    val currentStep by rememberUpdatedState(step)
+    val currentDefaultValue by rememberUpdatedState(defaultValue)
+    val currentOnReset by rememberUpdatedState(onReset)
+    val currentOnDone by rememberUpdatedState(onDone)
+
     val view = LocalView.current
     val density = LocalDensity.current
     val isNonDefault = abs(value - defaultValue) > (step * 0.4f)
@@ -138,7 +147,7 @@ fun EditorRulerSlider(
                 }
 
                 // Center Slot: Horizontal Interactive Ruler Canvas
-                var rawValue by remember(value) { mutableFloatStateOf(value) }
+                var rawValue by remember { mutableFloatStateOf(value) }
                 val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
                 val primaryColor = MaterialTheme.colorScheme.primary
 
@@ -147,33 +156,35 @@ fun EditorRulerSlider(
                         .weight(1f)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(8.dp))
-                        .pointerInput(range, step, defaultValue) {
+                        .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragStart = {
-                                    rawValue = value
+                                    rawValue = currentValue
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
+                                    val activeStep = currentStep
+                                    val activePx = if (activeStep > 0f) tickSpacingPx / activeStep else tickSpacingPx
                                     val deltaUnits = EditorRulerSliderMath.deltaToValue(
                                         dragDeltaPx = dragAmount.x,
-                                        pxPerUnit = pxPerUnit,
+                                        pxPerUnit = activePx,
                                         inverted = true
                                     )
-                                    val oldStepped = EditorRulerSliderMath.quantize(rawValue, step)
+                                    val oldStepped = EditorRulerSliderMath.quantize(rawValue, activeStep)
                                     val candidate = rawValue + deltaUnits
-                                    val clamped = EditorRulerSliderMath.clamp(candidate, range)
+                                    val clamped = EditorRulerSliderMath.clamp(candidate, currentRange)
                                     rawValue = clamped
 
                                     val snapped = EditorRulerSliderMath.snapToDefault(
                                         value = clamped,
-                                        defaultValue = defaultValue,
-                                        snapThreshold = step * 1.5f
+                                        defaultValue = currentDefaultValue,
+                                        snapThreshold = activeStep * 0.4f
                                     )
-                                    val newStepped = EditorRulerSliderMath.quantize(snapped, step)
+                                    val newStepped = EditorRulerSliderMath.quantize(snapped, activeStep)
 
                                     if (newStepped != oldStepped) {
                                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                        onValueChange(newStepped)
+                                        currentOnValueChange(newStepped)
                                     }
                                 }
                             )
@@ -272,7 +283,7 @@ fun EditorRulerSlider(
                     contentAlignment = Alignment.Center
                 ) {
                     IconButton(
-                        onClick = onReset,
+                        onClick = currentOnReset,
                         enabled = isNonDefault,
                         modifier = Modifier.size(36.dp)
                     ) {
@@ -293,7 +304,7 @@ fun EditorRulerSlider(
 
         // Bottom Pill: "Done" Action Button
         FilledTonalButton(
-            onClick = onDone,
+            onClick = currentOnDone,
             shape = CircleShape,
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -310,3 +321,4 @@ fun EditorRulerSlider(
         }
     }
 }
+
