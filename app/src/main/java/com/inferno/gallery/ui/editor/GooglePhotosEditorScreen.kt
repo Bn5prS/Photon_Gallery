@@ -388,7 +388,7 @@ fun GooglePhotosEditorScreen(
                     .fillMaxWidth()
                     .clipToBounds()
                     .padding(horizontal = 8.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.TopStart
             ) {
                 val bmp = originalBitmap
                 val imgBmp = imageBitmap
@@ -416,60 +416,59 @@ fun GooglePhotosEditorScreen(
                     val boxH = if (isQuarterRotated) dispW else dispH
 
                     val density = LocalDensity.current
-                    val boxWDp = with(density) { boxW.toDp() }
-                    val boxHDp = with(density) { boxH.toDp() }
 
                     val canTouchImageToCompare = selectedTab != EditorTab.CROP &&
                             !isCropDragging &&
                             (selectedTab != EditorTab.MARKUP || activeMarkupTool == null)
                     val currentCanTouchToCompare by rememberUpdatedState(canTouchImageToCompare)
 
-                    // In Crop mode: smoothly align the cropped area to center of screen when not dragging
-                    var steadyCropRect by remember { mutableStateOf(currentSnapshot.cropState.cropRect) }
-                    LaunchedEffect(isCropDragging, currentSnapshot.cropState.cropRect, selectedTab) {
-                        if (!isCropDragging || selectedTab != EditorTab.CROP) {
-                            steadyCropRect = currentSnapshot.cropState.cropRect
-                        }
+                    // ── CROP VIEWPORT GEOMETRY ────────────────────────────
+                    val isCropMode = selectedTab == EditorTab.CROP && !isComparingOriginal
+
+                    // 1. Locked crop frame centered in viewport
+                    val activeAspect = currentSnapshot.cropState.aspectOption.resolveTargetRatio(effectiveAspect)
+                        ?: ((currentSnapshot.cropState.cropRect.width / currentSnapshot.cropState.cropRect.height.coerceAtLeast(0.01f)) * effectiveAspect)
+                    val maxFrameW = maxW * 0.84f
+                    val maxFrameH = maxH * 0.84f
+                    val (frameW, frameH) = if (activeAspect > (maxFrameW / maxFrameH)) {
+                        maxFrameW to (maxFrameW / activeAspect)
+                    } else {
+                        (maxFrameH * activeAspect) to maxFrameH
                     }
 
-                    val isCenteringCrop = selectedTab == EditorTab.CROP && !isComparingOriginal
-                    val cropCenterX = (steadyCropRect.left + steadyCropRect.right) / 2f
-                    val cropCenterY = (steadyCropRect.top + steadyCropRect.bottom) / 2f
-                    val cropWNorm = steadyCropRect.width.coerceAtLeast(0.05f)
-                    val cropHNorm = steadyCropRect.height.coerceAtLeast(0.05f)
+                    val frameLeft = (maxW - frameW) / 2f
+                    val frameTop = (maxH - frameH) / 2f
+                    val lockedCropFrame = Rect(frameLeft, frameTop, frameLeft + frameW, frameTop + frameH)
 
-                    val targetCropFitScale = if (isCenteringCrop) {
-                        minOf(0.85f / cropWNorm, 0.85f / cropHNorm).coerceIn(1f, 4f)
-                    } else 1f
+                    // 2. Photo layout aligned to locked crop frame (so cropRect fits frame)
+                    val cRect = currentSnapshot.cropState.cropRect
+                    val normW = cRect.width.coerceIn(0.02f, 1f)
+                    val normH = cRect.height.coerceIn(0.02f, 1f)
+                    val photoW = if (isCropMode) frameW / normW else boxW
+                    val photoH = if (isCropMode) frameH / normH else boxH
+                    val photoLeft = if (isCropMode) frameLeft - cRect.left * photoW else (maxW - boxW) / 2f
+                    val photoTop = if (isCropMode) frameTop - cRect.top * photoH else (maxH - boxH) / 2f
 
-                    val targetCropOffsetX = if (isCenteringCrop) {
-                        (0.5f - cropCenterX) * boxW
-                    } else 0f
-
-                    val targetCropOffsetY = if (isCenteringCrop) {
-                        (0.5f - cropCenterY) * boxH
-                    } else 0f
-
-                    val animatedCropScale by animateFloatAsState(
-                        targetValue = targetCropFitScale,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
-                        label = "cropViewportScale"
-                    )
-                    val animatedCropOffsetX by animateFloatAsState(
-                        targetValue = targetCropOffsetX,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
-                        label = "cropViewportOffsetX"
-                    )
-                    val animatedCropOffsetY by animateFloatAsState(
-                        targetValue = targetCropOffsetY,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
-                        label = "cropViewportOffsetY"
-                    )
+                    val photoWDp = with(density) { photoW.toDp() }
+                    val photoHDp = with(density) { photoH.toDp() }
 
                     // Image container with live geometry transforms applied via graphicsLayer
                     Box(
                         modifier = Modifier
-                            .size(width = boxWDp, height = boxHDp)
+                            .size(width = photoWDp, height = photoHDp)
+                            .graphicsLayer {
+                                translationX = photoLeft
+                                translationY = photoTop
+                                if (!isComparingOriginal) {
+                                    val crop = currentSnapshot.cropState
+                                    rotationZ = crop.rotation.toFloat() + crop.straightenAngle
+                                    scaleX = if (crop.flipH) -1f else 1f
+                                    scaleY = if (crop.flipV) -1f else 1f
+                                    rotationX = crop.verticalTilt
+                                    rotationY = -crop.horizontalTilt
+                                    cameraDistance = 16f * density.density
+                                }
+                            }
                             .then(
                                 if (canTouchImageToCompare) {
                                     Modifier.pointerInput(Unit) {
@@ -494,20 +493,7 @@ fun GooglePhotosEditorScreen(
                                         }
                                     }
                                 } else Modifier
-                            )
-                            .graphicsLayer {
-                                if (!isComparingOriginal) {
-                                    val crop = currentSnapshot.cropState
-                                    rotationZ = crop.rotation.toFloat() + crop.straightenAngle
-                                    scaleX = (if (crop.flipH) -1f else 1f) * animatedCropScale
-                                    scaleY = (if (crop.flipV) -1f else 1f) * animatedCropScale
-                                    translationX = animatedCropOffsetX * animatedCropScale
-                                    translationY = animatedCropOffsetY * animatedCropScale
-                                    rotationX = crop.verticalTilt
-                                    rotationY = -crop.horizontalTilt
-                                    cameraDistance = 16f * density.density
-                                }
-                            },
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         // 1. Live Rendered Image
@@ -564,56 +550,61 @@ fun GooglePhotosEditorScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
+                    }
 
-                        // 4. Corner Brackets & Grid (active in Crop tab)
-                        if (!isComparingOriginal && selectedTab == EditorTab.CROP) {
-                            EditorCornerBrackets(
-                                cropRect = currentSnapshot.cropState.cropRect,
-                                onCropRectChange = { newRect ->
-                                    val updatedCrop = currentSnapshot.cropState.copy(cropRect = newRect)
-                                    if (isCropDragging) {
-                                        updateLiveSnapshot(currentSnapshot.copy(cropState = updatedCrop))
-                                    } else {
-                                        commitSnapshot(currentSnapshot.copy(cropState = updatedCrop))
-                                    }
-                                },
-                                aspectRatio = currentSnapshot.cropState.aspectOption.resolveTargetRatio(effectiveAspect),
-                                isDragging = isCropDragging,
-                                onDragStateChange = { dragging ->
-                                    isCropDragging = dragging
-                                    if (dragging) {
-                                        dragStartCropSnapshot = currentSnapshot
-                                    } else {
-                                        dragStartCropSnapshot?.let { startSnap ->
-                                            if (startSnap != currentSnapshot) {
-                                                historyState = EditorHistoryState(
-                                                    past = historyState.past + startSnap,
-                                                    current = currentSnapshot,
-                                                    future = emptyList()
-                                                )
-                                            }
+                    // 4. Corner Brackets & Grid (active in Crop tab, placed in viewport space)
+                    if (!isComparingOriginal && selectedTab == EditorTab.CROP) {
+                        EditorCornerBrackets(
+                            cropRect = currentSnapshot.cropState.cropRect,
+                            onCropRectChange = { newRect ->
+                                val updatedCrop = currentSnapshot.cropState.copy(cropRect = newRect)
+                                if (isCropDragging) {
+                                    updateLiveSnapshot(currentSnapshot.copy(cropState = updatedCrop))
+                                } else {
+                                    commitSnapshot(currentSnapshot.copy(cropState = updatedCrop))
+                                }
+                            },
+                            aspectRatio = currentSnapshot.cropState.aspectOption.resolveTargetRatio(effectiveAspect),
+                            isDragging = isCropDragging,
+                            onDragStateChange = { dragging ->
+                                isCropDragging = dragging
+                                if (dragging) {
+                                    dragStartCropSnapshot = currentSnapshot
+                                } else {
+                                    dragStartCropSnapshot?.let { startSnap ->
+                                        if (startSnap != currentSnapshot) {
+                                            historyState = EditorHistoryState(
+                                                past = historyState.past + startSnap,
+                                                current = currentSnapshot,
+                                                future = emptyList()
+                                            )
                                         }
-                                        dragStartCropSnapshot = null
                                     }
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else if (!isComparingOriginal && currentSnapshot.cropState.cropRect != Rect(0f, 0f, 1f, 1f)) {
-                            // Subtle non-interactive boundary crop scrim when previewing outside Crop tab
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val rect = currentSnapshot.cropState.cropRect
-                                val w = size.width
-                                val h = size.height
-                                val l = rect.left * w
-                                val t = rect.top * h
-                                val r = rect.right * w
-                                val b = rect.bottom * h
-                                val scrim = Color.Black.copy(alpha = 0.65f)
-                                if (t > 0f) drawRect(scrim, Offset.Zero, Size(w, t))
-                                if (b < h) drawRect(scrim, Offset(0f, b), Size(w, h - b))
-                                if (l > 0f) drawRect(scrim, Offset(0f, t), Size(l, b - t))
-                                if (r < w) drawRect(scrim, Offset(r, t), Size(w - r, b - t))
-                            }
+                                    dragStartCropSnapshot = null
+                                }
+                            },
+                            frameRect = lockedCropFrame,
+                            photoWidth = photoW,
+                            photoHeight = photoH,
+                            photoLeft = photoLeft,
+                            photoTop = photoTop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (!isComparingOriginal && currentSnapshot.cropState.cropRect != Rect(0f, 0f, 1f, 1f)) {
+                        // Subtle non-interactive boundary crop scrim when previewing outside Crop tab
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val rect = currentSnapshot.cropState.cropRect
+                            val w = size.width
+                            val h = size.height
+                            val l = rect.left * w
+                            val t = rect.top * h
+                            val r = rect.right * w
+                            val b = rect.bottom * h
+                            val scrim = Color.Black.copy(alpha = 0.65f)
+                            if (t > 0f) drawRect(scrim, Offset.Zero, Size(w, t))
+                            if (b < h) drawRect(scrim, Offset(0f, b), Size(w, h - b))
+                            if (l > 0f) drawRect(scrim, Offset(0f, t), Size(l, b - t))
+                            if (r < w) drawRect(scrim, Offset(r, t), Size(w - r, b - t))
                         }
                     }
 

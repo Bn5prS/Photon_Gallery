@@ -30,9 +30,9 @@ import androidx.compose.ui.unit.dp
  * Overlays directly on the photo bounding box with:
  * - 4 white L-shaped thick bracket handles with drop shadows on the corners.
  * - 4 edge line handles for top, bottom, left, right edge resizing.
- * - Multi-touch pinch-to-zoom and pan support for maximum cropping flexibility.
- * - Minimum 48x48 dp touch target per handle for responsive thumb/finger dragging.
- * - Smooth normalized [cropRect] updating within 0f..1f.
+ * - Multi-touch pinch-to-zoom on the image with locked center crop box.
+ * - 1-finger swipe / pan (left, right, up, down) of the image within the crop box.
+ * - Constant, non-scaling DP line and bracket thickness (never thick or distorted).
  * - Aspect ratio constraint clamping (preserving exact aspect ratio when provided).
  * - Animated rule-of-thirds 3x3 grid lines visible when dragging.
  * - Scrim darkening outside of the active crop rectangle.
@@ -44,12 +44,22 @@ fun EditorCornerBrackets(
     aspectRatio: Float? = null, // null for freeform
     isDragging: Boolean = false,
     onDragStateChange: (Boolean) -> Unit = {},
+    frameRect: Rect? = null, // Screen-space locked crop frame (null falls back to normalized cropRect * size)
+    photoWidth: Float = 0f,
+    photoHeight: Float = 0f,
+    photoLeft: Float = 0f,
+    photoTop: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val currentCropRect by rememberUpdatedState(cropRect)
     val currentAspectRatio by rememberUpdatedState(aspectRatio)
     val currentOnCropRectChange by rememberUpdatedState(onCropRectChange)
     val currentOnDragStateChange by rememberUpdatedState(onDragStateChange)
+    val currentFrameRect by rememberUpdatedState(frameRect)
+    val currentPhotoWidth by rememberUpdatedState(photoWidth)
+    val currentPhotoHeight by rememberUpdatedState(photoHeight)
+    val currentPhotoLeft by rememberUpdatedState(photoLeft)
+    val currentPhotoTop by rememberUpdatedState(photoTop)
 
     val density = LocalDensity.current
     val touchRadiusPx = with(density) { 32.dp.toPx() } // 64dp hit target diameter
@@ -77,12 +87,17 @@ fun EditorCornerBrackets(
                     val h = size.height.toFloat()
                     if (w <= 0f || h <= 0f) return@awaitEachGesture
 
-                    var currentHandle = EditorCornerBracketsMath.hitTest(
+                    val activeFrame = currentFrameRect ?: Rect(
+                        currentCropRect.left * w,
+                        currentCropRect.top * h,
+                        currentCropRect.right * w,
+                        currentCropRect.bottom * h
+                    )
+
+                    var currentHandle = EditorCornerBracketsMath.hitTestScreen(
                         touchX = down.position.x,
                         touchY = down.position.y,
-                        cropRect = currentCropRect,
-                        canvasWidth = w,
-                        canvasHeight = h,
+                        boxRect = activeFrame,
                         touchRadiusPx = touchRadiusPx
                     )
                     activeHandle = currentHandle
@@ -104,8 +119,13 @@ fun EditorCornerBrackets(
 
                         val pointerCount = pressedPointers.size
 
+                        val pw = if (currentPhotoWidth > 0f) currentPhotoWidth else w
+                        val ph = if (currentPhotoHeight > 0f) currentPhotoHeight else h
+                        val pl = if (currentPhotoWidth > 0f) currentPhotoLeft else (activeFrame.left - currentCropRect.left * pw)
+                        val pt = if (currentPhotoHeight > 0f) currentPhotoTop else (activeFrame.top - currentCropRect.top * ph)
+
                         if (pointerCount >= 2) {
-                            // Multi-touch: Two-finger Pinch to zoom in/out & pan
+                            // Multi-touch: Two-finger Pinch to zoom in/out & pan image behind locked frame
                             if (!isGestureActive) {
                                 isGestureActive = true
                                 isInteracting = true
@@ -127,40 +147,70 @@ fun EditorCornerBrackets(
                             if (zoomFactor != 1f || panDelta != Offset.Zero) {
                                 pressedPointers.forEach { it.consume() }
 
-                                val updated = EditorCornerBracketsMath.zoomAndPanCropRect(
-                                    currentRect = currentCropRect,
-                                    zoomFactor = zoomFactor,
-                                    panDeltaXNorm = panDelta.x / w,
-                                    panDeltaYNorm = panDelta.y / h,
-                                    centroidXNorm = currentCentroid.x / w,
-                                    centroidYNorm = currentCentroid.y / h,
-                                    aspectRatio = currentAspectRatio
-                                )
+                                // 1. Apply zoom
+                                var updated = if (zoomFactor != 1f) {
+                                    EditorCornerBracketsMath.zoomPhotoInCrop(
+                                        currentRect = currentCropRect,
+                                        zoomFactor = zoomFactor,
+                                        centroidXPx = currentCentroid.x,
+                                        centroidYPx = currentCentroid.y,
+                                        photoLeftPx = pl,
+                                        photoTopPx = pt,
+                                        photoWidthPx = pw,
+                                        photoHeightPx = ph,
+                                        aspectRatio = currentAspectRatio
+                                    )
+                                } else currentCropRect
+
+                                // 2. Apply pan
+                                if (panDelta != Offset.Zero) {
+                                    updated = EditorCornerBracketsMath.panPhotoInCrop(
+                                        currentRect = updated,
+                                        dragDeltaXPx = panDelta.x,
+                                        dragDeltaYPx = panDelta.y,
+                                        photoWidthPx = pw,
+                                        photoHeightPx = ph
+                                    )
+                                }
                                 currentOnCropRectChange(updated)
                             }
 
                             prevCentroid = currentCentroid
                             prevPointerCount = pointerCount
                         } else {
-                            // Single pointer: corner, edge, or inside pan
+                            // Single pointer
                             val pointer = pressedPointers.first()
                             val dragDelta = pointer.position - pointer.previousPosition
 
                             if (dragDelta != Offset.Zero && currentHandle != CornerHandle.NONE) {
                                 pointer.consume()
-                                val deltaXNorm = dragDelta.x / w
-                                val deltaYNorm = dragDelta.y / h
 
-                                val updated = EditorCornerBracketsMath.updateCropRect(
-                                    currentRect = currentCropRect,
-                                    handle = currentHandle,
-                                    deltaXNormalized = deltaXNorm,
-                                    deltaYNormalized = deltaYNorm,
-                                    aspectRatio = currentAspectRatio,
-                                    canvasWidth = w,
-                                    canvasHeight = h
-                                )
-                                currentOnCropRectChange(updated)
+                                if (currentHandle == CornerHandle.INSIDE) {
+                                    // 1-finger swipe / pan photo (left, right, up, down) behind locked crop frame
+                                    val updated = EditorCornerBracketsMath.panPhotoInCrop(
+                                        currentRect = currentCropRect,
+                                        dragDeltaXPx = dragDelta.x,
+                                        dragDeltaYPx = dragDelta.y,
+                                        photoWidthPx = pw,
+                                        photoHeightPx = ph
+                                    )
+                                    currentOnCropRectChange(updated)
+                                } else {
+                                    // Handle drag: Corner or Edge handle resize
+                                    val deltaXNorm = dragDelta.x / pw
+                                    val deltaYNorm = dragDelta.y / ph
+
+                                    val updated = EditorCornerBracketsMath.updateCropRect(
+                                        currentRect = currentCropRect,
+                                        handle = currentHandle,
+                                        deltaXNormalized = deltaXNorm,
+                                        deltaYNormalized = deltaYNorm,
+                                        aspectRatio = currentAspectRatio,
+                                        canvasWidth = pw,
+                                        canvasHeight = ph
+                                    )
+                                    currentOnCropRectChange(updated)
+                                }
                             }
                             prevCentroid = pointer.position
                             prevPointerCount = 1
@@ -180,15 +230,22 @@ fun EditorCornerBrackets(
         val h = size.height
         if (w <= 0f || h <= 0f) return@Canvas
 
-        val l = (cropRect.left * w).coerceIn(0f, w)
-        val t = (cropRect.top * h).coerceIn(0f, h)
-        val r = (cropRect.right * w).coerceIn(l, w)
-        val b = (cropRect.bottom * h).coerceIn(t, h)
+        val activeFrame = currentFrameRect ?: Rect(
+            currentCropRect.left * w,
+            currentCropRect.top * h,
+            currentCropRect.right * w,
+            currentCropRect.bottom * h
+        )
+
+        val l = activeFrame.left.coerceIn(0f, w)
+        val t = activeFrame.top.coerceIn(0f, h)
+        val r = activeFrame.right.coerceIn(l, w)
+        val b = activeFrame.bottom.coerceIn(t, h)
         val cropW = r - l
         val cropH = b - t
 
         // 1. Dimmed Scrim Outside Crop Rectangle
-        val scrimColor = Color.Black.copy(alpha = 0.5f)
+        val scrimColor = Color.Black.copy(alpha = 0.55f)
         // Top
         if (t > 0f) {
             drawRect(color = scrimColor, topLeft = Offset.Zero, size = Size(w, t))
@@ -206,9 +263,9 @@ fun EditorCornerBrackets(
             drawRect(color = scrimColor, topLeft = Offset(r, t), size = Size(w - r, cropH))
         }
 
-        // 2. Subtle White Thin Bounding Box
+        // 2. Subtle White Thin Bounding Box (always crisp 1dp)
         drawRect(
-            color = Color.White.copy(alpha = 0.55f),
+            color = Color.White.copy(alpha = 0.65f),
             topLeft = Offset(l, t),
             size = Size(cropW, cropH),
             style = Stroke(width = thinBorderPx)
@@ -216,8 +273,8 @@ fun EditorCornerBrackets(
 
         // 3. Rule-of-Thirds Grid Lines (3x3)
         if (gridAlpha > 0f && cropW > 0f && cropH > 0f) {
-            val gridColor = Color.White.copy(alpha = 0.6f * gridAlpha)
-            val shadowGridColor = Color.Black.copy(alpha = 0.35f * gridAlpha)
+            val gridColor = Color.White.copy(alpha = 0.65f * gridAlpha)
+            val shadowGridColor = Color.Black.copy(alpha = 0.4f * gridAlpha)
 
             val x1 = l + cropW / 3f
             val x2 = l + 2f * cropW / 3f
@@ -239,7 +296,7 @@ fun EditorCornerBrackets(
             drawLine(gridColor, Offset(l, y2), Offset(r, y2), strokeWidth = thinBorderPx)
         }
 
-        // 4. 4 White L-Bracket Handles with Shadows
+        // 4. 4 White L-Bracket Handles with Shadows (always crisp 3.5dp)
         val clampedArmW = minOf(armLengthPx, cropW / 2f)
         val clampedArmH = minOf(armLengthPx, cropH / 2f)
 

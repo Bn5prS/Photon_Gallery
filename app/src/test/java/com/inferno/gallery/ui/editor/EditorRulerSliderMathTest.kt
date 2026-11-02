@@ -359,6 +359,66 @@ class EditorRulerSliderMathTest {
     }
 
     @Test
+    fun testPhotoSwipeAndZoomInLockedCrop() {
+        val initialCrop = Rect(0.2f, 0.2f, 0.6f, 0.6f) // 0.4 x 0.4
+        val photoW = 1000f
+        val photoH = 1000f
+
+        // 1. Swipe right by 100px: photo moves right, so crop window shifts left by 100/1000 = 0.1
+        val swipedRight = EditorCornerBracketsMath.panPhotoInCrop(
+            currentRect = initialCrop,
+            dragDeltaXPx = 100f,
+            dragDeltaYPx = 0f,
+            photoWidthPx = photoW,
+            photoHeightPx = photoH
+        )
+        assertEquals(0.1f, swipedRight.left, 0.001f)
+        assertEquals(0.5f, swipedRight.right, 0.001f)
+        assertEquals(0.4f, swipedRight.width, 0.001f)
+
+        // 2. Swipe down by 100px: photo moves down, so crop window shifts up by 0.1
+        val swipedDown = EditorCornerBracketsMath.panPhotoInCrop(
+            currentRect = initialCrop,
+            dragDeltaXPx = 0f,
+            dragDeltaYPx = 100f,
+            photoWidthPx = photoW,
+            photoHeightPx = photoH
+        )
+        assertEquals(0.1f, swipedDown.top, 0.001f)
+        assertEquals(0.5f, swipedDown.bottom, 0.001f)
+
+        // 3. Pinch zoom photo in by 2x: crop window shrinks 2x
+        val zoomedPhoto = EditorCornerBracketsMath.zoomPhotoInCrop(
+            currentRect = initialCrop,
+            zoomFactor = 2.0f,
+            centroidXPx = 500f,
+            centroidYPx = 500f,
+            photoLeftPx = 100f,
+            photoTopPx = 100f,
+            photoWidthPx = photoW,
+            photoHeightPx = photoH,
+            aspectRatio = null
+        )
+        assertEquals(0.2f, zoomedPhoto.width, 0.001f)
+        assertEquals(0.2f, zoomedPhoto.height, 0.001f)
+
+        // 4. Hit test screen
+        val boxScreen = Rect(100f, 100f, 500f, 500f)
+        assertEquals(
+            CornerHandle.TOP_LEFT,
+            EditorCornerBracketsMath.hitTestScreen(100f, 100f, boxScreen, 32f)
+        )
+        assertEquals(
+            CornerHandle.EDGE_BOTTOM,
+            EditorCornerBracketsMath.hitTestScreen(300f, 500f, boxScreen, 32f)
+        )
+        assertEquals(
+            CornerHandle.INSIDE,
+            EditorCornerBracketsMath.hitTestScreen(300f, 300f, boxScreen, 32f)
+        )
+    }
+
+    @Test
     fun testCornerFreeformClamping() {
         val initial = Rect(0.2f, 0.2f, 0.8f, 0.8f)
         val canvasW = 1000f

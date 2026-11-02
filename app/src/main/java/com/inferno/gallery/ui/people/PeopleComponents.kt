@@ -77,7 +77,7 @@ import com.inferno.gallery.ui.utils.pressScale
 import java.io.File
 
 /**
- * Bottom sheet to pick another person to merge into (Google Photos style).
+ * Bottom sheet to pick another person to merge into (Center-aligned style).
  */
 @Composable
 fun MergePersonPickerSheet(
@@ -302,7 +302,7 @@ fun MergePersonPickerSheet(
                             }
 
                             Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(IconSizeTokens.M)
@@ -316,7 +316,7 @@ fun MergePersonPickerSheet(
 }
 
 /**
- * Bottom sheet to show & hide faces across the gallery (Google Photos style).
+ * Bottom sheet to show & hide faces across the gallery (Center-aligned style).
  */
 @Composable
 fun HideShowFacesSheet(
@@ -527,7 +527,7 @@ fun MergeSuggestionHeroCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(IconSizeTokens.M)

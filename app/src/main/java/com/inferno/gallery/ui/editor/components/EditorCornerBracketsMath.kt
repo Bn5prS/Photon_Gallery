@@ -66,6 +66,42 @@ object EditorCornerBracketsMath {
     }
 
     /**
+     * Hit tests screen coordinates against the 4 corner handles, 4 edge lines, and inside of [boxRect].
+     */
+    fun hitTestScreen(
+        touchX: Float,
+        touchY: Float,
+        boxRect: Rect,
+        touchRadiusPx: Float
+    ): CornerHandle {
+        val l = boxRect.left
+        val t = boxRect.top
+        val r = boxRect.right
+        val b = boxRect.bottom
+
+        // Priority 1: 4 Corners
+        if (hypot(touchX - l, touchY - t) <= touchRadiusPx) return CornerHandle.TOP_LEFT
+        if (hypot(touchX - r, touchY - t) <= touchRadiusPx) return CornerHandle.TOP_RIGHT
+        if (hypot(touchX - l, touchY - b) <= touchRadiusPx) return CornerHandle.BOTTOM_LEFT
+        if (hypot(touchX - r, touchY - b) <= touchRadiusPx) return CornerHandle.BOTTOM_RIGHT
+
+        // Priority 2: 4 Edges
+        val edgeMargin = touchRadiusPx.coerceAtLeast(24f)
+        val isNearHorizSpan = touchX >= (l - edgeMargin) && touchX <= (r + edgeMargin)
+        val isNearVertSpan = touchY >= (t - edgeMargin) && touchY <= (b + edgeMargin)
+
+        if (isNearHorizSpan && abs(touchY - t) <= edgeMargin) return CornerHandle.EDGE_TOP
+        if (isNearHorizSpan && abs(touchY - b) <= edgeMargin) return CornerHandle.EDGE_BOTTOM
+        if (isNearVertSpan && abs(touchX - l) <= edgeMargin) return CornerHandle.EDGE_LEFT
+        if (isNearVertSpan && abs(touchX - r) <= edgeMargin) return CornerHandle.EDGE_RIGHT
+
+        // Priority 3: Inside area
+        if (touchX in l..r && touchY in t..b) return CornerHandle.INSIDE
+
+        return CornerHandle.NONE
+    }
+
+    /**
      * Updates [currentRect] given a drag delta in normalized coordinates, respecting
      * boundaries [0f..1f], minimum dimension, and [aspectRatio] (pixel width / height).
      */
@@ -343,6 +379,89 @@ object EditorCornerBracketsMath {
             right = (clampedL + newW).coerceIn(0f, 1f),
             bottom = (clampedT + newH).coerceIn(0f, 1f)
         )
+    }
+
+    /**
+     * Pans the photo behind the locked crop frame in response to 1-finger swipe or 2-finger drag.
+     * Dragging right reveals more left content (shifts crop left); dragging down reveals more top content.
+     */
+    fun panPhotoInCrop(
+        currentRect: Rect,
+        dragDeltaXPx: Float,
+        dragDeltaYPx: Float,
+        photoWidthPx: Float,
+        photoHeightPx: Float
+    ): Rect {
+        if (photoWidthPx <= 0f || photoHeightPx <= 0f) return currentRect
+        val normW = currentRect.width
+        val normH = currentRect.height
+
+        val deltaNormX = -dragDeltaXPx / photoWidthPx
+        val deltaNormY = -dragDeltaYPx / photoHeightPx
+
+        val maxL = (1f - normW).coerceAtLeast(0f)
+        val maxT = (1f - normH).coerceAtLeast(0f)
+
+        val newL = (currentRect.left + deltaNormX).coerceIn(0f, maxL)
+        val newT = (currentRect.top + deltaNormY).coerceIn(0f, maxT)
+
+        return Rect(newL, newT, (newL + normW).coerceIn(0f, 1f), (newT + normH).coerceIn(0f, 1f))
+    }
+
+    /**
+     * Zooms the photo behind the locked crop frame in response to multi-touch pinch.
+     * Pinching out (zoomFactor > 1) enlarges the photo, reducing the normalized crop window.
+     * Pinching in (zoomFactor < 1) shrinks the photo, expanding the normalized crop window.
+     */
+    fun zoomPhotoInCrop(
+        currentRect: Rect,
+        zoomFactor: Float,
+        centroidXPx: Float,
+        centroidYPx: Float,
+        photoLeftPx: Float,
+        photoTopPx: Float,
+        photoWidthPx: Float,
+        photoHeightPx: Float,
+        aspectRatio: Float?,
+        minDimensionNormalized: Float = 0.05f
+    ): Rect {
+        if (photoWidthPx <= 0f || photoHeightPx <= 0f) return currentRect
+        val clampedZoom = zoomFactor.coerceIn(0.2f, 5.0f)
+        if (clampedZoom == 1.0f) return currentRect
+
+        val oldW = currentRect.width
+        val oldH = currentRect.height
+
+        var newW = (oldW / clampedZoom).coerceIn(minDimensionNormalized, 1f)
+        var newH = (oldH / clampedZoom).coerceIn(minDimensionNormalized, 1f)
+
+        if (aspectRatio != null && aspectRatio > 0f) {
+            val candidateW = newH * aspectRatio
+            if (candidateW <= 1f) {
+                newW = candidateW.coerceAtLeast(minDimensionNormalized)
+                newH = newW / aspectRatio
+            } else {
+                newW = 1f
+                newH = (1f / aspectRatio).coerceIn(minDimensionNormalized, 1f)
+            }
+        }
+
+        val focusNormX = if (photoWidthPx > 0f) ((centroidXPx - photoLeftPx) / photoWidthPx).coerceIn(0f, 1f) else 0.5f
+        val focusNormY = if (photoHeightPx > 0f) ((centroidYPx - photoTopPx) / photoHeightPx).coerceIn(0f, 1f) else 0.5f
+
+        val ratioW = if (oldW > 0f) newW / oldW else 1f
+        val ratioH = if (oldH > 0f) newH / oldH else 1f
+
+        var newL = focusNormX - (focusNormX - currentRect.left) * ratioW
+        var newT = focusNormY - (focusNormY - currentRect.top) * ratioH
+
+        val maxL = (1f - newW).coerceAtLeast(0f)
+        val maxT = (1f - newH).coerceAtLeast(0f)
+
+        val clampedL = newL.coerceIn(0f, maxL)
+        val clampedT = newT.coerceIn(0f, maxT)
+
+        return Rect(clampedL, clampedT, (clampedL + newW).coerceIn(0f, 1f), (clampedT + newH).coerceIn(0f, 1f))
     }
 }
 

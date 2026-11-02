@@ -109,7 +109,7 @@ import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
-import com.inferno.gallery.ui.components.FloatingTipCard
+
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -339,7 +339,7 @@ fun PeopleScreen(
                                     }
                                 ) {
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                                         contentDescription = "Merge people",
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(IconSizeTokens.L)
@@ -382,7 +382,7 @@ fun PeopleScreen(
                                     }
                                 ) {
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                                         contentDescription = if (isMergeCardDismissedByUser) "Show merge suggestions" else "Hide merge suggestions",
                                         tint = if (!isMergeCardDismissedByUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(IconSizeTokens.L)
@@ -414,7 +414,7 @@ fun PeopleScreen(
                                         },
                                         leadingIcon = {
                                             Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                                                 contentDescription = null,
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -451,7 +451,7 @@ fun PeopleScreen(
                                     },
                                     leadingIcon = {
                                         Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                                             contentDescription = null,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -1067,24 +1067,6 @@ fun PeopleScreen(
                         }
                     }
 
-                    val settingsRepo = remember(context) { com.inferno.gallery.data.SettingsRepository.getInstance(context) }
-                    val tipPeopleDismissed by settingsRepo.tipPeopleCoverDismissedFlow.collectAsState(initial = true)
-
-                    if (!tipPeopleDismissed && displayPeople.isNotEmpty() && !isSelectionMode) {
-                        FloatingTipCard(
-                            title = "Quick Tip",
-                            message = "Press & hold any person to choose their best cover shot, rename them, or merge clusters.",
-                            iconResId = R.drawable.ic_ms_person,
-                            onDismiss = {
-                                coroutineScope.launch {
-                                    settingsRepo.dismissTip(com.inferno.gallery.data.SettingsRepository.TIP_PEOPLE_COVER)
-                                }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = SpacingTokens.L)
-                        )
-                    }
                 }
             }
         }
