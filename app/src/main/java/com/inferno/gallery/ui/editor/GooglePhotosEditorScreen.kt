@@ -920,10 +920,6 @@ fun GooglePhotosEditorScreen(
                 cropSubMode = CropSubMode.CAROUSEL
                 activeMarkupTool = null
                 Toast.makeText(context, "Reverted all edits", Toast.LENGTH_SHORT).show()
-            },
-            onHelpFeedback = {
-                val helpIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://support.google.com/photos/answer/6128850"))
-                runCatching { context.startActivity(helpIntent) }
             }
         )
     }

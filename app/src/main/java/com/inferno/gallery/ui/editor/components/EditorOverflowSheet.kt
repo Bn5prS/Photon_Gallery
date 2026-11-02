@@ -31,7 +31,6 @@ import com.inferno.gallery.R
  * - "Save (replace original)": Overwrites current photo.
  * - "Save as copy": Saves edited photo as a new file.
  * - "Revert edits": Discards all current edits and resets image to original state.
- * - "Help & feedback": User support / feedback launcher.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("DEPRECATION")
@@ -42,7 +41,6 @@ fun EditorOverflowSheet(
     canRevert: Boolean = true,
     onSave: (() -> Unit)? = null,
     onSaveAsCopy: (() -> Unit)? = null,
-    onHelpFeedback: (() -> Unit)? = null,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     modifier: Modifier = Modifier
 ) {
@@ -157,33 +155,6 @@ fun EditorOverflowSheet(
                         text = "Discard all changes made in this session",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Help & feedback item
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onDismissRequest()
-                        onHelpFeedback?.invoke()
-                    }
-                    .padding(horizontal = 24.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_info),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(
-                        text = "Help & feedback",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
