@@ -94,6 +94,8 @@ class MainActivity : FragmentActivity() {
             val hapticsStrength by settingsViewModel.hapticsStrength.collectAsState()
             val animateThemeTransitions by settingsViewModel.animateThemeTransitions.collectAsState()
             val motionStyle by settingsViewModel.motionStyle.collectAsState()
+            val themePaletteStyle by settingsViewModel.themePaletteStyle.collectAsState()
+            val appSeedColor by settingsViewModel.appSeedColor.collectAsState()
             
             com.inferno.gallery.ui.utils.PremiumHapticsManager.enabled = hapticsEnabled
             com.inferno.gallery.ui.utils.PremiumHapticsManager.strength = hapticsStrength
@@ -137,6 +139,8 @@ class MainActivity : FragmentActivity() {
                 darkTheme = isDark,
                 dynamicColor = useMaterialYou,
                 colorPresetName = colorPresetName,
+                paletteStyleName = themePaletteStyle,
+                appSeedColor = appSeedColor,
                 useAmoledBlack = useAmoledBlack,
                 useSystemFont = useSystemFont,
                 fontScale = fontScale,
@@ -146,7 +150,7 @@ class MainActivity : FragmentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(
                     androidx.compose.foundation.LocalOverscrollFactory provides null
                 ) {
-                    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    val backgroundColor = MaterialTheme.colorScheme.surface
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),

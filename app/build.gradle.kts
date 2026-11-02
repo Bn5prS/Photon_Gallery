@@ -139,6 +139,7 @@ dependencies {
 
     // ── Material 3 Expressive (explicit version ≥ 1.4.0, overrides BOM) ──
     implementation(libs.androidx.compose.material3)
+    implementation(libs.materialKolor)
 
     // ── Compose Animation (SharedTransitionScope, spring physics) ──
     implementation(libs.androidx.compose.animation)

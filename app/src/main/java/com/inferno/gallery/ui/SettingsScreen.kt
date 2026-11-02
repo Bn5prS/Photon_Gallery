@@ -44,6 +44,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.inferno.gallery.ui.components.FourQuadrantColorSwatch
+import com.inferno.gallery.ui.components.PhotonConnectedCardDefaults
+import com.inferno.gallery.ui.components.PhotonConnectedCardGroup
+import com.inferno.gallery.ui.components.PhotonConnectedCardWrapper
+import com.inferno.gallery.ui.components.PhotonBackButton
+import com.inferno.gallery.ui.components.PhotonCloseButton
+import com.inferno.gallery.ui.components.PhotonHeaderIconButton
+import com.inferno.gallery.ui.components.PhotonPaletteGrid
+import com.inferno.gallery.ui.components.PhotonCustomColorSection
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeSmall
@@ -148,6 +156,8 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsState()
     val useMaterialYou by viewModel.useMaterialYou.collectAsState()
     val colorPresetName by viewModel.colorPresetName.collectAsState()
+    val themePaletteStyle by viewModel.themePaletteStyle.collectAsState()
+    val appSeedColor by viewModel.appSeedColor.collectAsState()
     val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
     val showHiddenAlbums by viewModel.showHiddenAlbums.collectAsState()
@@ -635,6 +645,66 @@ fun SettingsScreen(
                                             onCheckedChange = { viewModel.setUseAmoledBlack(it) },
                                             enabled = isCurrentlyDark
                                         )
+                                    }
+                                )
+                            )
+
+                            SettingsGroupCard(
+                                title = "Custom Theme Color",
+                                items = listOf(
+                                    {
+                                        PhotonCustomColorSection(
+                                            currentColor = if (colorPresetName == "custom" && appSeedColor != -1) appSeedColor else 0xFF4285F4.toInt(),
+                                            enabled = true,
+                                            onColorChanged = { newColor ->
+                                                viewModel.setUseMaterialYou(false)
+                                                viewModel.setAppSeedColor(newColor)
+                                                viewModel.setColorPresetName("custom")
+                                            }
+                                        )
+                                    }
+                                )
+                            )
+
+                            SettingsGroupCard(
+                                title = "Palette Style",
+                                items = listOf(
+                                    {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Text(
+                                                text = "Material 3 Color Science Profiles",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Select from 9 chromatic tuning styles generated via MaterialKolor",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            val effectiveSeedColor = if (colorPresetName == "custom" && appSeedColor != -1) {
+                                                Color(appSeedColor)
+                                            } else if (useMaterialYou || colorPresetName == "dynamic") {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                ThemePalettes.getById(colorPresetName).seedColor
+                                            }
+
+                                            PhotonPaletteGrid(
+                                                currentStyle = themePaletteStyle,
+                                                seedColor = effectiveSeedColor,
+                                                isDark = isCurrentlyDark,
+                                                isAmoled = useAmoledBlack && isCurrentlyDark,
+                                                onStyleSelected = { selectedStyle ->
+                                                    viewModel.setThemePaletteStyle(selectedStyle)
+                                                }
+                                            )
+                                        }
                                     }
                                 )
                             )
@@ -2126,38 +2196,21 @@ fun SettingsGroupCard(
         if (title != null) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)
             )
         }
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+        PhotonConnectedCardGroup(
+            modifier = Modifier.fillMaxWidth()
         ) {
             items.forEachIndexed { index, itemContent ->
-                val shape = when {
-                    items.size == 1 -> ShapeLarge
-                    index == 0 -> RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = 4.dp,
-                        bottomEnd = 4.dp
-                    )
-                    index == items.size - 1 -> RoundedCornerShape(
-                        topStart = 4.dp,
-                        topEnd = 4.dp,
-                        bottomStart = 16.dp,
-                        bottomEnd = 16.dp
-                    )
-                    else -> ShapeExtraSmall
-                }
-                Surface(
-                    shape = shape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth()
+                PhotonConnectedCardWrapper(
+                    index = index,
+                    count = items.size,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     itemContent()
                 }

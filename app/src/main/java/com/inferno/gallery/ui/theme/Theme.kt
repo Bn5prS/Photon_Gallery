@@ -12,7 +12,6 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
-import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,18 +21,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamicColorScheme
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PhotonGalleryTheme — M3 Expressive Theme Entry Point
+//  PhotonGalleryTheme — Flagship M3 Expressive Theme Engine for Photon Gallery
 //
-//  Clean Default Material 3 Palette + Native Android System Dynamic Color (Material You).
-//  • When dynamicColor is true (Android 12+): Uses native dynamicLightColorScheme / dynamicDarkColorScheme
-//  • When dynamicColor is false: Uses official DefaultLightColorScheme / DefaultDarkColorScheme
-//  • Supports pure OLED pitch-black when useAmoledBlack is enabled in dark mode.
-//  • Highly optimized for zero frame drops:
-//    - AMOLED toggling is instantaneous (0ms) so OLED pixels turn off immediately without
-//      recomposition thrashing.
-//    - Dynamic system colors, typography, photon colors, and harmonized colors are fully memoized.
+//  • Dynamic 13-tone tonal palette generation via material-kolor with PaletteStyle.TonalSpot.
+//  • When dynamicColor is true on Android 12+: derives the seed color from system wallpaper.
+//  • When a curated palette preset is active: derives the seed color from the selected palette.
+//  • Full 5-level surface container hierarchy:
+//    - Canvas / scaffold background: surface & background
+//    - Recessed / grouping cards: surfaceContainerLow
+//    - Standard cards / items: surfaceContainer
+//    - Elevated dialogs / sheets: surfaceContainerHigh
+//    - Floating badges / chips: surfaceContainerHighest
+//  • AMOLED dark mode: pure Color.Black canvas while surfaceContainer & surfaceContainerHigh
+//    retain distinct tinted dark tones so cards stand out cleanly above OLED pitch black.
+//  • Fully memoized typography, photon colors, and harmonized colors for zero frame drops.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -41,6 +46,8 @@ fun PhotonGalleryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
     colorPresetName: String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "dynamic" else "default_blue",
+    paletteStyleName: String = "TonalSpot",
+    appSeedColor: Int = -1,
     useAmoledBlack: Boolean = false,
     useSystemFont: Boolean = false,
     fontScale: Float = 1.0f,
@@ -51,40 +58,53 @@ fun PhotonGalleryTheme(
     val context = LocalContext.current
 
     // Memoize the target color scheme to prevent re-querying system resources on arbitrary recompositions
-    val targetColorScheme: ColorScheme = remember(darkTheme, dynamicColor, colorPresetName, useAmoledBlack, context) {
+    val targetColorScheme: ColorScheme = remember(darkTheme, dynamicColor, colorPresetName, paletteStyleName, appSeedColor, useAmoledBlack, context) {
         val useDynamic = (dynamicColor || colorPresetName == "dynamic") &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            (colorPresetName == "dynamic" || dynamicColor)
-        when {
-            useDynamic -> {
-                if (darkTheme) {
-                    val systemDark = dynamicDarkColorScheme(context)
-                    if (useAmoledBlack) {
-                        systemDark.copy(
-                            background = Color.Black,
-                            surface = Color.Black,
-                            surfaceDim = Color.Black,
-                            surfaceContainerLowest = Color.Black,
-                            surfaceContainerLow = Color.Black,
-                        )
-                    } else {
-                        systemDark
-                    }
-                } else {
-                    val systemLight = dynamicLightColorScheme(context)
-                    // Soft-white canvas: tone 98 carries a subtle wallpaper blend — between the
-                    // tint-heavy tone 96 and the near-stark tone 100. Lowest stays pure white so
-                    // cards/placeholders keep contrast above the canvas.
-                    systemLight.copy(
-                        surfaceContainerLowest = Color.White,
-                        surfaceContainerLow = systemLight.surface
-                    )
-                }
-            }
-            else -> {
-                val palette = ThemePalettes.getById(colorPresetName)
-                palette.getScheme(darkTheme = darkTheme, useAmoledBlack = useAmoledBlack)
-            }
+            (colorPresetName == "dynamic" || dynamicColor) &&
+            (colorPresetName != "custom")
+
+        val seedColor: Color = if (colorPresetName == "custom" && appSeedColor != -1) {
+            Color(appSeedColor)
+        } else if (useDynamic) {
+            dynamicLightColorScheme(context).primary
+        } else {
+            val palette = ThemePalettes.getById(colorPresetName)
+            palette.seedColor
+        }
+
+        val resolvedStyle = try {
+            PaletteStyle.valueOf(paletteStyleName)
+        } catch (e: Exception) {
+            PaletteStyle.TonalSpot
+        }
+
+        val effectiveSeed = if (resolvedStyle == PaletteStyle.Monochrome) Color.Gray else seedColor
+
+        val baseScheme = dynamicColorScheme(
+            seedColor = effectiveSeed,
+            isDark = darkTheme,
+            isAmoled = useAmoledBlack && darkTheme,
+            style = resolvedStyle,
+        )
+
+        if (darkTheme && useAmoledBlack) {
+            baseScheme.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceDim = Color.Black,
+                surfaceBright = Color(0xFF2C2C2C),
+                surfaceContainerLowest = Color.Black,
+                surfaceContainerLow = Color(0xFF141414),
+                surfaceContainer = Color(0xFF1E1E1E),
+                surfaceContainerHigh = Color(0xFF282828),
+                surfaceContainerHighest = Color(0xFF333333),
+                surfaceVariant = baseScheme.surfaceVariant,
+            )
+        } else {
+            baseScheme.copy(
+                background = baseScheme.surface,
+            )
         }
     }
 

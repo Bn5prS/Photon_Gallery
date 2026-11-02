@@ -68,13 +68,7 @@ fun PhotonTopBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (onNavigateUp != null) {
-                        FilledTonalIconButton(onClick = onNavigateUp) {
-                            Icon(
-                                ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                        PhotonBackButton(onClick = onNavigateUp)
                     }
                     Text(
                         title,
@@ -106,13 +100,7 @@ fun PhotonTopBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (onNavigateUp != null) {
-                        FilledTonalIconButton(onClick = onNavigateUp) {
-                            Icon(
-                                ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                        PhotonBackButton(onClick = onNavigateUp)
                     }
                     Text(
                         title,

@@ -153,27 +153,117 @@ val NavDockLabelStyle = TextStyle(
 )
 
 fun appTypography(useSystemFont: Boolean, isDark: Boolean = false): Typography {
+    val grade = if (isDark) 25f else 0f
+
     if (useSystemFont) {
         return Typography(
-            displayLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 44.sp, lineHeight = 52.sp, letterSpacing = (-0.5).sp),
-            displayMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 36.sp, lineHeight = 44.sp, letterSpacing = (-0.3).sp),
-            displaySmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 36.sp, letterSpacing = (-0.2).sp),
-            headlineLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 30.sp, lineHeight = 38.sp, letterSpacing = (-0.3).sp),
-            headlineMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 34.sp, letterSpacing = (-0.2).sp),
-            headlineSmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp, letterSpacing = (-0.1).sp),
-            titleLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.1).sp),
-            titleMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 23.sp, letterSpacing = 0.sp),
-            titleSmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.25.sp),
-            bodyLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.15.sp),
-            bodyMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.15.sp),
-            bodySmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.2.sp),
-            labelLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp),
-            labelMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.3.sp),
-            labelSmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 11.sp, lineHeight = 15.sp, letterSpacing = 0.4.sp)
+            displayLarge = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Bold,
+                fontSize = 44.sp,
+                lineHeight = 52.sp,
+                letterSpacing = (-0.3).sp
+            ),
+            displayMedium = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Bold,
+                fontSize = 36.sp,
+                lineHeight = 44.sp,
+                letterSpacing = (-0.25).sp
+            ),
+            displaySmall = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                lineHeight = 36.sp,
+                letterSpacing = (-0.25).sp
+            ),
+            headlineLarge = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                lineHeight = 38.sp,
+                letterSpacing = (-0.2).sp
+            ),
+            headlineMedium = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 26.sp,
+                lineHeight = 34.sp,
+                letterSpacing = (-0.1).sp
+            ),
+            headlineSmall = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 22.sp,
+                lineHeight = 30.sp,
+                letterSpacing = 0.sp
+            ),
+            titleLarge = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 20.sp,
+                lineHeight = 26.sp,
+                letterSpacing = 0.sp
+            ),
+            titleMedium = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 17.sp,
+                lineHeight = 23.sp,
+                letterSpacing = 0.1.sp
+            ),
+            titleSmall = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.15.sp
+            ),
+            bodyLarge = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.15.sp
+            ),
+            bodyMedium = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.2.sp
+            ),
+            bodySmall = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                letterSpacing = 0.25.sp
+            ),
+            labelLarge = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = 0.15.sp
+            ),
+            labelMedium = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                letterSpacing = 0.25.sp
+            ),
+            labelSmall = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                letterSpacing = 0.35.sp
+            )
         )
     }
-
-    val grade = if (isDark) 25f else 0f
 
     return Typography(
         displayLarge = TextStyle(
@@ -181,35 +271,35 @@ fun appTypography(useSystemFont: Boolean, isDark: Boolean = false): Typography {
             fontWeight = FontWeight.Bold,
             fontSize = 44.sp,
             lineHeight = 52.sp,
-            letterSpacing = (-0.25).sp
+            letterSpacing = (-0.3).sp
         ),
         displayMedium = TextStyle(
             fontFamily = googleSansFlex(weight = 700, width = 100f, opticalSize = 44f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.Bold,
             fontSize = 36.sp,
             lineHeight = 44.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.25).sp
         ),
         displaySmall = TextStyle(
             fontFamily = googleSansFlex(weight = 700, width = 100f, opticalSize = 36f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.Bold,
             fontSize = 28.sp,
             lineHeight = 36.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.25).sp
         ),
         headlineLarge = TextStyle(
             fontFamily = googleSansFlex(weight = 700, width = 100f, opticalSize = 38f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.Bold,
             fontSize = 30.sp,
             lineHeight = 38.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.2).sp
         ),
         headlineMedium = TextStyle(
             fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 30f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 26.sp,
             lineHeight = 34.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.1).sp
         ),
         headlineSmall = TextStyle(
             fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 24f, roundness = 100f, grade = grade, slant = 0f),
@@ -219,8 +309,8 @@ fun appTypography(useSystemFont: Boolean, isDark: Boolean = false): Typography {
             letterSpacing = 0.sp
         ),
         titleLarge = TextStyle(
-            fontFamily = googleSansFlex(weight = 700, width = 100f, opticalSize = 22f, roundness = 100f, grade = grade, slant = 0f),
-            fontWeight = FontWeight.Bold,
+            fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 22f, roundness = 100f, grade = grade, slant = 0f),
+            fontWeight = FontWeight.SemiBold,
             fontSize = 20.sp,
             lineHeight = 26.sp,
             letterSpacing = 0.sp
@@ -230,14 +320,14 @@ fun appTypography(useSystemFont: Boolean, isDark: Boolean = false): Typography {
             fontWeight = FontWeight.SemiBold,
             fontSize = 17.sp,
             lineHeight = 23.sp,
-            letterSpacing = 0.sp
+            letterSpacing = 0.1.sp
         ),
         titleSmall = TextStyle(
             fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 14f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             lineHeight = 20.sp,
-            letterSpacing = 0.1.sp
+            letterSpacing = 0.15.sp
         ),
         bodyLarge = TextStyle(
             fontFamily = googleSansFlex(weight = 400, width = 100f, opticalSize = 16f, roundness = 100f, grade = grade, slant = 0f),
@@ -251,35 +341,35 @@ fun appTypography(useSystemFont: Boolean, isDark: Boolean = false): Typography {
             fontWeight = FontWeight.Normal,
             fontSize = 14.sp,
             lineHeight = 20.sp,
-            letterSpacing = 0.15.sp
+            letterSpacing = 0.2.sp
         ),
         bodySmall = TextStyle(
-            fontFamily = googleSansFlex(weight = 450, width = 100f, opticalSize = 12f, roundness = 100f, grade = grade, slant = 0f),
-            fontWeight = FontWeight.Normal,
+            fontFamily = googleSansFlex(weight = 500, width = 100f, opticalSize = 12f, roundness = 100f, grade = grade, slant = 0f),
+            fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
             lineHeight = 16.sp,
-            letterSpacing = 0.2.sp
+            letterSpacing = 0.25.sp
         ),
         labelLarge = TextStyle(
             fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 14f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             lineHeight = 20.sp,
-            letterSpacing = 0.1.sp
+            letterSpacing = 0.15.sp
         ),
         labelMedium = TextStyle(
             fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 12f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 12.sp,
             lineHeight = 16.sp,
-            letterSpacing = 0.2.sp
+            letterSpacing = 0.25.sp
         ),
         labelSmall = TextStyle(
             fontFamily = googleSansFlex(weight = 600, width = 100f, opticalSize = 11f, roundness = 100f, grade = grade, slant = 0f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 11.sp,
             lineHeight = 15.sp,
-            letterSpacing = 0.3.sp
+            letterSpacing = 0.35.sp
         )
     )
 }

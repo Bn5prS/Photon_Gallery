@@ -146,6 +146,10 @@ import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
+import com.inferno.gallery.ui.components.PhotonHeaderIconButton
+import com.inferno.gallery.ui.components.PhotonBackButton
+import com.inferno.gallery.ui.components.PhotonCloseButton
+import com.inferno.gallery.ui.components.PhotonOverflowMenuButton
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -524,7 +528,7 @@ fun MainAppLayout(
             .fillMaxSize()
             .nestedScroll(nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             if (isMainScreen || isAlbumScreen || isSettingsScreen) {
                 val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
@@ -532,7 +536,7 @@ fun MainAppLayout(
                     targetValue = when {
                         isSelectionMode -> MaterialTheme.colorScheme.surfaceContainerHigh
                         isTopBarCollapsed -> MaterialTheme.colorScheme.surfaceContainer
-                        else -> MaterialTheme.colorScheme.surfaceContainerLow
+                        else -> MaterialTheme.colorScheme.surface
                     },
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "topBarColor"
@@ -563,16 +567,10 @@ fun MainAppLayout(
                                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                ExpressiveFilledIconButton(
+                                PhotonCloseButton(
                                     onClick = { viewModel.clearSelection() },
-                                    modifier = Modifier.size(40.dp),
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Clear selection", modifier = Modifier.size(IconSizeTokens.L))
-                                }
+                                    contentDescription = "Clear selection"
+                                )
                                 AnimatedContent(
                                     targetState = selectedUris.size,
                                     transitionSpec = {
@@ -592,18 +590,13 @@ fun MainAppLayout(
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                 }
-                                ExpressiveFilledIconButton(
-                                    onClick = { viewModel.toggleSelectAll() },
-                                    modifier = Modifier.size(40.dp),
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                    )
+                                PhotonHeaderIconButton(
+                                    onClick = { viewModel.toggleSelectAll() }
                                 ) {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
                                         contentDescription = "Select or Deselect All",
-                                        modifier = Modifier.size(IconSizeTokens.L)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
@@ -617,16 +610,9 @@ fun MainAppLayout(
                                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                ExpressiveFilledIconButton(
-                                    onClick = { nestedNavController.popBackStackSafely() },
-                                    modifier = Modifier.size(40.dp),
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(IconSizeTokens.L))
-                                }
+                                PhotonBackButton(
+                                    onClick = { nestedNavController.popBackStackSafely() }
+                                )
                                 val friendlyTitle = when {
                                     albumNameArg == "search_text" -> "Search Results"
                                     albumNameArg == "search_smart" -> "Semantic Matches"
@@ -661,21 +647,16 @@ fun MainAppLayout(
                                 var showAlbumOverflowMenu by remember { mutableStateOf(false) }
                                 var albumOverflowState by remember { mutableStateOf("main") }
                                 Box {
-                                    ExpressiveFilledIconButton(
+                                    PhotonHeaderIconButton(
                                         onClick = {
                                             albumOverflowState = "main"
                                             showAlbumOverflowMenu = true
-                                        },
-                                        modifier = Modifier.size(40.dp),
-                                        colors = IconButtonDefaults.filledIconButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSurface
-                                        )
+                                        }
                                     ) {
                                         Icon(
                                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
                                             contentDescription = "More options",
-                                            modifier = Modifier.size(IconSizeTokens.L)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                     DropdownMenu(
@@ -740,22 +721,15 @@ fun MainAppLayout(
                                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                ExpressiveFilledIconButton(
+                                PhotonBackButton(
                                     onClick = {
                                         if (settingsActiveSection != null) {
                                             settingsActiveSection = null
                                         } else {
                                             nestedNavController.popBackStackSafely()
                                         }
-                                    },
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(IconSizeTokens.L))
-                                }
+                                    }
+                                )
                                 val settingsHeaderTitle = when (settingsActiveSection) {
                                     "Look & Feel" -> stringResource(R.string.category_theme_display)
                                     "Layout & Navigation" -> stringResource(R.string.category_layout_navigation)
@@ -808,34 +782,24 @@ fun MainAppLayout(
                                     modifier = Modifier.padding(end = 6.dp)
                                 ) {
                                     if (currentRoute != "photos" && currentRoute != "videos" && currentRoute != "search") {
-                                        ExpressiveFilledIconButton(
-                                            onClick = { nestedNavController.navigate("search") },
-                                            modifier = Modifier.size(40.dp),
-                                            colors = IconButtonDefaults.filledIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface
-                                            )
+                                        PhotonHeaderIconButton(
+                                            onClick = { nestedNavController.navigate("search") }
                                         ) {
                                             Icon(
                                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
                                                 contentDescription = "Search",
-                                                modifier = Modifier.size(IconSizeTokens.L)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
                                     if (currentRoute == "albums") {
-                                        ExpressiveFilledIconButton(
-                                            onClick = { showCreateAlbumDialog = true },
-                                            modifier = Modifier.size(40.dp),
-                                            colors = IconButtonDefaults.filledIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface
-                                            )
+                                        PhotonHeaderIconButton(
+                                            onClick = { showCreateAlbumDialog = true }
                                         ) {
                                             Icon(
                                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
                                                 contentDescription = "Create Album",
-                                                modifier = Modifier.size(IconSizeTokens.L)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
@@ -843,21 +807,16 @@ fun MainAppLayout(
                                     var showOverflowMenu by remember { mutableStateOf(false) }
                                     var overflowState by remember { mutableStateOf("main") }
                                     Box {
-                                        ExpressiveFilledIconButton(
+                                        PhotonHeaderIconButton(
                                             onClick = {
                                                 overflowState = "main"
                                                 showOverflowMenu = true
-                                            },
-                                            modifier = Modifier.size(40.dp),
-                                            colors = IconButtonDefaults.filledIconButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface
-                                            )
+                                            }
                                         ) {
                                             Icon(
                                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
                                                 contentDescription = "More options",
-                                                modifier = Modifier.size(IconSizeTokens.L)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                         DropdownMenu(

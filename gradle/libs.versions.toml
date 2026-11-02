@@ -1,4 +1,5 @@
 [versions]
+materialKolor = "4.1.1"
 # Core
 agp = "9.2.1"
 kotlin = "2.2.10"
@@ -62,6 +63,7 @@ lottie = "6.4.0"
 material = "1.12.0"
 
 [libraries]
+materialKolor = { group = "com.materialkolor", name = "material-kolor", version.ref = "materialKolor" }
 lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie" }
 # ── AndroidX Core ──
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
