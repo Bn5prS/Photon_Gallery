@@ -17,6 +17,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -46,6 +49,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,9 +63,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -138,6 +145,7 @@ fun GooglePhotosEditorScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -399,10 +407,34 @@ fun GooglePhotosEditorScreen(
                     val boxWDp = with(density) { boxW.toDp() }
                     val boxHDp = with(density) { boxH.toDp() }
 
+                    val canTouchImageToCompare = !isCropDragging && (selectedTab != EditorTab.MARKUP || activeMarkupTool == null)
+                    val currentCanTouchToCompare by rememberUpdatedState(canTouchImageToCompare)
+
                     // Image container with live geometry transforms applied via graphicsLayer
                     Box(
                         modifier = Modifier
                             .size(width = boxWDp, height = boxHDp)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    if (!currentCanTouchToCompare) return@awaitEachGesture
+
+                                    val timeoutMs = (viewConfiguration.longPressTimeoutMillis).coerceIn(120L, 200L)
+                                    val upOrCancel = withTimeoutOrNull(timeoutMs) {
+                                        waitForUpOrCancellation()
+                                    }
+
+                                    if (upOrCancel == null && currentCanTouchToCompare) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isComparingOriginal = true
+                                        try {
+                                            waitForUpOrCancellation()
+                                        } finally {
+                                            isComparingOriginal = false
+                                        }
+                                    }
+                                }
+                            }
                             .graphicsLayer {
                                 if (!isComparingOriginal) {
                                     val crop = currentSnapshot.cropState
