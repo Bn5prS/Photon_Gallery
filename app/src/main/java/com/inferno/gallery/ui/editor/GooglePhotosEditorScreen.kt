@@ -224,6 +224,7 @@ fun GooglePhotosEditorScreen(
     var cropSubMode by rememberSaveable { mutableStateOf(CropSubMode.CAROUSEL) }
     var showAspectPicker by rememberSaveable { mutableStateOf(false) }
     var isCropDragging by remember { mutableStateOf(false) }
+    var dragStartCropSnapshot by remember { mutableStateOf<EditorSnapshot?>(null) }
 
     // Markup studio settings
     var activeMarkupTool by rememberSaveable { mutableStateOf<MarkupTool?>(null) }
@@ -331,6 +332,7 @@ fun GooglePhotosEditorScreen(
                     // Reset sub-mode tools when switching tabs
                     if (tab != EditorTab.ADJUST) activeAdjustTool = null
                     if (tab != EditorTab.CROP) cropSubMode = CropSubMode.CAROUSEL
+                    if (tab != EditorTab.MARKUP) activeMarkupTool = null
                 },
                 onOpenSearch = { isSearchOpen = true }
             )
@@ -468,8 +470,19 @@ fun GooglePhotosEditorScreen(
                                 isDragging = isCropDragging,
                                 onDragStateChange = { dragging ->
                                     isCropDragging = dragging
-                                    if (!dragging) {
-                                        commitSnapshot(currentSnapshot)
+                                    if (dragging) {
+                                        dragStartCropSnapshot = currentSnapshot
+                                    } else {
+                                        dragStartCropSnapshot?.let { startSnap ->
+                                            if (startSnap != currentSnapshot) {
+                                                historyState = EditorHistoryState(
+                                                    past = historyState.past + startSnap,
+                                                    current = currentSnapshot,
+                                                    future = emptyList()
+                                                )
+                                            }
+                                        }
+                                        dragStartCropSnapshot = null
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize()
@@ -517,8 +530,12 @@ fun GooglePhotosEditorScreen(
                     }
 
                     // 6. Floating Quick Action Bar
-                    val showQuickActionBar = (selectedTab == EditorTab.CROP && cropSubMode == CropSubMode.CAROUSEL) ||
-                            (selectedTab != EditorTab.CROP && activeAdjustTool == null && activeMarkupTool == null)
+                    val showQuickActionBar = when (selectedTab) {
+                        EditorTab.CROP -> cropSubMode == CropSubMode.CAROUSEL
+                        EditorTab.ADJUST -> activeAdjustTool == null
+                        EditorTab.MARKUP -> activeMarkupTool == null
+                        else -> true
+                    }
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showQuickActionBar,
                         enter = fadeIn(tween(160)) + slideInVertically(tween(160)) { it / 2 },
@@ -900,5 +917,9 @@ private fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
         }
         else -> return bitmap
     }
-    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    val transformed = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    if (transformed != bitmap && !bitmap.isRecycled) {
+        bitmap.recycle()
+    }
+    return transformed
 }
