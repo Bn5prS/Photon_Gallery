@@ -299,10 +299,10 @@ private fun CropCarouselView(
             onClick = onOpenAspect
         )
 
-        // 2. Straighten (Framing)
+        // 2. Framing (Straighten)
         val hasStraighten = cropState.straightenAngle != 0f
         CropToolTile(
-            label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else "Straighten",
+            label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else "Framing",
             iconRes = R.drawable.ic_ms_straighten,
             isActive = hasStraighten,
             hasActiveDot = hasStraighten,

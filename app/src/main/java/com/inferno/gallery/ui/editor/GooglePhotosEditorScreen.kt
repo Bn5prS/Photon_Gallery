@@ -21,6 +21,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -39,6 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -74,15 +76,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.exifinterface.media.ExifInterface
+import com.inferno.gallery.R
 import com.inferno.gallery.ui.editor.components.EditorBottomTabs
 import com.inferno.gallery.ui.editor.components.EditorCornerBrackets
+import com.inferno.gallery.ui.editor.components.EditorCornerBracketsMath
 import com.inferno.gallery.ui.editor.components.EditorOverflowSheet
-import com.inferno.gallery.ui.editor.components.EditorQuickActionBar
 import com.inferno.gallery.ui.editor.components.EditorTopBar
 import com.inferno.gallery.ui.editor.crop.CropGeometryHelper
 import com.inferno.gallery.ui.editor.engine.ImageExportWorker
@@ -686,52 +690,55 @@ fun GooglePhotosEditorScreen(
                         }
                     }
 
-                    // 6. Floating Quick Action Bar
-                    val showQuickActionBar = when (selectedTab) {
-                        EditorTab.CROP -> cropSubMode == CropSubMode.CAROUSEL
-                        EditorTab.ADJUST -> activeAdjustTool == null
-                        EditorTab.MARKUP -> activeMarkupTool == null
-                        else -> true
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showQuickActionBar,
-                        enter = fadeIn(tween(160)) + slideInVertically(tween(160)) { it / 2 },
-                        exit = fadeOut(tween(120)) + slideOutVertically(tween(120)) { it / 2 },
+                    // 6. Floating View Original / Compare button in top-right corner
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 8.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(top = 12.dp, end = 12.dp)
                     ) {
-                        EditorQuickActionBar(
-                            onStraighten = {
-                                selectedTab = EditorTab.CROP
-                                cropSubMode = CropSubMode.FRAMING
+                        Surface(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                    shape = CircleShape
+                                ),
+                            shape = CircleShape,
+                            color = if (isComparingOriginal) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
                             },
-                            currentAspect = currentSnapshot.cropState.aspectOption.label,
-                            onAspectClick = {
-                                selectedTab = EditorTab.CROP
-                                showAspectPicker = true
-                            },
-                            onCompareChange = { comparing ->
-                                isComparingOriginal = comparing
-                            },
-                            onRotate = {
-                                val newRotation = CropGeometryHelper.rotateCounterClockwise(currentSnapshot.cropState.rotation)
-                                val newEffAspect = CropGeometryHelper.effectiveAspectRatio(rawAspect, newRotation)
-                                val newRect = if (currentSnapshot.cropState.aspectOption != com.inferno.gallery.ui.editor.model.AspectRatioOption.FREEFORM) {
-                                    CropGeometryHelper.calculateInitialAspectRect(currentSnapshot.cropState.aspectOption, newEffAspect)
-                                } else {
-                                    currentSnapshot.cropState.cropRect
-                                }
-                                commitSnapshot(
-                                    currentSnapshot.copy(
-                                        cropState = currentSnapshot.cropState.copy(
-                                            rotation = newRotation,
-                                            cropRect = newRect
-                                        )
-                                    )
+                            tonalElevation = 4.dp,
+                            shadowElevation = 2.dp
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false)
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            isComparingOriginal = true
+                                            waitForUpOrCancellation()
+                                            isComparingOriginal = false
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_ms_compare),
+                                    contentDescription = "Hold to compare with original",
+                                    tint = if (isComparingOriginal) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                        )
+                        }
                     }
                 } else if (isLoadingBitmap) {
                     CircularProgressIndicator(
