@@ -200,11 +200,99 @@ class EditorRulerSliderMathTest {
             EditorCornerBracketsMath.hitTest(500f, 500f, cropRect, canvasW, canvasH, touchRadius)
         )
 
+        // Edges: Top, Bottom, Left, Right
+        assertEquals(
+            CornerHandle.EDGE_TOP,
+            EditorCornerBracketsMath.hitTest(500f, 200f, cropRect, canvasW, canvasH, touchRadius)
+        )
+        assertEquals(
+            CornerHandle.EDGE_BOTTOM,
+            EditorCornerBracketsMath.hitTest(500f, 800f, cropRect, canvasW, canvasH, touchRadius)
+        )
+        assertEquals(
+            CornerHandle.EDGE_LEFT,
+            EditorCornerBracketsMath.hitTest(200f, 500f, cropRect, canvasW, canvasH, touchRadius)
+        )
+        assertEquals(
+            CornerHandle.EDGE_RIGHT,
+            EditorCornerBracketsMath.hitTest(800f, 500f, cropRect, canvasW, canvasH, touchRadius)
+        )
+
         // Far outside: (50, 50)
         assertEquals(
             CornerHandle.NONE,
             EditorCornerBracketsMath.hitTest(50f, 50f, cropRect, canvasW, canvasH, touchRadius)
         )
+    }
+
+    @Test
+    fun testEdgeFreeformAndAspectDrag() {
+        val initial = Rect(0.2f, 0.2f, 0.8f, 0.8f)
+        val canvasW = 1000f
+        val canvasH = 1000f
+
+        // 1. Freeform top edge drag
+        val topDragged = EditorCornerBracketsMath.updateCropRect(
+            currentRect = initial,
+            handle = CornerHandle.EDGE_TOP,
+            deltaXNormalized = 0f,
+            deltaYNormalized = -0.1f,
+            aspectRatio = null,
+            canvasWidth = canvasW,
+            canvasHeight = canvasH
+        )
+        assertEquals(0.2f, topDragged.left, 0.001f)
+        assertEquals(0.1f, topDragged.top, 0.001f)
+        assertEquals(0.8f, topDragged.right, 0.001f)
+        assertEquals(0.8f, topDragged.bottom, 0.001f)
+
+        // 2. Freeform bottom edge drag
+        val bottomDragged = EditorCornerBracketsMath.updateCropRect(
+            currentRect = initial,
+            handle = CornerHandle.EDGE_BOTTOM,
+            deltaXNormalized = 0f,
+            deltaYNormalized = 0.1f,
+            aspectRatio = null,
+            canvasWidth = canvasW,
+            canvasHeight = canvasH
+        )
+        assertEquals(0.9f, bottomDragged.bottom, 0.001f)
+
+        // 3. Freeform left edge drag
+        val leftDragged = EditorCornerBracketsMath.updateCropRect(
+            currentRect = initial,
+            handle = CornerHandle.EDGE_LEFT,
+            deltaXNormalized = 0.1f,
+            deltaYNormalized = 0f,
+            aspectRatio = null,
+            canvasWidth = canvasW,
+            canvasHeight = canvasH
+        )
+        assertEquals(0.3f, leftDragged.left, 0.001f)
+
+        // 4. Freeform right edge drag
+        val rightDragged = EditorCornerBracketsMath.updateCropRect(
+            currentRect = initial,
+            handle = CornerHandle.EDGE_RIGHT,
+            deltaXNormalized = 0.1f,
+            deltaYNormalized = 0f,
+            aspectRatio = null,
+            canvasWidth = canvasW,
+            canvasHeight = canvasH
+        )
+        assertEquals(0.9f, rightDragged.right, 0.001f)
+
+        // 5. Fixed aspect ratio edge drag
+        val aspectDragged = EditorCornerBracketsMath.updateCropRect(
+            currentRect = initial,
+            handle = CornerHandle.EDGE_BOTTOM,
+            deltaXNormalized = 0f,
+            deltaYNormalized = 0.1f,
+            aspectRatio = 1.0f,
+            canvasWidth = canvasW,
+            canvasHeight = canvasH
+        )
+        assertEquals(aspectDragged.width, aspectDragged.height, 0.001f)
     }
 
     @Test

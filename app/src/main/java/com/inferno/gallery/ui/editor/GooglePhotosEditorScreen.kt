@@ -407,34 +407,40 @@ fun GooglePhotosEditorScreen(
                     val boxWDp = with(density) { boxW.toDp() }
                     val boxHDp = with(density) { boxH.toDp() }
 
-                    val canTouchImageToCompare = !isCropDragging && (selectedTab != EditorTab.MARKUP || activeMarkupTool == null)
+                    val canTouchImageToCompare = selectedTab != EditorTab.CROP &&
+                            !isCropDragging &&
+                            (selectedTab != EditorTab.MARKUP || activeMarkupTool == null)
                     val currentCanTouchToCompare by rememberUpdatedState(canTouchImageToCompare)
 
                     // Image container with live geometry transforms applied via graphicsLayer
                     Box(
                         modifier = Modifier
                             .size(width = boxWDp, height = boxHDp)
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    if (!currentCanTouchToCompare) return@awaitEachGesture
+                            .then(
+                                if (canTouchImageToCompare) {
+                                    Modifier.pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            if (!currentCanTouchToCompare) return@awaitEachGesture
 
-                                    val timeoutMs = (viewConfiguration.longPressTimeoutMillis).coerceIn(120L, 200L)
-                                    val upOrCancel = withTimeoutOrNull(timeoutMs) {
-                                        waitForUpOrCancellation()
-                                    }
+                                            val timeoutMs = (viewConfiguration.longPressTimeoutMillis).coerceIn(300L, 500L)
+                                            val upOrCancel = withTimeoutOrNull(timeoutMs) {
+                                                waitForUpOrCancellation()
+                                            }
 
-                                    if (upOrCancel == null && currentCanTouchToCompare) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        isComparingOriginal = true
-                                        try {
-                                            waitForUpOrCancellation()
-                                        } finally {
-                                            isComparingOriginal = false
+                                            if (upOrCancel == null && currentCanTouchToCompare) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                isComparingOriginal = true
+                                                try {
+                                                    waitForUpOrCancellation()
+                                                } finally {
+                                                    isComparingOriginal = false
+                                                }
+                                            }
                                         }
                                     }
-                                }
-                            }
+                                } else Modifier
+                            )
                             .graphicsLayer {
                                 if (!isComparingOriginal) {
                                     val crop = currentSnapshot.cropState

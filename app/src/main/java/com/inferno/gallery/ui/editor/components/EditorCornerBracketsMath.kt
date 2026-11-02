@@ -14,6 +14,10 @@ enum class CornerHandle {
     TOP_RIGHT,
     BOTTOM_LEFT,
     BOTTOM_RIGHT,
+    EDGE_TOP,
+    EDGE_BOTTOM,
+    EDGE_LEFT,
+    EDGE_RIGHT,
     INSIDE,
     NONE
 }
@@ -24,7 +28,7 @@ enum class CornerHandle {
 object EditorCornerBracketsMath {
 
     /**
-     * Hit tests the touch coordinates against the 4 corner handles and inside of [cropRect].
+     * Hit tests the touch coordinates against the 4 corner handles, 4 edge lines, and inside of [cropRect].
      */
     fun hitTest(
         touchX: Float,
@@ -39,13 +43,23 @@ object EditorCornerBracketsMath {
         val r = cropRect.right * canvasWidth
         val b = cropRect.bottom * canvasHeight
 
-        // Priority 1: 4 Corners
+        // Priority 1: 4 Corners (highest precedence)
         if (hypot(touchX - l, touchY - t) <= touchRadiusPx) return CornerHandle.TOP_LEFT
         if (hypot(touchX - r, touchY - t) <= touchRadiusPx) return CornerHandle.TOP_RIGHT
         if (hypot(touchX - l, touchY - b) <= touchRadiusPx) return CornerHandle.BOTTOM_LEFT
         if (hypot(touchX - r, touchY - b) <= touchRadiusPx) return CornerHandle.BOTTOM_RIGHT
 
-        // Priority 2: Inside area
+        // Priority 2: 4 Edges / lines (touch near boundary lines)
+        val edgeMargin = touchRadiusPx.coerceAtLeast(24f)
+        val isNearHorizSpan = touchX >= (l - edgeMargin) && touchX <= (r + edgeMargin)
+        val isNearVertSpan = touchY >= (t - edgeMargin) && touchY <= (b + edgeMargin)
+
+        if (isNearHorizSpan && abs(touchY - t) <= edgeMargin) return CornerHandle.EDGE_TOP
+        if (isNearHorizSpan && abs(touchY - b) <= edgeMargin) return CornerHandle.EDGE_BOTTOM
+        if (isNearVertSpan && abs(touchX - l) <= edgeMargin) return CornerHandle.EDGE_LEFT
+        if (isNearVertSpan && abs(touchX - r) <= edgeMargin) return CornerHandle.EDGE_RIGHT
+
+        // Priority 3: Inside area
         if (touchX in l..r && touchY in t..b) return CornerHandle.INSIDE
 
         return CornerHandle.NONE
@@ -112,6 +126,22 @@ object EditorCornerBracketsMath {
                     val minB = (t + minDimensionNormalized).coerceAtMost(1f)
                     r = (r + deltaXNormalized).coerceIn(minR, 1f)
                     b = (b + deltaYNormalized).coerceIn(minB, 1f)
+                }
+                CornerHandle.EDGE_TOP -> {
+                    val maxT = (b - minDimensionNormalized).coerceAtLeast(0f)
+                    t = (t + deltaYNormalized).coerceIn(0f, maxT)
+                }
+                CornerHandle.EDGE_BOTTOM -> {
+                    val minB = (t + minDimensionNormalized).coerceAtMost(1f)
+                    b = (b + deltaYNormalized).coerceIn(minB, 1f)
+                }
+                CornerHandle.EDGE_LEFT -> {
+                    val maxL = (r - minDimensionNormalized).coerceAtLeast(0f)
+                    l = (l + deltaXNormalized).coerceIn(0f, maxL)
+                }
+                CornerHandle.EDGE_RIGHT -> {
+                    val minR = (l + minDimensionNormalized).coerceAtMost(1f)
+                    r = (r + deltaXNormalized).coerceIn(minR, 1f)
                 }
                 else -> {}
             }
@@ -194,6 +224,54 @@ object EditorCornerBracketsMath {
                 }
                 val chosenW = chosenH * rNorm
                 Rect(anchorX - chosenW, anchorY - chosenH, anchorX, anchorY)
+            }
+            CornerHandle.EDGE_TOP -> {
+                val candH = (currentRect.bottom - (currentRect.top + deltaYNormalized)).coerceAtLeast(minH)
+                val maxAllowedH = currentRect.bottom.coerceAtLeast(minH)
+                val maxH = min(maxAllowedH, if (rNorm > 0f) 1f / rNorm else maxAllowedH)
+                val newH = candH.coerceIn(minH, maxH)
+                val newW = (newH * rNorm).coerceIn(minW, 1f)
+                val newTop = currentRect.bottom - newH
+                val cx = (currentRect.left + currentRect.right) / 2f
+                val newLeft = (cx - newW / 2f).coerceIn(0f, (1f - newW).coerceAtLeast(0f))
+                val newRight = (newLeft + newW).coerceIn(0f, 1f)
+                Rect(newLeft, newTop, newRight, currentRect.bottom)
+            }
+            CornerHandle.EDGE_BOTTOM -> {
+                val candH = ((currentRect.bottom + deltaYNormalized) - currentRect.top).coerceAtLeast(minH)
+                val maxAllowedH = (1f - currentRect.top).coerceAtLeast(minH)
+                val maxH = min(maxAllowedH, if (rNorm > 0f) 1f / rNorm else maxAllowedH)
+                val newH = candH.coerceIn(minH, maxH)
+                val newW = (newH * rNorm).coerceIn(minW, 1f)
+                val newBottom = currentRect.top + newH
+                val cx = (currentRect.left + currentRect.right) / 2f
+                val newLeft = (cx - newW / 2f).coerceIn(0f, (1f - newW).coerceAtLeast(0f))
+                val newRight = (newLeft + newW).coerceIn(0f, 1f)
+                Rect(newLeft, currentRect.top, newRight, newBottom)
+            }
+            CornerHandle.EDGE_LEFT -> {
+                val candW = (currentRect.right - (currentRect.left + deltaXNormalized)).coerceAtLeast(minW)
+                val maxAllowedW = currentRect.right.coerceAtLeast(minW)
+                val maxW = min(maxAllowedW, if (rNorm > 0f) 1f * rNorm else maxAllowedW)
+                val newW = candW.coerceIn(minW, maxW)
+                val newH = (if (rNorm > 0f) newW / rNorm else newW).coerceIn(minH, 1f)
+                val newLeft = currentRect.right - newW
+                val cy = (currentRect.top + currentRect.bottom) / 2f
+                val newTop = (cy - newH / 2f).coerceIn(0f, (1f - newH).coerceAtLeast(0f))
+                val newBottom = (newTop + newH).coerceIn(0f, 1f)
+                Rect(newLeft, newTop, currentRect.right, newBottom)
+            }
+            CornerHandle.EDGE_RIGHT -> {
+                val candW = ((currentRect.right + deltaXNormalized) - currentRect.left).coerceAtLeast(minW)
+                val maxAllowedW = (1f - currentRect.left).coerceAtLeast(minW)
+                val maxW = min(maxAllowedW, if (rNorm > 0f) 1f * rNorm else maxAllowedW)
+                val newW = candW.coerceIn(minW, maxW)
+                val newH = (if (rNorm > 0f) newW / rNorm else newW).coerceIn(minH, 1f)
+                val newRight = currentRect.left + newW
+                val cy = (currentRect.top + currentRect.bottom) / 2f
+                val newTop = (cy - newH / 2f).coerceIn(0f, (1f - newH).coerceAtLeast(0f))
+                val newBottom = (newTop + newH).coerceIn(0f, 1f)
+                Rect(currentRect.left, newTop, newRight, newBottom)
             }
             else -> currentRect
         }
