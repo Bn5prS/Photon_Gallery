@@ -402,6 +402,27 @@ class EditorRulerSliderMathTest {
         assertEquals(0.2f, zoomedPhoto.width, 0.001f)
         assertEquals(0.2f, zoomedPhoto.height, 0.001f)
 
+        // 3b. Pinch zoom photo OUT: crop window can NEVER expand beyond 1.0f
+        val zoomedOutPhoto = EditorCornerBracketsMath.zoomPhotoInCrop(
+            currentRect = initialCrop,
+            zoomFactor = 0.1f, // extreme zoom out
+            centroidXPx = 500f,
+            centroidYPx = 500f,
+            photoLeftPx = 100f,
+            photoTopPx = 100f,
+            photoWidthPx = photoW,
+            photoHeightPx = photoH,
+            aspectRatio = null
+        )
+        assertTrue(zoomedOutPhoto.width <= 1.0f)
+        assertTrue(zoomedOutPhoto.height <= 1.0f)
+        assertTrue(zoomedOutPhoto.left >= 0f)
+        assertTrue(zoomedOutPhoto.top >= 0f)
+        assertTrue(zoomedOutPhoto.right <= 1.0f)
+        assertTrue(zoomedOutPhoto.bottom <= 1.0f)
+        // Aspect ratio is strictly preserved (initial was 1:1, so width == height)
+        assertEquals(zoomedOutPhoto.width, zoomedOutPhoto.height, 0.001f)
+
         // 4. Hit test screen
         val boxScreen = Rect(100f, 100f, 500f, 500f)
         assertEquals(

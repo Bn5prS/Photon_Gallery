@@ -412,6 +412,11 @@ object EditorCornerBracketsMath {
      * Zooms the photo behind the locked crop frame in response to multi-touch pinch.
      * Pinching out (zoomFactor > 1) enlarges the photo, reducing the normalized crop window.
      * Pinching in (zoomFactor < 1) shrinks the photo, expanding the normalized crop window.
+     *
+     * In both freeform and aspect-constrained modes, zooming the photo scales the crop window
+     * uniformly so the aspect ratio of the crop box is 100% preserved. The crop window is
+     * strictly clamped so it can never exceed 1.0 in either dimension (photo can never shrink
+     * smaller than the crop box), and its boundaries are clamped strictly inside [0..1].
      */
     fun zoomPhotoInCrop(
         currentRect: Rect,
@@ -422,7 +427,7 @@ object EditorCornerBracketsMath {
         photoTopPx: Float,
         photoWidthPx: Float,
         photoHeightPx: Float,
-        aspectRatio: Float?,
+        aspectRatio: Float? = null,
         minDimensionNormalized: Float = 0.05f
     ): Rect {
         if (photoWidthPx <= 0f || photoHeightPx <= 0f) return currentRect
@@ -431,29 +436,23 @@ object EditorCornerBracketsMath {
 
         val oldW = currentRect.width
         val oldH = currentRect.height
+        if (oldW <= 0f || oldH <= 0f) return currentRect
 
-        var newW = (oldW / clampedZoom).coerceIn(minDimensionNormalized, 1f)
-        var newH = (oldH / clampedZoom).coerceIn(minDimensionNormalized, 1f)
+        val cropScale = 1f / clampedZoom
 
-        if (aspectRatio != null && aspectRatio > 0f) {
-            val candidateW = newH * aspectRatio
-            if (candidateW <= 1f) {
-                newW = candidateW.coerceAtLeast(minDimensionNormalized)
-                newH = newW / aspectRatio
-            } else {
-                newW = 1f
-                newH = (1f / aspectRatio).coerceIn(minDimensionNormalized, 1f)
-            }
-        }
+        // The crop window can NEVER expand beyond 1.0 in either width or height
+        val maxCropScale = minOf(1f / oldW, 1f / oldH).coerceAtLeast(1f)
+        val minCropScale = maxOf(minDimensionNormalized / oldW, minDimensionNormalized / oldH).coerceAtMost(1f)
 
-        val focusNormX = if (photoWidthPx > 0f) ((centroidXPx - photoLeftPx) / photoWidthPx).coerceIn(0f, 1f) else 0.5f
-        val focusNormY = if (photoHeightPx > 0f) ((centroidYPx - photoTopPx) / photoHeightPx).coerceIn(0f, 1f) else 0.5f
+        val effectiveScale = cropScale.coerceIn(minCropScale, maxCropScale)
+        val newW = (oldW * effectiveScale).coerceIn(minDimensionNormalized, 1f)
+        val newH = (oldH * effectiveScale).coerceIn(minDimensionNormalized, 1f)
 
-        val ratioW = if (oldW > 0f) newW / oldW else 1f
-        val ratioH = if (oldH > 0f) newH / oldH else 1f
+        val focusNormX = ((centroidXPx - photoLeftPx) / photoWidthPx).coerceIn(0f, 1f)
+        val focusNormY = ((centroidYPx - photoTopPx) / photoHeightPx).coerceIn(0f, 1f)
 
-        var newL = focusNormX - (focusNormX - currentRect.left) * ratioW
-        var newT = focusNormY - (focusNormY - currentRect.top) * ratioH
+        val newL = focusNormX - (focusNormX - currentRect.left) * effectiveScale
+        val newT = focusNormY - (focusNormY - currentRect.top) * effectiveScale
 
         val maxL = (1f - newW).coerceAtLeast(0f)
         val maxT = (1f - newH).coerceAtLeast(0f)
@@ -461,7 +460,7 @@ object EditorCornerBracketsMath {
         val clampedL = newL.coerceIn(0f, maxL)
         val clampedT = newT.coerceIn(0f, maxT)
 
-        return Rect(clampedL, clampedT, (clampedL + newW).coerceIn(0f, 1f), (clampedT + newH).coerceIn(0f, 1f))
+        return Rect(clampedL, clampedT, clampedL + newW, clampedT + newH)
     }
 }
 
