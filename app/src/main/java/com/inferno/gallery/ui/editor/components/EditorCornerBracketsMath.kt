@@ -276,5 +276,73 @@ object EditorCornerBracketsMath {
             else -> currentRect
         }
     }
+
+    /**
+     * Updates [currentRect] for multi-touch pinch-to-zoom and pan operations.
+     *
+     * @param zoomFactor Multiplier > 1f to zoom into image (reducing crop area), < 1f to zoom out.
+     * @param panDeltaXNorm Horizontal drag delta in normalized canvas coordinates.
+     * @param panDeltaYNorm Vertical drag delta in normalized canvas coordinates.
+     * @param centroidXNorm Center of pinch in normalized coordinates.
+     * @param centroidYNorm Center of pinch in normalized coordinates.
+     * @param aspectRatio Optional aspect ratio constraint (width / height).
+     */
+    fun zoomAndPanCropRect(
+        currentRect: Rect,
+        zoomFactor: Float,
+        panDeltaXNorm: Float,
+        panDeltaYNorm: Float,
+        centroidXNorm: Float,
+        centroidYNorm: Float,
+        aspectRatio: Float?,
+        minDimensionNormalized: Float = 0.05f
+    ): Rect {
+        if (zoomFactor == 1f && panDeltaXNorm == 0f && panDeltaYNorm == 0f) return currentRect
+
+        // Zoom: Pinching out (zoomFactor > 1) zooms INTO the photo, so the visible crop rect shrinks
+        val clampedZoom = zoomFactor.coerceIn(0.2f, 5.0f)
+        var newW = (currentRect.width / clampedZoom).coerceIn(minDimensionNormalized, 1f)
+        var newH = (currentRect.height / clampedZoom).coerceIn(minDimensionNormalized, 1f)
+
+        if (aspectRatio != null && aspectRatio > 0f) {
+            val candidateW = newH * aspectRatio
+            if (candidateW <= 1f) {
+                newW = candidateW.coerceAtLeast(minDimensionNormalized)
+                newH = newW / aspectRatio
+            } else {
+                newW = 1f
+                newH = (1f / aspectRatio).coerceIn(minDimensionNormalized, 1f)
+            }
+        }
+
+        // Relative anchor in current rect
+        val fx = if (currentRect.width > 0f) {
+            ((centroidXNorm - currentRect.left) / currentRect.width).coerceIn(0f, 1f)
+        } else 0.5f
+        val fy = if (currentRect.height > 0f) {
+            ((centroidYNorm - currentRect.top) / currentRect.height).coerceIn(0f, 1f)
+        } else 0.5f
+
+        // Compute new top-left around centroid
+        var newL = centroidXNorm - fx * newW
+        var newT = centroidYNorm - fy * newH
+
+        // Pan: Dragging finger right/down moves photo right/down, meaning crop window shifts opposite
+        newL -= panDeltaXNorm
+        newT -= panDeltaYNorm
+
+        // Clamp to normalized canvas boundaries
+        val maxL = (1f - newW).coerceAtLeast(0f)
+        val maxT = (1f - newH).coerceAtLeast(0f)
+        val clampedL = newL.coerceIn(0f, maxL)
+        val clampedT = newT.coerceIn(0f, maxT)
+
+        return Rect(
+            left = clampedL,
+            top = clampedT,
+            right = (clampedL + newW).coerceIn(0f, 1f),
+            bottom = (clampedT + newH).coerceIn(0f, 1f)
+        )
+    }
 }
 

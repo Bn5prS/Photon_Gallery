@@ -174,6 +174,10 @@ fun CropStudio(
                             }
                             onCropStateChange(cropState.copy(rotation = newRotation, cropRect = newRect))
                         },
+                        onMirror = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            onCropStateChange(cropState.copy(flipH = !cropState.flipH))
+                        },
                         onOpenPerspective = {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             savedVerticalTilt = cropState.verticalTilt
@@ -272,6 +276,7 @@ private fun CropCarouselView(
     onOpenAspect: () -> Unit,
     onOpenStraighten: () -> Unit,
     onRotate90: () -> Unit,
+    onMirror: () -> Unit,
     onOpenPerspective: () -> Unit,
     onResetCrop: () -> Unit,
     modifier: Modifier = Modifier
@@ -279,7 +284,7 @@ private fun CropCarouselView(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -314,7 +319,17 @@ private fun CropCarouselView(
             onClick = onRotate90
         )
 
-        // 4. Perspective
+        // 4. Mirror (Horizontal Flip)
+        val hasMirror = cropState.flipH
+        CropToolTile(
+            label = "Mirror",
+            iconRes = R.drawable.ic_ms_flip,
+            isActive = hasMirror,
+            hasActiveDot = hasMirror,
+            onClick = onMirror
+        )
+
+        // 5. Perspective
         val hasPerspective = cropState.verticalTilt != 0f || cropState.horizontalTilt != 0f
         CropToolTile(
             label = "Perspective",
@@ -324,7 +339,7 @@ private fun CropCarouselView(
             onClick = onOpenPerspective
         )
 
-        // 5. Reset
+        // 6. Reset
         CropToolTile(
             label = "Reset",
             iconRes = R.drawable.ic_ms_refresh,
@@ -351,7 +366,7 @@ private fun CropToolTile(
 ) {
     Column(
         modifier = modifier
-            .width(62.dp)
+            .width(54.dp)
             .clickable(enabled = isEnabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)

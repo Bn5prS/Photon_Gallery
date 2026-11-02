@@ -3,7 +3,9 @@ package com.inferno.gallery.ui.editor.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,14 +17,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -36,7 +45,7 @@ import com.inferno.gallery.R
  * Contains:
  * - Cancel 'X' icon button on the left
  * - Undo and Redo icon buttons (enabled/disabled states)
- * - "Save as copy" prominent Material 3 pill button (visible when changes exist)
+ * - Prominent "Save" pill button with "Save as copy" option (visible when changes exist)
  * - More options '⋮' icon button for overflow menu
  */
 @Composable
@@ -47,10 +56,13 @@ fun EditorTopBar(
     canUndo: Boolean,
     canRedo: Boolean,
     hasModifications: Boolean,
-    onSaveAsCopy: () -> Unit,
+    onSave: () -> Unit = {},
+    onSaveAsCopy: () -> Unit = {},
     onMoreOptions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showSaveMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -109,7 +121,7 @@ fun EditorTopBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Right side: "Save as copy" button and More options menu
+        // Right side: "Save" split pill and More options menu
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -119,22 +131,79 @@ fun EditorTopBar(
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                Button(
-                    onClick = onSaveAsCopy,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Save as copy",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.SemiBold
+                    Button(
+                        onClick = onSave,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        contentPadding = PaddingValues(start = 16.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                        elevation = null
+                    ) {
+                        Text(
+                            text = "Save",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold
+                            )
                         )
-                    )
+                    }
+
+                    Box {
+                        IconButton(
+                            onClick = { showSaveMenu = true },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .padding(end = 4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_ms_unfold_more),
+                                contentDescription = "Save options",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showSaveMenu,
+                            onDismissRequest = { showSaveMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Save (replace original)") },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_ms_save),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showSaveMenu = false
+                                    onSave()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Save as copy") },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_ms_content_copy),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showSaveMenu = false
+                                    onSaveAsCopy()
+                                }
+                            )
+                        }
+                    }
                 }
             }
 

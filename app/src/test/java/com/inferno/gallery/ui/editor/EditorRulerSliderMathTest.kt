@@ -296,6 +296,69 @@ class EditorRulerSliderMathTest {
     }
 
     @Test
+    fun testPinchZoomAndPanCropRect() {
+        val initial = Rect(0.1f, 0.1f, 0.9f, 0.9f) // 0.8 x 0.8 centered at 0.5, 0.5
+
+        // 1. Pinch out (zoomFactor > 1) -> zooms into image, shrinking crop window
+        val zoomedIn = EditorCornerBracketsMath.zoomAndPanCropRect(
+            currentRect = initial,
+            zoomFactor = 2.0f,
+            panDeltaXNorm = 0f,
+            panDeltaYNorm = 0f,
+            centroidXNorm = 0.5f,
+            centroidYNorm = 0.5f,
+            aspectRatio = null
+        )
+        assertEquals(0.4f, zoomedIn.width, 0.001f)
+        assertEquals(0.4f, zoomedIn.height, 0.001f)
+        assertEquals(0.3f, zoomedIn.left, 0.001f)
+        assertEquals(0.3f, zoomedIn.top, 0.001f)
+
+        // 2. Pinch in (zoomFactor < 1) -> zooms out, expanding crop window towards 1f
+        val zoomedOut = EditorCornerBracketsMath.zoomAndPanCropRect(
+            currentRect = zoomedIn,
+            zoomFactor = 0.5f,
+            panDeltaXNorm = 0f,
+            panDeltaYNorm = 0f,
+            centroidXNorm = 0.5f,
+            centroidYNorm = 0.5f,
+            aspectRatio = null
+        )
+        assertEquals(0.8f, zoomedOut.width, 0.001f)
+        assertEquals(0.8f, zoomedOut.height, 0.001f)
+
+        // 3. Pan delta
+        val panned = EditorCornerBracketsMath.zoomAndPanCropRect(
+            currentRect = zoomedIn,
+            zoomFactor = 1.0f,
+            panDeltaXNorm = 0.1f,
+            panDeltaYNorm = -0.1f,
+            centroidXNorm = 0.5f,
+            centroidYNorm = 0.5f,
+            aspectRatio = null
+        )
+        // Dragging right (panDeltaX = 0.1) shifts window left by 0.1: 0.3 - 0.1 = 0.2
+        assertEquals(0.2f, panned.left, 0.001f)
+        // Dragging up (panDeltaY = -0.1) shifts window down by 0.1: 0.3 - (-0.1) = 0.4
+        assertEquals(0.4f, panned.top, 0.001f)
+
+        // 4. Boundary clamping
+        val clamped = EditorCornerBracketsMath.zoomAndPanCropRect(
+            currentRect = initial,
+            zoomFactor = 0.1f, // very large zoom out
+            panDeltaXNorm = 2.0f, // huge pan
+            panDeltaYNorm = 2.0f,
+            centroidXNorm = 0.5f,
+            centroidYNorm = 0.5f,
+            aspectRatio = null
+        )
+        assertTrue(clamped.left >= 0f)
+        assertTrue(clamped.top >= 0f)
+        assertTrue(clamped.right <= 1f)
+        assertTrue(clamped.bottom <= 1f)
+    }
+
+    @Test
     fun testCornerFreeformClamping() {
         val initial = Rect(0.2f, 0.2f, 0.8f, 0.8f)
         val canvasW = 1000f

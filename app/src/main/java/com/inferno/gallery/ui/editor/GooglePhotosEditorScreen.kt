@@ -9,6 +9,9 @@ import android.widget.Toast
 import java.io.InputStream
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -242,6 +245,7 @@ fun GooglePhotosEditorScreen(
     var showOverflowMenu by rememberSaveable { mutableStateOf(false) }
     var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
     var isSaving by rememberSaveable { mutableStateOf(false) }
+    var savingMessage by rememberSaveable { mutableStateOf("Saving changes\u2026") }
     var isComparingOriginal by remember { mutableStateOf(false) }
 
     // Studio-specific active sub-modes
@@ -263,6 +267,39 @@ fun GooglePhotosEditorScreen(
     var showTextDialog by rememberSaveable { mutableStateOf(false) }
 
     val hasModifications = historyState.canUndo || currentSnapshot.isModified
+
+    val handleSave: (Boolean) -> Unit = { overwrite ->
+        if (!isSaving) {
+            isSaving = true
+            savingMessage = if (overwrite) "Saving changes\u2026" else "Saving copy\u2026"
+            scope.launch {
+                val result = ImageExportWorker.exportImage(
+                    context = context,
+                    sourceUri = imageUri,
+                    cropState = currentSnapshot.cropState,
+                    tuneValues = currentSnapshot.tuneValues,
+                    filterPreset = currentSnapshot.filterPreset,
+                    filterStrength = currentSnapshot.filterStrength,
+                    markupState = currentSnapshot.markupState,
+                    overwrite = overwrite
+                )
+                isSaving = false
+                result.onSuccess { savedUri ->
+                    Toast.makeText(
+                        context,
+                        if (overwrite) "Saved changes to photo" else "Saved copy to photos",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    onSaved(savedUri)
+                    onBack()
+                }.onFailure { error ->
+                    snackbarHostState.showSnackbar(
+                        message = error.localizedMessage ?: "Failed to save photo"
+                    )
+                }
+            }
+        }
+    }
 
     // ── 4. System Back Handling ──────────────────────────────────────────
     BackHandler(enabled = true) {
@@ -319,33 +356,8 @@ fun GooglePhotosEditorScreen(
                 canUndo = historyState.canUndo,
                 canRedo = historyState.canRedo,
                 hasModifications = hasModifications,
-                onSaveAsCopy = {
-                    if (!isSaving) {
-                        isSaving = true
-                        scope.launch {
-                            val result = ImageExportWorker.exportImage(
-                                context = context,
-                                sourceUri = imageUri,
-                                cropState = currentSnapshot.cropState,
-                                tuneValues = currentSnapshot.tuneValues,
-                                filterPreset = currentSnapshot.filterPreset,
-                                filterStrength = currentSnapshot.filterStrength,
-                                markupState = currentSnapshot.markupState,
-                                overwrite = false
-                            )
-                            isSaving = false
-                            result.onSuccess { savedUri ->
-                                Toast.makeText(context, "Saved copy to photos", Toast.LENGTH_SHORT).show()
-                                onSaved(savedUri)
-                                onBack()
-                            }.onFailure { error ->
-                                snackbarHostState.showSnackbar(
-                                    message = error.localizedMessage ?: "Failed to save photo copy"
-                                )
-                            }
-                        }
-                    }
-                },
+                onSave = { handleSave(true) },
+                onSaveAsCopy = { handleSave(false) },
                 onMoreOptions = { showOverflowMenu = true }
             )
         },
@@ -412,6 +424,48 @@ fun GooglePhotosEditorScreen(
                             (selectedTab != EditorTab.MARKUP || activeMarkupTool == null)
                     val currentCanTouchToCompare by rememberUpdatedState(canTouchImageToCompare)
 
+                    // In Crop mode: smoothly align the cropped area to center of screen when not dragging
+                    var steadyCropRect by remember { mutableStateOf(currentSnapshot.cropState.cropRect) }
+                    LaunchedEffect(isCropDragging, currentSnapshot.cropState.cropRect, selectedTab) {
+                        if (!isCropDragging || selectedTab != EditorTab.CROP) {
+                            steadyCropRect = currentSnapshot.cropState.cropRect
+                        }
+                    }
+
+                    val isCenteringCrop = selectedTab == EditorTab.CROP && !isComparingOriginal
+                    val cropCenterX = (steadyCropRect.left + steadyCropRect.right) / 2f
+                    val cropCenterY = (steadyCropRect.top + steadyCropRect.bottom) / 2f
+                    val cropWNorm = steadyCropRect.width.coerceAtLeast(0.05f)
+                    val cropHNorm = steadyCropRect.height.coerceAtLeast(0.05f)
+
+                    val targetCropFitScale = if (isCenteringCrop) {
+                        minOf(0.85f / cropWNorm, 0.85f / cropHNorm).coerceIn(1f, 4f)
+                    } else 1f
+
+                    val targetCropOffsetX = if (isCenteringCrop) {
+                        (0.5f - cropCenterX) * boxW
+                    } else 0f
+
+                    val targetCropOffsetY = if (isCenteringCrop) {
+                        (0.5f - cropCenterY) * boxH
+                    } else 0f
+
+                    val animatedCropScale by animateFloatAsState(
+                        targetValue = targetCropFitScale,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+                        label = "cropViewportScale"
+                    )
+                    val animatedCropOffsetX by animateFloatAsState(
+                        targetValue = targetCropOffsetX,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+                        label = "cropViewportOffsetX"
+                    )
+                    val animatedCropOffsetY by animateFloatAsState(
+                        targetValue = targetCropOffsetY,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioNoBouncy),
+                        label = "cropViewportOffsetY"
+                    )
+
                     // Image container with live geometry transforms applied via graphicsLayer
                     Box(
                         modifier = Modifier
@@ -445,8 +499,10 @@ fun GooglePhotosEditorScreen(
                                 if (!isComparingOriginal) {
                                     val crop = currentSnapshot.cropState
                                     rotationZ = crop.rotation.toFloat() + crop.straightenAngle
-                                    scaleX = if (crop.flipH) -1f else 1f
-                                    scaleY = if (crop.flipV) -1f else 1f
+                                    scaleX = (if (crop.flipH) -1f else 1f) * animatedCropScale
+                                    scaleY = (if (crop.flipV) -1f else 1f) * animatedCropScale
+                                    translationX = animatedCropOffsetX * animatedCropScale
+                                    translationY = animatedCropOffsetY * animatedCropScale
                                     rotationX = crop.verticalTilt
                                     rotationY = -crop.horizontalTilt
                                     cameraDistance = 16f * density.density
@@ -856,6 +912,8 @@ fun GooglePhotosEditorScreen(
         EditorOverflowSheet(
             onDismissRequest = { showOverflowMenu = false },
             canRevert = hasModifications,
+            onSave = { handleSave(true) },
+            onSaveAsCopy = { handleSave(false) },
             onRevertEdits = {
                 commitSnapshot(EditorSnapshot())
                 activeAdjustTool = null
@@ -941,7 +999,7 @@ fun GooglePhotosEditorScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Saving copy\u2026",
+                        text = savingMessage,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )

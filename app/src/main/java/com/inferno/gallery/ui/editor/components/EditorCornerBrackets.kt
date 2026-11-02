@@ -3,7 +3,8 @@ package com.inferno.gallery.ui.editor.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +29,8 @@ import androidx.compose.ui.unit.dp
  *
  * Overlays directly on the photo bounding box with:
  * - 4 white L-shaped thick bracket handles with drop shadows on the corners.
+ * - 4 edge line handles for top, bottom, left, right edge resizing.
+ * - Multi-touch pinch-to-zoom and pan support for maximum cropping flexibility.
  * - Minimum 48x48 dp touch target per handle for responsive thumb/finger dragging.
  * - Smooth normalized [cropRect] updating within 0f..1f.
  * - Aspect ratio constraint clamping (preserving exact aspect ratio when provided).
@@ -56,7 +59,8 @@ fun EditorCornerBrackets(
     val thinBorderPx = with(density) { 1.dp.toPx() }
 
     var activeHandle by remember { mutableStateOf(CornerHandle.NONE) }
-    val showGrid = isDragging || activeHandle != CornerHandle.NONE
+    var isInteracting by remember { mutableStateOf(false) }
+    val showGrid = isDragging || isInteracting || activeHandle != CornerHandle.NONE
     val gridAlpha by animateFloatAsState(
         targetValue = if (showGrid) 1f else 0f,
         animationSpec = tween(durationMillis = 180),
@@ -67,52 +71,109 @@ fun EditorCornerBrackets(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        val hit = EditorCornerBracketsMath.hitTest(
-                            touchX = offset.x,
-                            touchY = offset.y,
-                            cropRect = currentCropRect,
-                            canvasWidth = size.width.toFloat(),
-                            canvasHeight = size.height.toFloat(),
-                            touchRadiusPx = touchRadiusPx
-                        )
-                        activeHandle = hit
-                        if (hit != CornerHandle.NONE) {
-                            currentOnDragStateChange(true)
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        if (activeHandle != CornerHandle.NONE && size.width > 0 && size.height > 0) {
-                            change.consume()
-                            val deltaXNorm = dragAmount.x / size.width.toFloat()
-                            val deltaYNorm = dragAmount.y / size.height.toFloat()
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val w = size.width.toFloat()
+                    val h = size.height.toFloat()
+                    if (w <= 0f || h <= 0f) return@awaitEachGesture
 
-                            val updated = EditorCornerBracketsMath.updateCropRect(
-                                currentRect = currentCropRect,
-                                handle = activeHandle,
-                                deltaXNormalized = deltaXNorm,
-                                deltaYNormalized = deltaYNorm,
-                                aspectRatio = currentAspectRatio,
-                                canvasWidth = size.width.toFloat(),
-                                canvasHeight = size.height.toFloat()
-                            )
-                            currentOnCropRectChange(updated)
-                        }
-                    },
-                    onDragEnd = {
-                        if (activeHandle != CornerHandle.NONE) {
+                    var currentHandle = EditorCornerBracketsMath.hitTest(
+                        touchX = down.position.x,
+                        touchY = down.position.y,
+                        cropRect = currentCropRect,
+                        canvasWidth = w,
+                        canvasHeight = h,
+                        touchRadiusPx = touchRadiusPx
+                    )
+                    activeHandle = currentHandle
+
+                    var isGestureActive = false
+                    if (currentHandle != CornerHandle.NONE) {
+                        isGestureActive = true
+                        isInteracting = true
+                        currentOnDragStateChange(true)
+                    }
+
+                    var prevPointerCount = 1
+                    var prevCentroid = down.position
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressedPointers = event.changes.filter { it.pressed }
+                        if (pressedPointers.isEmpty()) break
+
+                        val pointerCount = pressedPointers.size
+
+                        if (pointerCount >= 2) {
+                            // Multi-touch: Two-finger Pinch to zoom in/out & pan
+                            if (!isGestureActive) {
+                                isGestureActive = true
+                                isInteracting = true
+                                currentOnDragStateChange(true)
+                            }
+                            currentHandle = CornerHandle.NONE
                             activeHandle = CornerHandle.NONE
-                            currentOnDragStateChange(false)
-                        }
-                    },
-                    onDragCancel = {
-                        if (activeHandle != CornerHandle.NONE) {
-                            activeHandle = CornerHandle.NONE
-                            currentOnDragStateChange(false)
+
+                            val currentCentroid = pressedPointers.fold(Offset.Zero) { acc, p -> acc + p.position } / pointerCount.toFloat()
+                            val p1 = pressedPointers[0]
+                            val p2 = pressedPointers[1]
+
+                            val currentDist = (p1.position - p2.position).getDistance()
+                            val prevDist = (p1.previousPosition - p2.previousPosition).getDistance()
+
+                            val zoomFactor = if (prevDist > 0f) currentDist / prevDist else 1f
+                            val panDelta = if (prevPointerCount >= 2) currentCentroid - prevCentroid else Offset.Zero
+
+                            if (zoomFactor != 1f || panDelta != Offset.Zero) {
+                                pressedPointers.forEach { it.consume() }
+
+                                val updated = EditorCornerBracketsMath.zoomAndPanCropRect(
+                                    currentRect = currentCropRect,
+                                    zoomFactor = zoomFactor,
+                                    panDeltaXNorm = panDelta.x / w,
+                                    panDeltaYNorm = panDelta.y / h,
+                                    centroidXNorm = currentCentroid.x / w,
+                                    centroidYNorm = currentCentroid.y / h,
+                                    aspectRatio = currentAspectRatio
+                                )
+                                currentOnCropRectChange(updated)
+                            }
+
+                            prevCentroid = currentCentroid
+                            prevPointerCount = pointerCount
+                        } else {
+                            // Single pointer: corner, edge, or inside pan
+                            val pointer = pressedPointers.first()
+                            val dragDelta = pointer.position - pointer.previousPosition
+
+                            if (dragDelta != Offset.Zero && currentHandle != CornerHandle.NONE) {
+                                pointer.consume()
+                                val deltaXNorm = dragDelta.x / w
+                                val deltaYNorm = dragDelta.y / h
+
+                                val updated = EditorCornerBracketsMath.updateCropRect(
+                                    currentRect = currentCropRect,
+                                    handle = currentHandle,
+                                    deltaXNormalized = deltaXNorm,
+                                    deltaYNormalized = deltaYNorm,
+                                    aspectRatio = currentAspectRatio,
+                                    canvasWidth = w,
+                                    canvasHeight = h
+                                )
+                                currentOnCropRectChange(updated)
+                            }
+                            prevCentroid = pointer.position
+                            prevPointerCount = 1
                         }
                     }
-                )
+
+                    if (isGestureActive) {
+                        currentHandle = CornerHandle.NONE
+                        activeHandle = CornerHandle.NONE
+                        isInteracting = false
+                        currentOnDragStateChange(false)
+                    }
+                }
             }
     ) {
         val w = size.width

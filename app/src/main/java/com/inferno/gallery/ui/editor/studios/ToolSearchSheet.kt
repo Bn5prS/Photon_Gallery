@@ -114,7 +114,15 @@ object ToolSearchCatalog {
             description = "Rotate image 90 degrees counter-clockwise",
             iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
             tab = EditorTab.CROP,
-            keywords = listOf("rotate", "turn", "orientation", "ccw", "flip", "spin")
+            keywords = listOf("rotate", "turn", "orientation", "ccw", "spin")
+        ),
+        EditorToolItem(
+            id = "mirror",
+            name = "Mirror",
+            description = "Flip image horizontally",
+            iconRes = R.drawable.ic_ms_flip,
+            tab = EditorTab.CROP,
+            keywords = listOf("mirror", "flip", "invert", "horizontal flip", "reverse")
         ),
         EditorToolItem(
             id = "perspective",

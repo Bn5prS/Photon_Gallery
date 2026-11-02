@@ -20,7 +20,10 @@ import com.inferno.gallery.ui.editor.model.FilterPreset
 import com.inferno.gallery.ui.editor.model.TuneValues
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.OutputStream
 import kotlin.math.max
 
 /**
@@ -215,11 +218,30 @@ object ImageExportWorker {
 
             // 8. Commit to MediaStore
             if (overwrite) {
-                val outputStream = context.contentResolver.openOutputStream(sourceUri, "w")
-                    ?: throw IllegalStateException("Cannot open output stream for overwrite: $sourceUri")
-                outputStream.use { out ->
-                    workBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                val outputStream: OutputStream? = if (sourceUri.scheme == "file" || sourceUri.scheme == null) {
+                    val file = File(sourceUri.path ?: sourceUri.toString())
+                    FileOutputStream(file)
+                } else {
+                    try {
+                        context.contentResolver.openOutputStream(sourceUri, "w")
+                    } catch (e: Exception) {
+                        val path = queryFilePath(context, sourceUri)
+                        if (path != null) FileOutputStream(File(path)) else throw e
+                    }
                 }
+                outputStream?.use { out ->
+                    workBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                } ?: throw IllegalStateException("Cannot open output stream for overwrite: $sourceUri")
+
+                if (sourceUri.scheme == "content") {
+                    try {
+                        val cv = ContentValues().apply {
+                            put(MediaStore.Images.Media.DATE_MODIFIED, System.currentTimeMillis() / 1000)
+                        }
+                        context.contentResolver.update(sourceUri, cv, null, null)
+                    } catch (_: Exception) {}
+                }
+
                 if (!workBitmap.isRecycled) {
                     workBitmap.recycle()
                 }
@@ -328,5 +350,25 @@ object ImageExportWorker {
             }
         }
         return uri.lastPathSegment
+    }
+
+    private fun queryFilePath(context: Context, uri: Uri): String? {
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.query(
+                    uri,
+                    arrayOf(MediaStore.Images.Media.DATA),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                        if (idx >= 0) return cursor.getString(idx)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return uri.path
     }
 }
