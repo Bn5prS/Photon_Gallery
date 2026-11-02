@@ -65,6 +65,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -424,92 +425,87 @@ fun GooglePhotosEditorScreen(
                             (selectedTab != EditorTab.MARKUP || activeMarkupTool == null)
                     val currentCanTouchToCompare by rememberUpdatedState(canTouchImageToCompare)
 
-                    // ── CROP VIEWPORT GEOMETRY ────────────────────────────
+                    // ── CROP VIEWPORT GEOMETRY (CENTERED VIEWPORT MODEL) ──────
                     val isCropMode = selectedTab == EditorTab.CROP && !isComparingOriginal
 
-                    // In Crop mode: steadyCropRect defines the centered viewport framing.
-                    // While dragging a crop handle, steadyCropRect is frozen so the photo is completely stationary.
-                    var steadyCropRect by remember { mutableStateOf(currentSnapshot.cropState.cropRect) }
-                    LaunchedEffect(currentSnapshot.cropState.cropRect, isDraggingCropHandle, selectedTab) {
-                        if (!isDraggingCropHandle && selectedTab == EditorTab.CROP) {
-                            steadyCropRect = currentSnapshot.cropState.cropRect
-                        }
+                    val targetGeo = remember(maxW, maxH, effectiveAspect, currentSnapshot.cropState.cropRect) {
+                        EditorCornerBracketsMath.calculateViewportGeometry(
+                            viewWidth = maxW,
+                            viewHeight = maxH,
+                            photoAspect = effectiveAspect,
+                            cropRect = currentSnapshot.cropState.cropRect
+                        )
                     }
 
-                    // Smoothly animate the crop framing when user finishes dragging handle or changes aspect ratio
-                    val animL by animateFloatAsState(
-                        targetValue = steadyCropRect.left,
-                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                        label = "cropAnimL"
-                    )
-                    val animT by animateFloatAsState(
-                        targetValue = steadyCropRect.top,
-                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                        label = "cropAnimT"
-                    )
-                    val animR by animateFloatAsState(
-                        targetValue = steadyCropRect.right,
-                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                        label = "cropAnimR"
-                    )
-                    val animB by animateFloatAsState(
-                        targetValue = steadyCropRect.bottom,
-                        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                        label = "cropAnimB"
-                    )
-                    val animCropRect = Rect(animL, animT, animR, animB)
+                    // Release-to-center transition animation
+                    val animProgress = remember { androidx.compose.animation.core.Animatable(1f) }
+                    var frozenScale by remember { mutableFloatStateOf(1f) }
+                    var frozenTransX by remember { mutableFloatStateOf(0f) }
+                    var frozenTransY by remember { mutableFloatStateOf(0f) }
 
-                    // 1. Available frame viewport (~84% max bounds)
-                    val maxFrameW = maxW * 0.84f
-                    val maxFrameH = maxH * 0.84f
+                    val targetScale = if (isCropMode) targetGeo.scale else 1f
+                    val targetTransX = if (isCropMode) targetGeo.translationX else 0f
+                    val targetTransY = if (isCropMode) targetGeo.translationY else 0f
 
-                    val animW = animCropRect.width.coerceAtLeast(0.01f)
-                    val animH = animCropRect.height.coerceAtLeast(0.01f)
-                    val animAspect = (animW / animH) * effectiveAspect
-
-                    val (frameW, frameH) = if (animAspect > (maxFrameW / maxFrameH)) {
-                        maxFrameW to (maxFrameW / animAspect)
-                    } else {
-                        (maxFrameH * animAspect) to maxFrameH
+                    val progress = animProgress.value
+                    val liveScale = when {
+                        isDraggingCropHandle -> frozenScale
+                        progress < 1f -> frozenScale + (targetScale - frozenScale) * progress
+                        else -> targetScale
                     }
-                    val frameLeft = (maxW - frameW) / 2f
-                    val frameTop = (maxH - frameH) / 2f
+                    val liveTransX = when {
+                        isDraggingCropHandle -> frozenTransX
+                        progress < 1f -> frozenTransX + (targetTransX - frozenTransX) * progress
+                        else -> targetTransX
+                    }
+                    val liveTransY = when {
+                        isDraggingCropHandle -> frozenTransY
+                        progress < 1f -> frozenTransY + (targetTransY - frozenTransY) * progress
+                        else -> targetTransY
+                    }
 
-                    // 2. Photo layout (uniform scale strictly preserving aspect ratio!)
-                    val photoW = if (isCropMode) frameW / animW else boxW
-                    val photoH = if (isCropMode) frameH / animH else boxH
-                    val photoLeft = if (isCropMode) frameLeft - animCropRect.left * photoW else (maxW - boxW) / 2f
-                    val photoTop = if (isCropMode) frameTop - animCropRect.top * photoH else (maxH - boxH) / 2f
+                    val centerX = maxW / 2f
+                    val centerY = maxH / 2f
+                    val baseW = targetGeo.baseW
+                    val baseH = targetGeo.baseH
+                    val baseLeft = targetGeo.baseLeft
+                    val baseTop = targetGeo.baseTop
 
-                    // 3. Screen-space Crop Box
-                    // In steady state, animCropRect == currentSnapshot.cropState.cropRect, so box is exactly (frameLeft, frameTop, frameLeft + frameW, frameTop + frameH).
-                    // While dragging a handle, animCropRect and the photo are frozen, so the crop box moves freely over the photo following the touch!
-                    val activeCrop = currentSnapshot.cropState.cropRect
+                    val photoScreenW = baseW * liveScale
+                    val photoScreenH = baseH * liveScale
+                    val photoScreenLeft = centerX + liveTransX - photoScreenW / 2f
+                    val photoScreenTop = centerY + liveTransY - photoScreenH / 2f
+
+                    // Screen-space Crop Box
+                    val cRect = currentSnapshot.cropState.cropRect
                     val currentCropBoxOnScreen = if (isCropMode) {
-                        val boxL = photoLeft + activeCrop.left * photoW
-                        val boxT = photoTop + activeCrop.top * photoH
-                        val boxR = photoLeft + activeCrop.right * photoW
-                        val boxB = photoTop + activeCrop.bottom * photoH
+                        val boxL = photoScreenLeft + cRect.left * photoScreenW
+                        val boxT = photoScreenTop + cRect.top * photoScreenH
+                        val boxR = photoScreenLeft + cRect.right * photoScreenW
+                        val boxB = photoScreenTop + cRect.bottom * photoScreenH
                         Rect(boxL, boxT, boxR, boxB)
                     } else {
-                        Rect(photoLeft, photoTop, photoLeft + photoW, photoTop + photoH)
+                        Rect(photoScreenLeft, photoScreenTop, photoScreenLeft + photoScreenW, photoScreenTop + photoScreenH)
                     }
 
-                    val photoWDp = with(density) { photoW.toDp() }
-                    val photoHDp = with(density) { photoH.toDp() }
+                    val baseWDp = with(density) { baseW.toDp() }
+                    val baseHDp = with(density) { baseH.toDp() }
 
                     // Image container with live geometry transforms applied via graphicsLayer
                     Box(
                         modifier = Modifier
-                            .size(width = photoWDp, height = photoHDp)
+                            .size(width = baseWDp, height = baseHDp)
                             .graphicsLayer {
-                                translationX = photoLeft
-                                translationY = photoTop
+                                translationX = baseLeft + liveTransX
+                                translationY = baseTop + liveTransY
+                                scaleX = liveScale
+                                scaleY = liveScale
+                                transformOrigin = TransformOrigin(0.5f, 0.5f)
                                 if (!isComparingOriginal) {
                                     val crop = currentSnapshot.cropState
                                     rotationZ = crop.rotation.toFloat() + crop.straightenAngle
-                                    scaleX = if (crop.flipH) -1f else 1f
-                                    scaleY = if (crop.flipV) -1f else 1f
+                                    scaleX *= if (crop.flipH) -1f else 1f
+                                    scaleY *= if (crop.flipV) -1f else 1f
                                     rotationX = crop.verticalTilt
                                     rotationY = -crop.horizontalTilt
                                     cameraDistance = 16f * density.density
@@ -609,12 +605,23 @@ fun GooglePhotosEditorScreen(
                             aspectRatio = currentSnapshot.cropState.aspectOption.resolveTargetRatio(effectiveAspect),
                             isDragging = isCropDragging,
                             onDragHandleStateChange = { dragging ->
-                                isDraggingCropHandle = dragging
-                                isCropDragging = dragging
                                 if (dragging) {
+                                    frozenScale = liveScale
+                                    frozenTransX = liveTransX
+                                    frozenTransY = liveTransY
+                                    isDraggingCropHandle = true
+                                    isCropDragging = true
                                     dragStartCropSnapshot = currentSnapshot
                                 } else {
-                                    steadyCropRect = currentSnapshot.cropState.cropRect
+                                    isDraggingCropHandle = false
+                                    isCropDragging = false
+                                    scope.launch {
+                                        animProgress.snapTo(0f)
+                                        animProgress.animateTo(
+                                            targetValue = 1f,
+                                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                        )
+                                    }
                                     dragStartCropSnapshot?.let { startSnap ->
                                         if (startSnap != currentSnapshot) {
                                             historyState = EditorHistoryState(
@@ -628,14 +635,13 @@ fun GooglePhotosEditorScreen(
                                 }
                             },
                             cropBoxOnScreen = currentCropBoxOnScreen,
-                            photoWidth = photoW,
-                            photoHeight = photoH,
-                            photoLeft = photoLeft,
-                            photoTop = photoTop,
+                            photoWidth = photoScreenW,
+                            photoHeight = photoScreenH,
+                            photoLeft = photoScreenLeft,
+                            photoTop = photoScreenTop,
                             onPhotoPanZoom = { newRect ->
                                 val updatedCrop = currentSnapshot.cropState.copy(cropRect = newRect)
                                 updateLiveSnapshot(currentSnapshot.copy(cropState = updatedCrop))
-                                steadyCropRect = newRect
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -645,10 +651,10 @@ fun GooglePhotosEditorScreen(
                             val rect = currentSnapshot.cropState.cropRect
                             val w = size.width
                             val h = size.height
-                            val l = photoLeft + rect.left * photoW
-                            val t = photoTop + rect.top * photoH
-                            val r = photoLeft + rect.right * photoW
-                            val b = photoTop + rect.bottom * photoH
+                            val l = photoScreenLeft + rect.left * photoScreenW
+                            val t = photoScreenTop + rect.top * photoScreenH
+                            val r = photoScreenLeft + rect.right * photoScreenW
+                            val b = photoScreenTop + rect.bottom * photoScreenH
                             val scrim = Color.Black.copy(alpha = 0.65f)
                             if (t > 0f) drawRect(scrim, Offset.Zero, Size(w, t))
                             if (b < h) drawRect(scrim, Offset(0f, b), Size(w, h - b))

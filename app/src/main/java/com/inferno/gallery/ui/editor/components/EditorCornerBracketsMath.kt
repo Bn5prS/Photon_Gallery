@@ -22,10 +22,117 @@ enum class CornerHandle {
     NONE
 }
 
+data class CropViewportGeometry(
+    val baseW: Float,
+    val baseH: Float,
+    val baseLeft: Float,
+    val baseTop: Float,
+    val targetFrame: Rect,
+    val scale: Float,
+    val translationX: Float,
+    val translationY: Float,
+    val cropBoxOnScreen: Rect,
+    val photoScreenLeft: Float,
+    val photoScreenTop: Float,
+    val photoScreenWidth: Float,
+    val photoScreenHeight: Float
+)
+
 /**
  * Mathematical calculations and hit-testing for crop corner brackets.
  */
 object EditorCornerBracketsMath {
+
+    /**
+     * Calculates the viewport geometry for photo layout and centered crop frame.
+     * Scale is always uniform (never stretches).
+     */
+    fun calculateViewportGeometry(
+        viewWidth: Float,
+        viewHeight: Float,
+        photoAspect: Float,
+        cropRect: Rect,
+        framingFraction: Float = 0.84f
+    ): CropViewportGeometry {
+        if (viewWidth <= 0f || viewHeight <= 0f || photoAspect <= 0f) {
+            val r = Rect(0f, 0f, viewWidth, viewHeight)
+            return CropViewportGeometry(
+                baseW = viewWidth,
+                baseH = viewHeight,
+                baseLeft = 0f,
+                baseTop = 0f,
+                targetFrame = r,
+                scale = 1f,
+                translationX = 0f,
+                translationY = 0f,
+                cropBoxOnScreen = r,
+                photoScreenLeft = 0f,
+                photoScreenTop = 0f,
+                photoScreenWidth = viewWidth,
+                photoScreenHeight = viewHeight
+            )
+        }
+
+        val framingW = viewWidth * framingFraction
+        val framingH = viewHeight * framingFraction
+
+        val (baseW, baseH) = if (photoAspect > (framingW / framingH)) {
+            framingW to (framingW / photoAspect)
+        } else {
+            (framingH * photoAspect) to framingH
+        }
+
+        val centerX = viewWidth / 2f
+        val centerY = viewHeight / 2f
+        val baseLeft = centerX - baseW / 2f
+        val baseTop = centerY - baseH / 2f
+
+        val normW = cropRect.width.coerceIn(0.02f, 1f)
+        val normH = cropRect.height.coerceIn(0.02f, 1f)
+        val cropAspect = (normW / normH) * photoAspect
+
+        val (frameW, frameH) = if (cropAspect > (framingW / framingH)) {
+            framingW to (framingW / cropAspect)
+        } else {
+            (framingH * cropAspect) to maxOf(1f, framingH)
+        }
+
+        val frameLeft = centerX - frameW / 2f
+        val frameTop = centerY - frameH / 2f
+        val targetFrame = Rect(frameLeft, frameTop, frameLeft + frameW, frameTop + frameH)
+
+        val scale = frameW / (normW * baseW)
+        val cropCenterX = (cropRect.left + cropRect.right) / 2f
+        val cropCenterY = (cropRect.top + cropRect.bottom) / 2f
+        val translationX = (0.5f - cropCenterX) * baseW * scale
+        val translationY = (0.5f - cropCenterY) * baseH * scale
+
+        val photoScreenWidth = baseW * scale
+        val photoScreenHeight = baseH * scale
+        val photoScreenLeft = centerX + translationX - photoScreenWidth / 2f
+        val photoScreenTop = centerY + translationY - photoScreenHeight / 2f
+
+        val boxL = photoScreenLeft + cropRect.left * photoScreenWidth
+        val boxT = photoScreenTop + cropRect.top * photoScreenHeight
+        val boxR = photoScreenLeft + cropRect.right * photoScreenWidth
+        val boxB = photoScreenTop + cropRect.bottom * photoScreenHeight
+
+        return CropViewportGeometry(
+            baseW = baseW,
+            baseH = baseH,
+            baseLeft = baseLeft,
+            baseTop = baseTop,
+            targetFrame = targetFrame,
+            scale = scale,
+            translationX = translationX,
+            translationY = translationY,
+            cropBoxOnScreen = Rect(boxL, boxT, boxR, boxB),
+            photoScreenLeft = photoScreenLeft,
+            photoScreenTop = photoScreenTop,
+            photoScreenWidth = photoScreenWidth,
+            photoScreenHeight = photoScreenHeight
+        )
+    }
 
     /**
      * Hit tests the touch coordinates against the 4 corner handles, 4 edge lines, and inside of [cropRect].
