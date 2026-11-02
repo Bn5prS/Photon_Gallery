@@ -2,6 +2,8 @@
 
 package com.inferno.gallery.picker
 
+import androidx.compose.ui.res.stringResource
+
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -222,7 +224,7 @@ fun PickerScreen(
                     FilterChip(
                         selected = filterIndex == 0,
                         onClick = { filterIndex = 0 },
-                        label = { Text("All", style = MaterialTheme.typography.labelMedium) },
+                        label = { Text(stringResource(R.string.picker_tab_all), style = MaterialTheme.typography.labelMedium) },
                         shape = CircleShape,
                         colors = FilterChipDefaults.filterChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -234,7 +236,7 @@ fun PickerScreen(
                     FilterChip(
                         selected = filterIndex == 1,
                         onClick = { filterIndex = 1 },
-                        label = { Text("Photos", style = MaterialTheme.typography.labelMedium) },
+                        label = { Text(stringResource(R.string.nav_photos), style = MaterialTheme.typography.labelMedium) },
                         shape = CircleShape,
                         colors = FilterChipDefaults.filterChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -246,7 +248,7 @@ fun PickerScreen(
                     FilterChip(
                         selected = filterIndex == 2,
                         onClick = { filterIndex = 2 },
-                        label = { Text("Videos", style = MaterialTheme.typography.labelMedium) },
+                        label = { Text(stringResource(R.string.album_videos), style = MaterialTheme.typography.labelMedium) },
                         shape = CircleShape,
                         colors = FilterChipDefaults.filterChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

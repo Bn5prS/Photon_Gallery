@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 package com.inferno.gallery.ui.vault
 
+import androidx.compose.ui.res.stringResource
+
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -182,7 +184,7 @@ fun PrivateSpaceScreen(
                                         shape = ShapeLarge
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Lock Vault Now", fontWeight = FontWeight.Medium) },
+                                            text = { Text(stringResource(R.string.vault_lock_now), fontWeight = FontWeight.Medium) },
                                             leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_lock), contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                             onClick = {
                                                 showOptionsMenu = false
@@ -192,7 +194,7 @@ fun PrivateSpaceScreen(
                                             }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Change Master PIN", fontWeight = FontWeight.Medium) },
+                                            text = { Text(stringResource(R.string.vault_change_pin), fontWeight = FontWeight.Medium) },
                                             leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_key), contentDescription = null) },
                                             onClick = {
                                                 showOptionsMenu = false
@@ -409,8 +411,8 @@ fun PrivateSpaceScreen(
                         ) {
                             PhotonEmptyState(
                                 icon = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
-                                title = "Private Space is Empty",
-                                subtitle = "Select photos in your gallery and tap \"Hide\" to move them to this encrypted space.",
+                                title = stringResource(R.string.vault_empty_title),
+                                subtitle = stringResource(R.string.vault_empty_instruction),
                                 shape = ExpressiveShapes.Clover8Leaf
                             )
                         }

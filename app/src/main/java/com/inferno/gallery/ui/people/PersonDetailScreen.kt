@@ -5,6 +5,8 @@
 
 package com.inferno.gallery.ui.people
 
+import androidx.compose.ui.res.stringResource
+
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -232,8 +234,8 @@ fun PersonDetailScreen(
         MergePersonPickerSheet(
             people = allPeople,
             currentPersonId = personId,
-            title = "Move photos to...",
-            subtitle = "Select a person to move ${selectedMediaIds.size} photo(s) to.",
+            title = stringResource(R.string.people_move_photos_title),
+            subtitle = stringResource(R.string.people_move_photos_desc, selectedMediaIds.size),
             onDismissRequest = { showMovePhotosPicker = false },
             onSelectTargetPerson = { target ->
                 showMovePhotosPicker = false

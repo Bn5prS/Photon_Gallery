@@ -644,8 +644,8 @@ fun DetailScreen(
     if (showDeleteConfirmDialog && pendingDeleteItem != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { androidx.compose.material3.Text("Move to Recycle Bin") },
-            text = { androidx.compose.material3.Text("This item will be moved to the Recycle Bin.") },
+            title = { androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_title)) },
+            text = { androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_msg)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(
                     onClick = {
@@ -674,14 +674,14 @@ fun DetailScreen(
                         }
                     }
                 ) {
-                    androidx.compose.material3.Text("Move to Bin")
+                    androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_confirm))
                 }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(
                     onClick = { showDeleteConfirmDialog = false }
                 ) {
-                    androidx.compose.material3.Text("Cancel")
+                    androidx.compose.material3.Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -691,13 +691,13 @@ fun DetailScreen(
         var renameText by remember(currentItem) { mutableStateOf(currentItem.name) }
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showRenameDialog = false },
-            title = { androidx.compose.material3.Text("Rename File") },
+            title = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_title)) },
             text = {
                 androidx.compose.foundation.layout.Column {
                     androidx.compose.material3.OutlinedTextField(
                         value = renameText,
                         onValueChange = { renameText = it },
-                        label = { androidx.compose.material3.Text("File Name") },
+                        label = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -725,14 +725,14 @@ fun DetailScreen(
                         showRenameDialog = false
                     }
                 ) {
-                    androidx.compose.material3.Text("Save")
+                    androidx.compose.material3.Text(stringResource(R.string.action_save))
                 }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(
                     onClick = { showRenameDialog = false }
                 ) {
-                    androidx.compose.material3.Text("Cancel")
+                    androidx.compose.material3.Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -741,11 +741,11 @@ fun DetailScreen(
     if (showCopySheet && currentItem != null) {
         val allAlbumsList by viewModel.allAlbums.collectAsState()
         AlbumPickerSheet(
-            title = "Copy to Album",
+            title = stringResource(R.string.sheet_copy_to_album),
             itemCount = 1,
             albums = allAlbumsList,
             showPrivateSpaceOption = false,
-            confirmPathButtonText = "Copy Here",
+            confirmPathButtonText = stringResource(R.string.sheet_copy_here),
             onDismissRequest = { showCopySheet = false },
             onSelectAlbum = { bucket ->
                 showCopySheet = false
@@ -761,11 +761,11 @@ fun DetailScreen(
     if (showMoveSheet && currentItem != null) {
         val allAlbumsList by viewModel.allAlbums.collectAsState()
         AlbumPickerSheet(
-            title = "Move to Album",
+            title = stringResource(R.string.sheet_move_to_album),
             itemCount = 1,
             albums = allAlbumsList,
             showPrivateSpaceOption = true,
-            confirmPathButtonText = "Move Here",
+            confirmPathButtonText = stringResource(R.string.sheet_move_here),
             onDismissRequest = { showMoveSheet = false },
             onSelectAlbum = { bucket ->
                 showMoveSheet = false
@@ -1715,7 +1715,7 @@ fun DetailScreen(
                         )
                         if (currentItem != null && motionPhotoInfo?.isMotionPhoto == true) {
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Export Motion Video (MP4)") },
+                                text = { Text(stringResource(R.string.action_export_motion_mp4)) },
                                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_movie), contentDescription = null) },
                                 onClick = {
                                     showMoreMenu = false
@@ -1732,7 +1732,7 @@ fun DetailScreen(
                         }
                         if (currentItem != null) {
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Open with") },
+                                text = { Text(stringResource(R.string.action_open_with)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_open_in_new), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1806,7 +1806,7 @@ fun DetailScreen(
                             }
                             if (currentItem != null && currentItem.isVideo) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Extract frame") },
+                                    text = { Text(stringResource(R.string.action_extract_frame)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1901,8 +1901,8 @@ fun DetailScreen(
         val tipMotionDismissed by settingsRepo.tipMotionPhotoDismissedFlow.collectAsState(initial = true)
         if (!tipMotionDismissed && motionPhotoInfo?.isMotionPhoto == true && showUi) {
             FloatingTipCard(
-                title = "Quick Tip",
-                message = "Press & hold anywhere on the photo to play live motion video.",
+                title = stringResource(R.string.quick_tip),
+                message = stringResource(R.string.tip_motion_photo),
                 iconResId = R.drawable.ic_ms_motion_photos_on,
                 onDismiss = {
                     coroutineScope.launch {

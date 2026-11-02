@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -856,8 +858,8 @@ fun ImageEditorScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     if (!tipMarkupDismissed) {
                                         FloatingTipCard(
-                                            title = "Quick Tip",
-                                            message = "Tap placed text or arrows to move, scale, and rotate freely with two fingers.",
+                                            title = stringResource(R.string.quick_tip),
+                                            message = stringResource(R.string.tip_markup_gesture),
                                             iconResId = R.drawable.ic_ms_touch_app,
                                             onDismiss = {
                                                 coroutineScope.launch {
@@ -949,7 +951,7 @@ fun ImageEditorScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // ── Main Tool Selector Row (Google Photos Style Tabs) ──
+                    // ── Main Tool Selector Row (Photo Editor Tabs) ──
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1105,14 +1107,14 @@ fun ImageEditorScreen(
                             onDismissRequest = { showSaveMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Save as Copy") },
+                                text = { Text(stringResource(R.string.editor_save_copy)) },
                                 onClick = {
                                     showSaveMenu = false
                                     saveImage(overwrite = false)
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Overwrite Original") },
+                                text = { Text(stringResource(R.string.editor_overwrite)) },
                                 onClick = {
                                     showSaveMenu = false
                                     saveImage(overwrite = true)
@@ -1251,12 +1253,21 @@ private fun SuggestionsPanel(
         val tune: TuneValues
     )
 
-    val suggestions = remember {
+    val enhanceTitle = stringResource(R.string.preset_enhance)
+    val autoBalancedSub = stringResource(R.string.preset_auto_balanced)
+    val warmTitle = stringResource(R.string.preset_warm)
+    val goldenHourSub = stringResource(R.string.preset_golden_hour)
+    val coolTitle = stringResource(R.string.preset_cool)
+    val crispChillSub = stringResource(R.string.preset_crisp_chill)
+    val dynamicTitle = stringResource(R.string.preset_dynamic)
+    val highPopSub = stringResource(R.string.preset_high_pop)
+
+    val suggestions = remember(enhanceTitle, autoBalancedSub, warmTitle, goldenHourSub, coolTitle, crispChillSub, dynamicTitle, highPopSub) {
         listOf(
             SuggestionItem(
                 id = "enhance",
-                title = "Enhance",
-                subtitle = "Auto balanced",
+                title = enhanceTitle,
+                subtitle = autoBalancedSub,
                 tune = TuneValues(
                     brightness = 5f,
                     contrast = 15f,
@@ -1268,8 +1279,8 @@ private fun SuggestionsPanel(
             ),
             SuggestionItem(
                 id = "warm",
-                title = "Warm",
-                subtitle = "Golden hour",
+                title = warmTitle,
+                subtitle = goldenHourSub,
                 tune = TuneValues(
                     warmth = 28f,
                     saturation = 10f,
@@ -1278,8 +1289,8 @@ private fun SuggestionsPanel(
             ),
             SuggestionItem(
                 id = "cool",
-                title = "Cool",
-                subtitle = "Crisp chill",
+                title = coolTitle,
+                subtitle = crispChillSub,
                 tune = TuneValues(
                     warmth = -28f,
                     saturation = 6f,
@@ -1288,8 +1299,8 @@ private fun SuggestionsPanel(
             ),
             SuggestionItem(
                 id = "dynamic",
-                title = "Dynamic",
-                subtitle = "High pop",
+                title = dynamicTitle,
+                subtitle = highPopSub,
                 tune = TuneValues(
                     contrast = 24f,
                     highlights = -14f,
@@ -1674,7 +1685,7 @@ private fun CropToolPanel(
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = "Rotate")
                 }
-                Text("Rotate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.editor_rotate), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilledTonalIconButton(
@@ -1693,7 +1704,7 @@ private fun CropToolPanel(
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz), contentDescription = "Flip H")
                 }
-                Text("Flip H", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.editor_flip_h), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilledTonalIconButton(
@@ -1716,7 +1727,7 @@ private fun CropToolPanel(
                         modifier = Modifier.graphicsLayer { rotationZ = 90f }
                     )
                 }
-                Text("Flip V", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.editor_flip_v), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilledTonalIconButton(
@@ -1735,7 +1746,7 @@ private fun CropToolPanel(
                 ) {
                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_refresh), contentDescription = "Reset")
                 }
-                Text("Reset", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.editor_reset), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

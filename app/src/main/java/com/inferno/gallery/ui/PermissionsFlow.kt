@@ -773,7 +773,7 @@ private fun SetupLooksFeelPage(
                                 modifier = Modifier.size(IconSizeTokens.S)
                             )
                         },
-                        label = { Text("System", style = MaterialTheme.typography.labelMedium) }
+                        label = { Text(stringResource(R.string.theme_mode_system), style = MaterialTheme.typography.labelMedium) }
                     )
 
                     SegmentedButton(
@@ -790,7 +790,7 @@ private fun SetupLooksFeelPage(
                                 modifier = Modifier.size(IconSizeTokens.S)
                             )
                         },
-                        label = { Text("Light", style = MaterialTheme.typography.labelMedium) }
+                        label = { Text(stringResource(R.string.theme_mode_light), style = MaterialTheme.typography.labelMedium) }
                     )
 
                     SegmentedButton(
@@ -807,7 +807,7 @@ private fun SetupLooksFeelPage(
                                 modifier = Modifier.size(IconSizeTokens.S)
                             )
                         },
-                        label = { Text("Dark", style = MaterialTheme.typography.labelMedium) }
+                        label = { Text(stringResource(R.string.theme_mode_dark), style = MaterialTheme.typography.labelMedium) }
                     )
                 }
             }
@@ -900,7 +900,7 @@ private fun SetupLooksFeelPage(
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         item {
                             ColorSwatchItem(
-                                title = "Dynamic",
+                                title = stringResource(R.string.material_you),
                                 color = MaterialTheme.colorScheme.primary,
                                 isSelected = useMaterialYou || colorPresetName == "dynamic",
                                 isDynamic = true,
@@ -1408,7 +1408,7 @@ private fun SetupAiPage(
                                     },
                                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
-                                    Text("Cancel")
+                                    Text(stringResource(R.string.action_cancel))
                                 }
                             }
                         }
@@ -1729,7 +1729,7 @@ private fun SetupAiPage(
                                         },
                                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                     ) {
-                                        Text("Cancel")
+                                        Text(stringResource(R.string.action_cancel))
                                     }
                                 }
                             }

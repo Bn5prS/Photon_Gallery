@@ -510,7 +510,7 @@ fun AlbumsScreen(
                                     }
                                 }
                                 Text(
-                                    text = "Explore Map",
+                                    text = stringResource(R.string.explore_map),
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.photonColors.onMediaScrim,
                                     modifier = Modifier
@@ -609,15 +609,25 @@ fun AlbumsScreen(
                         contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
                     ) {
                         items(documentBuckets, key = { "document_${it.bucketName}" }) { docBucket ->
-                            val (title, iconRes) = when (docBucket.bucketName) {
-                                BucketNames.DOC_BOOKS_MAGAZINES -> "Books & Magazines" to R.drawable.ic_ms_menu_book
-                                BucketNames.DOC_EVENTS -> "Events" to R.drawable.ic_ms_confirmation_number
-                                BucketNames.DOC_IDS -> "IDs" to R.drawable.ic_ms_badge
-                                BucketNames.DOC_NOTES -> "Notes" to R.drawable.ic_ms_edit_note
-                                BucketNames.DOC_PAYMENTS -> "Payments / Methods" to R.drawable.ic_ms_payments
-                                BucketNames.DOC_RECEIPTS -> "Receipts" to R.drawable.ic_ms_receipt_long
-                                BucketNames.DOC_SOCIAL -> "Social" to R.drawable.ic_ms_share
-                                else -> "Documents" to R.drawable.ic_ms_description
+                            val title = when (docBucket.bucketName) {
+                                BucketNames.DOC_BOOKS_MAGAZINES -> stringResource(R.string.doc_books_magazines)
+                                BucketNames.DOC_EVENTS -> stringResource(R.string.doc_events)
+                                BucketNames.DOC_IDS -> stringResource(R.string.doc_ids)
+                                BucketNames.DOC_NOTES -> stringResource(R.string.doc_notes)
+                                BucketNames.DOC_PAYMENTS -> stringResource(R.string.doc_payments)
+                                BucketNames.DOC_RECEIPTS -> stringResource(R.string.doc_receipts)
+                                BucketNames.DOC_SOCIAL -> stringResource(R.string.doc_social)
+                                else -> stringResource(R.string.doc_documents)
+                            }
+                            val iconRes = when (docBucket.bucketName) {
+                                BucketNames.DOC_BOOKS_MAGAZINES -> R.drawable.ic_ms_menu_book
+                                BucketNames.DOC_EVENTS -> R.drawable.ic_ms_confirmation_number
+                                BucketNames.DOC_IDS -> R.drawable.ic_ms_badge
+                                BucketNames.DOC_NOTES -> R.drawable.ic_ms_edit_note
+                                BucketNames.DOC_PAYMENTS -> R.drawable.ic_ms_payments
+                                BucketNames.DOC_RECEIPTS -> R.drawable.ic_ms_receipt_long
+                                BucketNames.DOC_SOCIAL -> R.drawable.ic_ms_share
+                                else -> R.drawable.ic_ms_description
                             }
 
                             Surface(
@@ -688,7 +698,7 @@ fun AlbumsScreen(
                                             )
                                         }
                                         Text(
-                                            text = "${docBucket.itemCount} items",
+                                            text = stringResource(R.string.media_count_multiple, docBucket.itemCount),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (docBucket.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                                             maxLines = 1
@@ -724,17 +734,29 @@ fun AlbumsScreen(
                         contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
                     ) {
                         items(mediaTypeBuckets, key = { "media_type_${it.bucketName}" }) { mediaType ->
-                            val (title, iconRes) = when (mediaType.bucketName) {
-                                BucketNames.MEDIA_TYPE_RAW -> "RAW" to R.drawable.ic_ms_photo_camera
-                                BucketNames.MEDIA_TYPE_PANORAMAS -> "Panoramas" to R.drawable.ic_ms_aspect_ratio
-                                BucketNames.MEDIA_TYPE_SLOW_MO -> "Slow Motion" to R.drawable.ic_ms_schedule
-                                BucketNames.MEDIA_TYPE_ANIMATIONS -> "Animations" to R.drawable.ic_ms_auto_fix_high
-                                BucketNames.MEDIA_TYPE_NIGHT -> "Night Shots" to R.drawable.ic_ms_wb_twilight
-                                BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> "Photo Spheres" to R.drawable.ic_ms_vrpano
-                                BucketNames.MEDIA_TYPE_PORTRAIT -> "Portraits" to R.drawable.ic_ms_person
-                                BucketNames.MEDIA_TYPE_MACRO -> "Macro" to R.drawable.ic_ms_filter_vintage
-                                BucketNames.MEDIA_TYPE_TIMELAPSE -> "Time-Lapses" to R.drawable.ic_ms_timelapse
-                                else -> "Media" to R.drawable.ic_ms_image
+                            val title = when (mediaType.bucketName) {
+                                BucketNames.MEDIA_TYPE_RAW -> stringResource(R.string.mode_raw)
+                                BucketNames.MEDIA_TYPE_PANORAMAS -> stringResource(R.string.mode_panoramas)
+                                BucketNames.MEDIA_TYPE_SLOW_MO -> stringResource(R.string.mode_slow_mo)
+                                BucketNames.MEDIA_TYPE_ANIMATIONS -> stringResource(R.string.mode_animations)
+                                BucketNames.MEDIA_TYPE_NIGHT -> stringResource(R.string.mode_night)
+                                BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> stringResource(R.string.mode_photo_sphere)
+                                BucketNames.MEDIA_TYPE_PORTRAIT -> stringResource(R.string.mode_portrait)
+                                BucketNames.MEDIA_TYPE_MACRO -> stringResource(R.string.mode_macro)
+                                BucketNames.MEDIA_TYPE_TIMELAPSE -> stringResource(R.string.mode_timelapse)
+                                else -> stringResource(R.string.nav_photos)
+                            }
+                            val iconRes = when (mediaType.bucketName) {
+                                BucketNames.MEDIA_TYPE_RAW -> R.drawable.ic_ms_photo_camera
+                                BucketNames.MEDIA_TYPE_PANORAMAS -> R.drawable.ic_ms_aspect_ratio
+                                BucketNames.MEDIA_TYPE_SLOW_MO -> R.drawable.ic_ms_schedule
+                                BucketNames.MEDIA_TYPE_ANIMATIONS -> R.drawable.ic_ms_auto_fix_high
+                                BucketNames.MEDIA_TYPE_NIGHT -> R.drawable.ic_ms_wb_twilight
+                                BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> R.drawable.ic_ms_vrpano
+                                BucketNames.MEDIA_TYPE_PORTRAIT -> R.drawable.ic_ms_person
+                                BucketNames.MEDIA_TYPE_MACRO -> R.drawable.ic_ms_filter_vintage
+                                BucketNames.MEDIA_TYPE_TIMELAPSE -> R.drawable.ic_ms_timelapse
+                                else -> R.drawable.ic_ms_image
                             }
 
                             Surface(
@@ -805,7 +827,7 @@ fun AlbumsScreen(
                                             )
                                         }
                                         Text(
-                                            text = "${mediaType.itemCount} items",
+                                            text = stringResource(R.string.media_count_multiple, mediaType.itemCount),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (mediaType.coverUri != Uri.EMPTY) MaterialTheme.photonColors.onMediaScrim.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                                             maxLines = 1
@@ -974,16 +996,18 @@ fun AlbumsScreen(
         }
 
         item(key = "content_more_tools", span = { GridItemSpan(maxLineSpan) }) {
-            val toolItems = remember(trashCount) {
+            val trashTitle = stringResource(R.string.album_trash)
+            val cleanUpTitle = stringResource(R.string.utility_clean_up)
+            val toolItems = remember(trashCount, trashTitle, cleanUpTitle) {
                 listOf(
                     CollectionBlockItem(
-                        title = "Trash",
+                        title = trashTitle,
                         iconRes = R.drawable.ic_ms_delete,
                         count = trashCount,
                         onClick = { onAlbumClick("Trash") }
                     ),
                     CollectionBlockItem(
-                        title = "Clean Up",
+                        title = cleanUpTitle,
                         iconRes = R.drawable.ic_ms_cleaning_services,
                         onClick = onNavigateToDuplicateCleaner
                     )
@@ -1021,8 +1045,8 @@ fun AlbumsScreen(
 
     if (!tipAlbumsDismissed) {
         FloatingTipCard(
-            title = "Quick Tip",
-            message = "Press & hold any album to change its cover photo or choose custom shapes like Cookie, Clover & Pill.",
+            title = stringResource(R.string.quick_tip),
+            message = stringResource(R.string.tip_albums_customize),
             iconResId = R.drawable.ic_ms_auto_fix_high,
             onDismiss = {
                 coroutineScope.launch {
@@ -1416,7 +1440,7 @@ fun AlbumDropdownMenu(
             )
         }
         DropdownMenuItem(
-            text = { Text("Change Cover", style = MaterialTheme.typography.bodyMedium) },
+            text = { Text(stringResource(R.string.action_change_cover), style = MaterialTheme.typography.bodyMedium) },
             leadingIcon = {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
@@ -1431,7 +1455,7 @@ fun AlbumDropdownMenu(
         )
         if (hasCustomCover) {
             DropdownMenuItem(
-                text = { Text("Reset to Default Cover", style = MaterialTheme.typography.bodyMedium) },
+                text = { Text(stringResource(R.string.action_reset_cover), style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = {
                     Icon(
                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
@@ -1446,7 +1470,7 @@ fun AlbumDropdownMenu(
             )
         }
         DropdownMenuItem(
-            text = { Text("Change Shape", style = MaterialTheme.typography.bodyMedium) },
+            text = { Text(stringResource(R.string.action_change_shape), style = MaterialTheme.typography.bodyMedium) },
             leadingIcon = {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
@@ -1461,7 +1485,7 @@ fun AlbumDropdownMenu(
         )
         if (hasCustomShape) {
             DropdownMenuItem(
-                text = { Text("Reset to Default Shape", style = MaterialTheme.typography.bodyMedium) },
+                text = { Text(stringResource(R.string.action_reset_shape), style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = {
                     Icon(
                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
@@ -1554,7 +1578,7 @@ fun AlbumsControlBar(
             ) {
                 // Name Sorts
                 DropdownMenuItem(
-                    text = { Text("Name (A to Z)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_name_a_to_z_short), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.NameAsc, onClick = null)
                     },
@@ -1564,7 +1588,7 @@ fun AlbumsControlBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Name (Z to A)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_name_z_to_a_short), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.NameDesc, onClick = null)
                     },
@@ -1575,7 +1599,7 @@ fun AlbumsControlBar(
                 )
                 // Date Added / Modified Sorts
                 DropdownMenuItem(
-                    text = { Text("Date Added (Newest)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_date_added_newest), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.DateModifiedNewToOld, onClick = null)
                     },
@@ -1585,7 +1609,7 @@ fun AlbumsControlBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Date Added (Oldest)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_date_added_oldest), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.DateModifiedOldToNew, onClick = null)
                     },
@@ -1596,7 +1620,7 @@ fun AlbumsControlBar(
                 )
                 // Date Taken Sorts
                 DropdownMenuItem(
-                    text = { Text("Date Taken (Newest)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_date_taken_newest), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.NewToOld, onClick = null)
                     },
@@ -1606,7 +1630,7 @@ fun AlbumsControlBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Date Taken (Oldest)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_date_taken_oldest), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.OldToNew, onClick = null)
                     },
@@ -1617,7 +1641,7 @@ fun AlbumsControlBar(
                 )
                 // Item Count Sorts
                 DropdownMenuItem(
-                    text = { Text("Item Count (Most items)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_count_most), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.CountDesc, onClick = null)
                     },
@@ -1627,7 +1651,7 @@ fun AlbumsControlBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Item Count (Least items)", style = MaterialTheme.typography.bodyMedium) },
+                    text = { Text(stringResource(R.string.sort_count_least), style = MaterialTheme.typography.bodyMedium) },
                     trailingIcon = {
                         RadioButton(selected = currentSort == SortOrder.CountAsc, onClick = null)
                     },
@@ -1800,7 +1824,7 @@ fun SectionHeader(
     count: Int? = null,
     isExpanded: Boolean = true,
     isCollapsible: Boolean = true,
-    seeAllText: String = "Show all",
+    seeAllText: String = stringResource(R.string.action_show_all),
     onToggle: () -> Unit = {},
     onSeeAll: (() -> Unit)? = null
 ) {

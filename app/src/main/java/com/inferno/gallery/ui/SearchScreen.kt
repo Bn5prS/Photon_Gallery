@@ -367,8 +367,8 @@ private fun EmptySearchState(
             item {
                 PhotonEmptyState(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                    title = "Search photos & videos",
-                    subtitle = "Search by file name, format, album, date, text inside photos, or describe any scene.",
+                    title = stringResource(R.string.search_empty_title),
+                    subtitle = stringResource(R.string.search_empty_subtitle),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 48.dp)
@@ -390,7 +390,7 @@ private fun SearchingState() {
                 modifier = Modifier.size(48.dp)
             )
             Text(
-                text = "Searching…",
+                text = stringResource(R.string.search_in_progress),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -402,8 +402,8 @@ private fun SearchingState() {
 private fun NoResultsState(query: String, onClear: () -> Unit) {
     PhotonEmptyState(
         icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
-        title = "No results for “$query”",
-        subtitle = "Try different keywords, dates, or visual scene descriptions.",
+        title = stringResource(R.string.search_no_results_title, query),
+        subtitle = stringResource(R.string.search_no_results_subtitle),
         shape = ExpressiveShapes.Clover8Leaf,
         modifier = Modifier.fillMaxSize(),
         action = {
@@ -412,7 +412,7 @@ private fun NoResultsState(query: String, onClear: () -> Unit) {
                 shape = ShapeFull
             ) {
                 Text(
-                    text = "Clear search",
+                    text = stringResource(R.string.search_clear_button),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                 )
             }
@@ -775,7 +775,7 @@ private fun SearchResultsList(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "Show all matches (${ftsResults.size})",
+                                        text = stringResource(R.string.search_show_all_fts, ftsResults.size),
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                                     )
                                 }
@@ -839,7 +839,7 @@ private fun SearchResultsList(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "Show all semantic matches (${smartResults.size})",
+                                        text = stringResource(R.string.search_show_all_semantic, smartResults.size),
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                                     )
                                 }

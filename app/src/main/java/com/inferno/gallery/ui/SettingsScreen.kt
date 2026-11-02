@@ -230,8 +230,8 @@ fun SettingsScreen(
     if (showClearFacesConfirm) {
         AlertDialog(
             onDismissRequest = { showClearFacesConfirm = false },
-            title = { Text("Clear Face Index", style = MaterialTheme.typography.titleLarge) },
-            text = { Text("This will wipe out all clustered faces, recognized people, and custom names. Are you sure you want to proceed?", style = MaterialTheme.typography.bodyMedium) },
+            title = { Text(stringResource(R.string.dialog_clear_face_title), style = MaterialTheme.typography.titleLarge) },
+            text = { Text(stringResource(R.string.dialog_clear_face_msg), style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -239,12 +239,12 @@ fun SettingsScreen(
                         viewModel.clearFaceIndex()
                     }
                 ) {
-                    Text("Clear All Faces", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.dialog_clear_all_faces_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearFacesConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -253,8 +253,8 @@ fun SettingsScreen(
     if (showClearIndexConfirm) {
         AlertDialog(
             onDismissRequest = { showClearIndexConfirm = false },
-            title = { Text("Clear Smart Search Index") },
-            text = { Text("This will wipe out all computed image embeddings for semantic search. You will need to run the indexer again to use smart search. Are you sure you want to proceed?") },
+            title = { Text(stringResource(R.string.dialog_clear_smart_search_title)) },
+            text = { Text(stringResource(R.string.dialog_clear_smart_search_msg)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -262,12 +262,12 @@ fun SettingsScreen(
                         viewModel.clearSmartSearchEmbeddings()
                     }
                 ) {
-                    Text("Clear Index", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.btn_clear_index), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearIndexConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -276,8 +276,8 @@ fun SettingsScreen(
     if (showDeleteModelConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteModelConfirm = false },
-            title = { Text("Delete AI Model Files", style = MaterialTheme.typography.titleLarge) },
-            text = { Text("This will delete the local ONNX model files (approx. 150MB). You will not be able to use semantic search or index new images until you download them again. Are you sure?", style = MaterialTheme.typography.bodyMedium) },
+            title = { Text(stringResource(R.string.dialog_delete_ai_models_title), style = MaterialTheme.typography.titleLarge) },
+            text = { Text(stringResource(R.string.dialog_delete_ai_models_msg), style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -285,12 +285,12 @@ fun SettingsScreen(
                         viewModel.deleteSmartSearchModel()
                     }
                 ) {
-                    Text("Delete Files", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.dialog_delete_files_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteModelConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -299,10 +299,10 @@ fun SettingsScreen(
     if (showRescanFacesConfirm) {
         AlertDialog(
             onDismissRequest = { showRescanFacesConfirm = false },
-            title = { Text("Rescan All Faces", style = MaterialTheme.typography.titleLarge) },
+            title = { Text(stringResource(R.string.dialog_rescan_faces_title), style = MaterialTheme.typography.titleLarge) },
             text = {
                 Text(
-                    text = "This will reset face scan status and re-analyze all photos in your gallery using the on-device face engine.\n\nAll existing named people, custom tags, and manual groupings will be safely preserved. Are you sure you want to rescan?",
+                    text = stringResource(R.string.dialog_rescan_faces_msg),
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -313,12 +313,12 @@ fun SettingsScreen(
                         viewModel.startFaceIndexing(forceRescan = true)
                     }
                 ) {
-                    Text("Rescan All", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.dialog_rescan_all_confirm), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showRescanFacesConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -327,10 +327,10 @@ fun SettingsScreen(
     if (showDeleteFaceModelConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteFaceModelConfirm = false },
-            title = { Text("Delete Face Model File", style = MaterialTheme.typography.titleLarge) },
+            title = { Text(stringResource(R.string.dialog_delete_face_model_title), style = MaterialTheme.typography.titleLarge) },
             text = {
                 Text(
-                    text = "This will delete the local MobileFaceNet ONNX model file (~13MB).\n\nYou will not be able to scan or cluster new faces until you download it again. Existing people and tags already in your gallery will remain untouched.",
+                    text = stringResource(R.string.dialog_delete_face_model_msg),
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -341,12 +341,12 @@ fun SettingsScreen(
                         viewModel.deleteFaceModel()
                     }
                 ) {
-                    Text("Delete Model", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteFaceModelConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -355,10 +355,10 @@ fun SettingsScreen(
     if (showRebuildOcrConfirm) {
         AlertDialog(
             onDismissRequest = { showRebuildOcrConfirm = false },
-            title = { Text("Rebuild Text Index", style = MaterialTheme.typography.titleLarge) },
+            title = { Text(stringResource(R.string.dialog_rebuild_text_index_title), style = MaterialTheme.typography.titleLarge) },
             text = {
                 Text(
-                    text = "This will wipe out all cached OCR text recognition entries and re-index text across all images in your gallery from scratch. Are you sure you want to proceed?",
+                    text = stringResource(R.string.dialog_rebuild_text_index_msg),
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -369,12 +369,12 @@ fun SettingsScreen(
                         viewModel.rebuildOcrIndex()
                     }
                 ) {
-                    Text("Rebuild Index", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.btn_rebuild_index), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showRebuildOcrConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -387,7 +387,7 @@ fun SettingsScreen(
     if (showPrivacyDialog) {
         AlertDialog(
             onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("Privacy Notice", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.dialog_privacy_notice_title), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     text = "Photon Gallery is built with a privacy-first approach.\n\n" +
@@ -399,7 +399,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showPrivacyDialog = false }) {
-                    Text("Understood")
+                    Text(stringResource(R.string.dialog_understood))
                 }
             }
         )
@@ -500,8 +500,8 @@ fun SettingsScreen(
                             },
                             {
                                 SettingsCategoryRow(
-                                    title = "Excluded Folders",
-                                    subtitle = "Hide specific folders from the main gallery",
+                                    title = stringResource(R.string.setting_excluded_folders_category),
+                                    subtitle = stringResource(R.string.setting_excluded_folders_category_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_off),
                                     iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -641,12 +641,12 @@ fun SettingsScreen(
 
 
                             SettingsGroupCard(
-                                title = "Display Preferences",
+                                title = stringResource(R.string.setting_display_preferences_title),
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = "Dynamic Ambient Color",
-                                            subtitle = "Tint the viewer background with colors extracted from the current photo",
+                                            title = stringResource(R.string.setting_dynamic_ambient_title),
+                                            subtitle = stringResource(R.string.setting_dynamic_ambient_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
                                             checked = viewerDynamicColor,
                                             onCheckedChange = { viewModel.setViewerDynamicColor(it) }
@@ -654,8 +654,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Blur Viewer Background",
-                                            subtitle = "Show a blurred version of the photo behind it in the full screen viewer",
+                                            title = stringResource(R.string.setting_blur_viewer_bg_title),
+                                            subtitle = stringResource(R.string.setting_blur_viewer_bg_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
                                             checked = viewerBlurEffect,
                                             onCheckedChange = { viewModel.setViewerBlurEffect(it) }
@@ -663,8 +663,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Zoom Viewport Navigator",
-                                            subtitle = "Show a mini-thumbnail in the corner to track your position when zoomed in",
+                                            title = stringResource(R.string.setting_zoom_navigator_title),
+                                            subtitle = stringResource(R.string.setting_zoom_navigator_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
                                             checked = viewerZoomMinimapEnabled,
                                             onCheckedChange = { viewModel.setViewerZoomMinimapEnabled(it) }
@@ -672,8 +672,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Show Album Size",
-                                            subtitle = "Display total size of albums on the Albums screen",
+                                            title = stringResource(R.string.setting_show_album_size),
+                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
                                             checked = showAlbumSize,
                                             onCheckedChange = { viewModel.setShowAlbumSize(it) }
@@ -681,8 +681,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Maximize Fullscreen Brightness",
-                                            subtitle = "Temporarily maximize screen brightness when viewing media in full screen",
+                                            title = stringResource(R.string.setting_max_brightness_title),
+                                            subtitle = stringResource(R.string.setting_max_brightness_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
                                             checked = maxBrightnessEnabled,
                                             onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
@@ -690,8 +690,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Use System Font",
-                                            subtitle = "Use device default font instead of Photon's custom expressive typography",
+                                            title = stringResource(R.string.setting_use_system_font_title),
+                                            subtitle = stringResource(R.string.setting_use_system_font_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
                                             checked = useSystemFont,
                                             onCheckedChange = { viewModel.setUseSystemFont(it) }
@@ -708,12 +708,12 @@ fun SettingsScreen(
                             )
 
                             SettingsGroupCard(
-                                title = "Timeline Layout",
+                                title = stringResource(R.string.setting_timeline_layout),
                                 items = listOf(
                                     {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text(
-                                                text = "Date Header Alignment",
+                                                text = stringResource(R.string.setting_date_header_align),
                                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
@@ -736,14 +736,14 @@ fun SettingsScreen(
                                                     onClick = { viewModel.setDateHeaderAlignment("LEFT") },
                                                     selected = dateHeaderAlignment == "LEFT",
                                                     icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_left), contentDescription = null) },
-                                                    label = { Text("Left", style = MaterialTheme.typography.labelMedium) }
+                                                    label = { Text(stringResource(R.string.align_left), style = MaterialTheme.typography.labelMedium) }
                                                 )
                                                 SegmentedButton(
                                                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                                                     onClick = { viewModel.setDateHeaderAlignment("CENTER") },
                                                     selected = dateHeaderAlignment == "CENTER",
                                                     icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_center), contentDescription = null) },
-                                                    label = { Text("Center", style = MaterialTheme.typography.labelMedium) }
+                                                    label = { Text(stringResource(R.string.align_center), style = MaterialTheme.typography.labelMedium) }
                                                 )
                                             }
                                         }
@@ -754,7 +754,7 @@ fun SettingsScreen(
 
                         "Layout & Navigation" -> {
                             SettingsGroupCard(
-                                title = "Timeline Layout & Grid",
+                                title = stringResource(R.string.setting_timeline_grid_title),
                                 items = listOf(
                                     {
                                         Column(
@@ -766,13 +766,13 @@ fun SettingsScreen(
                                             // 1. Grid Style Selector
                                             Column {
                                                 Text(
-                                                    text = "Main Gallery Grid Style",
+                                                    text = stringResource(R.string.setting_grid_style_title),
                                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
-                                                    text = "Choose how photos and videos are arranged in your main timeline",
+                                                    text = stringResource(R.string.setting_grid_style_sub),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -786,14 +786,14 @@ fun SettingsScreen(
                                                         onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID) },
                                                         selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.STANDARD_GRID,
                                                         icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                        label = { Text("Standard", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
+                                                        label = { Text(stringResource(R.string.layout_standard), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
                                                     )
                                                     SegmentedButton(
                                                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                                                         onClick = { viewModel.setTimelineLayoutMode(com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC) },
                                                         selected = timelineLayoutMode == com.inferno.gallery.data.TimelineLayoutMode.EDITORIAL_MOSAIC,
                                                         icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_dashboard), contentDescription = null) },
-                                                        label = { Text("Editorial Mosaic", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
+                                                        label = { Text(stringResource(R.string.layout_editorial_mosaic), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
                                                     )
                                                 }
                                             }
@@ -813,9 +813,9 @@ fun SettingsScreen(
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) {
                                                     Column {
-                                                        Text(text = "Grid Items per Row", style = MaterialTheme.typography.bodyLarge)
+                                                        Text(text = stringResource(R.string.setting_grid_items_per_row), style = MaterialTheme.typography.bodyLarge)
                                                         Text(
-                                                            text = "Number of columns across the timeline",
+                                                            text = stringResource(R.string.setting_grid_items_sub),
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
@@ -825,7 +825,7 @@ fun SettingsScreen(
                                                         color = MaterialTheme.colorScheme.secondaryContainer
                                                     ) {
                                                         Text(
-                                                            text = "$gridCellsCount columns",
+                                                            text = stringResource(R.string.columns_count, gridCellsCount),
                                                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -887,7 +887,7 @@ fun SettingsScreen(
                             )
 
                             SettingsGroupCard(
-                                title = "Dock & Navigation",
+                                title = stringResource(R.string.setting_dock_navigation_title),
                                 items = buildList<@Composable () -> Unit> {
                                     add {
                                         val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
@@ -922,8 +922,8 @@ fun SettingsScreen(
                                     if (showMemories && memoriesDismissed) {
                                         add {
                                             ClickableSettingItem(
-                                                title = "Restore Spotlight Banner",
-                                                subtitle = "Re-display the dismissed memories banner on the main feed",
+                                                title = stringResource(R.string.setting_restore_spotlight_title),
+                                                subtitle = stringResource(R.string.setting_restore_spotlight_sub),
                                                 icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                                 onClick = { viewModel.restoreMemoriesBanner() }
                                             )
@@ -935,7 +935,7 @@ fun SettingsScreen(
 
                         "General" -> {
                             SettingsGroupCard(
-                                title = "Albums & Library",
+                                title = stringResource(R.string.setting_albums_library_title),
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
@@ -978,7 +978,7 @@ fun SettingsScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(text = "Haptic Strength", style = MaterialTheme.typography.bodyLarge)
+                                            Text(text = stringResource(R.string.setting_haptic_strength), style = MaterialTheme.typography.bodyLarge)
                                             Surface(
                                                 shape = CircleShape,
                                                 color = MaterialTheme.colorScheme.secondaryContainer
@@ -1003,13 +1003,13 @@ fun SettingsScreen(
                             }
 
                             SettingsGroupCard(
-                                title = "Haptics & Feedback",
+                                title = stringResource(R.string.setting_haptics_title),
                                 items = hapticsItems
                             )
 
 
                             SettingsGroupCard(
-                                title = "Media Playback",
+                                title = stringResource(R.string.setting_media_playback_title),
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
@@ -1107,7 +1107,7 @@ fun SettingsScreen(
                             }
 
                             SettingsGroupCard(
-                                title = "Local Text Search (OCR)",
+                                title = stringResource(R.string.setting_ocr_search),
                                 items = listOf(
                                     {
                                         Column(
@@ -1233,20 +1233,20 @@ fun SettingsScreen(
                                                         ),
                                                         modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Text("Stop Indexing")
+                                                        Text(stringResource(R.string.btn_stop_indexing))
                                                     }
                                                 } else {
                                                     FilledTonalButton(
                                                         onClick = { viewModel.startOcrIndexing() },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Text("Start Indexing")
+                                                        Text(stringResource(R.string.btn_start_indexing))
                                                     }
                                                     OutlinedButton(
                                                         onClick = { showRebuildOcrConfirm = true },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Text("Rebuild Index")
+                                                        Text(stringResource(R.string.btn_rebuild_index))
                                                     }
                                                 }
                                             }
@@ -1360,7 +1360,7 @@ fun SettingsScreen(
                                                     onClick = { viewModel.cancelModelDownload() },
                                                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                                 ) {
-                                                    Text("Cancel")
+                                                    Text(stringResource(R.string.action_cancel))
                                                 }
                                             }
                                         } else {
@@ -1368,7 +1368,7 @@ fun SettingsScreen(
                                                 onClick = { viewModel.startModelDownload() },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Text("Download AI Model Files")
+                                                Text(stringResource(R.string.btn_download_ai_models))
                                             }
                                         }
                                     }
@@ -1376,8 +1376,8 @@ fun SettingsScreen(
                             } else {
                                 smartSearchItems.add {
                                     SwitchSettingItem(
-                                        title = "Auto Index New Images",
-                                        subtitle = "Automatically index new photos with AI in the background",
+                                        title = stringResource(R.string.setting_auto_index_images),
+                                        subtitle = stringResource(R.string.setting_auto_index_images_sub),
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                         checked = smartSearchAutoIndex,
                                         onCheckedChange = { viewModel.setSmartSearchAutoIndex(it) }
@@ -1493,20 +1493,20 @@ fun SettingsScreen(
                                                     ),
                                                     modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Text("Stop Indexing")
+                                                    Text(stringResource(R.string.btn_stop_indexing))
                                                 }
                                             } else {
                                                 FilledTonalButton(
                                                     onClick = { viewModel.startSmartSearchIndexing() },
                                                     modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Text("Start Indexing")
+                                                    Text(stringResource(R.string.btn_start_indexing))
                                                 }
                                                 OutlinedButton(
                                                     onClick = { showClearIndexConfirm = true },
                                                     modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Text("Clear Index")
+                                                    Text(stringResource(R.string.btn_clear_index))
                                                 }
                                             }
                                         }
@@ -1543,7 +1543,7 @@ fun SettingsScreen(
                                                 ),
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Text("Delete AI Model Files")
+                                                Text(stringResource(R.string.setting_delete_models))
                                             }
                                         }
                                     }
@@ -1551,7 +1551,7 @@ fun SettingsScreen(
                             }
 
                             SettingsGroupCard(
-                                title = "Local Semantic Search (AI)",
+                                title = stringResource(R.string.setting_smart_search_title),
                                 items = smartSearchItems
                             )
 
@@ -1569,8 +1569,8 @@ fun SettingsScreen(
 
                             faceItems.add {
                                 SwitchSettingItem(
-                                    title = "Face Recognition & People",
-                                    subtitle = "Recognize and organize people in your gallery on-device",
+                                    title = stringResource(R.string.setting_face_clustering),
+                                    subtitle = stringResource(R.string.setting_face_clustering_desc),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                     checked = faceRecognitionEnabled,
                                     onCheckedChange = { viewModel.setFaceRecognitionEnabled(it) }
@@ -1672,7 +1672,7 @@ fun SettingsScreen(
                                                         onClick = { viewModel.cancelFaceModelDownload() },
                                                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                                     ) {
-                                                        Text("Cancel")
+                                                        Text(stringResource(R.string.action_cancel))
                                                     }
                                                 }
                                             } else {
@@ -1680,7 +1680,7 @@ fun SettingsScreen(
                                                     onClick = { viewModel.startFaceModelDownload() },
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) {
-                                                    Text("Download Face Recognition Model")
+                                                    Text(stringResource(R.string.btn_download_face_model))
                                                 }
                                             }
                                         }
@@ -1688,8 +1688,8 @@ fun SettingsScreen(
                                 } else {
                                     faceItems.add {
                                         SwitchSettingItem(
-                                            title = "Auto-Index New Faces",
-                                            subtitle = "Automatically detect and cluster faces when new photos arrive",
+                                            title = stringResource(R.string.setting_auto_index_faces),
+                                            subtitle = stringResource(R.string.setting_auto_index_faces_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                             checked = faceAutoIndex,
                                             onCheckedChange = { viewModel.setFaceAutoIndex(it) }
@@ -1825,7 +1825,7 @@ fun SettingsScreen(
                                                         ),
                                                         modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Text("Stop Scanning")
+                                                        Text(stringResource(R.string.btn_stop_scanning))
                                                     }
                                                 } else {
                                                     FilledTonalButton(
@@ -1844,7 +1844,7 @@ fun SettingsScreen(
                                                         onClick = { showClearFacesConfirm = true },
                                                         modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Text("Clear Faces")
+                                                        Text(stringResource(R.string.btn_clear_faces))
                                                     }
                                                 }
                                             }
@@ -1881,7 +1881,7 @@ fun SettingsScreen(
                                                     ),
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) {
-                                                    Text("Delete Face Model File")
+                                                    Text(stringResource(R.string.dialog_delete_face_model_title))
                                                 }
                                             }
                                         }
@@ -1890,7 +1890,7 @@ fun SettingsScreen(
                             }
 
                             SettingsGroupCard(
-                                title = "People & Face Recognition",
+                                title = stringResource(R.string.setting_face_clustering),
                                 items = faceItems
                             )
                         }
@@ -1899,8 +1899,8 @@ fun SettingsScreen(
                             val recycleBinItems = mutableListOf<@Composable () -> Unit>(
                                 {
                                     SwitchSettingItem(
-                                        title = "Confirm Deletion",
-                                        subtitle = "Show confirmation dialog when moving media to recycle bin",
+                                        title = stringResource(R.string.setting_confirm_delete),
+                                        subtitle = stringResource(R.string.setting_confirm_delete_sub),
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                                         checked = confirmDelete,
                                         onCheckedChange = { viewModel.setConfirmDeleteEnabled(it) }
@@ -1908,8 +1908,8 @@ fun SettingsScreen(
                                 },
                                 {
                                     SwitchSettingItem(
-                                        title = "Auto-clean Recycle Bin",
-                                        subtitle = "Automatically delete old items in the recycle bin",
+                                        title = stringResource(R.string.auto_clean_trash),
+                                        subtitle = stringResource(R.string.auto_clean_trash_desc),
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                                         checked = autoCleanTrash,
                                         onCheckedChange = { viewModel.setAutoCleanTrashEnabled(it) }
@@ -1925,13 +1925,13 @@ fun SettingsScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(text = "Retention Period", style = MaterialTheme.typography.bodyLarge)
+                                            Text(text = stringResource(R.string.setting_retention_period), style = MaterialTheme.typography.bodyLarge)
                                             Surface(
                                                 shape = CircleShape,
                                                 color = MaterialTheme.colorScheme.secondaryContainer
                                             ) {
                                                 Text(
-                                                    text = "$autoCleanDays Days",
+                                                    text = stringResource(R.string.days_count, autoCleanDays),
                                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -1946,19 +1946,19 @@ fun SettingsScreen(
                                                 shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                                                 onClick = { viewModel.setAutoCleanTrashDays(7) },
                                                 selected = autoCleanDays == 7,
-                                                label = { Text("7 Days") }
+                                                label = { Text(stringResource(R.string.days_count, 7)) }
                                             )
                                             SegmentedButton(
                                                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                                                 onClick = { viewModel.setAutoCleanTrashDays(14) },
                                                 selected = autoCleanDays == 14,
-                                                label = { Text("14 Days") }
+                                                label = { Text(stringResource(R.string.days_count, 14)) }
                                             )
                                             SegmentedButton(
                                                 shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                                                 onClick = { viewModel.setAutoCleanTrashDays(30) },
                                                 selected = autoCleanDays == 30,
-                                                label = { Text("30 Days") }
+                                                label = { Text(stringResource(R.string.days_count, 30)) }
                                             )
                                         }
                                     }
@@ -1966,17 +1966,17 @@ fun SettingsScreen(
                             }
 
                             SettingsGroupCard(
-                                title = "Recycle Bin & Deletion",
+                                title = stringResource(R.string.setting_recycle_bin_title),
                                 items = recycleBinItems
                             )
 
                             SettingsGroupCard(
-                                title = "Screen & Recents Security",
+                                title = stringResource(R.string.setting_recents_security_title),
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = "Hide Content in Recents",
-                                            subtitle = "Block viewing app content in the recent apps screen (also disables screenshots)",
+                                            title = stringResource(R.string.setting_hide_recents),
+                                            subtitle = stringResource(R.string.setting_hide_recents_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
                                             checked = secureRecentsEnabled,
                                             onCheckedChange = { viewModel.setSecureRecentsEnabled(it) }
@@ -1986,12 +1986,12 @@ fun SettingsScreen(
                             )
 
                             SettingsGroupCard(
-                                title = "Metadata Privacy",
+                                title = stringResource(R.string.setting_metadata_privacy_title),
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = "Strip Metadata Before Sharing",
-                                            subtitle = "Remove GPS, camera specifications, timestamps, timezone offsets, and author details when sharing",
+                                            title = stringResource(R.string.setting_strip_metadata_title),
+                                            subtitle = stringResource(R.string.setting_strip_metadata_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_verified_user),
                                             checked = stripMetadataOnShare,
                                             onCheckedChange = { viewModel.setStripMetadataOnShare(it) }
@@ -2006,11 +2006,11 @@ fun SettingsScreen(
                             val excludedFolders by galleryViewModel.excludedFolders.collectAsState()
 
                             SettingsGroupCard(
-                                title = "Folder Visibility",
+                                title = stringResource(R.string.setting_folder_visibility_title),
                                 items = listOf(
                                     {
                                         Text(
-                                            text = "Excluded folders won't appear in the Photos tab or Albums grid. You can still access them by searching.",
+                                            text = stringResource(R.string.setting_excluded_folders_desc),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(16.dp)
@@ -2024,8 +2024,8 @@ fun SettingsScreen(
                                     items = listOf(
                                         {
                                             SettingsRow(
-                                                title = "No folders found",
-                                                subtitle = "Media folders will appear here once scanned"
+                                                title = stringResource(R.string.setting_no_folders_found),
+                                                subtitle = stringResource(R.string.setting_no_folders_found_sub)
                                             )
                                         }
                                     )
@@ -2371,13 +2371,13 @@ fun FontScaleSettingItem(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Font Scale",
+                    text = stringResource(R.string.setting_font_scale_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "Adjust text size flexibility across the app",
+                    text = stringResource(R.string.setting_font_scale_sub),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2437,14 +2437,14 @@ fun FontScaleSettingItem(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "Live Typography Preview",
+                        text = stringResource(R.string.setting_live_typography_preview),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Text dynamically reflows with expressive layout hierarchy and proportional line heights.",
+                        text = stringResource(R.string.setting_live_typography_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2618,7 +2618,7 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(R.string.action_close))
             }
         }
     )
@@ -2656,7 +2656,7 @@ fun TimelineLayoutPreviewCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "Live Layout Preview",
+                        text = stringResource(R.string.setting_live_layout_preview),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )

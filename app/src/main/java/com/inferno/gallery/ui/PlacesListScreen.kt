@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -140,8 +142,8 @@ fun PlacesListScreen(
             ) {
                 PhotonEmptyState(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_location_off),
-                    title = "No Geotagged Photos",
-                    subtitle = "Photos with GPS coordinates will automatically appear here grouped by place and city."
+                    title = stringResource(R.string.places_no_geotag_title),
+                    subtitle = stringResource(R.string.places_no_geotag_desc)
                 )
             }
         } else {

@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 package com.inferno.gallery.ui.components
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -759,7 +761,7 @@ fun ExifDetailsSheet(
 
                         if (createdDate != null) {
                             DetailKeyValueRow(
-                                label = "Date Taken / Created",
+                                label = stringResource(R.string.exif_date_taken),
                                 value = formatFullTimestamp(createdDate),
                                 icon = ImageVector.vectorResource(R.drawable.ic_ms_calendar_month)
                             )
@@ -767,7 +769,7 @@ fun ExifDetailsSheet(
 
                         if (isModifiedDifferent) {
                             DetailKeyValueRow(
-                                label = "Date Modified",
+                                label = stringResource(R.string.exif_date_modified),
                                 value = formatFullTimestamp(modifiedDate),
                                 icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule)
                             )
@@ -775,7 +777,7 @@ fun ExifDetailsSheet(
 
                         // File Size Row
                         DetailKeyValueRow(
-                            label = "File Size",
+                            label = stringResource(R.string.exif_file_size),
                             value = formatDetailedSize(galleryItem.size),
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_description)
                         )
@@ -797,7 +799,7 @@ fun ExifDetailsSheet(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "Geometry & Dimensions",
+                            text = stringResource(R.string.exif_geometry_dimensions),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
@@ -810,14 +812,14 @@ fun ExifDetailsSheet(
                         ) {
                             // Pixel Dimensions
                             MetricBadgeBlock(
-                                label = "Dimensions",
+                                label = stringResource(R.string.exif_dimensions),
                                 value = exifData?.resolutionString ?: "Unknown",
                                 modifier = Modifier.weight(1f)
                             )
                             // Megapixels
                             if (!exifData?.megapixelsString.isNullOrEmpty()) {
                                 MetricBadgeBlock(
-                                    label = "Pixel Count",
+                                    label = stringResource(R.string.exif_pixel_count),
                                     value = exifData!!.megapixelsString,
                                     modifier = Modifier.weight(0.7f)
                                 )
@@ -831,7 +833,7 @@ fun ExifDetailsSheet(
                             // Aspect Ratio
                             if (!exifData?.aspectRatioString.isNullOrEmpty()) {
                                 MetricBadgeBlock(
-                                    label = "Aspect Ratio",
+                                    label = stringResource(R.string.exif_aspect_ratio),
                                     value = exifData!!.aspectRatioString,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -839,7 +841,7 @@ fun ExifDetailsSheet(
                             // Color Space
                             exifData?.colorSpace?.let { cs ->
                                 MetricBadgeBlock(
-                                    label = "Color Space",
+                                    label = stringResource(R.string.exif_color_space),
                                     value = cs,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -901,7 +903,7 @@ fun ExifDetailsSheet(
                             ) {
                                 exifData?.aperture?.let { ap ->
                                     ExposureBadge(
-                                        label = "Aperture",
+                                        label = stringResource(R.string.exif_aperture),
                                         value = ap,
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
                                         modifier = Modifier.weight(1f)
@@ -909,7 +911,7 @@ fun ExifDetailsSheet(
                                 }
                                 exifData?.shutterSpeed?.let { ss ->
                                     ExposureBadge(
-                                        label = "Shutter",
+                                        label = stringResource(R.string.exif_shutter),
                                         value = ss,
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
                                         modifier = Modifier.weight(1f)
@@ -931,7 +933,7 @@ fun ExifDetailsSheet(
                                 }
                                 (exifData?.focalLength35mm ?: exifData?.focalLength)?.let { fl ->
                                     ExposureBadge(
-                                        label = "Focal Length",
+                                        label = stringResource(R.string.exif_focal_length),
                                         value = fl,
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
                                         modifier = Modifier.weight(1f)
@@ -941,10 +943,10 @@ fun ExifDetailsSheet(
 
                             // Additional parameters
                             exifData?.flash?.let { fl ->
-                                DetailKeyValueRow(label = "Flash", value = fl, icon = ImageVector.vectorResource(R.drawable.ic_ms_bolt))
+                                DetailKeyValueRow(label = stringResource(R.string.exif_flash), value = fl, icon = ImageVector.vectorResource(R.drawable.ic_ms_bolt))
                             }
                             exifData?.whiteBalance?.let { wb ->
-                                DetailKeyValueRow(label = "White Balance", value = wb, icon = ImageVector.vectorResource(R.drawable.ic_ms_tune))
+                                DetailKeyValueRow(label = stringResource(R.string.exif_white_balance), value = wb, icon = ImageVector.vectorResource(R.drawable.ic_ms_tune))
                             }
                         }
                     }
@@ -985,7 +987,7 @@ fun ExifDetailsSheet(
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
-                                        text = "Location Coordinates",
+                                        text = stringResource(R.string.exif_coordinates),
                                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                         maxLines = 1,
                                         softWrap = false

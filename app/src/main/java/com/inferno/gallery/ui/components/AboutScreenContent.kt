@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui.components
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -216,7 +218,7 @@ fun AboutScreenContent(
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 ) {
                                     Text(
-                                        text = "DEVELOPER",
+                                        text = stringResource(R.string.about_developer),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -225,7 +227,7 @@ fun AboutScreenContent(
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Creator & Lead Maintainer",
+                                text = stringResource(R.string.about_creator_maintainer),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -291,7 +293,7 @@ fun AboutScreenContent(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Star Project",
+                                    text = stringResource(R.string.about_star_project),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimary
@@ -305,18 +307,18 @@ fun AboutScreenContent(
 
         // ── 3. Updates & Delivery (Sheet Design Segmented Group Card) ───────
         SettingsGroupCard(
-            title = "Updates & Delivery",
+            title = stringResource(R.string.about_updates_delivery),
             items = listOf<@Composable () -> Unit>(
                 {
                     val updateSubtitle = when (updateState) {
-                        is UpdateState.Checking -> "Checking for updates…"
-                        is UpdateState.UpdateAvailable -> "v${updateState.info.latestVersion} available! Click to update"
-                        is UpdateState.UpToDate -> "Installed: v${BuildConfig.VERSION_NAME} (Up to date)"
-                        is UpdateState.ReadyToInstall -> "v${updateState.info.latestVersion} downloaded. Ready to install"
-                        else -> "Installed: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+                        is UpdateState.Checking -> stringResource(R.string.update_status_checking)
+                        is UpdateState.UpdateAvailable -> stringResource(R.string.update_status_available, updateState.info.latestVersion)
+                        is UpdateState.UpToDate -> stringResource(R.string.update_status_uptodate, BuildConfig.VERSION_NAME)
+                        is UpdateState.ReadyToInstall -> stringResource(R.string.update_status_downloaded, updateState.info.latestVersion)
+                        else -> stringResource(R.string.update_status_build, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
                     }
                     ClickableSettingItem(
-                        title = "Check for Updates",
+                        title = stringResource(R.string.about_check_updates),
                         subtitle = updateSubtitle,
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
                         onClick = {
@@ -327,8 +329,8 @@ fun AboutScreenContent(
                 },
                 {
                     ClickableSettingItem(
-                        title = "Update Log",
-                        subtitle = "Timeline of every release — dates, builds, and changes",
+                        title = stringResource(R.string.about_update_log),
+                        subtitle = stringResource(R.string.about_update_log_sub),
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
                         onClick = {
                             haptic.tick()
@@ -338,8 +340,8 @@ fun AboutScreenContent(
                 },
                 {
                     SwitchSettingItem(
-                        title = "Auto-Check for Updates",
-                        subtitle = "Notify about updates on app launch and in the background",
+                        title = stringResource(R.string.about_auto_check),
+                        subtitle = stringResource(R.string.about_auto_check_sub),
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
                         checked = autoCheckUpdates,
                         onCheckedChange = { onAutoCheckUpdatesChange(it) }
@@ -350,12 +352,12 @@ fun AboutScreenContent(
 
         // ── 4. Project & Community (Sheet Design Segmented Group Card) ──────
         SettingsGroupCard(
-            title = "Project & Open Source",
+            title = stringResource(R.string.about_project_opensource),
             items = listOf<@Composable () -> Unit>(
                 {
                     ClickableSettingItem(
-                        title = "Source Code on GitHub",
-                        subtitle = "Inspect architecture, fork, or star the repository",
+                        title = stringResource(R.string.setting_github_repo),
+                        subtitle = stringResource(R.string.setting_github_repo_sub),
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_code),
                         onClick = {
                             haptic.tick()
@@ -365,8 +367,8 @@ fun AboutScreenContent(
                 },
                 {
                     ClickableSettingItem(
-                        title = "Report Issue & Feedback",
-                        subtitle = "Submit bug reports or suggest new features",
+                        title = stringResource(R.string.setting_report_bug),
+                        subtitle = stringResource(R.string.setting_report_bug_sub),
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_bug_report),
                         onClick = {
                             haptic.tick()
@@ -376,8 +378,8 @@ fun AboutScreenContent(
                 },
                 {
                     ClickableSettingItem(
-                        title = "Open Source Licenses",
-                        subtitle = "Attributions for third-party libraries and tools",
+                        title = stringResource(R.string.about_licenses),
+                        subtitle = stringResource(R.string.about_licenses_sub),
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_description),
                         onClick = {
                             haptic.tick()
@@ -387,8 +389,8 @@ fun AboutScreenContent(
                 },
                 {
                     ClickableSettingItem(
-                        title = "Privacy Policy & Guarantee",
-                        subtitle = "Full transparency on 100% on-device data processing",
+                        title = stringResource(R.string.setting_privacy_policy),
+                        subtitle = stringResource(R.string.setting_privacy_policy_sub),
                         icon = ImageVector.vectorResource(R.drawable.ic_ms_shield),
                         onClick = {
                             haptic.tick()
@@ -408,7 +410,7 @@ fun AboutScreenContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "Photon Gallery • Free & Open Source",
+                text = stringResource(R.string.about_brand_footer),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 letterSpacing = 0.5.sp

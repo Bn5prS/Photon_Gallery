@@ -2,6 +2,8 @@
 
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -70,7 +72,7 @@ fun GpsScanningAnimation(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Photo Map") },
+                title = { Text(stringResource(R.string.map_title)) },
                 navigationIcon = {
                     FilledTonalIconButton(onClick = onBackClick) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
@@ -161,7 +163,7 @@ fun NoGeotaggedPhotosState(onBackClick: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Photo Map") },
+                title = { Text(stringResource(R.string.map_title)) },
                 navigationIcon = {
                     FilledTonalIconButton(onClick = onBackClick) {
                         Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
@@ -180,8 +182,8 @@ fun NoGeotaggedPhotosState(onBackClick: () -> Unit) {
         ) {
             PhotonEmptyState(
                 icon = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
-                title = "No location data",
-                subtitle = "None of your photos have GPS coordinates embedded. Photos taken with location enabled will appear here.",
+                title = stringResource(R.string.map_no_location_title),
+                subtitle = stringResource(R.string.map_no_location_desc),
                 shape = ExpressiveShapes.Cookie12Sided
             )
         }

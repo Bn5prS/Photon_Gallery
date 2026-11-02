@@ -1088,8 +1088,8 @@ fun GooglePhotosEditorScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text(text = "Discard edits?") },
-            text = { Text(text = "If you go back now, all changes made in this session will be lost.") },
+            title = { Text(text = stringResource(R.string.dialog_discard_edits_title)) },
+            text = { Text(text = stringResource(R.string.dialog_discard_edits_msg)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1097,12 +1097,12 @@ fun GooglePhotosEditorScreen(
                         onBack()
                     }
                 ) {
-                    Text(text = "Discard", color = MaterialTheme.colorScheme.error)
+                    Text(text = stringResource(R.string.action_discard), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
-                    Text(text = "Keep editing")
+                    Text(text = stringResource(R.string.action_keep_editing))
                 }
             }
         )

@@ -2,6 +2,8 @@
 
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -266,7 +268,7 @@ fun AllAlbumsScreen(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Change Cover", style = MaterialTheme.typography.bodyMedium) },
+                            text = { Text(stringResource(R.string.action_change_cover), style = MaterialTheme.typography.bodyMedium) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
@@ -281,7 +283,7 @@ fun AllAlbumsScreen(
                         )
                         if (customCovers.containsKey(bucket.bucketName)) {
                             DropdownMenuItem(
-                                text = { Text("Reset to Default Cover", style = MaterialTheme.typography.bodyMedium) },
+                                text = { Text(stringResource(R.string.action_reset_cover), style = MaterialTheme.typography.bodyMedium) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
@@ -296,7 +298,7 @@ fun AllAlbumsScreen(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Change Shape", style = MaterialTheme.typography.bodyMedium) },
+                            text = { Text(stringResource(R.string.action_change_shape), style = MaterialTheme.typography.bodyMedium) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
@@ -311,7 +313,7 @@ fun AllAlbumsScreen(
                         )
                         if (customShapes.containsKey(bucket.bucketName)) {
                             DropdownMenuItem(
-                                text = { Text("Reset to Default Shape", style = MaterialTheme.typography.bodyMedium) },
+                                text = { Text(stringResource(R.string.action_reset_shape), style = MaterialTheme.typography.bodyMedium) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),

@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui.components
 
+import androidx.compose.ui.res.stringResource
+
 import android.os.Environment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -237,12 +239,12 @@ fun AlbumPickerSheet(
                 if (showCreateFolderDialog) {
                     AlertDialog(
                         onDismissRequest = { showCreateFolderDialog = false },
-                        title = { Text("Create New Folder") },
+                        title = { Text(stringResource(R.string.dialog_create_folder_title)) },
                         text = {
                             OutlinedTextField(
                                 value = newFolderName,
                                 onValueChange = { newFolderName = it },
-                                label = { Text("Folder Name") },
+                                label = { Text(stringResource(R.string.dialog_folder_name_label)) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -261,7 +263,7 @@ fun AlbumPickerSheet(
                                     }
                                 }
                             ) {
-                                Text("Create")
+                                Text(stringResource(R.string.action_create))
                             }
                         },
                         dismissButton = {
@@ -271,7 +273,7 @@ fun AlbumPickerSheet(
                                     newFolderName = ""
                                 }
                             ) {
-                                Text("Cancel")
+                                Text(stringResource(R.string.action_cancel))
                             }
                         }
                     )
@@ -392,7 +394,7 @@ fun AlbumPickerSheet(
                         modifier = Modifier.weight(1f),
                         shape = ShapeMedium
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.action_cancel))
                     }
                     ExpressiveButton(
                         onClick = {

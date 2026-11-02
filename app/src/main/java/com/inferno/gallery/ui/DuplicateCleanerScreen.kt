@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import android.app.Activity
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -262,7 +264,7 @@ fun DuplicateCleanerScreen(
                             ) {
                                 Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Move to Trash", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                                Text(stringResource(R.string.dialog_move_to_trash_confirm), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
                             }
                         }
                     }
@@ -353,7 +355,7 @@ fun DuplicateCleanerScreen(
                         ) {
                             Icon(ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services), contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Select Copies", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                            Text(stringResource(R.string.cleaner_select_copies), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
                         }
                     }
                 }

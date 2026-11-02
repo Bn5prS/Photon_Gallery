@@ -2,6 +2,8 @@
 
 package com.inferno.gallery.ui.people
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -68,11 +70,11 @@ fun PeopleCarousel(
         verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
     ) {
         SectionHeader(
-            title = "People",
+            title = stringResource(R.string.people_title),
             count = if (people.isNotEmpty()) people.size else null,
             isExpanded = isExpanded,
             onToggle = onToggle,
-            seeAllText = "Show all",
+            seeAllText = stringResource(R.string.action_show_all),
             onSeeAll = onSeeAll
         )
 
@@ -128,12 +130,12 @@ fun PeopleCarousel(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "People & Faces",
+                                text = stringResource(R.string.people_and_faces),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Tap to view recognized people and organize your gallery",
+                                text = stringResource(R.string.people_carousel_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -206,7 +208,7 @@ private fun PersonAvatarCard(
         }
 
         Text(
-            text = person.name ?: "Unnamed",
+            text = person.name ?: stringResource(R.string.people_unnamed),
             style = MaterialTheme.typography.labelLarge,
             color = if (person.name != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -216,7 +218,7 @@ private fun PersonAvatarCard(
         )
 
         Text(
-            text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
+            text = if (person.faceCount == 1) stringResource(R.string.photo_count_single, 1) else stringResource(R.string.photo_count_multiple, person.faceCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             maxLines = 1,

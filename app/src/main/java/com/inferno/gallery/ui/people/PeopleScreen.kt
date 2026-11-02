@@ -6,6 +6,8 @@
 
 package com.inferno.gallery.ui.people
 
+import androidx.compose.ui.res.stringResource
+
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -442,7 +444,7 @@ fun PeopleScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Merge Similar Faces") },
+                                    text = { Text(stringResource(R.string.people_merge_similar)) },
                                     onClick = {
                                         showMenu = false
                                         isMergeCardDismissedByUser = false
@@ -458,7 +460,7 @@ fun PeopleScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Filter by photo count") },
+                                    text = { Text(stringResource(R.string.people_filter_count)) },
                                     onClick = {
                                         showMenu = false
                                         showFilterSheet = true
@@ -472,7 +474,7 @@ fun PeopleScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Hide & show faces") },
+                                    text = { Text(stringResource(R.string.people_hide_show_faces)) },
                                     onClick = {
                                         showMenu = false
                                         showHideShowSheet = true
@@ -594,7 +596,7 @@ fun PeopleScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             minPhotosThreshold = 1
                         },
-                        label = { Text("All (${allPeople.size})") },
+                        label = { Text(stringResource(R.string.people_filter_all, allPeople.size)) },
                         shape = ShapeFull
                     )
 
@@ -605,7 +607,7 @@ fun PeopleScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             minPhotosThreshold = 3
                         },
-                        label = { Text("3+ photos ($count3)") },
+                        label = { Text(stringResource(R.string.people_filter_count, 3, count3)) },
                         shape = ShapeFull
                     )
 
@@ -616,7 +618,7 @@ fun PeopleScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             minPhotosThreshold = 5
                         },
-                        label = { Text("5+ photos ($count5)") },
+                        label = { Text(stringResource(R.string.people_filter_count, 5, count5)) },
                         shape = ShapeFull
                     )
 
@@ -627,7 +629,7 @@ fun PeopleScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             minPhotosThreshold = 10
                         },
-                        label = { Text("10+ photos ($count10)") },
+                        label = { Text(stringResource(R.string.people_filter_count, 10, count10)) },
                         shape = ShapeFull
                     )
 

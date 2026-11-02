@@ -691,41 +691,41 @@ fun MainAppLayout(
                                     ) {
                                         if (albumOverflowState == "main") {
                                             DropdownMenuItem(
-                                                text = { Text("View Mode") },
+                                                text = { Text(stringResource(R.string.menu_view_mode)) },
                                                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
                                                 trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
                                                 onClick = { albumOverflowState = "view" }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Sort Order") },
+                                                text = { Text(stringResource(R.string.menu_sort_order)) },
                                                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
                                                 trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
                                                 onClick = { albumOverflowState = "sort" }
                                             )
                                         } else if (albumOverflowState == "view") {
                                             DropdownMenuItem(
-                                                text = { Text("Back") },
+                                                text = { Text(stringResource(R.string.action_back)) },
                                                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
                                                 onClick = { albumOverflowState = "main" }
                                             )
                                             androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            DropdownMenuItem(text = { Text("Immersive View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Grouped View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_immersive)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_grouped)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showAlbumOverflowMenu = false; albumOverflowState = "main" })
                                         } else if (albumOverflowState == "sort") {
                                             DropdownMenuItem(
-                                                text = { Text("Back") },
+                                                text = { Text(stringResource(R.string.action_back)) },
                                                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
                                                 onClick = { albumOverflowState = "main" }
                                             )
                                             androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            DropdownMenuItem(text = { Text("Date Taken (Newest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Date Taken (Oldest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Date Added (Newest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedNewToOld); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Date Added (Oldest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedOldToNew); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Size (Large to Small)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Size (Small to Large)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Name (A - Z)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text("Name (Z - A)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameDesc); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedNewToOld); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedOldToNew); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_big_to_small)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_small_to_big)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_a_to_z)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_z_to_a)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameDesc); showAlbumOverflowMenu = false; albumOverflowState = "main" })
                                         }
                                     }
                                 }
@@ -888,13 +888,13 @@ fun MainAppLayout(
                                                 if (currentRoute == "photos" || currentRoute == "videos") {
                                                     androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                                     DropdownMenuItem(
-                                                        text = { Text("View Mode") },
+                                                        text = { Text(stringResource(R.string.menu_view_mode)) },
                                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
                                                         trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
                                                         onClick = { overflowState = "view" }
                                                     )
                                                     DropdownMenuItem(
-                                                        text = { Text("Sort Order") },
+                                                        text = { Text(stringResource(R.string.menu_sort_order)) },
                                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
                                                         trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
                                                         onClick = { overflowState = "sort" }
@@ -902,28 +902,28 @@ fun MainAppLayout(
                                                 }
                                             } else if (overflowState == "view") {
                                                 DropdownMenuItem(
-                                                    text = { Text("Back") },
+                                                    text = { Text(stringResource(R.string.action_back)) },
                                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
                                                     onClick = { overflowState = "main" }
                                                 )
                                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text("Immersive View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Grouped View") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_immersive)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_grouped)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
                                             } else if (overflowState == "sort") {
                                                 DropdownMenuItem(
-                                                    text = { Text("Back") },
+                                                    text = { Text(stringResource(R.string.action_back)) },
                                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
                                                     onClick = { overflowState = "main" }
                                                 )
                                                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text("Date Taken (Newest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Date Taken (Oldest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Date Added (Newest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedNewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Date Added (Oldest)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedOldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Size (Large to Small)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Size (Small to Large)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Name (A - Z)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text("Name (Z - A)") }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameDesc); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedNewToOld); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedOldToNew); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_big_to_small)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_small_to_big)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_a_to_z)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
+                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_z_to_a)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameDesc); showOverflowMenu = false; overflowState = "main" })
                                             }
                                         }
                                     }
@@ -1738,12 +1738,12 @@ fun MainAppLayout(
                             if (showCreateFolderDialog) {
                                 androidx.compose.material3.AlertDialog(
                                     onDismissRequest = { showCreateFolderDialog = false },
-                                    title = { Text("Create New Folder") },
+                                    title = { Text(stringResource(R.string.dialog_create_folder_title)) },
                                     text = {
                                         androidx.compose.material3.OutlinedTextField(
                                             value = newFolderName,
                                             onValueChange = { newFolderName = it },
-                                            label = { Text("Folder Name") },
+                                            label = { Text(stringResource(R.string.dialog_folder_name_label)) },
                                             singleLine = true,
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -1762,7 +1762,7 @@ fun MainAppLayout(
                                                 }
                                             }
                                         ) {
-                                            Text("Create")
+                                            Text(stringResource(R.string.action_create))
                                         }
                                     },
                                     dismissButton = {
@@ -1772,7 +1772,7 @@ fun MainAppLayout(
                                                 newFolderName = ""
                                             }
                                         ) {
-                                            Text("Cancel")
+                                            Text(stringResource(R.string.action_cancel))
                                         }
                                     }
                                 )
@@ -1889,7 +1889,7 @@ fun MainAppLayout(
                                     modifier = Modifier.weight(1f),
                                     shape = ShapeMedium
                                 ) {
-                                    Text("Cancel")
+                                    Text(stringResource(R.string.action_cancel))
                                 }
                                 ExpressiveButton(
                                     onClick = {
@@ -1899,7 +1899,7 @@ fun MainAppLayout(
                                     modifier = Modifier.weight(1f),
                                     shape = ShapeMedium
                                 ) {
-                                    Text("Move Here")
+                                    Text(stringResource(R.string.sheet_move_here))
                                 }
                             }
                         }
@@ -2035,12 +2035,12 @@ fun MainAppLayout(
                             if (showCreateFolderDialog) {
                                 androidx.compose.material3.AlertDialog(
                                     onDismissRequest = { showCreateFolderDialog = false },
-                                    title = { Text("Create New Folder") },
+                                    title = { Text(stringResource(R.string.dialog_create_folder_title)) },
                                     text = {
                                         androidx.compose.material3.OutlinedTextField(
                                             value = newFolderName,
                                             onValueChange = { newFolderName = it },
-                                            label = { Text("Folder Name") },
+                                            label = { Text(stringResource(R.string.dialog_folder_name_label)) },
                                             singleLine = true,
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -2059,7 +2059,7 @@ fun MainAppLayout(
                                                 }
                                             }
                                         ) {
-                                            Text("Create")
+                                            Text(stringResource(R.string.action_create))
                                         }
                                     },
                                     dismissButton = {
@@ -2069,7 +2069,7 @@ fun MainAppLayout(
                                                 newFolderName = ""
                                             }
                                         ) {
-                                            Text("Cancel")
+                                            Text(stringResource(R.string.action_cancel))
                                         }
                                     }
                                 )
@@ -2186,7 +2186,7 @@ fun MainAppLayout(
                                     modifier = Modifier.weight(1f),
                                     shape = ShapeMedium
                                 ) {
-                                    Text("Cancel")
+                                    Text(stringResource(R.string.action_cancel))
                                 }
                                 ExpressiveButton(
                                     onClick = {
@@ -2196,7 +2196,7 @@ fun MainAppLayout(
                                     modifier = Modifier.weight(1f),
                                     shape = ShapeMedium
                                 ) {
-                                    Text("Copy Here")
+                                    Text(stringResource(R.string.sheet_copy_here))
                                 }
                             }
                         }
@@ -2207,8 +2207,8 @@ fun MainAppLayout(
             if (showMultiDeleteConfirmDialog) {
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { showMultiDeleteConfirmDialog = false },
-                    title = { Text("Move to Recycle Bin") },
-                    text = { Text("Move ${selectedUris.size} items to the Recycle Bin?") },
+                    title = { Text(stringResource(R.string.dialog_move_to_trash_title)) },
+                    text = { Text(stringResource(R.string.dialog_multi_trash_msg, selectedUris.size)) },
                     confirmButton = {
                         androidx.compose.material3.TextButton(
                             onClick = {
@@ -2237,14 +2237,14 @@ fun MainAppLayout(
                                 }
                             }
                         ) {
-                            Text("Move to Bin", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.dialog_move_to_trash_confirm), color = MaterialTheme.colorScheme.error)
                         }
                     },
                     dismissButton = {
                         androidx.compose.material3.TextButton(
                             onClick = { showMultiDeleteConfirmDialog = false }
                         ) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.action_cancel))
                         }
                     }
                 )
@@ -2255,8 +2255,8 @@ fun MainAppLayout(
                 if (showTrashRestoreConfirmDialog) {
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { showTrashRestoreConfirmDialog = false },
-                        title = { Text("Restore Items") },
-                        text = { Text("Restore ${selectedUris.size} items from the Recycle Bin?") },
+                        title = { Text(stringResource(R.string.dialog_restore_items_title)) },
+                        text = { Text(stringResource(R.string.dialog_restore_items_msg, selectedUris.size)) },
                         confirmButton = {
                             androidx.compose.material3.TextButton(
                                 onClick = {
@@ -2285,14 +2285,14 @@ fun MainAppLayout(
                                     }
                                 }
                             ) {
-                                Text("Restore")
+                                Text(stringResource(R.string.action_restore))
                             }
                         },
                         dismissButton = {
                             androidx.compose.material3.TextButton(
                                 onClick = { showTrashRestoreConfirmDialog = false }
                             ) {
-                                Text("Cancel")
+                                Text(stringResource(R.string.action_cancel))
                             }
                         }
                     )
@@ -2301,8 +2301,8 @@ fun MainAppLayout(
                 if (showTrashDeleteConfirmDialog) {
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { showTrashDeleteConfirmDialog = false },
-                        title = { Text("Delete Permanently") },
-                        text = { Text("Permanently delete ${selectedUris.size} items? This action cannot be undone.") },
+                        title = { Text(stringResource(R.string.dialog_delete_perm_title)) },
+                        text = { Text(stringResource(R.string.dialog_delete_perm_msg, selectedUris.size)) },
                         confirmButton = {
                             androidx.compose.material3.TextButton(
                                 onClick = {
@@ -2330,14 +2330,14 @@ fun MainAppLayout(
                                     }
                                 }
                             ) {
-                                Text("Delete", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                             }
                         },
                         dismissButton = {
                             androidx.compose.material3.TextButton(
                                 onClick = { showTrashDeleteConfirmDialog = false }
                             ) {
-                                Text("Cancel")
+                                Text(stringResource(R.string.action_cancel))
                             }
                         }
                     )
@@ -2363,7 +2363,7 @@ fun MainAppLayout(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Restore")
+                        Text(stringResource(R.string.action_restore))
                     }
 
                     ExpressiveButton(
@@ -2382,7 +2382,7 @@ fun MainAppLayout(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Delete")
+                        Text(stringResource(R.string.action_delete))
                     }
                 }
             } else {
@@ -2435,7 +2435,7 @@ fun MainAppLayout(
                                 onDismissRequest = { createMenuExpanded = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Collage") },
+                                    text = { Text(stringResource(R.string.action_collage)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
                                     onClick = {
                                         createMenuExpanded = false
@@ -2447,7 +2447,7 @@ fun MainAppLayout(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Stitch") },
+                                    text = { Text(stringResource(R.string.action_stitch)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
                                     onClick = {
                                         createMenuExpanded = false
@@ -2500,7 +2500,7 @@ fun MainAppLayout(
                             ) {
                                 // Hide (Private Space)
                                 DropdownMenuItem(
-                                    text = { Text("Hide") },
+                                    text = { Text(stringResource(R.string.action_hide)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
                                     onClick = {
                                         moreMenuExpanded = false
@@ -2545,7 +2545,7 @@ fun MainAppLayout(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Create new album",
+                        text = stringResource(R.string.new_album),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                     )
@@ -2553,8 +2553,8 @@ fun MainAppLayout(
                     androidx.compose.material3.OutlinedTextField(
                         value = newAlbumName,
                         onValueChange = { newAlbumName = it },
-                        label = { Text("Album name") },
-                        placeholder = { Text("Enter album name") },
+                        label = { Text(stringResource(R.string.album_name_label)) },
+                        placeholder = { Text(stringResource(R.string.album_name_hint)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
                     )
@@ -2570,7 +2570,7 @@ fun MainAppLayout(
                                 newAlbumName = ""
                             }
                         ) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.action_cancel))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         ExpressiveButton(
@@ -2593,7 +2593,7 @@ fun MainAppLayout(
                             },
                             enabled = newAlbumName.isNotBlank()
                         ) {
-                            Text("Save")
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 }
