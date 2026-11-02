@@ -1,0 +1,904 @@
+package com.inferno.gallery.ui.editor
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.exifinterface.media.ExifInterface
+import com.inferno.gallery.ui.editor.components.EditorBottomTabs
+import com.inferno.gallery.ui.editor.components.EditorCornerBrackets
+import com.inferno.gallery.ui.editor.components.EditorOverflowSheet
+import com.inferno.gallery.ui.editor.components.EditorQuickActionBar
+import com.inferno.gallery.ui.editor.components.EditorTopBar
+import com.inferno.gallery.ui.editor.crop.CropGeometryHelper
+import com.inferno.gallery.ui.editor.engine.ImageExportWorker
+import com.inferno.gallery.ui.editor.engine.ImageProcessingEngine
+import com.inferno.gallery.ui.editor.markup.MarkupCanvasOverlay
+import com.inferno.gallery.ui.editor.markup.MarkupPalette
+import com.inferno.gallery.ui.editor.markup.MarkupState
+import com.inferno.gallery.ui.editor.markup.MarkupText
+import com.inferno.gallery.ui.editor.markup.MarkupTextEditorDialog
+import com.inferno.gallery.ui.editor.markup.MarkupTool
+import com.inferno.gallery.ui.editor.markup.RedactMode
+import com.inferno.gallery.ui.editor.model.AdjustTool
+import com.inferno.gallery.ui.editor.model.CropState
+import com.inferno.gallery.ui.editor.model.EditorHistoryState
+import com.inferno.gallery.ui.editor.model.EditorTab
+import com.inferno.gallery.ui.editor.model.FilterPreset
+import com.inferno.gallery.ui.editor.model.TuneValues
+import com.inferno.gallery.ui.editor.studios.AdjustStudio
+import com.inferno.gallery.ui.editor.studios.AutoSuggestionType
+import com.inferno.gallery.ui.editor.studios.AutoSuggestionsEngine
+import com.inferno.gallery.ui.editor.studios.AutoStudio
+import com.inferno.gallery.ui.editor.studios.CropStudio
+import com.inferno.gallery.ui.editor.studios.CropSubMode
+import com.inferno.gallery.ui.editor.studios.FiltersStudio
+import com.inferno.gallery.ui.editor.studios.MarkupStudio
+import com.inferno.gallery.ui.editor.studios.MoreStudio
+import com.inferno.gallery.ui.editor.studios.ToolSearchSheet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.max
+
+/**
+ * Immutable snapshot container of all editing parameters for history stack undo/redo operations.
+ */
+data class EditorSnapshot(
+    val cropState: CropState = CropState(),
+    val tuneValues: TuneValues = TuneValues(),
+    val filterPreset: FilterPreset = FilterPreset.ORIGINAL,
+    val filterStrength: Float = 100f,
+    val markupState: MarkupState = MarkupState()
+) {
+    val isModified: Boolean
+        get() = cropState.isModified ||
+                !tuneValues.isDefault() ||
+                filterPreset != FilterPreset.ORIGINAL ||
+                markupState.strokes.isNotEmpty() ||
+                markupState.texts.isNotEmpty()
+}
+
+/**
+ * Flagship photo editor screen providing comprehensive editing workflow,
+ * studios, animations, and lossless export engine.
+ *
+ * @param imageUri MediaStore content URI of the photo to edit.
+ * @param onBack Invoked when user exits the editor.
+ * @param onSaved Invoked with the newly created copy URI when export succeeds.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun GooglePhotosEditorScreen(
+    imageUri: Uri,
+    onBack: () -> Unit,
+    onSaved: (Uri) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // ── 1. Bitmap Loading State ──────────────────────────────────────────
+    var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isLoadingBitmap by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(imageUri) {
+        isLoadingBitmap = true
+        loadError = null
+        originalBitmap = withContext(Dispatchers.IO) {
+            try {
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, boundsOpts)
+                } ?: return@withContext null
+
+                val maxDim = maxOf(boundsOpts.outWidth, boundsOpts.outHeight)
+                var sampleSize = 1
+                // Target ~2560px for smooth 60fps GPU preview
+                val targetMax = 2560
+                while (maxDim / (sampleSize * 2) >= targetMax) {
+                    sampleSize *= 2
+                }
+
+                val decodeOpts = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                val rawBmp = context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, decodeOpts)
+                } ?: return@withContext null
+
+                val exifOrientation = try {
+                    context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                        ExifInterface(stream).getAttributeInt(
+                            ExifInterface.TAG_ORIENTATION,
+                            ExifInterface.ORIENTATION_NORMAL
+                        )
+                    } ?: ExifInterface.ORIENTATION_NORMAL
+                } catch (e: Exception) {
+                    ExifInterface.ORIENTATION_NORMAL
+                }
+
+                applyExifOrientation(rawBmp, exifOrientation)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        isLoadingBitmap = false
+        if (originalBitmap == null) {
+            loadError = "Unable to load image"
+        }
+    }
+
+    val imageBitmap = remember(originalBitmap) { originalBitmap?.asImageBitmap() }
+
+    // ── 2. History & Editor State Management ──────────────────────────────
+    var historyState by remember {
+        mutableStateOf(EditorHistoryState(current = EditorSnapshot()))
+    }
+    val currentSnapshot = historyState.current
+
+    val commitSnapshot: (EditorSnapshot) -> Unit = { newSnapshot ->
+        if (newSnapshot != historyState.current) {
+            historyState = historyState.push(newSnapshot)
+        }
+    }
+
+    val updateLiveSnapshot: (EditorSnapshot) -> Unit = { newSnapshot ->
+        historyState = historyState.copy(current = newSnapshot)
+    }
+
+    // ── 3. Navigation & Studio Selection ─────────────────────────────────
+    var selectedTab by rememberSaveable { mutableStateOf(EditorTab.AUTO) }
+    var isSearchOpen by rememberSaveable { mutableStateOf(false) }
+    var showOverflowMenu by rememberSaveable { mutableStateOf(false) }
+    var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+    var isComparingOriginal by remember { mutableStateOf(false) }
+
+    // Studio-specific active sub-modes
+    var activeAdjustTool by rememberSaveable { mutableStateOf<AdjustTool?>(null) }
+    var cropSubMode by rememberSaveable { mutableStateOf(CropSubMode.CAROUSEL) }
+    var showAspectPicker by rememberSaveable { mutableStateOf(false) }
+    var isCropDragging by remember { mutableStateOf(false) }
+
+    // Markup studio settings
+    var activeMarkupTool by rememberSaveable { mutableStateOf<MarkupTool?>(null) }
+    var markupColor by remember { mutableStateOf(MarkupPalette.COLORS[0]) }
+    var penStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_PEN_WIDTH) }
+    var highlighterStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_HIGHLIGHTER_WIDTH) }
+    var redactStrokeWidth by remember { mutableFloatStateOf(MarkupPalette.DEFAULT_REDACT_WIDTH) }
+    var redactMode by remember { mutableStateOf(RedactMode.MOSAIC) }
+    var selectedMarkupTextId by remember { mutableStateOf<Long?>(null) }
+    var editingTextItem by remember { mutableStateOf<MarkupText?>(null) }
+    var showTextDialog by rememberSaveable { mutableStateOf(false) }
+
+    val hasModifications = historyState.canUndo || currentSnapshot.isModified
+
+    // ── 4. System Back Handling ──────────────────────────────────────────
+    BackHandler(enabled = true) {
+        when {
+            isSearchOpen -> isSearchOpen = false
+            cropSubMode != CropSubMode.CAROUSEL -> cropSubMode = CropSubMode.CAROUSEL
+            activeAdjustTool != null -> activeAdjustTool = null
+            hasModifications -> showDiscardDialog = true
+            else -> onBack()
+        }
+    }
+
+    // ── 5. ColorMatrix & Shader Computation ──────────────────────────────
+    val filterMatrix = remember(currentSnapshot.filterPreset, currentSnapshot.filterStrength) {
+        if (currentSnapshot.filterPreset != FilterPreset.ORIGINAL && currentSnapshot.filterStrength > 0f) {
+            currentSnapshot.filterPreset.interpolate(currentSnapshot.filterStrength)
+        } else null
+    }
+
+    val combinedMatrix = remember(currentSnapshot.tuneValues, filterMatrix) {
+        ImageProcessingEngine.buildCombinedMatrix(
+            tune = currentSnapshot.tuneValues,
+            filterMatrix = filterMatrix
+        )
+    }
+
+    val activeColorFilter = remember(isComparingOriginal, combinedMatrix) {
+        if (isComparingOriginal) null else ColorFilter.colorMatrix(combinedMatrix)
+    }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = Color.Black,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            EditorTopBar(
+                onCancel = {
+                    if (hasModifications) {
+                        showDiscardDialog = true
+                    } else {
+                        onBack()
+                    }
+                },
+                onUndo = {
+                    if (historyState.canUndo) {
+                        historyState = historyState.undo()
+                    }
+                },
+                onRedo = {
+                    if (historyState.canRedo) {
+                        historyState = historyState.redo()
+                    }
+                },
+                canUndo = historyState.canUndo,
+                canRedo = historyState.canRedo,
+                hasModifications = hasModifications,
+                onSaveAsCopy = {
+                    if (!isSaving) {
+                        isSaving = true
+                        scope.launch {
+                            val result = ImageExportWorker.exportImage(
+                                context = context,
+                                sourceUri = imageUri,
+                                cropState = currentSnapshot.cropState,
+                                tuneValues = currentSnapshot.tuneValues,
+                                filterPreset = currentSnapshot.filterPreset,
+                                filterStrength = currentSnapshot.filterStrength,
+                                markupState = currentSnapshot.markupState,
+                                overwrite = false
+                            )
+                            isSaving = false
+                            result.onSuccess { savedUri ->
+                                Toast.makeText(context, "Saved copy to photos", Toast.LENGTH_SHORT).show()
+                                onSaved(savedUri)
+                                onBack()
+                            }.onFailure { error ->
+                                snackbarHostState.showSnackbar(
+                                    message = error.localizedMessage ?: "Failed to save photo copy"
+                                )
+                            }
+                        }
+                    }
+                },
+                onMoreOptions = { showOverflowMenu = true }
+            )
+        },
+        bottomBar = {
+            EditorBottomTabs(
+                selectedTab = selectedTab,
+                onSelectTab = { tab ->
+                    selectedTab = tab
+                    // Reset sub-mode tools when switching tabs
+                    if (tab != EditorTab.ADJUST) activeAdjustTool = null
+                    if (tab != EditorTab.CROP) cropSubMode = CropSubMode.CAROUSEL
+                },
+                onOpenSearch = { isSearchOpen = true }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // ── CENTER CANVAS VIEWPORT ───────────────────────────────────
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val bmp = originalBitmap
+                val imgBmp = imageBitmap
+
+                if (bmp != null && imgBmp != null) {
+                    val rawAspect = bmp.width.toFloat() / bmp.height.toFloat()
+                    val effectiveAspect = if (isComparingOriginal) {
+                        rawAspect
+                    } else {
+                        CropGeometryHelper.effectiveAspectRatio(rawAspect, currentSnapshot.cropState.rotation)
+                    }
+
+                    val maxW = constraints.maxWidth.toFloat()
+                    val maxH = constraints.maxHeight.toFloat()
+                    val containerAspect = if (maxH > 0f) maxW / maxH else 1f
+
+                    val (dispW, dispH) = if (effectiveAspect > containerAspect) {
+                        maxW to (maxW / effectiveAspect)
+                    } else {
+                        (maxH * effectiveAspect) to maxH
+                    }
+
+                    val isQuarterRotated = !isComparingOriginal && (currentSnapshot.cropState.rotation % 180 != 0)
+                    val boxW = if (isQuarterRotated) dispH else dispW
+                    val boxH = if (isQuarterRotated) dispW else dispH
+
+                    val density = LocalDensity.current
+                    val boxWDp = with(density) { boxW.toDp() }
+                    val boxHDp = with(density) { boxH.toDp() }
+
+                    // Image container with live geometry transforms applied via graphicsLayer
+                    Box(
+                        modifier = Modifier
+                            .size(width = boxWDp, height = boxHDp)
+                            .graphicsLayer {
+                                if (!isComparingOriginal) {
+                                    val crop = currentSnapshot.cropState
+                                    rotationZ = crop.rotation.toFloat() + crop.straightenAngle
+                                    scaleX = if (crop.flipH) -1f else 1f
+                                    scaleY = if (crop.flipV) -1f else 1f
+                                    rotationX = crop.verticalTilt
+                                    rotationY = -crop.horizontalTilt
+                                    cameraDistance = 16f * density.density
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // 1. Live Rendered Image
+                        Image(
+                            bitmap = imgBmp,
+                            contentDescription = "Edited photo",
+                            colorFilter = activeColorFilter,
+                            contentScale = ContentScale.FillBounds,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // 2. Real-time Vignette Radial Gradient Overlay
+                        if (!isComparingOriginal && currentSnapshot.tuneValues.vignette > 0f) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val cx = size.width / 2f
+                                val cy = size.height / 2f
+                                val radius = max(cx, cy) * 1.2f
+                                val alpha = ((currentSnapshot.tuneValues.vignette / 100f) * 0.78f).coerceIn(0f, 1f)
+                                drawRect(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = alpha)),
+                                        center = Offset(cx, cy),
+                                        radius = radius
+                                    ),
+                                    size = size
+                                )
+                            }
+                        }
+
+                        // 3. Markup Overlay (interactive in Markup tab, persistent display elsewhere)
+                        if (!isComparingOriginal && (selectedTab == EditorTab.MARKUP || currentSnapshot.markupState.strokes.isNotEmpty() || currentSnapshot.markupState.texts.isNotEmpty())) {
+                            val markupActive = selectedTab == EditorTab.MARKUP && activeMarkupTool != null
+                            MarkupCanvasOverlay(
+                                markupState = currentSnapshot.markupState,
+                                activeTool = activeMarkupTool ?: MarkupTool.PEN,
+                                currentColor = markupColor,
+                                currentStrokeWidth = when (activeMarkupTool) {
+                                    MarkupTool.PEN -> penStrokeWidth
+                                    MarkupTool.HIGHLIGHTER -> highlighterStrokeWidth
+                                    MarkupTool.REDACT -> redactStrokeWidth
+                                    else -> penStrokeWidth
+                                },
+                                redactMode = redactMode,
+                                selectedTextId = selectedMarkupTextId,
+                                onSelectText = { selectedMarkupTextId = it },
+                                onStateChanged = { updatedMarkup ->
+                                    commitSnapshot(currentSnapshot.copy(markupState = updatedMarkup))
+                                },
+                                onEditTextRequest = { textItem ->
+                                    editingTextItem = textItem
+                                    showTextDialog = true
+                                },
+                                isInteractive = markupActive,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        // 4. Corner Brackets & Grid (active in Crop tab)
+                        if (!isComparingOriginal && selectedTab == EditorTab.CROP) {
+                            EditorCornerBrackets(
+                                cropRect = currentSnapshot.cropState.cropRect,
+                                onCropRectChange = { newRect ->
+                                    val updatedCrop = currentSnapshot.cropState.copy(cropRect = newRect)
+                                    if (isCropDragging) {
+                                        updateLiveSnapshot(currentSnapshot.copy(cropState = updatedCrop))
+                                    } else {
+                                        commitSnapshot(currentSnapshot.copy(cropState = updatedCrop))
+                                    }
+                                },
+                                aspectRatio = currentSnapshot.cropState.aspectOption.resolveTargetRatio(effectiveAspect),
+                                isDragging = isCropDragging,
+                                onDragStateChange = { dragging ->
+                                    isCropDragging = dragging
+                                    if (!dragging) {
+                                        commitSnapshot(currentSnapshot)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (!isComparingOriginal && currentSnapshot.cropState.cropRect != Rect(0f, 0f, 1f, 1f)) {
+                            // Subtle non-interactive boundary crop scrim when previewing outside Crop tab
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val rect = currentSnapshot.cropState.cropRect
+                                val w = size.width
+                                val h = size.height
+                                val l = rect.left * w
+                                val t = rect.top * h
+                                val r = rect.right * w
+                                val b = rect.bottom * h
+                                val scrim = Color.Black.copy(alpha = 0.65f)
+                                if (t > 0f) drawRect(scrim, Offset.Zero, Size(w, t))
+                                if (b < h) drawRect(scrim, Offset(0f, b), Size(w, h - b))
+                                if (l > 0f) drawRect(scrim, Offset(0f, t), Size(l, b - t))
+                                if (r < w) drawRect(scrim, Offset(r, t), Size(w - r, b - t))
+                            }
+                        }
+                    }
+
+                    // 5. Hold-to-compare "Original" pill badge
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isComparingOriginal,
+                        enter = fadeIn(tween(120)),
+                        exit = fadeOut(tween(120)),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.72f),
+                            tonalElevation = 6.dp
+                        ) {
+                            Text(
+                                text = "Original",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    // 6. Floating Quick Action Bar
+                    val showQuickActionBar = (selectedTab == EditorTab.CROP && cropSubMode == CropSubMode.CAROUSEL) ||
+                            (selectedTab != EditorTab.CROP && activeAdjustTool == null && activeMarkupTool == null)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showQuickActionBar,
+                        enter = fadeIn(tween(160)) + slideInVertically(tween(160)) { it / 2 },
+                        exit = fadeOut(tween(120)) + slideOutVertically(tween(120)) { it / 2 },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                    ) {
+                        EditorQuickActionBar(
+                            onStraighten = {
+                                selectedTab = EditorTab.CROP
+                                cropSubMode = CropSubMode.FRAMING
+                            },
+                            currentAspect = currentSnapshot.cropState.aspectOption.label,
+                            onAspectClick = {
+                                selectedTab = EditorTab.CROP
+                                showAspectPicker = true
+                            },
+                            onCompareChange = { comparing ->
+                                isComparingOriginal = comparing
+                            },
+                            onRotate = {
+                                val newRotation = CropGeometryHelper.rotateCounterClockwise(currentSnapshot.cropState.rotation)
+                                val newEffAspect = CropGeometryHelper.effectiveAspectRatio(rawAspect, newRotation)
+                                val newRect = if (currentSnapshot.cropState.aspectOption != com.inferno.gallery.ui.editor.model.AspectRatioOption.FREEFORM) {
+                                    CropGeometryHelper.calculateInitialAspectRect(currentSnapshot.cropState.aspectOption, newEffAspect)
+                                } else {
+                                    currentSnapshot.cropState.cropRect
+                                }
+                                commitSnapshot(
+                                    currentSnapshot.copy(
+                                        cropState = currentSnapshot.cropState.copy(
+                                            rotation = newRotation,
+                                            cropRect = newRect
+                                        )
+                                    )
+                                )
+                            }
+                        )
+                    }
+                } else if (isLoadingBitmap) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = loadError ?: "Failed to open image",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            // ── BOTTOM STUDIOS CONTAINER ──────────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp
+            ) {
+                when (selectedTab) {
+                    EditorTab.AUTO -> {
+                        AutoStudio(
+                            previewBitmap = originalBitmap,
+                            onApplyTuneValues = { tune ->
+                                commitSnapshot(currentSnapshot.copy(tuneValues = tune))
+                            }
+                        )
+                    }
+
+                    EditorTab.CROP -> {
+                        val rawAspect = originalBitmap?.let { it.width.toFloat() / it.height.toFloat() } ?: 1f
+                        CropStudio(
+                            cropState = currentSnapshot.cropState,
+                            onCropStateChange = { newCrop ->
+                                commitSnapshot(currentSnapshot.copy(cropState = newCrop))
+                            },
+                            imageAspect = rawAspect,
+                            showAspectPicker = showAspectPicker,
+                            onDismissAspectPicker = { showAspectPicker = false },
+                            initialSubMode = cropSubMode,
+                            onStraightenDone = { cropSubMode = CropSubMode.CAROUSEL },
+                            onReset = {
+                                commitSnapshot(currentSnapshot.copy(cropState = CropState()))
+                            }
+                        )
+                    }
+
+                    EditorTab.ADJUST -> {
+                        AdjustStudio(
+                            tuneValues = currentSnapshot.tuneValues,
+                            onTuneValuesChange = { newTune ->
+                                commitSnapshot(currentSnapshot.copy(tuneValues = newTune))
+                            },
+                            initialTool = activeAdjustTool,
+                            onDone = { activeAdjustTool = null }
+                        )
+                    }
+
+                    EditorTab.MARKUP -> {
+                        MarkupStudio(
+                            markupState = currentSnapshot.markupState,
+                            onMarkupStateChange = { newMarkup ->
+                                commitSnapshot(currentSnapshot.copy(markupState = newMarkup))
+                            },
+                            activeTool = activeMarkupTool,
+                            onActiveToolChange = { activeMarkupTool = it },
+                            selectedColor = markupColor,
+                            onColorChange = { markupColor = it },
+                            penStrokeWidth = penStrokeWidth,
+                            onPenStrokeWidthChange = { penStrokeWidth = it },
+                            highlighterStrokeWidth = highlighterStrokeWidth,
+                            onHighlighterStrokeWidthChange = { highlighterStrokeWidth = it },
+                            redactStrokeWidth = redactStrokeWidth,
+                            onRedactStrokeWidthChange = { redactStrokeWidth = it },
+                            redactMode = redactMode,
+                            onRedactModeChange = { redactMode = it },
+                            onOpenTextDialog = {
+                                editingTextItem = null
+                                showTextDialog = true
+                            },
+                            onDone = { activeMarkupTool = null }
+                        )
+                    }
+
+                    EditorTab.FILTERS -> {
+                        FiltersStudio(
+                            previewBitmap = originalBitmap,
+                            selectedFilter = currentSnapshot.filterPreset,
+                            filterStrength = currentSnapshot.filterStrength,
+                            onSelectFilter = { preset ->
+                                commitSnapshot(currentSnapshot.copy(filterPreset = preset))
+                            },
+                            onFilterStrengthChange = { strength ->
+                                commitSnapshot(currentSnapshot.copy(filterStrength = strength))
+                            },
+                            onDone = {}
+                        )
+                    }
+
+                    EditorTab.MORE -> {
+                        MoreStudio(imageUri = imageUri)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 6. Tool Search Sheet Modal ───────────────────────────────────────
+    if (isSearchOpen) {
+        ToolSearchSheet(
+            onSelectTool = { tab, toolId ->
+                isSearchOpen = false
+                selectedTab = tab
+                when (tab) {
+                    EditorTab.ADJUST -> {
+                        val tool = AdjustTool.entries.find {
+                            it.name.equals(toolId, ignoreCase = true) ||
+                                    it.name.replace("_", "").equals(toolId?.replace("_", ""), ignoreCase = true)
+                        } ?: when (toolId?.lowercase()) {
+                            "brightness" -> AdjustTool.BRIGHTNESS
+                            "contrast" -> AdjustTool.CONTRAST
+                            "tone" -> AdjustTool.TONE
+                            "white_point", "white point" -> AdjustTool.WHITE_POINT
+                            "highlights" -> AdjustTool.HIGHLIGHTS
+                            "shadows" -> AdjustTool.SHADOWS
+                            "black_point", "black point" -> AdjustTool.BLACK_POINT
+                            "saturation" -> AdjustTool.SATURATION
+                            "warmth" -> AdjustTool.WARMTH
+                            "tint" -> AdjustTool.TINT
+                            "skin_tone", "skin tone" -> AdjustTool.SKIN_TONE
+                            "blue_tone", "blue tone" -> AdjustTool.BLUE_TONE
+                            "vignette" -> AdjustTool.VIGNETTE
+                            else -> null
+                        }
+                        activeAdjustTool = tool
+                    }
+
+                    EditorTab.CROP -> {
+                        when (toolId?.lowercase()) {
+                            "straighten" -> cropSubMode = CropSubMode.FRAMING
+                            "perspective" -> cropSubMode = CropSubMode.PERSPECTIVE
+                            "crop_aspect", "aspect" -> showAspectPicker = true
+                            "rotate" -> {
+                                val rawAspect = originalBitmap?.let { it.width.toFloat() / it.height.toFloat() } ?: 1f
+                                val newRotation = CropGeometryHelper.rotateCounterClockwise(currentSnapshot.cropState.rotation)
+                                val newEffAspect = CropGeometryHelper.effectiveAspectRatio(rawAspect, newRotation)
+                                val newRect = if (currentSnapshot.cropState.aspectOption != com.inferno.gallery.ui.editor.model.AspectRatioOption.FREEFORM) {
+                                    CropGeometryHelper.calculateInitialAspectRect(currentSnapshot.cropState.aspectOption, newEffAspect)
+                                } else {
+                                    currentSnapshot.cropState.cropRect
+                                }
+                                commitSnapshot(
+                                    currentSnapshot.copy(
+                                        cropState = currentSnapshot.cropState.copy(
+                                            rotation = newRotation,
+                                            cropRect = newRect
+                                        )
+                                    )
+                                )
+                            }
+                            "reset_crop", "reset" -> {
+                                commitSnapshot(currentSnapshot.copy(cropState = CropState()))
+                            }
+                            else -> cropSubMode = CropSubMode.CAROUSEL
+                        }
+                    }
+
+                    EditorTab.MARKUP -> {
+                        when (toolId?.lowercase()) {
+                            "markup_pen", "pen" -> activeMarkupTool = MarkupTool.PEN
+                            "markup_highlighter", "highlighter" -> activeMarkupTool = MarkupTool.HIGHLIGHTER
+                            "markup_redact", "redact" -> activeMarkupTool = MarkupTool.REDACT
+                            "markup_text", "text" -> {
+                                activeMarkupTool = MarkupTool.TEXT
+                                showTextDialog = true
+                            }
+                            "markup_arrow", "arrow" -> activeMarkupTool = MarkupTool.ARROW
+                            "markup_eraser", "eraser" -> activeMarkupTool = MarkupTool.ERASER
+                            else -> activeMarkupTool = MarkupTool.PEN
+                        }
+                    }
+
+                    EditorTab.FILTERS -> {
+                        val preset = FilterPreset.entries.find {
+                            it.name.equals(toolId, ignoreCase = true) || it.label.equals(toolId, ignoreCase = true)
+                        }
+                        if (preset != null) {
+                            commitSnapshot(currentSnapshot.copy(filterPreset = preset, filterStrength = 100f))
+                        }
+                    }
+
+                    EditorTab.AUTO -> {
+                        val suggestions = AutoSuggestionsEngine.generateSuggestions(originalBitmap)
+                        val tuned = when (toolId?.lowercase()) {
+                            "auto_enhance", "enhance" -> suggestions.find { it.type == AutoSuggestionType.ENHANCE }?.tuneValues
+                            "auto_dynamic", "dynamic" -> suggestions.find { it.type == AutoSuggestionType.DYNAMIC }?.tuneValues
+                            "auto_warm", "warm" -> suggestions.find { it.type == AutoSuggestionType.WARM }?.tuneValues
+                            "auto_cool", "cool" -> suggestions.find { it.type == AutoSuggestionType.COOL }?.tuneValues
+                            else -> null
+                        }
+                        if (tuned != null) {
+                            commitSnapshot(currentSnapshot.copy(tuneValues = tuned))
+                        }
+                    }
+
+                    EditorTab.MORE -> {
+                        // Tab switch suffices
+                    }
+                }
+            },
+            onDismiss = { isSearchOpen = false }
+        )
+    }
+
+    // ── 7. Overflow Bottom Sheet ─────────────────────────────────────────
+    if (showOverflowMenu) {
+        EditorOverflowSheet(
+            onDismissRequest = { showOverflowMenu = false },
+            canRevert = hasModifications,
+            onRevertEdits = {
+                commitSnapshot(EditorSnapshot())
+                activeAdjustTool = null
+                cropSubMode = CropSubMode.CAROUSEL
+                activeMarkupTool = null
+                Toast.makeText(context, "Reverted all edits", Toast.LENGTH_SHORT).show()
+            },
+            onHelpFeedback = {
+                val helpIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://support.google.com/photos/answer/6128850"))
+                runCatching { context.startActivity(helpIntent) }
+            }
+        )
+    }
+
+    // ── 8. Markup Text Editor Dialog ─────────────────────────────────────
+    if (showTextDialog) {
+        MarkupTextEditorDialog(
+            initialText = editingTextItem,
+            onDismissRequest = { showTextDialog = false },
+            onConfirm = { updatedOrNewText ->
+                showTextDialog = false
+                markupColor = updatedOrNewText.color
+                val updatedMarkup = if (editingTextItem != null) {
+                    currentSnapshot.markupState.withUpdatedText(updatedOrNewText)
+                } else {
+                    currentSnapshot.markupState.withAddedText(updatedOrNewText)
+                }
+                commitSnapshot(currentSnapshot.copy(markupState = updatedMarkup))
+                selectedMarkupTextId = updatedOrNewText.id
+            },
+            onDelete = { idToDelete ->
+                showTextDialog = false
+                val updatedMarkup = currentSnapshot.markupState.withRemovedText(idToDelete)
+                commitSnapshot(currentSnapshot.copy(markupState = updatedMarkup))
+                selectedMarkupTextId = null
+            }
+        )
+    }
+
+    // ── 9. Discard Changes Confirmation Dialog ───────────────────────────
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text(text = "Discard edits?") },
+            text = { Text(text = "If you go back now, all changes made in this session will be lost.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardDialog = false
+                        onBack()
+                    }
+                ) {
+                    Text(text = "Discard", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text(text = "Keep editing")
+                }
+            }
+        )
+    }
+
+    // ── 10. Saving Copy Modal Progress Overlay ───────────────────────────
+    if (isSaving) {
+        Dialog(
+            onDismissRequest = { /* Prevent dismiss while saving */ },
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Saving copy\u2026",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Normalizes bitmap orientation according to EXIF rotation and flip tags.
+ */
+private fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
+    val matrix = android.graphics.Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> {
+            matrix.preRotate(90f)
+            matrix.preScale(-1f, 1f)
+        }
+        ExifInterface.ORIENTATION_TRANSVERSE -> {
+            matrix.preRotate(270f)
+            matrix.preScale(-1f, 1f)
+        }
+        else -> return bitmap
+    }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+}

@@ -27,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
+import com.inferno.gallery.ui.editor.GooglePhotosEditorScreen
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.utils.popBackStackSafely
 
@@ -61,13 +62,19 @@ fun NavigationGraph(
     val context = androidx.compose.ui.platform.LocalContext.current
     val mainActivity = context as? com.inferno.gallery.MainActivity
     val viewIntentUri by mainActivity?.viewIntentUri?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
+    val isEditIntent by mainActivity?.isEditIntent?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     LaunchedEffect(viewIntentUri, isLoading) {
         val uri = viewIntentUri
         if (uri != null && !isLoading) {
             val encoded = android.net.Uri.encode(uri.toString())
             mainActivity?.consumeViewIntentUri()
-            navController.navigate("detail/$encoded")
+            if (isEditIntent) {
+                mainActivity?.consumeEditIntent()
+                navController.navigate("editor?uri=$encoded")
+            } else {
+                navController.navigate("detail/$encoded")
+            }
         }
     }
 
@@ -314,7 +321,7 @@ fun NavigationGraph(
             ) { backStackEntry ->
                 val uriString = backStackEntry.arguments?.getString("uri") ?: ""
                 val uri = android.net.Uri.parse(android.net.Uri.decode(uriString))
-                ImageEditorScreen(
+                GooglePhotosEditorScreen(
                     imageUri = uri,
                     onBack = { navController.popBackStackSafely(backStackEntry) },
                     onSaved = { }

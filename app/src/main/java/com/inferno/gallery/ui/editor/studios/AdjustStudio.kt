@@ -73,6 +73,11 @@ fun AdjustStudio(
     onDone: (() -> Unit)? = null
 ) {
     var activeTool by rememberSaveable { mutableStateOf(initialTool) }
+    LaunchedEffect(initialTool) {
+        if (initialTool != null) {
+            activeTool = initialTool
+        }
+    }
     val tools = remember { AdjustTool.entries }
     val listState = rememberLazyListState()
     val view = LocalView.current

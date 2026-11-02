@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -108,9 +109,13 @@ fun CropStudio(
     showAspectPicker: Boolean = false,
     onDismissAspectPicker: (() -> Unit)? = null,
     onStraightenDone: (() -> Unit)? = null,
-    onReset: (() -> Unit)? = null
+    onReset: (() -> Unit)? = null,
+    initialSubMode: CropSubMode = CropSubMode.CAROUSEL
 ) {
-    var subMode by rememberSaveable { mutableStateOf(CropSubMode.CAROUSEL) }
+    var subMode by rememberSaveable { mutableStateOf(initialSubMode) }
+    LaunchedEffect(initialSubMode) {
+        subMode = initialSubMode
+    }
     var perspectiveAxis by rememberSaveable { mutableStateOf(PerspectiveAxis.VERTICAL) }
     var isInternalAspectSheetOpen by rememberSaveable { mutableStateOf(false) }
 

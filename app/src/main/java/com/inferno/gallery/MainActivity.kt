@@ -41,8 +41,15 @@ class MainActivity : FragmentActivity() {
     private val _viewIntentUri = kotlinx.coroutines.flow.MutableStateFlow<android.net.Uri?>(null)
     val viewIntentUri: kotlinx.coroutines.flow.StateFlow<android.net.Uri?> = _viewIntentUri.asStateFlow()
 
+    private val _isEditIntent = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isEditIntent: kotlinx.coroutines.flow.StateFlow<Boolean> = _isEditIntent.asStateFlow()
+
     fun consumeViewIntentUri() {
         _viewIntentUri.value = null
+    }
+
+    fun consumeEditIntent() {
+        _isEditIntent.value = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -219,11 +226,14 @@ class MainActivity : FragmentActivity() {
             return
         }
 
+        val isEdit = action == Intent.ACTION_EDIT || intent?.getBooleanExtra("open_editor", false) == true
         if (action == Intent.ACTION_VIEW ||
+            action == Intent.ACTION_EDIT ||
             action == "com.android.camera.action.REVIEW" ||
             action == android.provider.MediaStore.ACTION_REVIEW
         ) {
             if (uri != null) {
+                _isEditIntent.value = isEdit
                 _viewIntentUri.value = uri
             }
         }
