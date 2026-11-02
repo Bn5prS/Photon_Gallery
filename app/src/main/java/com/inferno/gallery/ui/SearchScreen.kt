@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -677,7 +679,7 @@ private fun SearchResultsList(
                 // Matching People Section
                 if (matchingPeople.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        PhotonSectionHeader(title = "People")
+                        PhotonSectionHeader(title = stringResource(R.string.search_section_people))
                     }
                     item(span = { GridItemSpan(4) }) {
                         LazyRow(
@@ -704,7 +706,7 @@ private fun SearchResultsList(
                 // Matching Albums Section
                 if (matchingAlbums.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        PhotonSectionHeader(title = "Albums")
+                        PhotonSectionHeader(title = stringResource(R.string.section_albums))
                     }
                     item(span = { GridItemSpan(4) }) {
                         LazyRow(
@@ -731,7 +733,7 @@ private fun SearchResultsList(
                 // Photos & Videos (Direct Matches)
                 if (ftsResults.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        PhotonSectionHeader(title = "Photos & videos")
+                        PhotonSectionHeader(title = stringResource(R.string.nav_photos))
                     }
                     items(
                         items = ftsResults.take(12),
@@ -795,7 +797,7 @@ private fun SearchResultsList(
                 // Semantic Matches
                 if (smartResults.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        PhotonSectionHeader(title = "Semantic matches")
+                        PhotonSectionHeader(title = stringResource(R.string.search_section_semantic))
                     }
                     items(
                         items = smartResults.take(12),
@@ -948,7 +950,7 @@ private fun SearchResultsList(
             "ALBUM" -> {
                 if (matchingAlbums.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        PhotonSectionHeader(title = "Matching Albums")
+                        PhotonSectionHeader(title = stringResource(R.string.search_section_matching_albums))
                     }
                     item(span = { GridItemSpan(4) }) {
                         LazyRow(
@@ -970,7 +972,7 @@ private fun SearchResultsList(
                 }
                 if (albumMedia.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) {
-                        PhotonSectionHeader(title = "Photos in Albums")
+                        PhotonSectionHeader(title = stringResource(R.string.search_section_photos_in_albums))
                     }
                     items(
                         items = albumMedia,

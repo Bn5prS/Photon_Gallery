@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui.editor.studios
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -90,7 +92,7 @@ fun MoreStudio(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Other editing apps",
+                text = stringResource(R.string.editor_more_other_apps),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -113,7 +115,7 @@ fun MoreStudio(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "No other photo editing apps installed",
+                    text = stringResource(R.string.editor_more_no_apps),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -134,7 +136,7 @@ fun MoreStudio(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Open System Share")
+                    Text(text = stringResource(R.string.detail_share))
                 }
             }
         } else {
@@ -275,13 +277,9 @@ internal fun queryEditorApps(context: Context, imageUri: Uri): List<ExternalEdit
         val editIntent = Intent(Intent.ACTION_EDIT).apply {
             setDataAndType(imageUri, "image/*")
         }
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/*"
-        }
 
         val flags = PackageManager.MATCH_DEFAULT_ONLY
         val editResolutions = pm.queryIntentActivities(editIntent, flags)
-        val sendResolutions = pm.queryIntentActivities(sendIntent, flags)
 
         val myPackage = context.packageName
         val appList = mutableListOf<ExternalEditorApp>()
@@ -309,27 +307,6 @@ internal fun queryEditorApps(context: Context, imageUri: Uri): List<ExternalEdit
             }
         }
 
-        for (resolve in sendResolutions) {
-            val pkg = resolve.activityInfo.packageName
-            if (seenPackages.add(pkg)) {
-                val label = resolve.loadLabel(pm).toString()
-                val icon = try {
-                    drawableToImageBitmap(resolve.loadIcon(pm))
-                } catch (e: Exception) {
-                    null
-                }
-                appList.add(
-                    ExternalEditorApp(
-                        packageName = pkg,
-                        activityName = resolve.activityInfo.name,
-                        label = label,
-                        icon = icon,
-                        isEditAction = false
-                    )
-                )
-            }
-        }
-
         appList.sortedBy { it.label.lowercase() }
     } catch (e: Exception) {
         emptyList()
@@ -351,19 +328,10 @@ private fun drawableToImageBitmap(drawable: Drawable): ImageBitmap? {
 
 private fun launchExternalApp(context: Context, imageUri: Uri, app: ExternalEditorApp) {
     try {
-        val intent = if (app.isEditAction) {
-            Intent(Intent.ACTION_EDIT).apply {
-                setDataAndType(imageUri, "image/*")
-                setClassName(app.packageName, app.activityName)
-                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-        } else {
-            Intent(Intent.ACTION_SEND).apply {
-                type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, imageUri)
-                setClassName(app.packageName, app.activityName)
-                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
-            }
+        val intent = Intent(Intent.ACTION_EDIT).apply {
+            setDataAndType(imageUri, "image/*")
+            setClassName(app.packageName, app.activityName)
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
         }
         context.startActivity(intent)
     } catch (e: Exception) {

@@ -55,6 +55,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -420,7 +421,7 @@ private fun ActiveDrawingModeView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = activeTool.label,
+                text = getMarkupToolLabel(activeTool),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -440,7 +441,7 @@ private fun ActiveDrawingModeView(
                         }
                     )
                     RedactModePill(
-                        label = "Blur",
+                        label = stringResource(R.string.editor_redact_blur),
                         iconRes = R.drawable.ic_ms_blur_on,
                         isSelected = redactMode == RedactMode.BLUR,
                         onClick = {
@@ -449,7 +450,7 @@ private fun ActiveDrawingModeView(
                         }
                     )
                     RedactModePill(
-                        label = "Blackout",
+                        label = stringResource(R.string.editor_redact_blackout),
                         iconRes = R.drawable.ic_ms_visibility_off,
                         isSelected = redactMode == RedactMode.BLACKOUT,
                         onClick = {
@@ -947,5 +948,16 @@ fun StrokeWidthCapsuleSlider(
                 .size(28.dp)
                 .align(Alignment.CenterStart)
         ) {}
+    }
+}
+
+@Composable
+fun getMarkupToolLabel(tool: MarkupTool): String {
+    return when (tool) {
+        MarkupTool.PEN -> stringResource(R.string.editor_markup_pen)
+        MarkupTool.HIGHLIGHTER -> stringResource(R.string.editor_markup_highlighter)
+        MarkupTool.REDACT -> stringResource(R.string.editor_markup_redact)
+        MarkupTool.TEXT -> stringResource(R.string.editor_markup_text)
+        else -> tool.label
     }
 }

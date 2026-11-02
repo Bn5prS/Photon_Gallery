@@ -2,6 +2,8 @@
 
 package com.inferno.gallery.ui.components
 
+import androidx.compose.ui.res.stringResource
+
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -207,7 +209,7 @@ fun PhotonGrid(
         Box(modifier = basePinchModifier) {
             when (timelineLayoutMode) {
                 TimelineLayoutMode.EDITORIAL_MOSAIC -> {
-                    // ── Editorial Mosaic Layout (Google Photos Multi-Cell Block Architecture) ──
+                    // ── Editorial Mosaic Layout (Multi-Cell Block Architecture) ──
                     val mosaicCols = gridCellsCount.coerceIn(2, 6)
                     val mosaicDisplayItems = remember(pagedMedia.itemCount, mosaicCols) {
                         buildMosaicDisplayItems(pagedMedia, mosaicCols)
@@ -611,8 +613,13 @@ fun TimelineSectionHeader(
             ),
         contentAlignment = if (isCenter) Alignment.Center else Alignment.CenterStart
     ) {
+        val displayTitle = when (title) {
+            "Today" -> stringResource(R.string.today)
+            "Yesterday" -> stringResource(R.string.yesterday)
+            else -> title
+        }
         Text(
-            text = title,
+            text = displayTitle,
             style = TimelineDateHeaderStyle,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = if (isCenter) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
@@ -1283,7 +1290,7 @@ private fun formatDuration(ms: Long): String {
 }
 
 /**
- * Composite display model for Google Photos-grade Editorial Mosaic layout.
+ * Composite display model for Production-grade Editorial Mosaic layout.
  * Eliminates Compose LazyVerticalGrid row-span limitations and prevents empty/negative space
  * by grouping companion items into matching-height blocks.
  */

@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui.editor
 
+import androidx.compose.ui.res.stringResource
+
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -708,7 +710,7 @@ fun GooglePhotosEditorScreen(
                             tonalElevation = 6.dp
                         ) {
                             Text(
-                                text = "Original",
+                                text = stringResource(R.string.editor_action_original),
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
@@ -755,7 +757,7 @@ fun GooglePhotosEditorScreen(
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_ms_compare),
-                                    contentDescription = "Hold to compare with original",
+                                    contentDescription = stringResource(R.string.editor_action_original),
                                     tint = if (isComparingOriginal) {
                                         MaterialTheme.colorScheme.onPrimaryContainer
                                     } else {

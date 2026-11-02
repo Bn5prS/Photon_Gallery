@@ -53,6 +53,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,6 +76,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -90,6 +92,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -99,6 +102,10 @@ import androidx.core.content.ContextCompat
 import androidx.work.WorkInfo
 import com.inferno.gallery.BuildConfig
 import com.inferno.gallery.R
+import com.inferno.gallery.ui.components.LanguageSelectionDialog
+import com.inferno.gallery.ui.components.OnboardingLanguagePill
+import com.inferno.gallery.ui.components.getCurrentAppLanguageTag
+import com.inferno.gallery.ui.components.setAppLanguage
 import com.inferno.gallery.ui.components.FourQuadrantColorSwatch
 import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.MotionTokens
@@ -397,6 +404,21 @@ private fun SetupWelcomePermissionsPage(
         photosGranted
     }
 
+    val context = LocalContext.current
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var currentLanguageTag by remember { mutableStateOf(getCurrentAppLanguageTag(context)) }
+
+    if (showLanguageDialog) {
+        LanguageSelectionDialog(
+            currentLanguageTag = currentLanguageTag,
+            onSelectLanguage = { tag ->
+                setAppLanguage(context, tag)
+                currentLanguageTag = tag
+            },
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -422,15 +444,28 @@ private fun SetupWelcomePermissionsPage(
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.Start
                 ) {
-                    // Top: Welcome Header
+                    // Top: Welcome Header with Top-Right Language Pill
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.Start
                     ) {
-                        Spacer(modifier = Modifier.height(SpacingTokens.M))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = SpacingTokens.XS),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OnboardingLanguagePill(
+                                currentLanguageTag = currentLanguageTag,
+                                onClick = { showLanguageDialog = true }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(SpacingTokens.S))
 
                         Text(
-                            text = "Welcome to",
+                            text = stringResource(R.string.onboarding_welcome_to),
                             style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Start
@@ -446,7 +481,7 @@ private fun SetupWelcomePermissionsPage(
                         Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
                         Text(
-                            text = "A private, beautiful space for all your memories.",
+                            text = stringResource(R.string.onboarding_welcome_tagline),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Start
@@ -468,14 +503,18 @@ private fun SetupWelcomePermissionsPage(
                         verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                     ) {
                         Text(
-                            text = "Required Permissions",
+                            text = stringResource(R.string.onboarding_required_permissions),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         PermissionBlockCard(
-                            title = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "Photos & Videos Access" else "Storage Access",
-                            subtitle = "Required to view, organize, and manage your photo and video library",
+                            title = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                stringResource(R.string.onboarding_perm_photos_videos_title)
+                            } else {
+                                stringResource(R.string.onboarding_perm_storage_title)
+                            },
+                            subtitle = stringResource(R.string.onboarding_perm_photos_videos_desc),
                             isGranted = mediaGranted,
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
                             iconShape = OfficialM3Shapes.Cookie12Sided,
@@ -486,8 +525,8 @@ private fun SetupWelcomePermissionsPage(
 
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             PermissionBlockCard(
-                                title = "All Files Access",
-                                subtitle = "Required for lossless folder moves, deletions & Vault",
+                                title = stringResource(R.string.onboarding_perm_all_files_title),
+                                subtitle = stringResource(R.string.onboarding_perm_all_files_desc),
                                 isGranted = allFilesGranted,
                                 icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
                                 iconShape = OfficialM3Shapes.Sunny,
@@ -510,7 +549,11 @@ private fun SetupWelcomePermissionsPage(
                     onGrantMediaClick()
                 }
             },
-            nextText = if (mediaGranted) "Next" else "Grant Permissions",
+            nextText = if (mediaGranted) {
+                stringResource(R.string.onboarding_action_next)
+            } else {
+                stringResource(R.string.onboarding_action_grant)
+            },
             onBack = null,
             nextIconRes = if (mediaGranted) R.drawable.ic_ms_chevron_right else null
         )

@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui.editor.components
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -93,8 +95,16 @@ fun EditorBottomTabs(
                                 },
                                 modifier = Modifier.size(18.dp)
                             )
+                            val tabLabel = when (tab) {
+                                EditorTab.AUTO -> stringResource(R.string.editor_tab_suggestions)
+                                EditorTab.CROP -> stringResource(R.string.editor_tab_crop)
+                                EditorTab.ADJUST -> stringResource(R.string.editor_tab_adjust)
+                                EditorTab.MARKUP -> stringResource(R.string.editor_tab_markup)
+                                EditorTab.FILTERS -> stringResource(R.string.editor_tab_filters)
+                                EditorTab.MORE -> stringResource(R.string.editor_tab_more)
+                            }
                             Text(
-                                text = tab.label,
+                                text = tabLabel,
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                 ),

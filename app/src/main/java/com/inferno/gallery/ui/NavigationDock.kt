@@ -56,6 +56,7 @@ import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.NavDockLabelStyle
 import com.inferno.gallery.ui.utils.tick
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.res.stringResource
 import com.inferno.gallery.R
 
 /**
@@ -141,8 +142,8 @@ fun FloatingNavigationPill(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SlidingPillTabItem(
-                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(22.dp)) },
-                    label = "Photos",
+                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(22.dp)) },
+                    label = stringResource(R.string.nav_photos),
                     isSelected = selectedIndex == 0,
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToPhotos
@@ -150,8 +151,8 @@ fun FloatingNavigationPill(
 
                 if (showVideosTab) {
                     SlidingPillTabItem(
-                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = "Videos", modifier = Modifier.size(22.dp)) },
-                        label = "Videos",
+                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = stringResource(R.string.album_videos), modifier = Modifier.size(22.dp)) },
+                        label = stringResource(R.string.album_videos),
                         isSelected = selectedIndex == 1,
                         modifier = Modifier.weight(1f),
                         onClick = onNavigateToVideos
@@ -162,19 +163,19 @@ fun FloatingNavigationPill(
                     icon = {
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                            contentDescription = "Albums",
+                            contentDescription = stringResource(R.string.nav_albums),
                             modifier = Modifier.size(22.dp)
                         )
                     },
-                    label = "Albums",
+                    label = stringResource(R.string.nav_albums),
                     isSelected = if (showVideosTab) selectedIndex == 2 else selectedIndex == 1,
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToAlbums
                 )
 
                 SlidingPillTabItem(
-                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(22.dp)) },
-                    label = "Search",
+                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = stringResource(R.string.nav_search), modifier = Modifier.size(22.dp)) },
+                    label = stringResource(R.string.nav_search),
                     isSelected = if (showVideosTab) selectedIndex == 3 else selectedIndex == 2,
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToSearch

@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -310,7 +311,7 @@ private fun CropCarouselView(
         // 2. Framing (Straighten)
         val hasStraighten = cropState.straightenAngle != 0f
         CropToolTile(
-            label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else "Framing",
+            label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else stringResource(R.string.editor_crop_straighten),
             iconRes = R.drawable.ic_ms_straighten,
             isActive = hasStraighten,
             hasActiveDot = hasStraighten,
@@ -320,7 +321,7 @@ private fun CropCarouselView(
         // 3. Rotate 90° CCW
         val hasRotation = cropState.rotation != 0
         CropToolTile(
-            label = if (hasRotation) "${cropState.rotation}°" else "Rotate",
+            label = if (hasRotation) "${cropState.rotation}°" else stringResource(R.string.editor_crop_rotate),
             iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
             isActive = hasRotation,
             hasActiveDot = hasRotation,
@@ -330,7 +331,7 @@ private fun CropCarouselView(
         // 4. Mirror (Horizontal Flip)
         val hasMirror = cropState.flipH
         CropToolTile(
-            label = "Mirror",
+            label = stringResource(R.string.editor_crop_mirror),
             iconRes = R.drawable.ic_ms_flip,
             isActive = hasMirror,
             hasActiveDot = hasMirror,
@@ -349,7 +350,7 @@ private fun CropCarouselView(
 
         // 6. Reset
         CropToolTile(
-            label = "Reset",
+            label = stringResource(R.string.editor_action_reset),
             iconRes = R.drawable.ic_ms_refresh,
             isActive = false,
             isEnabled = cropState.isModified,
@@ -462,7 +463,7 @@ private fun FramingSubModeView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Framing",
+                text = stringResource(R.string.editor_crop_straighten),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -771,7 +772,7 @@ fun AspectRatioPickerSheet(
                     ),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                 ) {
-                    Text(text = "Done", style = MaterialTheme.typography.labelMedium)
+                    Text(text = stringResource(R.string.editor_action_done), style = MaterialTheme.typography.labelMedium)
                 }
             }
 

@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.material3.FilledTonalIconButton
 import android.content.Context
 
@@ -1532,19 +1534,28 @@ fun DetailScreen(
                     )
                     // Draw the Viewport Indicator Map
                     Canvas(modifier = Modifier.matchParentSize()) {
-                        val viewportWidth = size.width / scale.floatValue
-                        val viewportHeight = size.height / scale.floatValue
+                        val imgW = if (imageAspectRatio > 0f) minOf(parentWidth, parentHeight * imageAspectRatio) else parentWidth
+                        val imgH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imgW / imageAspectRatio else parentHeight
                         
-                        val maxOffsetX = (parentWidth * (scale.floatValue - 1)) / 2
-                        val maxOffsetY = (parentHeight * (scale.floatValue - 1)) / 2
-                        
-                        val pctX = if (maxOffsetX > 0) -offsetX.floatValue / maxOffsetX else 0f
-                        val pctY = if (maxOffsetY > 0) -offsetY.floatValue / maxOffsetY else 0f
-                        
-                        val maxViewportW = maxOf(0f, size.width - viewportWidth)
-                        val maxViewportH = maxOf(0f, size.height - viewportHeight)
-                        val rectX = ((size.width - viewportWidth) / 2 * (1 + pctX)).coerceIn(0f, maxViewportW)
-                        val rectY = ((size.height - viewportHeight) / 2 * (1 + pctY)).coerceIn(0f, maxViewportH)
+                        val s = scale.floatValue
+                        val visibleFractionX = minOf(1f, parentWidth / maxOf(1f, imgW * s))
+                        val visibleFractionY = minOf(1f, parentHeight / maxOf(1f, imgH * s))
+
+                        val viewportWidth = (size.width * visibleFractionX).coerceIn(10.dp.toPx(), size.width)
+                        val viewportHeight = (size.height * visibleFractionY).coerceIn(10.dp.toPx(), size.height)
+
+                        val maxPanX = maxOf(0.001f, (imgW * s - parentWidth) / 2f)
+                        val maxPanY = maxOf(0.001f, (imgH * s - parentHeight) / 2f)
+
+                        val panFractionX = (-offsetX.floatValue / maxPanX).coerceIn(-1f, 1f)
+                        val panFractionY = (-offsetY.floatValue / maxPanY).coerceIn(-1f, 1f)
+
+                        val maxTravelX = maxOf(0f, size.width - viewportWidth)
+                        val maxTravelY = maxOf(0f, size.height - viewportHeight)
+
+                        val rectX = (maxTravelX / 2f * (1f + panFractionX)).coerceIn(0f, maxTravelX)
+                        val rectY = (maxTravelY / 2f * (1f + panFractionY)).coerceIn(0f, maxTravelY)
+
                         drawRect(
                             color = androidx.compose.ui.graphics.Color.White,
                             topLeft = Offset(rectX, rectY),
@@ -1695,7 +1706,7 @@ fun DetailScreen(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Info") },
+                            text = { Text(stringResource(R.string.detail_details)) },
                             leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
                             onClick = {
                                 showMoreMenu = false
@@ -1742,7 +1753,7 @@ fun DetailScreen(
                             }
                             if (currentItem != null && !currentItem.isVideo) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Set as wallpaper") },
+                                    text = { Text(stringResource(R.string.detail_set_wallpaper)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1762,7 +1773,7 @@ fun DetailScreen(
                             }
                             if (currentItem != null) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Copy to") },
+                                    text = { Text(stringResource(R.string.action_copy)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1773,7 +1784,7 @@ fun DetailScreen(
                             }
                             if (currentItem != null) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Move to") },
+                                    text = { Text(stringResource(R.string.action_move)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1784,7 +1795,7 @@ fun DetailScreen(
                             }
                             if (currentItem != null) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Rename") },
+                                    text = { Text(stringResource(R.string.action_edit)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1808,7 +1819,7 @@ fun DetailScreen(
                             // Hide (Private Space)
                             if (currentItem != null) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Hide") },
+                                    text = { Text(stringResource(R.string.detail_move_vault)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
@@ -1874,7 +1885,7 @@ fun DetailScreen(
                             fontWeight = FontWeight.Bold
                         )
                     )
-                    if (currentScale >= 3.0f) {
+                    if (currentScale >= 10.0f) {
                         Text(
                             text = "• DEEP ZOOM",
                             style = MaterialTheme.typography.labelSmall.copy(
@@ -2285,7 +2296,7 @@ private fun ViewerActionButtonsRow(
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
-                    contentDescription = "Share",
+                    contentDescription = stringResource(R.string.detail_share),
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
@@ -2299,7 +2310,7 @@ private fun ViewerActionButtonsRow(
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
-                    contentDescription = if (currentItem?.isVideo == true) "Extract frame" else "Edit",
+                    contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
@@ -2323,7 +2334,7 @@ private fun ViewerActionButtonsRow(
             ) {
                 Icon(
                     imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                    contentDescription = "Favorite",
+                    contentDescription = stringResource(R.string.detail_favorite),
                     tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .size(24.dp)
@@ -2341,7 +2352,7 @@ private fun ViewerActionButtonsRow(
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.detail_delete),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp)
                 )

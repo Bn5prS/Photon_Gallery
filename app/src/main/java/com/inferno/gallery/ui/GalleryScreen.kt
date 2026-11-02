@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.ui.res.stringResource
+
 import android.Manifest
 import com.inferno.gallery.ui.utils.pressScale
 import com.inferno.gallery.ui.components.PhotonEmptyState
@@ -570,7 +572,7 @@ fun GalleryScreen(
             )
         }
 
-        // ── Top Gradient Scrim (Google Photos Edge-to-Edge Status Bar Vignette) ──
+        // ── Top Gradient Scrim (Edge-to-Edge Status Bar Vignette) ──
         val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val scrimHeight = statusBarTop + 36.dp
         Box(
@@ -748,8 +750,14 @@ private fun DynamicDateBadge(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             )
         ) {
+            val rawDate = dateText() ?: ""
+            val displayDate = when (rawDate) {
+                "Today" -> stringResource(R.string.today)
+                "Yesterday" -> stringResource(R.string.yesterday)
+                else -> rawDate
+            }
             Text(
-                text = dateText() ?: "",
+                text = displayDate,
                 style = com.inferno.gallery.ui.theme.TimelineDateHeaderStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(

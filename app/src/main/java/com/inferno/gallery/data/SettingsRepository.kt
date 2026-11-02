@@ -541,12 +541,12 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val thumbnailCornerRadiusFlow: Flow<Float> = context.dataStore.data
         .map { preferences ->
-            preferences[THUMBNAIL_CORNER_RADIUS] ?: 0f
+            (preferences[THUMBNAIL_CORNER_RADIUS] ?: 0f).coerceIn(0f, 16f)
         }
 
     suspend fun updateThumbnailCornerRadius(radius: Float) {
         context.dataStore.edit { preferences ->
-            preferences[THUMBNAIL_CORNER_RADIUS] = radius
+            preferences[THUMBNAIL_CORNER_RADIUS] = radius.coerceIn(0f, 16f)
         }
     }
 

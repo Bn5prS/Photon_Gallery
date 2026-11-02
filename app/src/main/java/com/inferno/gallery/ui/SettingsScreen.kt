@@ -105,6 +105,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.res.stringResource
+import com.inferno.gallery.ui.components.LanguageSelectionDialog
+import com.inferno.gallery.ui.components.getCurrentAppLanguageTag
+import com.inferno.gallery.ui.components.getActiveLanguage
+import com.inferno.gallery.ui.components.setAppLanguage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -202,6 +207,19 @@ fun SettingsScreen(
     var showRebuildOcrConfirm by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var currentLanguageTag by remember { mutableStateOf(getCurrentAppLanguageTag(context)) }
+
+    if (showLanguageDialog) {
+        LanguageSelectionDialog(
+            currentLanguageTag = currentLanguageTag,
+            onSelectLanguage = { tag ->
+                setAppLanguage(context, tag)
+                currentLanguageTag = tag
+            },
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
 
     val isCurrentlyDark = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemDark
@@ -416,12 +434,12 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     SettingsGroupCard(
-                        title = "Appearance & Interface",
+                        title = stringResource(R.string.category_theme_display),
                         items = listOf(
                             {
                                 SettingsCategoryRow(
-                                    title = "Look & Feel",
-                                    subtitle = "Theme, colors, AMOLED black, and display preferences",
+                                    title = stringResource(R.string.category_theme_display),
+                                    subtitle = stringResource(R.string.settings_category_theme_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
                                     iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -430,8 +448,8 @@ fun SettingsScreen(
                             },
                             {
                                 SettingsCategoryRow(
-                                    title = "Layout & Navigation",
-                                    subtitle = "Grid columns, dock style, and album shapes",
+                                    title = stringResource(R.string.category_layout_navigation),
+                                    subtitle = stringResource(R.string.settings_category_layout_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
                                     iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -442,12 +460,12 @@ fun SettingsScreen(
                     )
 
                     SettingsGroupCard(
-                        title = "General & Search",
+                        title = stringResource(R.string.category_general),
                         items = listOf(
                             {
                                 SettingsCategoryRow(
-                                    title = "General",
-                                    subtitle = "Albums visibility, haptics, video autoplay, and confirmations",
+                                    title = stringResource(R.string.category_general),
+                                    subtitle = stringResource(R.string.settings_category_general_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_settings),
                                     iconContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                                     iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -456,8 +474,8 @@ fun SettingsScreen(
                             },
                             {
                                 SettingsCategoryRow(
-                                    title = "Smart Search & OCR",
-                                    subtitle = "Semantic AI search, face clustering, and text recognition",
+                                    title = stringResource(R.string.smart_search),
+                                    subtitle = stringResource(R.string.settings_category_smart_search_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                     iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -468,12 +486,12 @@ fun SettingsScreen(
                     )
 
                     SettingsGroupCard(
-                        title = "Security & Storage",
+                        title = stringResource(R.string.category_security_privacy),
                         items = listOf(
                             {
                                 SettingsCategoryRow(
-                                    title = "Privacy & Security",
-                                    subtitle = "Metadata stripping, deletion rules, and data control",
+                                    title = stringResource(R.string.category_security_privacy),
+                                    subtitle = stringResource(R.string.settings_category_privacy_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_shield),
                                     iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -494,12 +512,12 @@ fun SettingsScreen(
                     )
 
                     SettingsGroupCard(
-                        title = "System",
+                        title = stringResource(R.string.category_about),
                         items = listOf(
                             {
                                 SettingsCategoryRow(
-                                    title = "About",
-                                    subtitle = "App info, updates, maintainer, and open-source licenses",
+                                    title = stringResource(R.string.category_about),
+                                    subtitle = stringResource(R.string.settings_category_about_sub),
                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
                                     iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                     iconColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -522,7 +540,7 @@ fun SettingsScreen(
                     when (section) {
                         "Look & Feel" -> {
                             SettingsGroupCard(
-                                title = "Theme & Mode",
+                                title = stringResource(R.string.setting_theme_mode),
                                 items = listOf(
                                     {
                                         Column(modifier = Modifier.padding(16.dp)) {
@@ -534,29 +552,29 @@ fun SettingsScreen(
                                                     onClick = { viewModel.setThemeMode(ThemeMode.SYSTEM) },
                                                     selected = themeMode == ThemeMode.SYSTEM,
                                                     icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_wb_twilight), contentDescription = null) },
-                                                    label = { Text("System", style = MaterialTheme.typography.labelMedium) }
+                                                    label = { Text(stringResource(R.string.setting_theme_system), style = MaterialTheme.typography.labelMedium) }
                                                 )
                                                 SegmentedButton(
                                                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                                                     onClick = { viewModel.setThemeMode(ThemeMode.LIGHT) },
                                                     selected = themeMode == ThemeMode.LIGHT,
                                                     icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_light_mode), contentDescription = null) },
-                                                    label = { Text("Light", style = MaterialTheme.typography.labelMedium) }
+                                                    label = { Text(stringResource(R.string.setting_theme_light), style = MaterialTheme.typography.labelMedium) }
                                                 )
                                                 SegmentedButton(
                                                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                                                     onClick = { viewModel.setThemeMode(ThemeMode.DARK) },
                                                     selected = themeMode == ThemeMode.DARK,
                                                     icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_dark_mode), contentDescription = null) },
-                                                    label = { Text("Dark", style = MaterialTheme.typography.labelMedium) }
+                                                    label = { Text(stringResource(R.string.setting_theme_dark), style = MaterialTheme.typography.labelMedium) }
                                                 )
                                             }
                                         }
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Material You",
-                                            subtitle = "Use dynamic system wallpaper colors",
+                                            title = stringResource(R.string.setting_material_you),
+                                            subtitle = stringResource(R.string.setting_material_you_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
                                             checked = useMaterialYou || colorPresetName == "dynamic",
                                             onCheckedChange = { viewModel.setUseMaterialYou(it) }
@@ -576,7 +594,7 @@ fun SettingsScreen(
                                             ) {
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = "Color Palette",
+                                                        text = stringResource(R.string.setting_color_palette),
                                                         style = MaterialTheme.typography.titleMedium,
                                                         color = MaterialTheme.colorScheme.onSurface
                                                     )
@@ -610,8 +628,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Deep AMOLED Black",
-                                            subtitle = "Use pitch black background in dark mode",
+                                            title = stringResource(R.string.setting_amoled_black),
+                                            subtitle = stringResource(R.string.setting_amoled_black_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_contrast),
                                             checked = useAmoledBlack,
                                             onCheckedChange = { viewModel.setUseAmoledBlack(it) },
@@ -827,7 +845,7 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
                                             )
 
-                                            // 4. Thumbnail Corner Radius Slider
+                                            // 4. Thumbnail Corner Radius Slider (Max 16dp limit with proportional preview)
                                             Column {
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -835,16 +853,16 @@ fun SettingsScreen(
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Column {
-                                                        Text(text = "Thumbnail Corner Radius", style = MaterialTheme.typography.bodyLarge)
+                                                        Text(text = stringResource(R.string.setting_thumbnail_corner_radius), style = MaterialTheme.typography.bodyLarge)
                                                         Text(
-                                                            text = "${thumbnailCornerRadius.toInt()} dp",
+                                                            text = "${thumbnailCornerRadius.coerceIn(0f, 16f).toInt()} dp",
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
                                                     }
                                                     Surface(
-                                                        modifier = Modifier.size(44.dp),
-                                                        shape = RoundedCornerShape(thumbnailCornerRadius.dp),
+                                                        modifier = Modifier.size(56.dp),
+                                                        shape = RoundedCornerShape(thumbnailCornerRadius.coerceIn(0f, 16f).dp),
                                                         color = MaterialTheme.colorScheme.primaryContainer
                                                     ) {
                                                         Box(contentAlignment = Alignment.Center) {
@@ -852,15 +870,15 @@ fun SettingsScreen(
                                                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
                                                                 contentDescription = null,
                                                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                                modifier = Modifier.size(20.dp)
+                                                                modifier = Modifier.size(24.dp)
                                                             )
                                                         }
                                                     }
                                                 }
                                                 Slider(
-                                                    value = thumbnailCornerRadius,
-                                                    onValueChange = { viewModel.setThumbnailCornerRadius(it) },
-                                                    valueRange = 0f..24f
+                                                    value = thumbnailCornerRadius.coerceIn(0f, 16f),
+                                                    onValueChange = { viewModel.setThumbnailCornerRadius(it.coerceIn(0f, 16f)) },
+                                                    valueRange = 0f..16f
                                                 )
                                             }
                                         }
@@ -874,8 +892,8 @@ fun SettingsScreen(
                                     add {
                                         val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
                                         SwitchSettingItem(
-                                            title = "Full-Width Dock",
-                                            subtitle = "Use standard edge-to-edge dock instead of floating pill",
+                                            title = stringResource(R.string.setting_dock_classic),
+                                            subtitle = stringResource(R.string.setting_dock_videos_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
                                             checked = isDockFullWidth,
                                             onCheckedChange = { isChecked ->
@@ -885,8 +903,8 @@ fun SettingsScreen(
                                     }
                                     add {
                                         SwitchSettingItem(
-                                            title = "Show Videos Tab",
-                                            subtitle = "Add a dedicated Videos button to the navigation dock",
+                                            title = stringResource(R.string.setting_dock_videos),
+                                            subtitle = stringResource(R.string.setting_dock_videos_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
                                             checked = showVideosInDock,
                                             onCheckedChange = { viewModel.setShowVideosInDock(it) }
@@ -894,8 +912,8 @@ fun SettingsScreen(
                                     }
                                     add {
                                         SwitchSettingItem(
-                                            title = "Memories Spotlight",
-                                            subtitle = "Spotlight nostalgic throwbacks and recent highlights",
+                                            title = stringResource(R.string.setting_memories),
+                                            subtitle = stringResource(R.string.setting_memories_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
                                             checked = showMemories,
                                             onCheckedChange = { viewModel.setShowMemories(it) }
@@ -921,8 +939,8 @@ fun SettingsScreen(
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = "Show Hidden Albums",
-                                            subtitle = "Show albums that start with a dot (e.g., .nomedia folders)",
+                                            title = stringResource(R.string.setting_show_hidden),
+                                            subtitle = stringResource(R.string.setting_show_hidden_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility),
                                             checked = showHiddenAlbums,
                                             onCheckedChange = { viewModel.setShowHiddenAlbums(it) }
@@ -930,8 +948,8 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = "Show Empty Albums",
-                                            subtitle = "Display folders that contain no photos or videos",
+                                            title = stringResource(R.string.setting_show_empty),
+                                            subtitle = stringResource(R.string.setting_show_empty_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
                                             checked = showEmptyAlbums,
                                             onCheckedChange = { viewModel.setShowEmptyAlbums(it) }
@@ -943,8 +961,8 @@ fun SettingsScreen(
                             val hapticsItems = mutableListOf<@Composable () -> Unit>(
                                 {
                                     SwitchSettingItem(
-                                        title = "Haptic Feedback",
-                                        subtitle = "Provide tactile feedback for taps and interactions",
+                                        title = stringResource(R.string.setting_haptics),
+                                        subtitle = stringResource(R.string.setting_haptics_sub),
                                         icon = ImageVector.vectorResource(R.drawable.ic_ms_touch_app),
                                         checked = hapticsEnabled,
                                         onCheckedChange = { viewModel.setHapticsEnabled(it) }
@@ -995,8 +1013,8 @@ fun SettingsScreen(
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = "Autoplay Video with Sound",
-                                            subtitle = "Play videos with sound automatically in full screen (muted by default)",
+                                            title = stringResource(R.string.setting_video_autoplay),
+                                            subtitle = stringResource(R.string.setting_video_autoplay_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
                                             checked = autoplayWithSound,
                                             onCheckedChange = { viewModel.setAutoplayWithSoundEnabled(it) }
@@ -1005,33 +1023,23 @@ fun SettingsScreen(
                                 )
                             )
 
+                            val activeLang = getActiveLanguage(context, currentLanguageTag)
+                            val langSubtitle = if (currentLanguageTag.isEmpty()) {
+                                "${stringResource(R.string.language_system_default)} (${activeLang.displayName})"
+                            } else {
+                                "${activeLang.flagEmoji} ${activeLang.displayName}"
+                            }
+
                             SettingsGroupCard(
-                                title = "Language & Locale",
+                                title = stringResource(R.string.select_language),
                                 items = listOf(
                                     {
                                         ClickableSettingItem(
-                                            title = "App Language",
-                                            subtitle = "Change app language (English, Español, Português, Français, Deutsch)",
+                                            title = stringResource(R.string.select_language),
+                                            subtitle = langSubtitle,
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_menu_book),
                                             onClick = {
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                                    try {
-                                                        val intent = Intent(Settings.ACTION_APP_LOCALE_SETTINGS).apply {
-                                                            data = Uri.fromParts("package", context.packageName, null)
-                                                        }
-                                                        context.startActivity(intent)
-                                                    } catch (e: Exception) {
-                                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                            data = Uri.fromParts("package", context.packageName, null)
-                                                        }
-                                                        context.startActivity(intent)
-                                                    }
-                                                } else {
-                                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                        data = Uri.fromParts("package", context.packageName, null)
-                                                    }
-                                                    context.startActivity(intent)
-                                                }
+                                                showLanguageDialog = true
                                             }
                                         )
                                     }
@@ -2626,7 +2634,8 @@ fun TimelineLayoutPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val cols = columns.coerceIn(2, 6)
-    val effectiveRadius = cornerRadius.coerceIn(0f, 24f)
+    val effectiveRadius = cornerRadius.coerceIn(0f, 16f)
+    val previewRadius = (effectiveRadius * 0.45f).coerceIn(0f, 8f)
 
     Surface(
         shape = ShapeMedium,
@@ -2713,7 +2722,7 @@ fun TimelineLayoutPreviewCard(
                                                 modifier = Modifier
                                                     .weight(1f)
                                                     .fillMaxHeight(),
-                                                shape = RoundedCornerShape(effectiveRadius.dp),
+                                                shape = RoundedCornerShape(previewRadius.dp),
                                                 color = getSampleColor(seed),
                                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                                             ) {

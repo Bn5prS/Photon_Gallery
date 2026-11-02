@@ -159,6 +159,7 @@ import java.io.File
 import androidx.compose.runtime.rememberCoroutineScope
 import com.inferno.gallery.data.SettingsRepository
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.res.stringResource
 import com.inferno.gallery.R
 
 
@@ -755,8 +756,18 @@ fun MainAppLayout(
                                 ) {
                                     Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back", modifier = Modifier.size(IconSizeTokens.L))
                                 }
+                                val settingsHeaderTitle = when (settingsActiveSection) {
+                                    "Look & Feel" -> stringResource(R.string.category_theme_display)
+                                    "Layout & Navigation" -> stringResource(R.string.category_layout_navigation)
+                                    "General" -> stringResource(R.string.category_general)
+                                    "Smart Search & OCR" -> stringResource(R.string.smart_search)
+                                    "Privacy & Security" -> stringResource(R.string.category_security_privacy)
+                                    "About" -> stringResource(R.string.category_about)
+                                    null -> stringResource(R.string.settings_title)
+                                    else -> settingsActiveSection ?: stringResource(R.string.settings_title)
+                                }
                                 Text(
-                                    settingsActiveSection ?: "Settings",
+                                    settingsHeaderTitle,
                                     style = MaterialTheme.typography.headlineMedium,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -780,11 +791,11 @@ fun MainAppLayout(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 val titleText = when (currentRoute) {
-                                    "photos" -> "Photos"
-                                    "videos" -> "Videos"
-                                    "albums" -> "Albums"
-                                    "search" -> "Search"
-                                    else -> "Photon Gallery"
+                                    "photos" -> stringResource(R.string.nav_photos)
+                                    "videos" -> stringResource(R.string.album_videos)
+                                    "albums" -> stringResource(R.string.nav_albums)
+                                    "search" -> stringResource(R.string.nav_search)
+                                    else -> stringResource(R.string.app_name)
                                 }
                                 Text(
                                     titleText,
@@ -862,7 +873,7 @@ fun MainAppLayout(
                                         ) {
                                             if (overflowState == "main") {
                                                 DropdownMenuItem(
-                                                    text = { Text("Settings") },
+                                                    text = { Text(stringResource(R.string.settings_title)) },
                                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
                                                     onClick = {
                                                         showOverflowMenu = false
@@ -1001,8 +1012,8 @@ fun MainAppLayout(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             DockItem(
-                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = "Photos", modifier = Modifier.size(24.dp)) },
-                                label = "Photos",
+                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(24.dp)) },
+                                label = stringResource(R.string.nav_photos),
                                 isSelected = currentRoute == "photos",
                                 onClick = { 
                                     if (nestedNavController.currentDestination?.route == "photos") {
@@ -1018,8 +1029,8 @@ fun MainAppLayout(
                             )
                             if (showVideosInDock) {
                                 DockItem(
-                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = "Videos", modifier = Modifier.size(24.dp)) },
-                                    label = "Videos",
+                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = stringResource(R.string.album_videos), modifier = Modifier.size(24.dp)) },
+                                    label = stringResource(R.string.album_videos),
                                     isSelected = currentRoute == "videos",
                                     onClick = {
                                         if (nestedNavController.currentDestination?.route == "videos") {
@@ -1035,8 +1046,8 @@ fun MainAppLayout(
                                 )
                             }
                             DockItem(
-                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_album), contentDescription = "Albums", modifier = Modifier.size(24.dp)) },
-                                label = "Albums",
+                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_album), contentDescription = stringResource(R.string.nav_albums), modifier = Modifier.size(24.dp)) },
+                                label = stringResource(R.string.nav_albums),
                                 isSelected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
                                 onClick = { 
                                     if (nestedNavController.currentDestination?.route == "albums") {
@@ -1051,8 +1062,8 @@ fun MainAppLayout(
                                 }
                             )
                             DockItem(
-                                icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = "Search", modifier = Modifier.size(24.dp)) },
-                                label = "Search",
+                                icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = stringResource(R.string.nav_search), modifier = Modifier.size(24.dp)) },
+                                label = stringResource(R.string.nav_search),
                                 isSelected = currentRoute == "search",
                                 onClick = { nestedNavController.navigate("search") {
                                     popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }

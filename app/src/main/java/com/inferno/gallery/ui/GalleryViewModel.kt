@@ -1199,7 +1199,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun setThumbnailCornerRadius(radius: Float) {
         viewModelScope.launch {
-            settingsRepository.updateThumbnailCornerRadius(radius)
+            settingsRepository.updateThumbnailCornerRadius(radius.coerceIn(0f, 16f))
         }
     }
 

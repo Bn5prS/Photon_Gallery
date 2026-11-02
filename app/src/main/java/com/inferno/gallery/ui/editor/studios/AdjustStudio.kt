@@ -48,6 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import com.inferno.gallery.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -225,7 +227,7 @@ private fun AdjustToolSquircleItem(
     ) {
         // Label on top
         Text(
-            text = tool.label,
+            text = getAdjustToolLabel(tool),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
             color = textColor,
             maxLines = 1,
@@ -247,7 +249,7 @@ private fun AdjustToolSquircleItem(
             ) {
                 Icon(
                     painter = painterResource(id = tool.iconRes),
-                    contentDescription = tool.label,
+                    contentDescription = getAdjustToolLabel(tool),
                     tint = iconColor,
                     modifier = Modifier.size(24.dp)
                 )
@@ -339,7 +341,7 @@ private fun AdjustToolScrubbingView(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = prevTool.label,
+                            text = getAdjustToolLabel(prevTool),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             maxLines = 1,
@@ -356,7 +358,7 @@ private fun AdjustToolScrubbingView(
                 modifier = Modifier.padding(horizontal = 4.dp)
             ) {
                 Text(
-                    text = activeTool.label,
+                    text = getAdjustToolLabel(activeTool),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
@@ -376,7 +378,7 @@ private fun AdjustToolScrubbingView(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = nextTool.label,
+                            text = getAdjustToolLabel(nextTool),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             maxLines = 1,
@@ -404,5 +406,24 @@ private fun AdjustToolScrubbingView(
             },
             onDone = onDone
         )
+    }
+}
+
+@Composable
+fun getAdjustToolLabel(tool: AdjustTool): String {
+    return when (tool) {
+        AdjustTool.BRIGHTNESS -> stringResource(R.string.editor_adjust_brightness)
+        AdjustTool.CONTRAST -> stringResource(R.string.editor_adjust_contrast)
+        AdjustTool.TONE -> stringResource(R.string.editor_adjust_highlights)
+        AdjustTool.WHITE_POINT -> stringResource(R.string.editor_adjust_white_point)
+        AdjustTool.HIGHLIGHTS -> stringResource(R.string.editor_adjust_highlights)
+        AdjustTool.SHADOWS -> stringResource(R.string.editor_adjust_shadows)
+        AdjustTool.BLACK_POINT -> stringResource(R.string.editor_adjust_black_point)
+        AdjustTool.SATURATION -> stringResource(R.string.editor_adjust_saturation)
+        AdjustTool.WARMTH -> stringResource(R.string.editor_adjust_warmth)
+        AdjustTool.TINT -> stringResource(R.string.editor_adjust_tint)
+        AdjustTool.SKIN_TONE -> stringResource(R.string.editor_adjust_skin_tone)
+        AdjustTool.BLUE_TONE -> stringResource(R.string.editor_adjust_deep_blue)
+        AdjustTool.VIGNETTE -> stringResource(R.string.editor_adjust_vignette)
     }
 }

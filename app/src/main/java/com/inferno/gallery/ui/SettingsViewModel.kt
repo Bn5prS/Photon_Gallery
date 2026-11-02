@@ -393,7 +393,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setThumbnailCornerRadius(radius: Float) {
         viewModelScope.launch {
-            repository.updateThumbnailCornerRadius(radius)
+            repository.updateThumbnailCornerRadius(radius.coerceIn(0f, 16f))
         }
     }
 

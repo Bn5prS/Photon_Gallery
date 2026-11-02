@@ -98,7 +98,7 @@ fun EditorTopBar(
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_ms_undo),
-                    contentDescription = "Undo",
+                    contentDescription = stringResource(R.string.editor_action_undo),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -113,7 +113,7 @@ fun EditorTopBar(
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_ms_redo),
-                    contentDescription = "Redo",
+                    contentDescription = stringResource(R.string.editor_action_redo),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -148,7 +148,7 @@ fun EditorTopBar(
                         elevation = null
                     ) {
                         Text(
-                            text = "Save",
+                            text = stringResource(R.string.editor_action_save),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -175,7 +175,7 @@ fun EditorTopBar(
                             onDismissRequest = { showSaveMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Save (replace original)") },
+                                text = { Text(stringResource(R.string.editor_action_save)) },
                                 leadingIcon = {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_ms_save),
@@ -189,7 +189,7 @@ fun EditorTopBar(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Save as copy") },
+                                text = { Text(stringResource(R.string.editor_action_save_copy)) },
                                 leadingIcon = {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_ms_content_copy),

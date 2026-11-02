@@ -84,6 +84,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -248,7 +249,7 @@ fun AlbumsScreen(
         if (userPinnedAlbums.isNotEmpty()) {
             item(key = "header_pinned_albums", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeader(
-                    title = "Pinned",
+                    title = stringResource(R.string.section_pinned),
                     count = userPinnedAlbums.size,
                     isExpanded = pinnedExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedPinned() }
@@ -327,11 +328,11 @@ fun AlbumsScreen(
         // ── 2. All Other Albums Section ──
         item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
-                title = "Albums",
+                title = stringResource(R.string.section_albums),
                 count = if (unpinnedAlbums.isNotEmpty()) unpinnedAlbums.size else null,
                 isExpanded = albumsExpanded,
                 onToggle = { viewModel.toggleAlbumsExpandedMore() },
-                seeAllText = "Show all",
+                seeAllText = stringResource(R.string.action_show_all),
                 onSeeAll = if (hasMoreAlbums) onNavigateToAllAlbums else null
             )
         }
@@ -438,11 +439,11 @@ fun AlbumsScreen(
         // ── 3. Places Carousel ──
         item(key = "header_places", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
-                title = "Places",
+                title = stringResource(R.string.section_places),
                 count = if (placesClusters.isNotEmpty()) placesClusters.size else null,
                 isExpanded = placesExpanded,
                 onToggle = { viewModel.toggleAlbumsExpandedPlaces() },
-                seeAllText = "Show all",
+                seeAllText = stringResource(R.string.action_show_all),
                 onSeeAll = onNavigateToPlacesList
             )
         }
@@ -590,7 +591,7 @@ fun AlbumsScreen(
         if (documentBuckets.isNotEmpty()) {
             item(key = "header_documents", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeader(
-                    title = "Documents",
+                    title = stringResource(R.string.section_documents),
                     count = documentBuckets.size,
                     isExpanded = documentsExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedDocuments() }
@@ -705,7 +706,7 @@ fun AlbumsScreen(
         if (mediaTypeBuckets.isNotEmpty()) {
             item(key = "header_media_types", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeader(
-                    title = "Capture Modes",
+                    title = stringResource(R.string.section_capture_modes),
                     count = mediaTypeBuckets.size,
                     isExpanded = mediaTypesExpanded,
                     onToggle = { viewModel.toggleAlbumsExpandedMediaTypes() }
@@ -821,34 +822,39 @@ fun AlbumsScreen(
         // ── 4. Utilities & Tools ──
         item(key = "header_more_tools", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
-                title = "Utilities",
+                title = stringResource(R.string.section_utilities),
                 isCollapsible = false
             )
         }
 
         item(key = "row_utilities", span = { GridItemSpan(maxLineSpan) }) {
-            val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount) {
+            val favTitle = stringResource(R.string.album_favorites)
+            val screenTitle = stringResource(R.string.album_screenshots)
+            val vidTitle = stringResource(R.string.album_videos)
+            val vaultTitle = stringResource(R.string.album_vault)
+
+            val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount, favTitle, screenTitle, vidTitle, vaultTitle) {
                 listOf(
                     UtilityItem(
-                        title = "Favorites",
+                        title = favTitle,
                         iconRes = R.drawable.ic_ms_star,
                         count = favoriteItems.size,
                         onClick = { onAlbumClick("Favorites") }
                     ),
                     UtilityItem(
-                        title = "Screenshots",
+                        title = screenTitle,
                         iconRes = R.drawable.ic_ms_aspect_ratio,
                         count = screenshotsCount,
                         onClick = { onAlbumClick("Screenshots") }
                     ),
                     UtilityItem(
-                        title = "Videos",
+                        title = vidTitle,
                         iconRes = R.drawable.ic_ms_play_arrow,
                         count = videoCount,
                         onClick = { onAlbumClick("Videos") }
                     ),
                     UtilityItem(
-                        title = "Locked",
+                        title = vaultTitle,
                         iconRes = R.drawable.ic_ms_lock,
                         count = vaultItemCount,
                         onClick = {
