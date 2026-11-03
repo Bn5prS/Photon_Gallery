@@ -3,6 +3,7 @@ package com.inferno.gallery.ui.people
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.ai.FaceClusteringManager
 import com.inferno.gallery.data.db.CoreMediaEntity
 import com.inferno.gallery.data.db.DatabaseProvider
@@ -142,6 +143,18 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     val pendingMergeSuggestions: StateFlow<List<MergeSuggestionWithPersons>> = faceDao.observePendingMergeSuggestions()
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val settingsRepository = SettingsRepository.getInstance(application)
+
+    val isMergeCardDismissed: StateFlow<Boolean> = settingsRepository.peopleMergeCardDismissedFlow
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setMergeCardDismissed(dismissed: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updatePeopleMergeCardDismissed(dismissed)
+        }
+    }
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query

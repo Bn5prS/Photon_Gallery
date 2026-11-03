@@ -83,6 +83,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val STORY_MUSIC_MUTED = booleanPreferencesKey("story_music_muted")
         val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
         val MEMORIES_DISMISSED = booleanPreferencesKey("memories_dismissed")
+        val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
         val ALBUMS_EXPANDED_MORE = booleanPreferencesKey("albums_expanded_more")
@@ -344,6 +345,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateMemoriesDismissed(dismissed: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[MEMORIES_DISMISSED] = dismissed
+        }
+    }
+
+    val peopleMergeCardDismissedFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PEOPLE_MERGE_CARD_DISMISSED] ?: false
+        }
+
+    suspend fun updatePeopleMergeCardDismissed(dismissed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PEOPLE_MERGE_CARD_DISMISSED] = dismissed
         }
     }
 

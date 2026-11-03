@@ -179,7 +179,7 @@ fun PeopleScreen(
     var namingPerson by remember { mutableStateOf<PersonEntity?>(null) }
     var collisionPair by remember { mutableStateOf<Pair<PersonEntity, PersonEntity>?>(null) }
     var showHideShowSheet by remember { mutableStateOf(false) }
-    var isMergeCardDismissedByUser by rememberSaveable { mutableStateOf(false) }
+    val isMergeCardDismissedByUser by viewModel.isMergeCardDismissed.collectAsState()
     var gridCols by rememberSaveable { mutableIntStateOf(3) }
     var isPinching by remember { mutableStateOf(false) }
     val livePinchScaleAnim = remember { Animatable(1f) }
@@ -370,7 +370,7 @@ fun PeopleScreen(
                             Box {
                                 IconButton(
                                     onClick = {
-                                        isMergeCardDismissedByUser = !isMergeCardDismissedByUser
+                                        viewModel.setMergeCardDismissed(!isMergeCardDismissedByUser)
                                     }
                                 ) {
                                     Icon(
@@ -419,7 +419,7 @@ fun PeopleScreen(
                                         },
                                         onClick = {
                                             showMenu = false
-                                            isMergeCardDismissedByUser = !isMergeCardDismissedByUser
+                                            viewModel.setMergeCardDismissed(!isMergeCardDismissedByUser)
                                         },
                                         leadingIcon = {
                                             Icon(
@@ -454,7 +454,7 @@ fun PeopleScreen(
                                     text = { Text(stringResource(R.string.people_merge_similar)) },
                                     onClick = {
                                         showMenu = false
-                                        isMergeCardDismissedByUser = false
+                                        viewModel.setMergeCardDismissed(false)
                                         viewModel.consolidateClusters()
                                         android.widget.Toast.makeText(context, "Consolidating similar faces…", android.widget.Toast.LENGTH_SHORT).show()
                                     },
@@ -570,7 +570,7 @@ fun PeopleScreen(
                         viewModel.dismissMergeSuggestion(suggestion)
                     },
                     onCloseCard = {
-                        isMergeCardDismissedByUser = true
+                        viewModel.setMergeCardDismissed(true)
                     }
                 )
             }
@@ -1246,7 +1246,7 @@ private fun PersonGridCard(
  * Spreading fingers decreases columns (zooms in: 5 -> 4 -> 3 -> 2),
  * pinching fingers increases columns (zooms out: 2 -> 3 -> 4 -> 5).
  */
-private fun Modifier.peopleGridPinchZoom(
+internal fun Modifier.peopleGridPinchZoom(
     gridCellsCount: Int,
     onGridCountChange: (Int) -> Unit,
     isSelectionMode: Boolean,

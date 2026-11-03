@@ -5,6 +5,33 @@
 
 package com.inferno.gallery.ui.people
 
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.graphicsLayer
+import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
+import com.inferno.gallery.ui.utils.ShareUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+
+
 import androidx.compose.ui.res.stringResource
 
 import android.net.Uri
@@ -101,6 +128,52 @@ fun PersonDetailScreen(
 
     var selectedMediaIds by remember { mutableStateOf(setOf<Long>()) }
     val isSelectionMode = selectedMediaIds.isNotEmpty()
+    val selectedMedia = remember(selectedMediaIds, mediaList) {
+        mediaList.filter { it.id in selectedMediaIds }
+    }
+
+    var gridCols by rememberSaveable { mutableIntStateOf(3) }
+    var isPinching by remember { mutableStateOf(false) }
+    val livePinchScaleAnim = remember { Animatable(1f) }
+    val pinchScaleScope = rememberCoroutineScope()
+
+    var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val confirmDeleteEnabled by viewModel.settingsRepository.confirmDeleteEnabledFlow.collectAsState(initial = true)
+
+    val trashLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            selectedMediaIds = emptySet()
+        }
+    }
+
+    val performTrash: () -> Unit = {
+        val uris = selectedMedia.map { Uri.parse(it.uriString) }
+        if (uris.isNotEmpty()) {
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    val trashIntent = android.provider.MediaStore.createTrashRequest(
+                        context.contentResolver,
+                        uris,
+                        true
+                    )
+                    val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                    withContext(Dispatchers.Main) {
+                        trashLauncher.launch(request)
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    BackHandler(enabled = isSelectionMode) {
+        selectedMediaIds = emptySet()
+    }
 
     var showMenu by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
@@ -273,8 +346,34 @@ fun PersonDetailScreen(
         )
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
+    if (showMultiDeleteConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showMultiDeleteConfirmDialog = false },
+            title = { Text(stringResource(R.string.dialog_move_to_trash_title)) },
+            text = { Text(stringResource(R.string.dialog_multi_trash_msg, selectedMediaIds.size)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showMultiDeleteConfirmDialog = false
+                        performTrash()
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_move_to_trash_confirm), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showMultiDeleteConfirmDialog = false }
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
             CenterAlignedTopAppBar(
@@ -311,27 +410,17 @@ fun PersonDetailScreen(
                     if (isSelectionMode) {
                         IconButton(
                             onClick = {
-                                showMovePhotosPicker = true
+                                if (selectedMediaIds.size == mediaList.size) {
+                                    selectedMediaIds = emptySet()
+                                } else {
+                                    selectedMediaIds = mediaList.map { it.id }.toSet()
+                                }
                             }
                         ) {
                             Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
-                                contentDescription = "Move photos to another person",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(IconSizeTokens.L)
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())
-                                Toast.makeText(context, "Removed from this person", Toast.LENGTH_SHORT).show()
-                                selectedMediaIds = emptySet()
-                            }
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_remove),
-                                contentDescription = "Remove from person",
-                                tint = MaterialTheme.colorScheme.error,
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
+                                contentDescription = "Select or Deselect All",
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(IconSizeTokens.L)
                             )
                         }
@@ -464,20 +553,55 @@ fun PersonDetailScreen(
             )
         }
     ) { innerPadding ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(
-                start = SpacingTokens.XS,
-                end = SpacingTokens.XS,
-                top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() + SpacingTokens.XXL
-            ),
-            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
-            verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
-            modifier = Modifier.fillMaxSize()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .peopleGridPinchZoom(
+                    gridCellsCount = gridCols,
+                    onGridCountChange = { newCols ->
+                        gridCols = newCols.coerceIn(2, 5)
+                    },
+                    isSelectionMode = isSelectionMode,
+                    haptic = haptic,
+                    onPinchScaleChange = { scale ->
+                        isPinching = true
+                        pinchScaleScope.launch {
+                            livePinchScaleAnim.snapTo(scale.coerceIn(0.75f, 1.30f))
+                        }
+                    },
+                    onPinchEnd = {
+                        pinchScaleScope.launch {
+                            livePinchScaleAnim.animateTo(
+                                targetValue = 1f,
+                                animationSpec = spring(
+                                    dampingRatio = 0.80f,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            )
+                            isPinching = false
+                        }
+                    }
+                )
         ) {
-            // Hero Header
-            item(span = { GridItemSpan(3) }) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(gridCols),
+                contentPadding = PaddingValues(
+                    start = SpacingTokens.XS,
+                    end = SpacingTokens.XS,
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + SpacingTokens.XXL + (if (isSelectionMode) 72.dp else 0.dp)
+                ),
+                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
+                verticalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = livePinchScaleAnim.value
+                        scaleY = livePinchScaleAnim.value
+                    }
+            ) {
+                // Hero Header
+                item(span = { GridItemSpan(gridCols) }) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -614,7 +738,122 @@ fun PersonDetailScreen(
                 )
             }
         }
+
+        AnimatedVisibility(
+            visible = isPinching,
+            enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
+            exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec()),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(bottom = 64.dp)
+        ) {
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp
+            ) {
+                Text(
+                    text = "$gridCols columns",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
     }
+    }
+
+    // Floating Selection Tools Dock
+    AnimatedVisibility(
+        visible = isSelectionMode,
+        enter = slideInVertically(MotionTokens.gentleSpring()) { it } + fadeIn(MotionTokens.gentleSpring()),
+        exit = slideOutVertically(MotionTokens.gentleSpring()) { it } + fadeOut(MotionTokens.gentleSpring()),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp)
+    ) {
+        Surface(
+            shape = ShapeExtraLarge,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Share
+                IconButton(
+                    onClick = {
+                        if (selectedMedia.isNotEmpty()) {
+                            coroutineScope.launch {
+                                val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                                val uris = selectedMedia.map { Uri.parse(it.uriString) }
+                                ShareUtils.shareMedia(context, uris, strip)
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                        contentDescription = "Share",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(IconSizeTokens.L)
+                    )
+                }
+
+                // Move to another person
+                IconButton(
+                    onClick = { showMovePhotosPicker = true }
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                        contentDescription = "Move photos to another person",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(IconSizeTokens.L)
+                    )
+                }
+
+                // Remove from person
+                IconButton(
+                    onClick = {
+                        viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())
+                        Toast.makeText(context, "Removed from this person", Toast.LENGTH_SHORT).show()
+                        selectedMediaIds = emptySet()
+                    }
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_remove),
+                        contentDescription = "Remove from person",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(IconSizeTokens.L)
+                    )
+                }
+
+                // Delete
+                IconButton(
+                    onClick = {
+                        if (confirmDeleteEnabled) {
+                            showMultiDeleteConfirmDialog = true
+                        } else {
+                            performTrash()
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(IconSizeTokens.L)
+                    )
+                }
+            }
+        }
+    }
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
