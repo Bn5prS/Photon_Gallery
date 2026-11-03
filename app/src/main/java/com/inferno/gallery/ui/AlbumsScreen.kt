@@ -502,7 +502,7 @@ fun AlbumsScreen(
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_map),
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
                                             contentDescription = null,
                                             modifier = Modifier.size(IconSizeTokens.L),
                                             tint = MaterialTheme.colorScheme.primary

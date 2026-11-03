@@ -1490,7 +1490,7 @@ fun DetailScreen(
 
             // Minimap Overlay — top-right corner
             AnimatedVisibility(
-                visible = viewerZoomMinimapEnabled && scale.floatValue >= 5f,
+                visible = viewerZoomMinimapEnabled && scale.floatValue >= 10f,
                 enter = fadeIn(MotionTokens.gentleSpring()),
                 exit = fadeOut(MotionTokens.gentleSpring()),
                 modifier = Modifier
