@@ -92,3 +92,13 @@ This design reimagines the full-screen viewer color palette with a **cinematic s
   - Icon Tint: `Color.White` (or `Color.White.copy(alpha = 0.90f)`).
   - Delete Tint: Softened white or subtle pastel error tint that does not flash harsh red against dark photos.
   - Favorite Tint: Active state uses `favoriteHarmonized` with spring bounce; inactive state uses `Color.White`.
+
+### 4.4 Theme Behavior (Universal Immersive Dark Cinema)
+- In accordance with photography industry standards (Google Photos, Apple Photos), when viewing media full screen in `DetailScreen.kt`, the viewer maintains a **Universal Immersive Dark** palette regardless of whether the app or system is in Light Mode or Dark Mode.
+- This ensures:
+  1. System status bar icons remain light/white (`isAppearanceLightStatusBars = false`).
+  2. Navigation bar icons remain light/white (`isAppearanceLightNavigationBars = false`).
+  3. Zero glare or contrast loss from bright white borders when viewing media in Light Mode.
+  4. Returning to the main timeline or albums restores the user's chosen Light Mode theme seamlessly.
+
+
