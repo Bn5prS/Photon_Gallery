@@ -34,7 +34,7 @@ class FavoritesManager(private val context: Context) {
 
     /**
      * Queries Android system MediaStore for all photos and videos marked with IS_FAVORITE = 1.
-     * This captures media favorited in Google Photos, OEM Gallery apps, or camera apps.
+     * This captures media favorited in external gallery apps, or camera apps.
      */
     fun queryMediaStoreFavorites(): Set<String> {
         val mediaStoreFavorites = mutableSetOf<String>()
@@ -63,8 +63,8 @@ class FavoritesManager(private val context: Context) {
     }
 
     /**
-     * Observes MediaStore external storage changes so that whenever another app (like Google Photos,
-     * Refra, or OEM camera/gallery) favorites or unfavorites an item, Photon Gallery immediately reacts in real time.
+     * Observes MediaStore external storage changes so that whenever another external app
+     * favorites or unfavorites an item, Photon Gallery immediately reacts in real time.
      */
     private val mediaStoreFavoritesFlow: Flow<Set<String>> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {

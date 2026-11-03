@@ -85,7 +85,7 @@ object MemoriesManager {
             }
         }
 
-        // ── Smart Fallback: Google Photos style Recent Highlights / Monthly Spotlight ──
+        // ── Smart Fallback: Recent Highlights / Monthly Spotlight ──
         return@withContext createFallbackHighlights(
             mediaDao = mediaDao,
             excludedFolders = excludedFolders,

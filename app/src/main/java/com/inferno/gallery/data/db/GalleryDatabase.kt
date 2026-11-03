@@ -114,9 +114,30 @@ interface MediaDao {
     suspend fun updateBucketByIds(ids: List<Long>, bucket: String)
 
     @androidx.room.Transaction
+    suspend fun updateBucketByIdsChunked(ids: List<Long>, bucket: String) {
+        ids.chunked(500).forEach { chunk ->
+            updateBucketByIds(chunk, bucket)
+        }
+    }
+
+    @androidx.room.Transaction
     suspend fun updateBucketByUrisChunked(uris: List<String>, bucket: String) {
         uris.chunked(500).forEach { chunk ->
             updateBucketByUris(chunk, bucket)
+        }
+    }
+
+    @androidx.room.Transaction
+    suspend fun restoreMediaToBuckets(updatesByBucket: Map<String, List<String>>) {
+        for ((bucket, uris) in updatesByBucket) {
+            updateBucketByUrisChunked(uris, bucket)
+        }
+    }
+
+    @androidx.room.Transaction
+    suspend fun updateBucketByIdsMap(updatesByBucket: Map<String, List<Long>>) {
+        for ((bucket, ids) in updatesByBucket) {
+            updateBucketByIdsChunked(ids, bucket)
         }
     }
 

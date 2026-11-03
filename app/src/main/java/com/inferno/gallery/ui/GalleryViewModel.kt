@@ -338,20 +338,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private var mediaStoreObserverJob: kotlinx.coroutines.Job? = null
+    private val observerThread = android.os.HandlerThread("MediaStoreObserver").apply { start() }
+    private val observerHandler = android.os.Handler(observerThread.looper)
 
-    private val mediaStoreObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+    private val mediaStoreObserver = object : android.database.ContentObserver(observerHandler) {
         override fun onChange(selfChange: Boolean) {
             mediaStoreObserverJob?.cancel()
-            mediaStoreObserverJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(1000) // Debounce rapid MediaStore changes
-                Log.d("GalleryViewModel", "MediaStore change detected, enqueueing MediaSyncWorker...")
-                val syncRequest = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
-                WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-                    "MediaSyncWorker_Foreground",
-                    ExistingWorkPolicy.REPLACE,
-                    syncRequest
-                )
-                scanPhotoSpheres()
+            mediaStoreObserverJob = viewModelScope.launch(Dispatchers.IO) {
+                kotlinx.coroutines.delay(150) // Fast 150ms debounce for rapid bursts
+                try {
+                    Log.d("GalleryViewModel", "MediaStore change detected, executing fast incremental sync...")
+                    com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
+                } catch (e: Exception) {
+                    Log.e("GalleryViewModel", "Fast incremental sync failed: ${e.message}")
+                }
             }
         }
     }
@@ -493,6 +493,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         super.onCleared()
         getApplication<Application>().contentResolver.unregisterContentObserver(mediaStoreObserver)
+        observerThread.quitSafely()
     }
 
     /**
@@ -2675,6 +2676,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun restoreSelectedMedia(uris: List<String>) {
         if (uris.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
+            val updatesByBucket = mutableMapOf<String, MutableList<String>>()
             for (chunk in uris.chunked(500)) {
                 val entities = database.mediaDao().getMediaByUrisList(chunk)
                 for (entity in entities) {
@@ -2684,9 +2686,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val originalBucket = if (parentName != null && !parentName.startsWith(".")) {
                         parentName
                     } else "Camera"
-                    database.mediaDao().updateBucketByUri(entity.uriString, originalBucket)
+                    updatesByBucket.getOrPut(originalBucket) { mutableListOf() }.add(entity.uriString)
                 }
             }
+            database.mediaDao().restoreMediaToBuckets(updatesByBucket)
             withContext(Dispatchers.Main) {
                 _uiEvents.send(UiEvent.DeleteSuccess)
             }

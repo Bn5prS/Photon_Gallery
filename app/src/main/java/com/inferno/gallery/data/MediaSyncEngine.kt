@@ -89,47 +89,49 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val deadIds = mutableListOf<Long>()
                 val deadPaths = mutableListOf<String>()
                 val foldersToCheck = mutableSetOf<File>()
+                val newOrModifiedPaths = mutableListOf<String>()
 
-                for (dbItem in dbList) {
-                    if (dbItem.bucketName == "Trash") continue
-                    if (dbItem.filePath.isNotBlank()) {
-                        val file = File(dbItem.filePath)
-                        if (!file.exists()) {
-                            deadIds.add(dbItem.id)
-                            deadPaths.add(dbItem.filePath)
-                            file.parentFile?.let { if (it.exists() && it.isDirectory) foldersToCheck.add(it) }
+                if (forceFullSync) {
+                    for (dbItem in dbList) {
+                        if (dbItem.bucketName == "Trash") continue
+                        if (dbItem.filePath.isNotBlank()) {
+                            val file = File(dbItem.filePath)
+                            if (!file.exists()) {
+                                deadIds.add(dbItem.id)
+                                deadPaths.add(dbItem.filePath)
+                                file.parentFile?.let { if (it.exists() && it.isDirectory) foldersToCheck.add(it) }
+                            }
                         }
                     }
-                }
 
-                // ── 2. Check for renamed/modified files in affected folders only ──
-                val newOrModifiedPaths = mutableListOf<String>()
-                if (foldersToCheck.isNotEmpty()) {
-                    for (folder in foldersToCheck) {
-                        if (!folder.exists() || !folder.isDirectory) continue
-                        val files = folder.listFiles() ?: continue
-                        for (file in files) {
-                            if (!file.isFile || file.name.startsWith(".")) continue
-                            if (!isMediaFile(file.name)) continue
-                            val path = file.absolutePath
-                            val known = dbPathToItem[path]
-                            if (known == null) {
-                                newOrModifiedPaths.add(path)
-                            } else {
-                                val diskModifiedSec = file.lastModified() / 1000L
-                                if (diskModifiedSec > known.dateModified + 2L) {
+                    // ── 2. Check for renamed/modified files in affected folders only ──
+                    if (foldersToCheck.isNotEmpty()) {
+                        for (folder in foldersToCheck) {
+                            if (!folder.exists() || !folder.isDirectory) continue
+                            val files = folder.listFiles() ?: continue
+                            for (file in files) {
+                                if (!file.isFile || file.name.startsWith(".")) continue
+                                if (!isMediaFile(file.name)) continue
+                                val path = file.absolutePath
+                                val known = dbPathToItem[path]
+                                if (known == null) {
                                     newOrModifiedPaths.add(path)
+                                } else {
+                                    val diskModifiedSec = file.lastModified() / 1000L
+                                    if (diskModifiedSec > known.dateModified + 2L) {
+                                        newOrModifiedPaths.add(path)
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // ── 4. Rescan dead and new paths through Android MediaScanner ──
-                val allPathsToScan = (deadPaths + newOrModifiedPaths).distinct()
-                if (allPathsToScan.isNotEmpty()) {
-                    Log.d(TAG, "Notifying MediaScanner of ${allPathsToScan.size} paths (${deadPaths.size} dead, ${newOrModifiedPaths.size} new/modified)")
-                    scanFilesAsync(allPathsToScan)
+                    // ── 4. Rescan dead and new paths through Android MediaScanner ──
+                    val allPathsToScan = (deadPaths + newOrModifiedPaths).distinct()
+                    if (allPathsToScan.isNotEmpty()) {
+                        Log.d(TAG, "Notifying MediaScanner of ${allPathsToScan.size} paths (${deadPaths.size} dead, ${newOrModifiedPaths.size} new/modified)")
+                        scanFilesAsync(allPathsToScan)
+                    }
                 }
 
                 // ── 5. Query MediaStore ──
@@ -204,7 +206,7 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val dbTrashIds = dbList.filter { it.bucketName == "Trash" }.map { it.id }.toSet()
                 val newlyTrashedIds = trashedMediaIds.filter { dbMap.containsKey(it) && !dbTrashIds.contains(it) }
                 if (newlyTrashedIds.isNotEmpty()) {
-                    database.mediaDao().updateBucketByIds(newlyTrashedIds, "Trash")
+                    database.mediaDao().updateBucketByIdsChunked(newlyTrashedIds, "Trash")
                 }
                 val missingTrashIds = trashedMediaIds.filter { !dbMap.containsKey(it) && !deltaIds.contains(it) }
                 if (missingTrashIds.isNotEmpty()) {
@@ -237,7 +239,8 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
 
                 val newPhotosCount = toInsert.count { !dbMap.containsKey(it.id) }
 
-                // Find deletions: compare DB against MediaStore, disk existence, and .nomedia
+                // Find deletions & restored items: compare DB against MediaStore, disk existence, and .nomedia
+                val restoredByBucket = mutableMapOf<String, MutableList<Long>>()
                 for (dbItem in dbList) {
                     if (dbItem.bucketName == "Trash") {
                         if (!allMediaStoreIds.contains(dbItem.id)) {
@@ -245,19 +248,30 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                         } else if (!trashedMediaIds.contains(dbItem.id)) {
                             val parentName = if (dbItem.filePath.isNotBlank()) File(dbItem.filePath).parentFile?.name else null
                             val originalBucket = if (parentName != null && !parentName.startsWith(".")) parentName else "Camera"
-                            database.mediaDao().updateBucketById(dbItem.id, originalBucket)
+                            restoredByBucket.getOrPut(originalBucket) { mutableListOf() }.add(dbItem.id)
                         }
                         continue
                     }
 
-                    val file = if (dbItem.filePath.isNotBlank()) File(dbItem.filePath) else null
-                    val fileExists = file != null && file.exists()
-                    val isHiddenByNoMedia = !showHiddenAlbums && dbItem.filePath.isNotBlank() &&
-                            NoMediaUtils.isPathHiddenByNoMedia(dbItem.filePath, noMediaCache)
+                    val isMissingFromMediaStore = !allMediaStoreIds.contains(dbItem.id)
+                    val isHiddenVault = vaultUris.contains(dbItem.uriString) || vaultPaths.contains(dbItem.filePath)
+                    val shouldDelete = if (forceFullSync) {
+                        val file = if (dbItem.filePath.isNotBlank()) File(dbItem.filePath) else null
+                        val fileExists = file != null && file.exists()
+                        val isHiddenByNoMedia = !showHiddenAlbums && dbItem.filePath.isNotBlank() &&
+                                NoMediaUtils.isPathHiddenByNoMedia(dbItem.filePath, noMediaCache)
+                        isMissingFromMediaStore || !fileExists || isHiddenByNoMedia || isHiddenVault
+                    } else {
+                        isMissingFromMediaStore || isHiddenVault
+                    }
 
-                    if (!allMediaStoreIds.contains(dbItem.id) || !fileExists || isHiddenByNoMedia || vaultUris.contains(dbItem.uriString) || vaultPaths.contains(dbItem.filePath)) {
+                    if (shouldDelete) {
                         toDelete.add(dbItem.id)
                     }
+                }
+
+                if (restoredByBucket.isNotEmpty()) {
+                    database.mediaDao().updateBucketByIdsMap(restoredByBucket)
                 }
 
                 val uniqueToDelete = toDelete.distinct()
@@ -318,30 +332,32 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     )
                 }
 
-                val geocodeRequest = OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
-                WorkManager.getInstance(appContext).enqueueUniqueWork(
-                    "ReverseGeocodeWorker",
-                    ExistingWorkPolicy.KEEP,
-                    geocodeRequest
-                )
+                if (newPhotosCount > 0) {
+                    val geocodeRequest = OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
+                    WorkManager.getInstance(appContext).enqueueUniqueWork(
+                        "ReverseGeocodeWorker",
+                        ExistingWorkPolicy.KEEP,
+                        geocodeRequest
+                    )
 
-                // Background photo sphere classification so refresh is instantaneous
-                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
-                        if (sphereCandidates.isNotEmpty()) {
-                            val sphereEntities = sphereCandidates.map { candidate ->
-                                val isSphere = PhotoSphereHelper.isPhotoSphere(
-                                    context = appContext,
-                                    filePath = candidate.filePath,
-                                    uriString = candidate.uriString
-                                )
-                                PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                    // Background photo sphere classification so refresh is instantaneous
+                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
+                            if (sphereCandidates.isNotEmpty()) {
+                                val sphereEntities = sphereCandidates.map { candidate ->
+                                    val isSphere = PhotoSphereHelper.isPhotoSphere(
+                                        context = appContext,
+                                        filePath = candidate.filePath,
+                                        uriString = candidate.uriString
+                                    )
+                                    PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                                }
+                                database.mediaDao().insertPhotoSpheres(sphereEntities)
                             }
-                            database.mediaDao().insertPhotoSpheres(sphereEntities)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Photo sphere check failed", e)
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Photo sphere check failed", e)
                     }
                 }
 
