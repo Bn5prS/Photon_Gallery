@@ -565,16 +565,7 @@ fun PeopleScreen(
 
             // Photo Count Filter Chips Row
             if (allPeople.isNotEmpty()) {
-                val count3 = remember(allPeople) {
-                    allPeople.count { it.faceCount >= 3 || !it.name.isNullOrBlank() || it.isFavorite }
-                }
-                val count5 = remember(allPeople) {
-                    allPeople.count { it.faceCount >= 5 || !it.name.isNullOrBlank() || it.isFavorite }
-                }
-                val count10 = remember(allPeople) {
-                    allPeople.count { it.faceCount >= 10 || !it.name.isNullOrBlank() || it.isFavorite }
-                }
-                val isCustomActive = minPhotosThreshold !in setOf(1, 3, 5, 10)
+                val isCustomActive = minPhotosThreshold > 1
 
                 Row(
                     modifier = Modifier
@@ -592,39 +583,6 @@ fun PeopleScreen(
                             minPhotosThreshold = 1
                         },
                         label = { Text(stringResource(R.string.people_filter_all, allPeople.size)) },
-                        shape = ShapeFull
-                    )
-
-                    // 3+ photos
-                    FilterChip(
-                        selected = minPhotosThreshold == 3,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            minPhotosThreshold = 3
-                        },
-                        label = { Text(stringResource(R.string.people_filter_count, 3, count3)) },
-                        shape = ShapeFull
-                    )
-
-                    // 5+ photos
-                    FilterChip(
-                        selected = minPhotosThreshold == 5,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            minPhotosThreshold = 5
-                        },
-                        label = { Text(stringResource(R.string.people_filter_count, 5, count5)) },
-                        shape = ShapeFull
-                    )
-
-                    // 10+ photos
-                    FilterChip(
-                        selected = minPhotosThreshold == 10,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            minPhotosThreshold = 10
-                        },
-                        label = { Text(stringResource(R.string.people_filter_count, 10, count10)) },
                         shape = ShapeFull
                     )
 
