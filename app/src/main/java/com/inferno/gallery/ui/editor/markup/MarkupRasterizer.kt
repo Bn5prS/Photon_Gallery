@@ -32,76 +32,87 @@ object MarkupRasterizer {
     ) {
         if (bitmapWidth <= 0 || bitmapHeight <= 0) return
 
-        // 1. Draw strokes
-        for (stroke in markup.strokes) {
-            if (stroke.points.isEmpty()) continue
-            val strokePx = (stroke.strokeWidth * bitmapWidth).coerceAtLeast(2f)
+        val hasBlurStrokes = markup.strokes.any { it.tool == MarkupTool.REDACT && it.redactMode == RedactMode.BLUR }
+        val precomputedBlurred = if (hasBlurStrokes && sourceBitmap != null && !sourceBitmap.isRecycled) {
+            createNaturalBlurredBitmap(sourceBitmap, bitmapWidth, bitmapHeight)
+        } else null
 
-            when (stroke.tool) {
-                MarkupTool.PEN -> {
-                    val paint = Paint().apply {
-                        isAntiAlias = true
-                        style = Paint.Style.STROKE
-                        strokeCap = Paint.Cap.ROUND
-                        strokeJoin = Paint.Join.ROUND
-                        color = stroke.color.toArgb()
-                        strokeWidth = strokePx
+        try {
+            // 1. Draw strokes
+            for (stroke in markup.strokes) {
+                if (stroke.points.isEmpty()) continue
+                val strokePx = (stroke.strokeWidth * bitmapWidth).coerceAtLeast(2f)
+
+                when (stroke.tool) {
+                    MarkupTool.PEN -> {
+                        val paint = Paint().apply {
+                            isAntiAlias = true
+                            style = Paint.Style.STROKE
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            color = stroke.color.toArgb()
+                            strokeWidth = strokePx
+                        }
+                        drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
                     }
-                    drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
-                }
 
-                MarkupTool.HIGHLIGHTER -> {
-                    val baseColor = stroke.color.toArgb()
-                    val alpha = 110 // Semi-transparent
-                    val highlighterColor = (alpha shl 24) or (baseColor and 0x00FFFFFF)
-                    val paint = Paint().apply {
-                        isAntiAlias = true
-                        style = Paint.Style.STROKE
-                        strokeCap = Paint.Cap.ROUND
-                        strokeJoin = Paint.Join.ROUND
-                        color = highlighterColor
-                        strokeWidth = strokePx * 1.8f
+                    MarkupTool.HIGHLIGHTER -> {
+                        val baseColor = stroke.color.toArgb()
+                        val alpha = 110 // Semi-transparent
+                        val highlighterColor = (alpha shl 24) or (baseColor and 0x00FFFFFF)
+                        val paint = Paint().apply {
+                            isAntiAlias = true
+                            style = Paint.Style.STROKE
+                            strokeCap = Paint.Cap.ROUND
+                            strokeJoin = Paint.Join.ROUND
+                            color = highlighterColor
+                            strokeWidth = strokePx * 1.8f
+                        }
+                        drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx * 1.8f, paint)
                     }
-                    drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx * 1.8f, paint)
-                }
 
-                MarkupTool.ARROW -> {
-                    drawArrowElement(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, stroke.color.toArgb())
-                }
+                    MarkupTool.ARROW -> {
+                        drawArrowElement(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, stroke.color.toArgb())
+                    }
 
-                MarkupTool.REDACT -> {
-                    val mode = stroke.redactMode ?: RedactMode.MOSAIC
-                    when (mode) {
-                        RedactMode.BLACKOUT -> {
-                            val paint = Paint().apply {
-                                isAntiAlias = true
-                                style = Paint.Style.STROKE
-                                strokeCap = Paint.Cap.ROUND
-                                strokeJoin = Paint.Join.ROUND
-                                color = android.graphics.Color.BLACK
-                                strokeWidth = strokePx
+                    MarkupTool.REDACT -> {
+                        val mode = stroke.redactMode ?: RedactMode.MOSAIC
+                        when (mode) {
+                            RedactMode.BLACKOUT -> {
+                                val paint = Paint().apply {
+                                    isAntiAlias = true
+                                    style = Paint.Style.STROKE
+                                    strokeCap = Paint.Cap.ROUND
+                                    strokeJoin = Paint.Join.ROUND
+                                    color = android.graphics.Color.BLACK
+                                    strokeWidth = strokePx
+                                }
+                                drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
                             }
-                            drawStrokePath(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, paint)
-                        }
-                        RedactMode.BLUR -> {
-                            drawBlurStroke(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, sourceBitmap)
-                        }
-                        RedactMode.MOSAIC -> {
-                            val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
-                            val tiles = calculateMosaicTiles(stroke.points, bitmapWidth, bitmapHeight, strokePx, tileSizePx)
-                            drawMosaicTiles(canvas, tiles, sourceBitmap)
+                            RedactMode.BLUR -> {
+                                drawBlurStroke(canvas, stroke.points, bitmapWidth, bitmapHeight, strokePx, sourceBitmap, precomputedBlurred)
+                            }
+                            RedactMode.MOSAIC -> {
+                                val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
+                                val tiles = calculateMosaicTiles(stroke.points, bitmapWidth, bitmapHeight, strokePx, tileSizePx)
+                                drawMosaicTiles(canvas, tiles, sourceBitmap)
+                            }
                         }
                     }
+
+                    else -> {}
                 }
-
-                else -> {}
             }
-        }
 
-        // 2. Draw text overlays
-        for (textElem in markup.texts) {
-            if (textElem.text.isBlank()) continue
-            drawTextElement(canvas, textElem, bitmapWidth, bitmapHeight)
+            // 2. Draw text overlays
+            for (textElem in markup.texts) {
+                if (textElem.text.isBlank()) continue
+                drawTextElement(canvas, textElem, bitmapWidth, bitmapHeight)
+            }
+        } finally {
+            if (precomputedBlurred != null && precomputedBlurred != sourceBitmap && !precomputedBlurred.isRecycled) {
+                precomputedBlurred.recycle()
+            }
         }
     }
 
@@ -457,15 +468,55 @@ object MarkupRasterizer {
         canvas.restore()
     }
 
+    /**
+     * Generates a smooth, natural frosted blur bitmap directly from the source image.
+     * Uses multi-stage bilinear reduction and expansion that dissolves text, digits, glyphs,
+     * and sharp edges into smooth, continuous color gradients of the underlying photo,
+     * with zero artificial milky layers.
+     */
+    fun createNaturalBlurredBitmap(
+        source: Bitmap,
+        targetWidth: Int = source.width,
+        targetHeight: Int = source.height
+    ): Bitmap {
+        if (targetWidth <= 0 || targetHeight <= 0 || source.isRecycled) return source
+
+        val minDim = minOf(targetWidth, targetHeight)
+        // Aggressive reduction down to ~20-30 pixels on the min dimension ensures complete text obliteration
+        val downScale = (minDim / 24).coerceIn(4, 48)
+        val downW = (targetWidth / downScale).coerceIn(12, 64)
+        val downH = (targetHeight / downScale).coerceIn(12, 64)
+
+        // Stage 1: Initial reduction with bilinear sampling
+        val small1 = Bitmap.createScaledBitmap(source, downW, downH, true)
+
+        // Stage 2: Deep diffusion downscale to completely obliterate glyph boundaries
+        val downW2 = (downW / 2).coerceAtLeast(6)
+        val downH2 = (downH / 2).coerceAtLeast(6)
+        val small2 = Bitmap.createScaledBitmap(small1, downW2, downH2, true)
+        if (small1 != source && small1 != small2) small1.recycle()
+
+        // Stage 3: Smooth upscale to intermediate
+        val small3 = Bitmap.createScaledBitmap(small2, downW, downH, true)
+        if (small2 != source && small2 != small3) small2.recycle()
+
+        // Stage 4: Final expansion to target resolution with bilinear interpolation
+        val blurredFinal = Bitmap.createScaledBitmap(small3, targetWidth, targetHeight, true)
+        if (small3 != source && small3 != blurredFinal) small3.recycle()
+
+        return blurredFinal
+    }
+
     private fun drawBlurStroke(
         canvas: Canvas,
         points: List<Offset>,
         bitmapWidth: Int,
         bitmapHeight: Int,
         strokePx: Float,
-        sourceBitmap: Bitmap?
+        sourceBitmap: Bitmap?,
+        precomputedBlurredBitmap: Bitmap? = null
     ) {
-        if (points.isEmpty() || sourceBitmap == null) return
+        if (points.isEmpty() || sourceBitmap == null || sourceBitmap.isRecycled) return
         val path = Path()
         val p0 = points[0]
         path.moveTo(p0.x * bitmapWidth, p0.y * bitmapHeight)
@@ -474,39 +525,29 @@ object MarkupRasterizer {
             path.lineTo(p.x * bitmapWidth, p.y * bitmapHeight)
         }
 
-        val bounds = RectF()
-        path.computeBounds(bounds, true)
-        val inset = strokePx
-        bounds.inset(-inset, -inset)
+        val strokePaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            this.strokeWidth = strokePx
+        }
+        val strokePath = Path()
+        if (points.size == 1) {
+            strokePath.addCircle(p0.x * bitmapWidth, p0.y * bitmapHeight, strokePx / 2f, Path.Direction.CW)
+        } else {
+            strokePaint.getFillPath(path, strokePath)
+        }
 
-        val left = bounds.left.toInt().coerceIn(0, bitmapWidth - 1)
-        val top = bounds.top.toInt().coerceIn(0, bitmapHeight - 1)
-        val right = bounds.right.toInt().coerceIn(left + 1, bitmapWidth)
-        val bottom = bounds.bottom.toInt().coerceIn(top + 1, bitmapHeight)
-        val patchW = right - left
-        val patchH = bottom - top
-        if (patchW <= 0 || patchH <= 0) return
+        val ownsBlurred = (precomputedBlurredBitmap == null)
+        val blurred = precomputedBlurredBitmap ?: createNaturalBlurredBitmap(sourceBitmap, bitmapWidth, bitmapHeight)
 
         try {
-            val patch = Bitmap.createBitmap(sourceBitmap, left, top, patchW, patchH)
-            val downW = (patchW / 12).coerceAtLeast(2)
-            val downH = (patchH / 12).coerceAtLeast(2)
-            val small = Bitmap.createScaledBitmap(patch, downW, downH, true)
-            val blurred = Bitmap.createScaledBitmap(small, patchW, patchH, true)
-
-            val strokePaint = Paint().apply {
-                isAntiAlias = true
-                style = Paint.Style.STROKE
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                strokeWidth = strokePx
-            }
-            val strokePath = Path()
-            strokePaint.getFillPath(path, strokePath)
-
             canvas.save()
             canvas.clipPath(strokePath)
-            canvas.drawBitmap(blurred, left.toFloat(), top.toFloat(), null)
+            val srcRect = android.graphics.Rect(0, 0, blurred.width, blurred.height)
+            val dstRect = android.graphics.Rect(0, 0, bitmapWidth, bitmapHeight)
+            canvas.drawBitmap(blurred, srcRect, dstRect, null)
             canvas.restore()
         } catch (e: Exception) {
             val fallbackPaint = Paint().apply {
@@ -514,10 +555,14 @@ object MarkupRasterizer {
                 style = Paint.Style.STROKE
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
-                color = android.graphics.Color.argb(200, 230, 230, 230)
-                strokeWidth = strokePx
+                color = android.graphics.Color.argb(220, 50, 50, 50)
+                this.strokeWidth = strokePx
             }
             drawStrokePath(canvas, points, bitmapWidth, bitmapHeight, strokePx, fallbackPaint)
+        } finally {
+            if (ownsBlurred && blurred != sourceBitmap && !blurred.isRecycled) {
+                blurred.recycle()
+            }
         }
     }
 

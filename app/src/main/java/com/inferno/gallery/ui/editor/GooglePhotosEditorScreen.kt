@@ -280,7 +280,14 @@ fun GooglePhotosEditorScreen(
     var markupPanX by rememberSaveable { mutableFloatStateOf(0f) }
     var markupPanY by rememberSaveable { mutableFloatStateOf(0f) }
 
+    // Navigation and crop entry tracking for Discard/Cancel and Confirm
+    var previousTab by rememberSaveable { mutableStateOf(EditorTab.AUTO) }
+    var entryCropState by remember { mutableStateOf<CropState?>(null) }
+
     LaunchedEffect(selectedTab) {
+        if (selectedTab == EditorTab.CROP) {
+            entryCropState = currentSnapshot.cropState
+        }
         if (selectedTab != EditorTab.MARKUP) {
             markupZoom = 1f
             markupPanX = 0f
@@ -328,6 +335,13 @@ fun GooglePhotosEditorScreen(
         when {
             isSearchOpen -> isSearchOpen = false
             cropSubMode != CropSubMode.CAROUSEL -> cropSubMode = CropSubMode.CAROUSEL
+            selectedTab == EditorTab.CROP -> {
+                entryCropState?.let { entryState ->
+                    commitSnapshot(currentSnapshot.copy(cropState = entryState))
+                }
+                selectedTab = if (previousTab != EditorTab.CROP) previousTab else EditorTab.AUTO
+                cropSubMode = CropSubMode.CAROUSEL
+            }
             activeAdjustTool != null -> activeAdjustTool = null
             selectedTab == EditorTab.MARKUP && markupZoom > 1.05f -> {
                 markupZoom = 1f
@@ -392,6 +406,9 @@ fun GooglePhotosEditorScreen(
             EditorBottomTabs(
                 selectedTab = selectedTab,
                 onSelectTab = { tab ->
+                    if (selectedTab != tab && selectedTab != EditorTab.CROP) {
+                        previousTab = selectedTab
+                    }
                     selectedTab = tab
                     // Reset sub-mode tools when switching tabs
                     if (tab != EditorTab.ADJUST) activeAdjustTool = null
@@ -598,6 +615,7 @@ fun GooglePhotosEditorScreen(
                                     else -> penStrokeWidth
                                 },
                                 redactMode = redactMode,
+                                sourceBitmap = originalBitmap,
                                 selectedTextId = selectedMarkupTextId,
                                 onSelectText = { selectedMarkupTextId = it },
                                 onStateChanged = { updatedMarkup ->
@@ -857,6 +875,18 @@ fun GooglePhotosEditorScreen(
                             onStraightenDone = { cropSubMode = CropSubMode.CAROUSEL },
                             onReset = {
                                 commitSnapshot(currentSnapshot.copy(cropState = CropState()))
+                            },
+                            onCancelCrop = {
+                                entryCropState?.let { entryState ->
+                                    commitSnapshot(currentSnapshot.copy(cropState = entryState))
+                                }
+                                selectedTab = if (previousTab != EditorTab.CROP) previousTab else EditorTab.AUTO
+                                cropSubMode = CropSubMode.CAROUSEL
+                            },
+                            onApplyCrop = {
+                                entryCropState = currentSnapshot.cropState
+                                selectedTab = if (previousTab != EditorTab.CROP) previousTab else EditorTab.AUTO
+                                cropSubMode = CropSubMode.CAROUSEL
                             }
                         )
                     }
@@ -1047,8 +1077,6 @@ fun GooglePhotosEditorScreen(
         EditorOverflowSheet(
             onDismissRequest = { showOverflowMenu = false },
             canRevert = hasModifications,
-            onSave = { handleSave(true) },
-            onSaveAsCopy = { handleSave(false) },
             onRevertEdits = {
                 commitSnapshot(EditorSnapshot())
                 activeAdjustTool = null

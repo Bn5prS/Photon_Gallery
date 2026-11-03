@@ -493,7 +493,7 @@ private fun ActiveDrawingModeView(
             )
         }
 
-        if (activeTool != MarkupTool.REDACT || redactMode == RedactMode.BLACKOUT) {
+        if (activeTool != MarkupTool.REDACT) {
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()

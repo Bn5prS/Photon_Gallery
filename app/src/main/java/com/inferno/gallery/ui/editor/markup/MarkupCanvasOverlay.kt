@@ -1,5 +1,6 @@
 package com.inferno.gallery.ui.editor.markup
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -27,7 +29,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -47,6 +51,7 @@ fun MarkupCanvasOverlay(
     currentColor: Color,
     currentStrokeWidth: Float,
     redactMode: RedactMode = RedactMode.MOSAIC,
+    sourceBitmap: Bitmap? = null,
     eraserRadius: Float = MarkupPalette.DEFAULT_ERASER_RADIUS,
     selectedTextId: Long? = null,
     onSelectText: (Long?) -> Unit = {},
@@ -60,6 +65,22 @@ fun MarkupCanvasOverlay(
     val textMeasurer = rememberTextMeasurer()
     val selectionAccentColor = MaterialTheme.colorScheme.primary
     val eraserColor = MaterialTheme.colorScheme.error
+
+    // Natural frosted blurred bitmap for RedactMode.BLUR (generated once directly from source photo)
+    val blurredBitmap = remember(sourceBitmap) {
+        sourceBitmap?.let { bmp ->
+            if (!bmp.isRecycled) {
+                MarkupRasterizer.createNaturalBlurredBitmap(bmp, bmp.width, bmp.height)
+            } else null
+        }
+    }
+    DisposableEffect(blurredBitmap) {
+        onDispose {
+            if (blurredBitmap != null && !blurredBitmap.isRecycled && blurredBitmap != sourceBitmap) {
+                blurredBitmap.recycle()
+            }
+        }
+    }
 
     // Active live stroke points while finger is down (in normalized 0..1 coordinates)
     val livePoints = remember { mutableStateListOf<Offset>() }
@@ -427,7 +448,7 @@ fun MarkupCanvasOverlay(
 
             // 1. Draw completed strokes
             for (stroke in markupState.strokes) {
-                drawStrokeItem(stroke, canvasW, canvasH)
+                drawStrokeItem(stroke, canvasW, canvasH, blurredBitmap, sourceBitmap)
             }
 
             // 2. Draw live stroke in progress
@@ -440,7 +461,7 @@ fun MarkupCanvasOverlay(
                     tool = tool,
                     redactMode = if (tool == MarkupTool.REDACT) currentRedactModeState else null
                 )
-                drawStrokeItem(liveStroke, canvasW, canvasH)
+                drawStrokeItem(liveStroke, canvasW, canvasH, blurredBitmap, sourceBitmap)
             }
 
             // 3. Draw text elements
@@ -568,7 +589,13 @@ private fun getTextHitInfo(
     return Pair(TextHitPart.NONE, localTouch)
 }
 
-private fun DrawScope.drawStrokeItem(stroke: MarkupStroke, width: Float, height: Float) {
+private fun DrawScope.drawStrokeItem(
+    stroke: MarkupStroke,
+    width: Float,
+    height: Float,
+    blurredBitmap: Bitmap?,
+    sourceBitmap: Bitmap?
+) {
     if (stroke.points.isEmpty()) return
     val strokePx = (stroke.strokeWidth * width).coerceAtLeast(3f)
 
@@ -620,7 +647,8 @@ private fun DrawScope.drawStrokeItem(stroke: MarkupStroke, width: Float, height:
                         points = stroke.points,
                         width = width,
                         height = height,
-                        strokePx = strokePx
+                        strokePx = strokePx,
+                        blurredBitmap = blurredBitmap
                     )
                 }
                 RedactMode.MOSAIC -> {
@@ -628,7 +656,8 @@ private fun DrawScope.drawStrokeItem(stroke: MarkupStroke, width: Float, height:
                         points = stroke.points,
                         width = width,
                         height = height,
-                        strokePx = strokePx
+                        strokePx = strokePx,
+                        sourceBitmap = sourceBitmap
                     )
                 }
             }
@@ -642,7 +671,8 @@ private fun DrawScope.drawMosaicStroke(
     points: List<Offset>,
     width: Float,
     height: Float,
-    strokePx: Float
+    strokePx: Float,
+    sourceBitmap: Bitmap?
 ) {
     val tileSizePx = (strokePx * 0.45f).coerceIn(10f, 60f)
     val tiles = MarkupRasterizer.calculateMosaicTiles(
@@ -654,9 +684,17 @@ private fun DrawScope.drawMosaicStroke(
     )
 
     for (tile in tiles) {
-        val h = ((tile.gridX * 73856093) xor (tile.gridY * 19349663)) and 0x7FFFFFFF
-        val gray = (100 + (h % 65)) / 255f
-        val tileColor = Color(gray, gray, gray, 1f)
+        val tileColor = if (sourceBitmap != null && !sourceBitmap.isRecycled) {
+            val normX = ((tile.left + tile.right) / 2f) / width
+            val normY = ((tile.top + tile.bottom) / 2f) / height
+            val sx = (normX * sourceBitmap.width).toInt().coerceIn(0, sourceBitmap.width - 1)
+            val sy = (normY * sourceBitmap.height).toInt().coerceIn(0, sourceBitmap.height - 1)
+            Color(sourceBitmap.getPixel(sx, sy))
+        } else {
+            val h = ((tile.gridX * 73856093) xor (tile.gridY * 19349663)) and 0x7FFFFFFF
+            val gray = (100 + (h % 65)) / 255f
+            Color(gray, gray, gray, 1f)
+        }
         val topLeft = Offset(tile.left.toFloat(), tile.top.toFloat())
         val size = Size((tile.right - tile.left).toFloat(), (tile.bottom - tile.top).toFloat())
 
@@ -679,22 +717,55 @@ private fun DrawScope.drawBlurStroke(
     points: List<Offset>,
     width: Float,
     height: Float,
-    strokePx: Float
+    strokePx: Float,
+    blurredBitmap: Bitmap?
 ) {
     if (points.isEmpty()) return
-    val layers = listOf(
-        Pair(1.4f, Color(0x55DDDDDD)),
-        Pair(1.0f, Color(0x66EEEEEE)),
-        Pair(0.7f, Color(0x77FFFFFF)),
-        Pair(0.4f, Color(0x88FFFFFF))
-    )
-    for ((multiplier, color) in layers) {
+    if (blurredBitmap != null && !blurredBitmap.isRecycled) {
+        drawIntoCanvas { composeCanvas ->
+            val nativeCanvas = composeCanvas.nativeCanvas
+            val strokePath = android.graphics.Path()
+
+            if (points.size == 1) {
+                val p = points[0]
+                strokePath.addCircle(
+                    p.x * width,
+                    p.y * height,
+                    strokePx / 2f,
+                    android.graphics.Path.Direction.CW
+                )
+            } else {
+                val linePath = android.graphics.Path()
+                linePath.moveTo(points[0].x * width, points[0].y * height)
+                for (i in 1 until points.size) {
+                    val p = points[i]
+                    linePath.lineTo(p.x * width, p.y * height)
+                }
+                val strokePaint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeCap = android.graphics.Paint.Cap.ROUND
+                    strokeJoin = android.graphics.Paint.Join.ROUND
+                    this.strokeWidth = strokePx
+                }
+                strokePaint.getFillPath(linePath, strokePath)
+            }
+
+            nativeCanvas.save()
+            nativeCanvas.clipPath(strokePath)
+            val srcRect = android.graphics.Rect(0, 0, blurredBitmap.width, blurredBitmap.height)
+            val dstRect = android.graphics.RectF(0f, 0f, width, height)
+            nativeCanvas.drawBitmap(blurredBitmap, srcRect, dstRect, null)
+            nativeCanvas.restore()
+        }
+    } else {
+        // Fallback when no bitmap available: clean single-stroke dark frost
         drawPathLine(
             points = points,
             width = width,
             height = height,
-            color = color,
-            strokePx = strokePx * multiplier
+            color = Color(0xDD333333),
+            strokePx = strokePx
         )
     }
 }

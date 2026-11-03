@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -111,6 +112,8 @@ fun CropStudio(
     onDismissAspectPicker: (() -> Unit)? = null,
     onStraightenDone: (() -> Unit)? = null,
     onReset: (() -> Unit)? = null,
+    onCancelCrop: (() -> Unit)? = null,
+    onApplyCrop: (() -> Unit)? = null,
     initialSubMode: CropSubMode = CropSubMode.CAROUSEL
 ) {
     var subMode by rememberSaveable { mutableStateOf(initialSubMode) }
@@ -197,7 +200,9 @@ fun CropStudio(
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             onCropStateChange(CropState())
                             onReset?.invoke()
-                        }
+                        },
+                        onCancelCrop = onCancelCrop,
+                        onApplyCrop = onApplyCrop
                     )
                 }
 
@@ -288,75 +293,159 @@ private fun CropCarouselView(
     onMirror: () -> Unit,
     onOpenPerspective: () -> Unit,
     onResetCrop: () -> Unit,
+    onCancelCrop: (() -> Unit)? = null,
+    onApplyCrop: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+    val view = LocalView.current
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. Crop / Aspect ratio
-        val hasCustomAspect = cropState.aspectOption != AspectRatioOption.FREEFORM ||
-                cropState.cropRect != androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)
-        CropToolTile(
-            label = cropState.aspectOption.label,
-            iconRes = R.drawable.ic_ms_crop,
-            isActive = hasCustomAspect,
-            hasActiveDot = hasCustomAspect,
-            onClick = onOpenAspect
-        )
+        // 1. Tool Tiles Carousel Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Crop / Aspect ratio
+            val hasCustomAspect = cropState.aspectOption != AspectRatioOption.FREEFORM ||
+                    cropState.cropRect != androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)
+            CropToolTile(
+                label = cropState.aspectOption.label,
+                iconRes = R.drawable.ic_ms_crop,
+                isActive = hasCustomAspect,
+                hasActiveDot = hasCustomAspect,
+                onClick = onOpenAspect
+            )
 
-        // 2. Framing (Straighten)
-        val hasStraighten = cropState.straightenAngle != 0f
-        CropToolTile(
-            label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else stringResource(R.string.editor_crop_straighten),
-            iconRes = R.drawable.ic_ms_straighten,
-            isActive = hasStraighten,
-            hasActiveDot = hasStraighten,
-            onClick = onOpenStraighten
-        )
+            // 2. Framing (Straighten)
+            val hasStraighten = cropState.straightenAngle != 0f
+            CropToolTile(
+                label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else stringResource(R.string.editor_crop_straighten),
+                iconRes = R.drawable.ic_ms_straighten,
+                isActive = hasStraighten,
+                hasActiveDot = hasStraighten,
+                onClick = onOpenStraighten
+            )
 
-        // 3. Rotate 90° CCW
-        val hasRotation = cropState.rotation != 0
-        CropToolTile(
-            label = if (hasRotation) "${cropState.rotation}°" else stringResource(R.string.editor_crop_rotate),
-            iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
-            isActive = hasRotation,
-            hasActiveDot = hasRotation,
-            onClick = onRotate90
-        )
+            // 3. Rotate 90° CCW
+            val hasRotation = cropState.rotation != 0
+            CropToolTile(
+                label = if (hasRotation) "${cropState.rotation}°" else stringResource(R.string.editor_crop_rotate),
+                iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
+                isActive = hasRotation,
+                hasActiveDot = hasRotation,
+                onClick = onRotate90
+            )
 
-        // 4. Mirror (Horizontal Flip)
-        val hasMirror = cropState.flipH
-        CropToolTile(
-            label = stringResource(R.string.editor_crop_mirror),
-            iconRes = R.drawable.ic_ms_flip,
-            isActive = hasMirror,
-            hasActiveDot = hasMirror,
-            onClick = onMirror
-        )
+            // 4. Mirror (Horizontal Flip)
+            val hasMirror = cropState.flipH
+            CropToolTile(
+                label = stringResource(R.string.editor_crop_mirror),
+                iconRes = R.drawable.ic_ms_flip,
+                isActive = hasMirror,
+                hasActiveDot = hasMirror,
+                onClick = onMirror
+            )
 
-        // 5. Perspective
-        val hasPerspective = cropState.verticalTilt != 0f || cropState.horizontalTilt != 0f
-        CropToolTile(
-            label = "Perspective",
-            iconRes = R.drawable.ic_ms_perspective,
-            isActive = hasPerspective,
-            hasActiveDot = hasPerspective,
-            onClick = onOpenPerspective
-        )
+            // 5. Perspective
+            val hasPerspective = cropState.verticalTilt != 0f || cropState.horizontalTilt != 0f
+            CropToolTile(
+                label = "Perspective",
+                iconRes = R.drawable.ic_ms_perspective,
+                isActive = hasPerspective,
+                hasActiveDot = hasPerspective,
+                onClick = onOpenPerspective
+            )
 
-        // 6. Reset
-        CropToolTile(
-            label = stringResource(R.string.editor_action_reset),
-            iconRes = R.drawable.ic_ms_refresh,
-            isActive = false,
-            isEnabled = cropState.isModified,
-            hasActiveDot = false,
-            onClick = onResetCrop
-        )
+            // 6. Reset
+            CropToolTile(
+                label = stringResource(R.string.editor_action_reset),
+                iconRes = R.drawable.ic_ms_refresh,
+                isActive = false,
+                isEnabled = cropState.isModified,
+                hasActiveDot = false,
+                onClick = onResetCrop
+            )
+        }
+
+        // 2. Action Buttons Row: Cancel and Confirmation (Apply/Done)
+        if (onCancelCrop != null || onApplyCrop != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Cancel button
+                FilledTonalButton(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        onCancelCrop?.invoke()
+                    },
+                    shape = CircleShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_ms_close),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.editor_action_cancel),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                }
+
+                // Center indicator badge
+                Text(
+                    text = if (cropState.aspectOption != AspectRatioOption.FREEFORM) {
+                        cropState.aspectOption.label
+                    } else if (cropState.isModified) {
+                        "Cropped"
+                    } else {
+                        stringResource(R.string.editor_tab_crop)
+                    },
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = if (cropState.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Confirmation / Done button
+                Button(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        onApplyCrop?.invoke()
+                    },
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_ms_check),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.editor_action_done),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+        }
     }
 }
 
