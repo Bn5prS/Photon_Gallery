@@ -153,7 +153,7 @@ class DeepZoomController(
             try {
                 val options = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize
-                    inPreferredConfig = Bitmap.Config.RGB_565
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
                 val bitmap = active.decodeRegion(rect, options)
                 if (bitmap != null) {
@@ -292,12 +292,16 @@ fun TileBasedDeepZoomOverlay(
                     val drawWidth = (tileRight - tileLeft) * fitScale
                     val drawHeight = (tileBottom - tileTop) * fitScale
 
+                    val tilePaint = android.graphics.Paint().apply {
+                        isFilterBitmap = (scale < 12f)
+                    }
+
                     drawIntoCanvas { canvas ->
                         canvas.nativeCanvas.drawBitmap(
                             cachedBitmap,
                             null,
                             android.graphics.RectF(drawLeft, drawTop, drawLeft + drawWidth, drawTop + drawHeight),
-                            null
+                            tilePaint
                         )
                     }
                 } else {

@@ -1290,7 +1290,7 @@ fun DetailScreen(
                                                 val oldScale = scale.floatValue
                                                 // Keep tracking accumulated zoom after slop
                                                 if (isMultiTouch) accumulatedZoom *= zoomChange
-                                                val newScale = (oldScale * zoomChange).coerceIn(1f, 25f)
+                                                val newScale = (oldScale * zoomChange).coerceIn(1f, 200f)
                                                 // Pinch-in past threshold while at normal scale → enter filmstrip overview
                                                 if (isMultiTouch && !isFilmstripOverview &&
                                                     oldScale <= 1.05f && accumulatedZoom < 0.82f) {
@@ -1561,6 +1561,22 @@ fun DetailScreen(
                             topLeft = Offset(rectX, rectY),
                             size = androidx.compose.ui.geometry.Size(viewportWidth, viewportHeight),
                             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                        )
+                    }
+
+                    // Zoom level indicator badge at bottom of minimap
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 3.dp),
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.75f)
+                    ) {
+                        Text(
+                            text = "${scale.floatValue.toInt()}x",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                         )
                     }
                 }
