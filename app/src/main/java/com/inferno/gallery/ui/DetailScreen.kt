@@ -1564,21 +1564,7 @@ fun DetailScreen(
                         )
                     }
 
-                    // Zoom level indicator badge at bottom of minimap
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 3.dp),
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.75f)
-                    ) {
-                        Text(
-                            text = "${scale.floatValue.toInt()}x",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                        )
-                    }
+
                 }
             } // end BoxWithConstraints
             } // end wrapper Box
