@@ -325,6 +325,16 @@
     <string name="update_status_downloaded">v%1$s heruntergeladen. Bereit zur Installation</string>
     <string name="update_status_build">Installiert: v%1$s (Build %2$d)</string>
     <string name="setting_display_preferences_title">Anzeigeeinstellungen</string>
+    <string name="setting_media_viewer_title">Medienbetrachter</string>
+    <string name="setting_media_viewer_sub">Umgebungslicht, unscharfer Hintergrund, Minimap und Helligkeit</string>
+    <string name="setting_typography_layout_title">Typografie &amp; Layout</string>
+    <string name="setting_typography_layout_sub">Schriftarten, Skalierung, Ausrichtung und Albengrößen</string>
+    <string name="setting_custom_color_title">Benutzerdefinierte Designfarbe</string>
+    <string name="setting_custom_color_sub">Chromatizität mit HSL-Schiebereglern anpassen</string>
+    <string name="setting_palette_style_title">Palettenstil</string>
+    <string name="setting_palette_style_sub">Farbprofile über MaterialKolor</string>
+    <string name="action_customize">Anpassen</string>
+    <string name="action_change">Ändern</string>
     <string name="setting_dynamic_ambient_title">Dynamische Umgebungsfarbe</string>
     <string name="setting_dynamic_ambient_sub">Hintergrund des Betrachters mit Farben aus dem aktuellen Foto färben</string>
     <string name="setting_blur_viewer_bg_title">Betrachterhintergrund weichzeichnen</string>

@@ -325,6 +325,16 @@
     <string name="update_status_downloaded">v%1$s baixada. Pronta para instalar</string>
     <string name="update_status_build">Instalado: v%1$s (Compilação %2$d)</string>
     <string name="setting_display_preferences_title">Preferências de exibição</string>
+    <string name="setting_media_viewer_title">Visualizador de mídia</string>
+    <string name="setting_media_viewer_sub">Iluminação ambiente, fundo desfocado, minimapa e brilho</string>
+    <string name="setting_typography_layout_title">Tipografia e layout</string>
+    <string name="setting_typography_layout_sub">Fontes, escala, alinhamento da linha do tempo e emblemas</string>
+    <string name="setting_custom_color_title">Cor do tema personalizada</string>
+    <string name="setting_custom_color_sub">Ajustar cromaticidade com controles HSL</string>
+    <string name="setting_palette_style_title">Estilo de paleta</string>
+    <string name="setting_palette_style_sub">Perfis cromáticos via MaterialKolor</string>
+    <string name="action_customize">Personalizar</string>
+    <string name="action_change">Alterar</string>
     <string name="setting_dynamic_ambient_title">Cor ambiente dinâmica</string>
     <string name="setting_dynamic_ambient_sub">Tingir o fundo do visualizador com cores extraídas da foto atual</string>
     <string name="setting_blur_viewer_bg_title">Desfocar fundo do visualizador</string>

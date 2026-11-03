@@ -18,6 +18,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -53,6 +54,10 @@ import com.inferno.gallery.ui.components.PhotonHeaderIconButton
 import com.inferno.gallery.ui.components.PhotonPaletteGrid
 import com.inferno.gallery.ui.components.PhotonCustomColorSection
 import com.inferno.gallery.ui.theme.ThemePalettes
+import com.inferno.gallery.ui.theme.ShapeEdgeTop
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.core.graphics.ColorUtils
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.ShapeMedium
@@ -219,6 +224,8 @@ fun SettingsScreen(
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var currentLanguageTag by remember { mutableStateOf(getCurrentAppLanguageTag(context)) }
+    var showCustomColorSheet by remember { mutableStateOf(false) }
+    var showPaletteStyleSheet by remember { mutableStateOf(false) }
 
     if (showLanguageDialog) {
         LanguageSelectionDialog(
@@ -236,6 +243,128 @@ fun SettingsScreen(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
+
+    if (showCustomColorSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showCustomColorSheet = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = ShapeEdgeTop,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = stringResource(R.string.setting_custom_color_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.setting_custom_color_sub),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { showCustomColorSheet = false },
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_done),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+
+                PhotonCustomColorSection(
+                    currentColor = if (colorPresetName == "custom" && appSeedColor != -1) appSeedColor else 0xFF4285F4.toInt(),
+                    enabled = true,
+                    onColorChanged = { newColor ->
+                        viewModel.setUseMaterialYou(false)
+                        viewModel.setAppSeedColor(newColor)
+                        viewModel.setColorPresetName("custom")
+                    }
+                )
+            }
+        }
+    }
+
+    if (showPaletteStyleSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showPaletteStyleSheet = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = ShapeEdgeTop,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = stringResource(R.string.setting_palette_style_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.setting_palette_style_sub),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { showPaletteStyleSheet = false },
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_done),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+
+                val effectiveSeedColor = if (colorPresetName == "custom" && appSeedColor != -1) {
+                    Color(appSeedColor)
+                } else if (useMaterialYou || colorPresetName == "dynamic") {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    ThemePalettes.getById(colorPresetName).seedColor
+                }
+
+                PhotonPaletteGrid(
+                    currentStyle = themePaletteStyle,
+                    seedColor = effectiveSeedColor,
+                    isDark = isCurrentlyDark,
+                    isAmoled = useAmoledBlack && isCurrentlyDark,
+                    onStyleSelected = { selectedStyle ->
+                        viewModel.setThemePaletteStyle(selectedStyle)
+                    }
+                )
+            }
+        }
+    }
+
+
 
     if (showClearFacesConfirm) {
         AlertDialog(
@@ -549,6 +678,7 @@ fun SettingsScreen(
                 ) {
                     when (section) {
                         "Look & Feel" -> {
+                            // ── Card 1: Theme & Colors ──
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_theme_mode),
                                 items = listOf(
@@ -580,6 +710,16 @@ fun SettingsScreen(
                                                 )
                                             }
                                         }
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_amoled_black),
+                                            subtitle = stringResource(R.string.setting_amoled_black_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_contrast),
+                                            checked = useAmoledBlack,
+                                            onCheckedChange = { viewModel.setUseAmoledBlack(it) },
+                                            enabled = isCurrentlyDark
+                                        )
                                     },
                                     {
                                         SwitchSettingItem(
@@ -637,81 +777,153 @@ fun SettingsScreen(
                                         }
                                     },
                                     {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_amoled_black),
-                                            subtitle = stringResource(R.string.setting_amoled_black_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_contrast),
-                                            checked = useAmoledBlack,
-                                            onCheckedChange = { viewModel.setUseAmoledBlack(it) },
-                                            enabled = isCurrentlyDark
-                                        )
-                                    }
-                                )
-                            )
+                                        val isCustomActive = !useMaterialYou && colorPresetName == "custom"
+                                        val effectiveColorInt = if (colorPresetName == "custom" && appSeedColor != -1) appSeedColor else 0xFF4285F4.toInt()
+                                        val effectiveColor = Color(effectiveColorInt)
+                                        val hexCode = String.format("#%06X", (0xFFFFFF and effectiveColorInt))
 
-                            SettingsGroupCard(
-                                title = "Custom Theme Color",
-                                items = listOf(
-                                    {
-                                        PhotonCustomColorSection(
-                                            currentColor = if (colorPresetName == "custom" && appSeedColor != -1) appSeedColor else 0xFF4285F4.toInt(),
-                                            enabled = true,
-                                            onColorChanged = { newColor ->
-                                                viewModel.setUseMaterialYou(false)
-                                                viewModel.setAppSeedColor(newColor)
-                                                viewModel.setColorPresetName("custom")
-                                            }
-                                        )
-                                    }
-                                )
-                            )
-
-                            SettingsGroupCard(
-                                title = "Palette Style",
-                                items = listOf(
-                                    {
-                                        Column(
+                                        Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .clickable {
+                                                    viewModel.setUseMaterialYou(false)
+                                                    viewModel.setColorPresetName("custom")
+                                                    showCustomColorSheet = true
+                                                }
                                                 .padding(horizontal = 16.dp, vertical = 12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = "Material 3 Color Science Profiles",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "Select from 9 chromatic tuning styles generated via MaterialKolor",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            val effectiveSeedColor = if (colorPresetName == "custom" && appSeedColor != -1) {
-                                                Color(appSeedColor)
-                                            } else if (useMaterialYou || colorPresetName == "dynamic") {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                ThemePalettes.getById(colorPresetName).seedColor
+                                            Row(
+                                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(effectiveColor)
+                                                        .border(
+                                                            width = if (isCustomActive) 2.5.dp else 1.dp,
+                                                            color = if (isCustomActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                                            shape = CircleShape
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (isCustomActive) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(10.dp)
+                                                                .clip(CircleShape)
+                                                                .background(if (ColorUtils.calculateLuminance(effectiveColorInt) > 0.5) Color.Black else Color.White)
+                                                        )
+                                                    }
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = stringResource(R.string.setting_custom_color_title),
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = if (isCustomActive) hexCode else stringResource(R.string.setting_custom_color_sub),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
                                             }
 
-                                            PhotonPaletteGrid(
-                                                currentStyle = themePaletteStyle,
-                                                seedColor = effectiveSeedColor,
-                                                isDark = isCurrentlyDark,
-                                                isAmoled = useAmoledBlack && isCurrentlyDark,
-                                                onStyleSelected = { selectedStyle ->
-                                                    viewModel.setThemePaletteStyle(selectedStyle)
+                                            FilledTonalButton(
+                                                onClick = {
+                                                    viewModel.setUseMaterialYou(false)
+                                                    viewModel.setColorPresetName("custom")
+                                                    showCustomColorSheet = true
+                                                },
+                                                shape = CircleShape,
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.action_customize),
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    {
+                                        val styleDisplayName = when (themePaletteStyle) {
+                                            "TonalSpot" -> "Tonal Spot"
+                                            "Neutral" -> "Neutral"
+                                            "Vibrant" -> "Vibrant"
+                                            "Expressive" -> "Expressive"
+                                            "Rainbow" -> "Rainbow"
+                                            "FruitSalad" -> "Fruit Salad"
+                                            "Monochrome" -> "Monochrome"
+                                            "Fidelity" -> "Fidelity"
+                                            "Content" -> "Content"
+                                            else -> themePaletteStyle
+                                        }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { showPaletteStyleSheet = true }
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
                                                 }
-                                            )
+                                                Column {
+                                                    Text(
+                                                        text = stringResource(R.string.setting_palette_style_title),
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = styleDisplayName,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                            }
+
+                                            FilledTonalButton(
+                                                onClick = { showPaletteStyleSheet = true },
+                                                shape = CircleShape,
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.action_change),
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                            }
                                         }
                                     }
                                 )
                             )
 
-
+                            // ── Card 2: Media Viewer ──
                             SettingsGroupCard(
-                                title = stringResource(R.string.setting_display_preferences_title),
+                                title = stringResource(R.string.setting_media_viewer_title),
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
@@ -742,43 +954,19 @@ fun SettingsScreen(
                                     },
                                     {
                                         SwitchSettingItem(
-                                            title = stringResource(R.string.setting_show_album_size),
-                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
-                                            checked = showAlbumSize,
-                                            onCheckedChange = { viewModel.setShowAlbumSize(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
                                             title = stringResource(R.string.setting_max_brightness_title),
                                             subtitle = stringResource(R.string.setting_max_brightness_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
                                             checked = maxBrightnessEnabled,
                                             onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
                                         )
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_use_system_font_title),
-                                            subtitle = stringResource(R.string.setting_use_system_font_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
-                                            checked = useSystemFont,
-                                            onCheckedChange = { viewModel.setUseSystemFont(it) }
-                                        )
-                                    },
-                                    {
-                                        FontScaleSettingItem(
-                                            fontScale = fontScale,
-                                            onFontScaleChange = { viewModel.setFontScale(it) },
-                                            onReset = { viewModel.setFontScale(1.0f) }
-                                        )
                                     }
                                 )
                             )
 
+                            // ── Card 3: Typography & Layout ──
                             SettingsGroupCard(
-                                title = stringResource(R.string.setting_timeline_layout),
+                                title = stringResource(R.string.setting_typography_layout_title),
                                 items = listOf(
                                     {
                                         Column(modifier = Modifier.padding(16.dp)) {
@@ -817,6 +1005,31 @@ fun SettingsScreen(
                                                 )
                                             }
                                         }
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_show_album_size),
+                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                            checked = showAlbumSize,
+                                            onCheckedChange = { viewModel.setShowAlbumSize(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_use_system_font_title),
+                                            subtitle = stringResource(R.string.setting_use_system_font_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
+                                            checked = useSystemFont,
+                                            onCheckedChange = { viewModel.setUseSystemFont(it) }
+                                        )
+                                    },
+                                    {
+                                        FontScaleSettingItem(
+                                            fontScale = fontScale,
+                                            onFontScaleChange = { viewModel.setFontScale(it) },
+                                            onReset = { viewModel.setFontScale(1.0f) }
+                                        )
                                     }
                                 )
                             )

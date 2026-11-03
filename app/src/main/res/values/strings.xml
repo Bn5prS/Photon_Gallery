@@ -325,6 +325,16 @@
     <string name="update_status_downloaded">v%1$s downloaded. Ready to install</string>
     <string name="update_status_build">Installed: v%1$s (Build %2$d)</string>
     <string name="setting_display_preferences_title">Display Preferences</string>
+    <string name="setting_media_viewer_title">Media Viewer</string>
+    <string name="setting_media_viewer_sub">Ambient lighting, blurred backdrop, minimap and brightness</string>
+    <string name="setting_typography_layout_title">Typography &amp; Layout</string>
+    <string name="setting_typography_layout_sub">Fonts, scaling, timeline alignment and album badges</string>
+    <string name="setting_custom_color_title">Custom Theme Color</string>
+    <string name="setting_custom_color_sub">Fine-tune seed chromaticity with HSL sliders</string>
+    <string name="setting_palette_style_title">Palette Style</string>
+    <string name="setting_palette_style_sub">Color science profiles via MaterialKolor</string>
+    <string name="action_customize">Customize</string>
+    <string name="action_change">Change</string>
     <string name="setting_dynamic_ambient_title">Dynamic Ambient Color</string>
     <string name="setting_dynamic_ambient_sub">Tint the viewer background with colors extracted from the current photo</string>
     <string name="setting_blur_viewer_bg_title">Blur Viewer Background</string>

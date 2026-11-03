@@ -325,6 +325,16 @@
     <string name="update_status_downloaded">v%1$s descargada. Lista para instalar</string>
     <string name="update_status_build">Instalado: v%1$s (Compilación %2$d)</string>
     <string name="setting_display_preferences_title">Preferencias de pantalla</string>
+    <string name="setting_media_viewer_title">Visor de medios</string>
+    <string name="setting_media_viewer_sub">Iluminación ambiental, fondo borroso, minimapa y brillo</string>
+    <string name="setting_typography_layout_title">Tipografía y diseño</string>
+    <string name="setting_typography_layout_sub">Fuentes, escala, alineación de cronología e insignias</string>
+    <string name="setting_custom_color_title">Color de tema personalizado</string>
+    <string name="setting_custom_color_sub">Ajustar cromaticidad con controles HSL</string>
+    <string name="setting_palette_style_title">Estilo de paleta</string>
+    <string name="setting_palette_style_sub">Perfiles cromáticos mediante MaterialKolor</string>
+    <string name="action_customize">Personalizar</string>
+    <string name="action_change">Cambiar</string>
     <string name="setting_dynamic_ambient_title">Color ambiental dinámico</string>
     <string name="setting_dynamic_ambient_sub">Teñir el fondo del visor con colores extraídos de la foto actual</string>
     <string name="setting_blur_viewer_bg_title">Desenfocar fondo del visor</string>

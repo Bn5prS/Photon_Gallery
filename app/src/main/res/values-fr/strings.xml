@@ -325,6 +325,16 @@
     <string name="update_status_downloaded">v%1$s téléchargée. Prête à être installée</string>
     <string name="update_status_build">Installé : v%1$s (Version %2$d)</string>
     <string name="setting_display_preferences_title">Préférences d\'affichage</string>
+    <string name="setting_media_viewer_title">Visionneuse de médias</string>
+    <string name="setting_media_viewer_sub">Éclairage ambiant, arrière-plan flou, mini-carte et luminosité</string>
+    <string name="setting_typography_layout_title">Typographie et disposition</string>
+    <string name="setting_typography_layout_sub">Polices, échelle, alignement chronologique et badges</string>
+    <string name="setting_custom_color_title">Couleur de thème personnalisée</string>
+    <string name="setting_custom_color_sub">Affiner la chromaticité avec les curseurs TSL</string>
+    <string name="setting_palette_style_title">Style de palette</string>
+    <string name="setting_palette_style_sub">Profils de science des couleurs via MaterialKolor</string>
+    <string name="action_customize">Personnaliser</string>
+    <string name="action_change">Modifier</string>
     <string name="setting_dynamic_ambient_title">Couleur ambiante dynamique</string>
     <string name="setting_dynamic_ambient_sub">Teinter l\'arrière-plan de la visionneuse avec les couleurs de la photo</string>
     <string name="setting_blur_viewer_bg_title">Arrière-plan flouté de la visionneuse</string>
