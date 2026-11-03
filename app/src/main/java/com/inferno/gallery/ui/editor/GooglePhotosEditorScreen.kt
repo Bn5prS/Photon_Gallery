@@ -474,9 +474,9 @@ fun GooglePhotosEditorScreen(
                     var frozenTransX by remember { mutableFloatStateOf(0f) }
                     var frozenTransY by remember { mutableFloatStateOf(0f) }
 
-                    val targetScale = if (isCropMode) targetGeo.scale else 1f
-                    val targetTransX = if (isCropMode) targetGeo.translationX else 0f
-                    val targetTransY = if (isCropMode) targetGeo.translationY else 0f
+                    val targetScale = if (!isComparingOriginal) targetGeo.scale else 1f
+                    val targetTransX = if (!isComparingOriginal) targetGeo.translationX else 0f
+                    val targetTransY = if (!isComparingOriginal) targetGeo.translationY else 0f
 
                     val progress = animProgress.value
                     val liveScale = when {
@@ -509,15 +509,12 @@ fun GooglePhotosEditorScreen(
 
                     // Screen-space Crop Box
                     val cRect = currentSnapshot.cropState.cropRect
-                    val currentCropBoxOnScreen = if (isCropMode) {
-                        val boxL = photoScreenLeft + cRect.left * photoScreenW
-                        val boxT = photoScreenTop + cRect.top * photoScreenH
-                        val boxR = photoScreenLeft + cRect.right * photoScreenW
-                        val boxB = photoScreenTop + cRect.bottom * photoScreenH
-                        Rect(boxL, boxT, boxR, boxB)
-                    } else {
-                        Rect(photoScreenLeft, photoScreenTop, photoScreenLeft + photoScreenW, photoScreenTop + photoScreenH)
-                    }
+                    val isCropped = !isComparingOriginal && (cRect.left > 0.001f || cRect.top > 0.001f || cRect.right < 0.999f || cRect.bottom < 0.999f)
+                    val boxL = photoScreenLeft + cRect.left * photoScreenW
+                    val boxT = photoScreenTop + cRect.top * photoScreenH
+                    val boxR = photoScreenLeft + cRect.right * photoScreenW
+                    val boxB = photoScreenTop + cRect.bottom * photoScreenH
+                    val currentCropBoxOnScreen = Rect(boxL, boxT, boxR, boxB)
 
                     val isQuarterRotated = !isComparingOriginal && (currentSnapshot.cropState.rotation % 180 != 0)
                     val unrotatedBaseW = if (isQuarterRotated) baseH else baseW
@@ -695,21 +692,20 @@ fun GooglePhotosEditorScreen(
                             },
                             modifier = Modifier.fillMaxSize()
                         )
-                    } else if (!isComparingOriginal && currentSnapshot.cropState.cropRect != Rect(0f, 0f, 1f, 1f)) {
-                        // Subtle non-interactive boundary crop scrim when previewing outside Crop tab
+                    } else if (isCropped) {
+                        // Mask out the uncropped regions outside the crop rect with solid canvas background
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            val rect = currentSnapshot.cropState.cropRect
                             val w = size.width
                             val h = size.height
-                            val l = photoScreenLeft + rect.left * photoScreenW
-                            val t = photoScreenTop + rect.top * photoScreenH
-                            val r = photoScreenLeft + rect.right * photoScreenW
-                            val b = photoScreenTop + rect.bottom * photoScreenH
-                            val scrim = Color.Black.copy(alpha = 0.65f)
-                            if (t > 0f) drawRect(scrim, Offset.Zero, Size(w, t))
-                            if (b < h) drawRect(scrim, Offset(0f, b), Size(w, h - b))
-                            if (l > 0f) drawRect(scrim, Offset(0f, t), Size(l, b - t))
-                            if (r < w) drawRect(scrim, Offset(r, t), Size(w - r, b - t))
+                            val l = photoScreenLeft + cRect.left * photoScreenW
+                            val t = photoScreenTop + cRect.top * photoScreenH
+                            val r = photoScreenLeft + cRect.right * photoScreenW
+                            val b = photoScreenTop + cRect.bottom * photoScreenH
+                            val maskColor = Color.Black
+                            if (t > 0f) drawRect(maskColor, Offset.Zero, Size(w, t + 0.5f))
+                            if (b < h) drawRect(maskColor, Offset(0f, b - 0.5f), Size(w, h - b + 0.5f))
+                            if (l > 0f) drawRect(maskColor, Offset(0f, t - 0.5f), Size(l + 0.5f, b - t + 1f))
+                            if (r < w) drawRect(maskColor, Offset(r - 0.5f, t - 0.5f), Size(w - r + 0.5f, b - t + 1f))
                         }
                     }
 
