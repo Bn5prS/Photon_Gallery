@@ -17,6 +17,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -251,24 +253,14 @@ fun EditorCornerBrackets(
         val cropW = r - l
         val cropH = b - t
 
-        // 1. Dimmed Scrim Outside Crop Rectangle
+        // 1. Dimmed Scrim Outside Crop Rectangle (full bleed to edges via EvenOdd path)
         val scrimColor = Color.Black.copy(alpha = 0.55f)
-        // Top
-        if (t > 0f) {
-            drawRect(color = scrimColor, topLeft = Offset.Zero, size = Size(w, t))
+        val scrimPath = Path().apply {
+            fillType = PathFillType.EvenOdd
+            addRect(Rect(0f, 0f, w, h))
+            addRect(Rect(l, t, r, b))
         }
-        // Bottom
-        if (b < h) {
-            drawRect(color = scrimColor, topLeft = Offset(0f, b), size = Size(w, h - b))
-        }
-        // Left
-        if (l > 0f && cropH > 0f) {
-            drawRect(color = scrimColor, topLeft = Offset(0f, t), size = Size(l, cropH))
-        }
-        // Right
-        if (r < w && cropH > 0f) {
-            drawRect(color = scrimColor, topLeft = Offset(r, t), size = Size(w - r, cropH))
-        }
+        drawPath(scrimPath, color = scrimColor)
 
         // 2. Subtle White Thin Bounding Box (always crisp 1dp)
         drawRect(

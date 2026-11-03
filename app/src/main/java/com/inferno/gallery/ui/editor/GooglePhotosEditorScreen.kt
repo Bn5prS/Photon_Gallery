@@ -69,6 +69,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -430,8 +432,7 @@ fun GooglePhotosEditorScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clipToBounds()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .clipToBounds(),
                 contentAlignment = Alignment.TopStart
             ) {
                 val bmp = originalBitmap
@@ -697,15 +698,16 @@ fun GooglePhotosEditorScreen(
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val w = size.width
                             val h = size.height
-                            val l = photoScreenLeft + cRect.left * photoScreenW
-                            val t = photoScreenTop + cRect.top * photoScreenH
-                            val r = photoScreenLeft + cRect.right * photoScreenW
-                            val b = photoScreenTop + cRect.bottom * photoScreenH
-                            val maskColor = Color.Black
-                            if (t > 0f) drawRect(maskColor, Offset.Zero, Size(w, t + 0.5f))
-                            if (b < h) drawRect(maskColor, Offset(0f, b - 0.5f), Size(w, h - b + 0.5f))
-                            if (l > 0f) drawRect(maskColor, Offset(0f, t - 0.5f), Size(l + 0.5f, b - t + 1f))
-                            if (r < w) drawRect(maskColor, Offset(r - 0.5f, t - 0.5f), Size(w - r + 0.5f, b - t + 1f))
+                            val l = (photoScreenLeft + cRect.left * photoScreenW).coerceIn(0f, w)
+                            val t = (photoScreenTop + cRect.top * photoScreenH).coerceIn(0f, h)
+                            val r = (photoScreenLeft + cRect.right * photoScreenW).coerceIn(l, w)
+                            val b = (photoScreenTop + cRect.bottom * photoScreenH).coerceIn(t, h)
+                            val maskPath = Path().apply {
+                                fillType = PathFillType.EvenOdd
+                                addRect(Rect(0f, 0f, w, h))
+                                addRect(Rect(l, t, r, b))
+                            }
+                            drawPath(maskPath, color = Color.Black)
                         }
                     }
 
