@@ -148,7 +148,10 @@ fun NavigationGraph(
                 if (MotionTokens.isStandardMotion) {
                     slideOutHorizontally(
                         animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.StandardEasing),
-                        targetOffsetX = { it }
+                        targetOffsetX = { (it * 0.35f).toInt() }
+                    ) + scaleOut(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.StandardEasing),
+                        targetScale = 0.90f
                     ) + fadeOut(
                         animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.StandardEasing)
                     )
@@ -160,7 +163,7 @@ fun NavigationGraph(
                         animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
                     ) + scaleOut(
                         animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                        targetScale = 0.94f
+                        targetScale = 0.90f
                     )
                 }
             }
@@ -220,7 +223,7 @@ fun NavigationGraph(
                 enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
                 popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
-                popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
+                popExitTransition = { scaleOut(targetScale = 0.90f, animationSpec = tween(MotionTokens.Durations.Short)) + fadeOut(MotionTokens.fastEffectsSpec()) }
             ) { backStackEntry ->
                 val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
                 val mediaId = try { android.net.Uri.decode(rawMediaId) } catch (e: Exception) { rawMediaId }
