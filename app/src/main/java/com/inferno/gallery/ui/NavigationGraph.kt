@@ -173,7 +173,14 @@ fun NavigationGraph(
                 route = "gallery",
                 enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
-                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                popEnterTransition = {
+                    scaleIn(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        initialScale = 0.94f
+                    ) + fadeIn(
+                        animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                    )
+                },
                 popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
             ) {
                 MainAppLayout(
@@ -223,7 +230,17 @@ fun NavigationGraph(
                 enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
                 popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
-                popExitTransition = { scaleOut(targetScale = 0.90f, animationSpec = tween(MotionTokens.Durations.Short)) + fadeOut(MotionTokens.fastEffectsSpec()) }
+                popExitTransition = {
+                    slideOutHorizontally(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        targetOffsetX = { (it * 0.25f).toInt() }
+                    ) + scaleOut(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                        targetScale = 0.88f
+                    ) + fadeOut(
+                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                    )
+                }
             ) { backStackEntry ->
                 val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
                 val mediaId = try { android.net.Uri.decode(rawMediaId) } catch (e: Exception) { rawMediaId }

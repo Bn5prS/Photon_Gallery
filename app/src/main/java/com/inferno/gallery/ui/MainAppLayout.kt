@@ -96,6 +96,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.ui.text.font.FontWeight
@@ -1060,10 +1067,50 @@ fun MainAppLayout(
         NavHost(
             navController = nestedNavController,
             startDestination = "photos",
-            enterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
-            exitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) },
-            popEnterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
-            popExitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) }
+            enterTransition = {
+                slideInHorizontally(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                    initialOffsetX = { (it * 0.25f).toInt() }
+                ) + fadeIn(
+                    animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                ) + scaleIn(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                    initialScale = 0.94f
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                    targetOffsetX = { -(it * 0.12f).toInt() }
+                ) + fadeOut(
+                    animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                ) + scaleOut(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                    targetScale = 0.94f
+                )
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                    initialOffsetX = { -(it * 0.12f).toInt() }
+                ) + fadeIn(
+                    animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                ) + scaleIn(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                    initialScale = 0.94f
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                    targetOffsetX = { (it * 0.25f).toInt() }
+                ) + fadeOut(
+                    animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+                ) + scaleOut(
+                    animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
+                    targetScale = 0.90f
+                )
+            }
         ) {
             composable("photos") {
                 GalleryScreen(

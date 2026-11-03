@@ -827,51 +827,13 @@ fun DetailScreen(
         }
     }
 
-    var predictiveProgress by remember { mutableFloatStateOf(0f) }
-    var predictiveEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
-    var isPredictiveBackActive by remember { mutableStateOf(false) }
-
-    val animatedPredictiveProgress by animateFloatAsState(
-        targetValue = predictiveProgress,
-        animationSpec = MotionTokens.snappySpring(),
-        label = "predictiveProgress"
-    )
-
-    PredictiveBackHandler(
-        enabled = !isFilmstripOverview && !showDeleteConfirmDialog && !showRenameDialog && !showCopySheet && !showMoveSheet && !showInfoCard
-    ) { progressFlow ->
-        try {
-            isPredictiveBackActive = true
-            progressFlow.collect { backEvent ->
-                predictiveProgress = backEvent.progress
-                predictiveEdge = backEvent.swipeEdge
-            }
-            safeOnBack()
-        } catch (e: CancellationException) {
-            isPredictiveBackActive = false
-            predictiveProgress = 0f
-        } finally {
-            isPredictiveBackActive = false
-            predictiveProgress = 0f
-        }
-    }
-
-
     // ── Swipe-to-dismiss state ─────────────────────────────────────────────
     // Vertical drag offset (px). When the user drags the image downward at
     // 1× zoom, this translates the pager and fades the black scrim.
     val dismissOffsetY = remember { Animatable(0f) }
     val dismissProgress = (kotlin.math.abs(dismissOffsetY.value) / 600f).coerceIn(0f, 1f)
-    val bgAlpha = (1f - dismissProgress) * (1f - animatedPredictiveProgress * 0.45f)
+    val bgAlpha = 1f - dismissProgress          // scrim fades out
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
-    val predictiveScale = 1f - animatedPredictiveProgress * 0.12f
-    val density = LocalDensity.current
-    val predictiveTranslationX = if (predictiveEdge == BackEventCompat.EDGE_LEFT) {
-        animatedPredictiveProgress * with(density) { 36.dp.toPx() }
-    } else {
-        -animatedPredictiveProgress * with(density) { 36.dp.toPx() }
-    }
-    val predictiveCornerRadius = (animatedPredictiveProgress * 28).dp
 
     val baseCanvasColor = Color.Black
     val targetBgColor = if (viewerDynamicColor) {
@@ -888,14 +850,6 @@ fun DetailScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer {
-                scaleX = predictiveScale
-                scaleY = predictiveScale
-                translationX = predictiveTranslationX
-                clip = animatedPredictiveProgress > 0.01f
-                shape = RoundedCornerShape(predictiveCornerRadius)
-            }
-            .clip(RoundedCornerShape(predictiveCornerRadius))
             .background(animatedBgColor.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center
     ) {
