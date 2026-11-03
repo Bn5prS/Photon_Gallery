@@ -138,9 +138,6 @@ fun NavigationGraph(
                         initialOffsetX = { -(it * 0.12f).toInt() }
                     ) + fadeIn(
                         animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                    ) + scaleIn(
-                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                        initialScale = 0.94f
                     )
                 }
             },
@@ -173,14 +170,7 @@ fun NavigationGraph(
                 route = "gallery",
                 enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
-                popEnterTransition = {
-                    scaleIn(
-                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                        initialScale = 0.94f
-                    ) + fadeIn(
-                        animationSpec = tween(MotionTokens.Durations.Medium, MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                    )
-                },
+                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
                 popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
             ) {
                 MainAppLayout(
