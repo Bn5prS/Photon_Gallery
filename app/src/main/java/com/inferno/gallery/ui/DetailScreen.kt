@@ -1890,26 +1890,21 @@ fun DetailScreen(
                 tonalElevation = 6.dp,
                 modifier = Modifier.height(32.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                Box(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
+                    val zoomText = if (currentScale >= 100f || currentScale % 1f == 0f) {
+                        String.format(java.util.Locale.US, "%.0f×", currentScale)
+                    } else {
+                        String.format(java.util.Locale.US, "%.1f×", currentScale)
+                    }
                     Text(
-                        text = String.format(java.util.Locale.US, "%.1f×", currentScale),
+                        text = zoomText,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold
                         )
                     )
-                    if (currentScale >= 10.0f) {
-                        Text(
-                            text = "• DEEP ZOOM",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
                 }
             }
         }
