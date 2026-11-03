@@ -322,7 +322,7 @@ fun DetailScreen(
 
     // Ensure we don't crash if items is empty
     if (galleryItems.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow))
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black))
         return
     }
 
@@ -824,7 +824,7 @@ fun DetailScreen(
     val bgAlpha = 1f - dismissProgress          // scrim fades out
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
 
-    val baseCanvasColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val baseCanvasColor = Color.Black
     val targetBgColor = if (viewerDynamicColor) {
         extractedAmbientColor ?: baseCanvasColor
     } else {
@@ -849,9 +849,9 @@ fun DetailScreen(
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
-                                animatedBgColor.copy(alpha = 0.85f * bgAlpha),
-                                animatedBgColor.copy(alpha = 0.40f * bgAlpha),
-                                Color.Black.copy(alpha = 0.95f * bgAlpha)
+                                animatedBgColor.copy(alpha = 0.35f * bgAlpha),
+                                animatedBgColor.copy(alpha = 0.12f * bgAlpha),
+                                Color.Black.copy(alpha = 0.98f * bgAlpha)
                             ),
                             radius = 1400f
                         )
@@ -875,7 +875,7 @@ fun DetailScreen(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .blur(24.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                        .blur(36.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         .alpha(if (viewerDynamicColor) 0.50f * bgAlpha else 0.40f * bgAlpha)
                 )
                 Box(
@@ -883,9 +883,9 @@ fun DetailScreen(
                         .fillMaxSize()
                         .background(
                             if (viewerDynamicColor) {
-                                animatedBgColor.copy(alpha = 0.55f * bgAlpha)
+                                animatedBgColor.copy(alpha = 0.35f * bgAlpha)
                             } else {
-                                Color.Black.copy(alpha = 0.45f * bgAlpha)
+                                Color.Black.copy(alpha = 0.82f * bgAlpha)
                             }
                         )
                 )
@@ -2396,8 +2396,8 @@ private fun extractAmbientMoodColor(bitmap: Bitmap): Color {
 
     if (hsv[1] < 0.08f) return Color.Unspecified
 
-    hsv[1] = hsv[1].coerceIn(0.40f, 0.75f)
-    hsv[2] = 0.13f
+    hsv[1] = (hsv[1] * 0.40f).coerceIn(0.10f, 0.30f)
+    hsv[2] = 0.08f
 
     return Color(android.graphics.Color.HSVToColor(hsv))
 }
