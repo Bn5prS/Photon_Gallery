@@ -163,9 +163,9 @@ fun AlbumsScreen(
     }
 
     val visibleAlbums = remember(unpinnedAlbums) {
-        unpinnedAlbums.take(9)
+        unpinnedAlbums.take(6)
     }
-    val hasMoreAlbums = unpinnedAlbums.size > 9
+    val hasMoreAlbums = unpinnedAlbums.size > 6
 
     // Persistent expand states for sections
     val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()

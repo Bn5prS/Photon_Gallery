@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
@@ -132,7 +133,11 @@ fun PersonDetailScreen(
         mediaList.filter { it.id in selectedMediaIds }
     }
 
-    var gridCols by rememberSaveable { mutableIntStateOf(3) }
+    val savedGridCols by viewModel.personDetailGridCellsCount.collectAsState()
+    var gridCols by rememberSaveable(savedGridCols) { mutableIntStateOf(savedGridCols) }
+    LaunchedEffect(savedGridCols) {
+        gridCols = savedGridCols
+    }
     var isPinching by remember { mutableStateOf(false) }
     val livePinchScaleAnim = remember { Animatable(1f) }
     val pinchScaleScope = rememberCoroutineScope()
@@ -559,7 +564,9 @@ fun PersonDetailScreen(
                 .peopleGridPinchZoom(
                     gridCellsCount = gridCols,
                     onGridCountChange = { newCols ->
-                        gridCols = newCols.coerceIn(2, 5)
+                        val clamped = newCols.coerceIn(2, 5)
+                        gridCols = clamped
+                        viewModel.updatePersonDetailGridCellsCount(clamped)
                     },
                     isSelectionMode = isSelectionMode,
                     haptic = haptic,

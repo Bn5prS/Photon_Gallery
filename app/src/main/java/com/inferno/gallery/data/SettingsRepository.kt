@@ -84,6 +84,8 @@ class SettingsRepository private constructor(private val context: Context) {
         val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
         val MEMORIES_DISMISSED = booleanPreferencesKey("memories_dismissed")
         val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
+        val PEOPLE_GRID_CELLS_COUNT = intPreferencesKey("people_grid_cells_count")
+        val PERSON_DETAIL_GRID_CELLS_COUNT = intPreferencesKey("person_detail_grid_cells_count")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
         val ALBUMS_EXPANDED_MORE = booleanPreferencesKey("albums_expanded_more")
@@ -548,6 +550,28 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateGridCellsCount(count: Int) {
         context.dataStore.edit { preferences ->
             preferences[GRID_CELLS_COUNT] = count
+        }
+    }
+
+    val peopleGridCellsCountFlow: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[PEOPLE_GRID_CELLS_COUNT] ?: 3
+        }
+
+    suspend fun updatePeopleGridCellsCount(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PEOPLE_GRID_CELLS_COUNT] = count
+        }
+    }
+
+    val personDetailGridCellsCountFlow: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[PERSON_DETAIL_GRID_CELLS_COUNT] ?: 3
+        }
+
+    suspend fun updatePersonDetailGridCellsCount(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PERSON_DETAIL_GRID_CELLS_COUNT] = count
         }
     }
 

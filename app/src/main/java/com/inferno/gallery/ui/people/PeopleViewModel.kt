@@ -156,6 +156,26 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    val peopleGridCellsCount: StateFlow<Int> = settingsRepository.peopleGridCellsCountFlow
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+
+    fun updatePeopleGridCellsCount(count: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updatePeopleGridCellsCount(count)
+        }
+    }
+
+    val personDetailGridCellsCount: StateFlow<Int> = settingsRepository.personDetailGridCellsCountFlow
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+
+    fun updatePersonDetailGridCellsCount(count: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.updatePersonDetailGridCellsCount(count)
+        }
+    }
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }

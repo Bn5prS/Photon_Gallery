@@ -180,7 +180,11 @@ fun PeopleScreen(
     var collisionPair by remember { mutableStateOf<Pair<PersonEntity, PersonEntity>?>(null) }
     var showHideShowSheet by remember { mutableStateOf(false) }
     val isMergeCardDismissedByUser by viewModel.isMergeCardDismissed.collectAsState()
-    var gridCols by rememberSaveable { mutableIntStateOf(3) }
+    val savedGridCols by viewModel.peopleGridCellsCount.collectAsState()
+    var gridCols by rememberSaveable(savedGridCols) { mutableIntStateOf(savedGridCols) }
+    LaunchedEffect(savedGridCols) {
+        gridCols = savedGridCols
+    }
     var isPinching by remember { mutableStateOf(false) }
     val livePinchScaleAnim = remember { Animatable(1f) }
     val pinchScaleScope = rememberCoroutineScope()
@@ -445,22 +449,6 @@ fun PeopleScreen(
                                             imageVector = ImageVector.vectorResource(
                                                 if (isModelDownloaded) R.drawable.ic_ms_refresh else R.drawable.ic_ms_download
                                             ),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.people_merge_similar)) },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.setMergeCardDismissed(false)
-                                        viewModel.consolidateClusters()
-                                        android.widget.Toast.makeText(context, "Consolidating similar faces…", android.widget.Toast.LENGTH_SHORT).show()
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
                                             contentDescription = null,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -1009,7 +997,9 @@ fun PeopleScreen(
                         .peopleGridPinchZoom(
                             gridCellsCount = gridCols,
                             onGridCountChange = { newCols ->
-                                gridCols = newCols.coerceIn(2, 5)
+                                val clamped = newCols.coerceIn(2, 5)
+                                gridCols = clamped
+                                viewModel.updatePeopleGridCellsCount(clamped)
                             },
                             isSelectionMode = isSelectionMode,
                             haptic = haptic,
