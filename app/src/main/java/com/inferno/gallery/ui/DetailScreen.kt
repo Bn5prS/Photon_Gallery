@@ -523,17 +523,6 @@ fun DetailScreen(
     }
 
     var currentScale by remember { mutableStateOf(1f) }
-    var isZoomBadgeVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(currentScale) {
-        if (currentScale > 1.05f) {
-            isZoomBadgeVisible = true
-            kotlinx.coroutines.delay(700L)
-            isZoomBadgeVisible = false
-        } else {
-            isZoomBadgeVisible = false
-        }
-    }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var pendingDeleteItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingDeletePage by remember { mutableStateOf<Int?>(null) }
@@ -601,8 +590,12 @@ fun DetailScreen(
     }
 
     androidx.compose.runtime.DisposableEffect(useFullScreenGlobal) {
+        val prevLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: false
+        val prevLightNavBars = insetsController?.isAppearanceLightNavigationBars ?: false
         if (window != null && insetsController != null) {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+            insetsController.isAppearanceLightStatusBars = false
+            insetsController.isAppearanceLightNavigationBars = false
             
             if (useFullScreenGlobal) {
                 // Global full screen mode is enabled -> hide system bars
@@ -617,6 +610,8 @@ fun DetailScreen(
         onDispose {
             // Restore to the global state when leaving DetailScreen
             if (window != null && insetsController != null) {
+                insetsController.isAppearanceLightStatusBars = prevLightStatusBars
+                insetsController.isAppearanceLightNavigationBars = prevLightNavBars
                 if (!useFullScreenGlobal) {
                     insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 } else {
@@ -1582,25 +1577,31 @@ fun DetailScreen(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 2.dp,
-                shadowElevation = 3.dp,
-                shape = ShapeNone
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.65f),
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Transparent
+                            )
+                        )
+                    )
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalIconButton(
                         onClick = safeOnBack,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = MaterialTheme.colorScheme.onSurface
+                            containerColor = Color.Black.copy(alpha = 0.35f),
+                            contentColor = Color.White
                         ),
                         modifier = Modifier.size(40.dp)
                     ) {
@@ -1629,9 +1630,11 @@ fun DetailScreen(
                             }
                             Text(
                                 text = formattedDate,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                ),
+                                color = Color.White,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth(),
                                 maxLines = 1,
@@ -1639,8 +1642,10 @@ fun DetailScreen(
                             )
                             Text(
                                 text = currentItem.name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp
+                                ),
+                                color = Color.White.copy(alpha = 0.75f),
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth(),
                                 maxLines = 1,
@@ -1656,8 +1661,8 @@ fun DetailScreen(
                                 isMotionPlaying = isMotionLooping
                             },
                             shape = ShapeFull,
-                            color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.35f),
+                            contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
                             modifier = Modifier
                                 .padding(end = 8.dp)
                                 .height(36.dp)
@@ -1683,14 +1688,12 @@ fun DetailScreen(
                         }
                     }
 
-
-
                     Box {
                         FilledTonalIconButton(
                             onClick = { showMoreMenu = true },
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                contentColor = MaterialTheme.colorScheme.onSurface
+                                containerColor = Color.Black.copy(alpha = 0.35f),
+                                contentColor = Color.White
                             ),
                             modifier = Modifier.size(40.dp)
                         ) {
@@ -1853,47 +1856,6 @@ fun DetailScreen(
             exifData = currentExif,
             onPersonClick = onNavigateToPerson
         )
-
-        // ── Floating Deep Zoom Pill ──
-        val zoomBadgeBottomPadding by animateDpAsState(
-            targetValue = if (showUi) (if (viewerFilmstripEnabled && galleryItems.size > 1) 130.dp else 78.dp) else 24.dp,
-            animationSpec = MotionTokens.snappySpring(),
-            label = "zoomBadgePadding"
-        )
-        AnimatedVisibility(
-            visible = isZoomBadgeVisible && currentScale > 1.05f,
-            enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
-            exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.bouncySpring()),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = zoomBadgeBottomPadding.coerceAtLeast(0.dp))
-        ) {
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                tonalElevation = 6.dp,
-                modifier = Modifier.height(32.dp)
-            ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val zoomText = if (currentScale >= 100f || currentScale % 1f == 0f) {
-                        String.format(java.util.Locale.US, "%.0f×", currentScale)
-                    } else {
-                        String.format(java.util.Locale.US, "%.1f×", currentScale)
-                    }
-                    Text(
-                        text = zoomText,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
-        }
 
         val tipMotionDismissed by settingsRepo.tipMotionPhotoDismissedFlow.collectAsState(initial = true)
         if (!tipMotionDismissed && motionPhotoInfo?.isMotionPhoto == true && showUi) {
