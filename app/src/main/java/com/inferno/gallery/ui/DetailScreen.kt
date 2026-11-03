@@ -2022,8 +2022,9 @@ fun DetailScreen(
             ) {
                 Surface(
                     shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    tonalElevation = 2.dp,
+                    color = Color.Black.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                    tonalElevation = 0.dp,
                     shadowElevation = 6.dp,
                     modifier = Modifier
                         .fillMaxWidth(0.88f)
@@ -2059,18 +2060,24 @@ fun DetailScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
             ) {
-                Surface(
-                    shape = ShapeNone,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.45f),
+                                    Color.Black.copy(alpha = 0.80f)
+                                )
+                            )
+                        )
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(top = 8.dp, bottom = 4.dp),
+                            .padding(top = 16.dp, bottom = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (galleryItems.size > 1) {
@@ -2154,7 +2161,7 @@ private fun ViewerFilmstripRow(
                 label = "filmstrip_alpha"
             )
             val borderStroke = if (isSelected) {
-                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                BorderStroke(2.dp, Color.White)
             } else {
                 null
             }
@@ -2230,7 +2237,7 @@ private fun ViewerActionButtonsRow(
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
                     contentDescription = "Restore",
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -2242,7 +2249,7 @@ private fun ViewerActionButtonsRow(
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = "Permanently Delete",
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = Color.White.copy(alpha = 0.85f),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -2256,7 +2263,7 @@ private fun ViewerActionButtonsRow(
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
                     contentDescription = stringResource(R.string.detail_share),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -2270,7 +2277,7 @@ private fun ViewerActionButtonsRow(
                 Icon(
                     imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
                     contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -2294,7 +2301,7 @@ private fun ViewerActionButtonsRow(
                 Icon(
                     imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
                     contentDescription = stringResource(R.string.detail_favorite),
-                    tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
+                    tint = if (isFavorite) favoriteHarmonized else Color.White,
                     modifier = Modifier
                         .size(24.dp)
                         .graphicsLayer {
@@ -2312,7 +2319,7 @@ private fun ViewerActionButtonsRow(
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = stringResource(R.string.detail_delete),
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = Color.White.copy(alpha = 0.85f),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -2327,7 +2334,7 @@ private fun ViewerActionButtonsRow(
                     Icon(
                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_google_lens),
                         contentDescription = "Google Lens",
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
