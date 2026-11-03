@@ -136,3 +136,4 @@
   - Release mid-swipe -> verify it smoothly pops back.
   - Push back to edge and release -> verify it springs back into full screen cleanly.
   - Test back gesture in Settings and Albums -> verify smooth interactive cross-screen preview.
+

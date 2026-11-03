@@ -93,3 +93,4 @@ This design implements rich, physical Predictive Back across Photon Gallery:
 
 ### 4.3 Navigation Graph Pop Curves (`NavigationGraph.kt`)
 - Update `popExitTransition` and `popEnterTransition` on all destinations to ensure full cross-page predictive back compatibility with scale and slide.
+

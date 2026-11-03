@@ -136,3 +136,4 @@
   - Verify bottom dock has transparent gradient scrim with no solid opaque card.
   - Verify action buttons and filmstrip active border are crisp white.
   - Verify exit back to timeline restores system theme without flicker.
+
