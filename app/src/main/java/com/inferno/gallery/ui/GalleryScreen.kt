@@ -187,7 +187,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 // Removed resolvedUriCache
 
 // Profiling switch for the prefetch pipeline (kept false to prevent thread competition during fling deceleration)
-private const val PREFETCH_EXPERIMENT_ENABLED = true
+private const val PREFETCH_EXPERIMENT_ENABLED = false
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable

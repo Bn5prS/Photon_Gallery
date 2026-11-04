@@ -20,6 +20,7 @@ import com.inferno.gallery.data.db.DatabaseProvider
 
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.MediaStoreThumbnailFetcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okio.Path.Companion.toPath
@@ -146,6 +147,7 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
+            .coroutineContext(Dispatchers.IO.limitedParallelism(4))
             .components {
                 // Support high-performance system thumbnails for local MediaStore items
                 add(MediaStoreThumbnailFetcher.Factory(context))

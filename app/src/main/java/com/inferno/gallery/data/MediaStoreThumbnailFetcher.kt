@@ -73,12 +73,16 @@ class MediaStoreThumbnailFetcher(
                 var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
                     try {
-                        context.contentResolver.loadThumbnail(uri, targetSize, signal)
+                        val b = context.contentResolver.loadThumbnail(uri, targetSize, signal)
+                        android.util.Log.d("MediaStoreFetcher", "loadThumbnail SUCCESS: ${b.width}x${b.height}, cfg=${b.config} for $uri")
+                        b
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
-                    } catch (_: android.os.OperationCanceledException) {
+                    } catch (e: android.os.OperationCanceledException) {
+                        android.util.Log.d("MediaStoreFetcher", "loadThumbnail CANCELED for $uri")
                         null
-                    } catch (_: Throwable) {
+                    } catch (e: Throwable) {
+                        android.util.Log.e("MediaStoreFetcher", "loadThumbnail FAILED: ${e.javaClass.simpleName}: ${e.message} for $uri")
                         null
                     }
                 }
@@ -165,7 +169,13 @@ class MediaStoreThumbnailFetcher(
         val width = (bitmap.width * scale).toInt().coerceIn(1, bitmap.width)
         val height = (bitmap.height * scale).toInt().coerceIn(1, bitmap.height)
         return try {
-            Bitmap.createScaledBitmap(bitmap, width, height, true) ?: bitmap
+            val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
+            if (scaled != null && scaled != bitmap) {
+                bitmap.recycle()
+                scaled
+            } else {
+                bitmap
+            }
         } catch (_: Throwable) {
             bitmap
         }
