@@ -702,8 +702,8 @@ fun AlbumsScreen(
                                     )
                                     Text(
                                         text = stringResource(R.string.media_count_multiple, docBucket.itemCount),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center,
@@ -834,8 +834,8 @@ fun AlbumsScreen(
                                     )
                                     Text(
                                         text = stringResource(R.string.media_count_multiple, mediaType.itemCount),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center,
@@ -1249,8 +1249,8 @@ fun AlbumCard(
 
                 Text(
                     text = countText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
@@ -1259,12 +1259,12 @@ fun AlbumCard(
                 if (showAlbumSize && bucket.totalSizeBytes > 0) {
                     Text(
                         text = "•",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                     )
                     Text(
                         text = Formatter.formatShortFileSize(context, bucket.totalSizeBytes),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                         maxLines = 1
                     )
@@ -1407,19 +1407,19 @@ fun AlbumListRow(
                     }
                     Text(
                         text = countText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                     )
 
                     if (showAlbumSize && bucket.totalSizeBytes > 0) {
                         Text(
                             text = "•",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                         )
                         Text(
                             text = Formatter.formatShortFileSize(context, bucket.totalSizeBytes),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                         )
                     }
