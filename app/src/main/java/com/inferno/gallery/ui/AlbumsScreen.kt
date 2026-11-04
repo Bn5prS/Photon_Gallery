@@ -173,7 +173,16 @@ fun AlbumsScreen(
     val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
     val albumsExpanded by viewModel.albumsExpandedMore.collectAsState()
     val peopleExpanded by viewModel.albumsExpandedPeople.collectAsState()
-    val peopleViewModel: com.inferno.gallery.ui.people.PeopleViewModel = viewModel()
+    val peopleViewModel: com.inferno.gallery.ui.people.PeopleViewModel = run {
+        var cur = context
+        while (cur is android.content.ContextWrapper) {
+            if (cur is androidx.lifecycle.ViewModelStoreOwner) break
+            cur = cur.baseContext
+        }
+        androidx.lifecycle.viewmodel.compose.viewModel(
+            viewModelStoreOwner = cur as androidx.lifecycle.ViewModelStoreOwner
+        )
+    }
     val promotedPeople by peopleViewModel.promotedPersons.collectAsState()
     val allPeople by peopleViewModel.allPersons.collectAsState()
     val faceIndexWorkInfo by peopleViewModel.faceIndexWorkInfo.collectAsState()

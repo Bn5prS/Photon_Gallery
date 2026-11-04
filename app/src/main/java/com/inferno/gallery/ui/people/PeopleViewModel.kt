@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -96,6 +97,9 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     val faceProgress = com.inferno.gallery.data.IndexingProgressManager.faceProgress
 
+    private val _isInitialLoading = MutableStateFlow(true)
+    val isInitialLoading: StateFlow<Boolean> = _isInitialLoading.asStateFlow()
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -125,6 +129,7 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
                 .thenByDescending { it.faceCount }
         )
     }
+        .onEach { _isInitialLoading.value = false }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -147,6 +152,7 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
                 .thenByDescending { it.faceCount }
         )
     }
+        .onEach { _isInitialLoading.value = false }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

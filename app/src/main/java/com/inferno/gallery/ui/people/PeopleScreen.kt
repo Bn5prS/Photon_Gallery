@@ -62,6 +62,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -124,12 +125,23 @@ fun PeopleScreen(
     onPersonClick: (Long) -> Unit,
     onStartScan: () -> Unit,
     onNavigateToSettings: (() -> Unit)? = null,
-    viewModel: PeopleViewModel = viewModel(),
+    viewModel: PeopleViewModel = run {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var cur = context
+        while (cur is android.content.ContextWrapper) {
+            if (cur is androidx.lifecycle.ViewModelStoreOwner) break
+            cur = cur.baseContext
+        }
+        androidx.lifecycle.viewmodel.compose.viewModel(
+            viewModelStoreOwner = cur as androidx.lifecycle.ViewModelStoreOwner
+        )
+    },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val promotedPeople by viewModel.promotedPersons.collectAsState()
     val allPeople by viewModel.allPersons.collectAsState()
+    val isInitialLoading by viewModel.isInitialLoading.collectAsState()
     val pendingSuggestions by viewModel.pendingMergeSuggestions.collectAsState()
     val faceProgressState by viewModel.faceProgress.collectAsState()
     val faceIndexWorkInfo by viewModel.faceIndexWorkInfo.collectAsState()
@@ -189,6 +201,17 @@ fun PeopleScreen(
     var isPinching by remember { mutableStateOf(false) }
     val livePinchScaleAnim = remember { Animatable(1f) }
     val pinchScaleScope = rememberCoroutineScope()
+
+    androidx.activity.compose.BackHandler(enabled = isSelectionMode) {
+        viewModel.clearSelection()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.updateSearchQuery("")
+            viewModel.clearSelection()
+        }
+    }
 
     if (namingPerson != null) {
         val target = namingPerson!!
@@ -668,7 +691,21 @@ fun PeopleScreen(
                 }
             }
 
-            if (displayPeople.isEmpty() && isScanning) {
+            if (isInitialLoading && displayPeople.isEmpty()) {
+                // Initial load in progress - keep layout calm with centered loader instead of flashing empty state
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(SpacingTokens.XXL),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(40.dp),
+                        strokeWidth = 3.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else if (displayPeople.isEmpty() && isScanning) {
                 // Active scanning state when no people are visible yet
                 Box(
                     modifier = Modifier

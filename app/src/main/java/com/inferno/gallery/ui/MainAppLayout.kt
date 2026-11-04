@@ -184,6 +184,16 @@ fun MainAppLayout(
     val settingsViewModel: SettingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         viewModelStoreOwner = LocalContext.current as androidx.lifecycle.ViewModelStoreOwner
     )
+    val peopleViewModel: com.inferno.gallery.ui.people.PeopleViewModel = run {
+        var cur = LocalContext.current
+        while (cur is android.content.ContextWrapper) {
+            if (cur is androidx.lifecycle.ViewModelStoreOwner) break
+            cur = cur.baseContext
+        }
+        androidx.lifecycle.viewmodel.compose.viewModel(
+            viewModelStoreOwner = cur as androidx.lifecycle.ViewModelStoreOwner
+        )
+    }
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
@@ -1256,7 +1266,8 @@ fun MainAppLayout(
                     onNavigateToSettings = {
                         settingsActiveSection = "Smart Search & OCR"
                         nestedNavController.navigate("settings")
-                    }
+                    },
+                    viewModel = peopleViewModel
                 )
             }
 
@@ -1282,7 +1293,8 @@ fun MainAppLayout(
                     onNavigateToSettings = {
                         settingsActiveSection = "Smart Search & OCR"
                         nestedNavController.navigate("settings")
-                    }
+                    },
+                    viewModel = peopleViewModel
                 )
             }
 
