@@ -133,7 +133,15 @@ fun PhotonPaletteGrid(
     onStyleSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val styles = remember { PaletteStyle.entries }
+    val styles = remember {
+        listOf(
+            PaletteStyle.TonalSpot,
+            PaletteStyle.Vibrant,
+            PaletteStyle.Expressive,
+            PaletteStyle.Neutral,
+            PaletteStyle.Monochrome
+        )
+    }
     val chunkedStyles = remember(styles) { styles.chunked(2) }
 
     Column(

@@ -856,11 +856,7 @@ fun SettingsScreen(
                                             "Neutral" -> "Neutral"
                                             "Vibrant" -> "Vibrant"
                                             "Expressive" -> "Expressive"
-                                            "Rainbow" -> "Rainbow"
-                                            "FruitSalad" -> "Fruit Salad"
                                             "Monochrome" -> "Monochrome"
-                                            "Fidelity" -> "Fidelity"
-                                            "Content" -> "Content"
                                             else -> themePaletteStyle
                                         }
 
