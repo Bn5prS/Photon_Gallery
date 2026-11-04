@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.os.Build
 import androidx.collection.LruCache
@@ -116,16 +117,17 @@ class DeepZoomController(
 
             if (createdDecoder != null) {
                 decoder = createdDecoder
+                val rawW = createdDecoder.width
+                val rawH = createdDecoder.height
                 if (rotationDegrees == 90 || rotationDegrees == 270) {
-                    imageWidth = createdDecoder.height
-                    imageHeight = createdDecoder.width
+                    imageWidth = rawH
+                    imageHeight = rawW
                 } else {
-                    imageWidth = createdDecoder.width
-                    imageHeight = createdDecoder.height
+                    imageWidth = rawW
+                    imageHeight = rawH
                 }
-                val totalPixels = imageWidth.toLong() * imageHeight.toLong()
-                // Activate for photos larger than 2048px in either dimension or > 6 megapixels with 0 rotation
-                isEligible = (imageWidth > 2048 || imageHeight > 2048 || totalPixels > 6_000_000L) && rotationDegrees == 0
+                // Any decodable image is eligible regardless of rotation or resolution
+                isEligible = imageWidth > 0 && imageHeight > 0
                 return@withContext isEligible
             }
         } catch (e: Exception) {
@@ -151,14 +153,67 @@ class DeepZoomController(
             if (active.isRecycled) return
 
             try {
+                val rawW = active.width
+                val rawH = active.height
+
+                // Map visualRect [tileLeft, tileTop, tileRight, tileBottom] to raw decoder coordinates
+                val rawRect = when (rotationDegrees) {
+                    90 -> Rect(
+                        rect.top.coerceIn(0, rawW),
+                        (rawH - rect.right).coerceIn(0, rawH),
+                        rect.bottom.coerceIn(0, rawW),
+                        (rawH - rect.left).coerceIn(0, rawH)
+                    )
+                    180 -> Rect(
+                        (rawW - rect.right).coerceIn(0, rawW),
+                        (rawH - rect.bottom).coerceIn(0, rawH),
+                        (rawW - rect.left).coerceIn(0, rawW),
+                        (rawH - rect.top).coerceIn(0, rawH)
+                    )
+                    270 -> Rect(
+                        (rawW - rect.bottom).coerceIn(0, rawW),
+                        rect.left.coerceIn(0, rawH),
+                        (rawW - rect.top).coerceIn(0, rawW),
+                        rect.right.coerceIn(0, rawH)
+                    )
+                    else -> Rect(
+                        rect.left.coerceIn(0, rawW),
+                        rect.top.coerceIn(0, rawH),
+                        rect.right.coerceIn(0, rawW),
+                        rect.bottom.coerceIn(0, rawH)
+                    )
+                }
+
+                if (rawRect.width() <= 0 || rawRect.height() <= 0) return
+
                 val options = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
-                val bitmap = active.decodeRegion(rect, options)
-                if (bitmap != null) {
-                    tileCache.put(key, bitmap)
-                    onDecoded(bitmap)
+                val rawBitmap = active.decodeRegion(rawRect, options)
+                if (rawBitmap != null) {
+                    val finalBitmap = if (rotationDegrees != 0) {
+                        val matrix = Matrix().apply {
+                            postRotate(rotationDegrees.toFloat())
+                        }
+                        val rotated = Bitmap.createBitmap(
+                            rawBitmap,
+                            0,
+                            0,
+                            rawBitmap.width,
+                            rawBitmap.height,
+                            matrix,
+                            true
+                        )
+                        if (rotated != rawBitmap) {
+                            rawBitmap.recycle()
+                        }
+                        rotated
+                    } else {
+                        rawBitmap
+                    }
+                    tileCache.put(key, finalBitmap)
+                    onDecoded(finalBitmap)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DeepZoomController", "Error decoding tile $key", e)
@@ -218,11 +273,7 @@ fun TileBasedDeepZoomOverlay(
         modifier = modifier
             .fillMaxSize()
             .graphicsLayer {
-                scaleX = scale * pagerScale
-                scaleY = scale * pagerScale
                 alpha = pagerAlpha
-                translationX = offsetX
-                translationY = offsetY
             }
     ) {
         // Read the trigger so canvas recomposes when new tiles finish decoding
@@ -287,20 +338,29 @@ fun TileBasedDeepZoomOverlay(
 
                 val cachedBitmap = controller.tileCache.get(tileKey)
                 if (cachedBitmap != null && !cachedBitmap.isRecycled) {
+                    val s = scale * pagerScale
                     val drawLeft = fitLeft + tileLeft * fitScale
                     val drawTop = fitTop + tileTop * fitScale
                     val drawWidth = (tileRight - tileLeft) * fitScale
                     val drawHeight = (tileBottom - tileTop) * fitScale
 
+                    val screenLeft = (drawLeft - composableW / 2f) * s + composableW / 2f + offsetX
+                    val screenTop = (drawTop - composableH / 2f) * s + composableH / 2f + offsetY
+                    val screenWidth = drawWidth * s
+                    val screenHeight = drawHeight * s
+
+                    val isSharpPixelMode = scale >= 10f
                     val tilePaint = android.graphics.Paint().apply {
-                        isFilterBitmap = (scale < 12f)
+                        isFilterBitmap = !isSharpPixelMode
+                        isAntiAlias = !isSharpPixelMode
+                        isDither = !isSharpPixelMode
                     }
 
                     drawIntoCanvas { canvas ->
                         canvas.nativeCanvas.drawBitmap(
                             cachedBitmap,
                             null,
-                            android.graphics.RectF(drawLeft, drawTop, drawLeft + drawWidth, drawTop + drawHeight),
+                            android.graphics.RectF(screenLeft, screenTop, screenLeft + screenWidth, screenTop + screenHeight),
                             tilePaint
                         )
                     }

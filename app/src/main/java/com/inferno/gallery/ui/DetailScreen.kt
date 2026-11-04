@@ -87,6 +87,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -1138,6 +1139,7 @@ fun DetailScreen(
                             model = request,
                             contentDescription = "Full-screen photo",
                             contentScale = ContentScale.Fit,
+                            filterQuality = if (scale.floatValue >= 10f) FilterQuality.None else FilterQuality.Low,
                             onSuccess = { state ->
                                 val size = state.painter.intrinsicSize
                                 if (size.width > 0f && size.height > 0f && size.width.isFinite() && size.height.isFinite()) {
@@ -1296,7 +1298,12 @@ fun DetailScreen(
                                                 val oldScale = scale.floatValue
                                                 // Keep tracking accumulated zoom after slop
                                                 if (isMultiTouch) accumulatedZoom *= zoomChange
-                                                val newScale = (oldScale * zoomChange).coerceIn(1f, 200f)
+                                                val zoomFactor = if (oldScale > 30f) {
+                                                    1f + (zoomChange - 1f) * (30f / oldScale).coerceIn(0.25f, 1f)
+                                                } else {
+                                                    zoomChange
+                                                }
+                                                val newScale = (oldScale * zoomFactor).coerceIn(1f, 200f)
                                                 // Pinch-in past threshold while at normal scale → enter filmstrip overview
                                                 if (isMultiTouch && !isFilmstripOverview &&
                                                     oldScale <= 1.05f && accumulatedZoom < 0.82f) {
