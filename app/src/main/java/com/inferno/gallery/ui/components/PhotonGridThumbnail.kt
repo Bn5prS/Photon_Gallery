@@ -194,19 +194,8 @@ fun BoxScope.PhotonGridThumbnail(
             }
         }
 
-        var isMotionPhoto by remember(item.id) {
-            mutableStateOf(com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(item.id) ?: false)
-        }
-
-        LaunchedEffect(item.id, gridCellsCount) {
-            // Only perform disk I/O scan on spacious grids (1-3 columns) when badge text is null and not yet cached
-            if (gridCellsCount <= 3 && badgeText == null && com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(item.id) == null) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    if (com.inferno.gallery.data.MotionPhotoHelper.isMotionPhotoFast(context, item)) {
-                        isMotionPhoto = true
-                    }
-                }
-            }
+        val isMotionPhoto = remember(item.id) {
+            com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(item.id) ?: false
         }
 
         val effectiveBadgeText = badgeText ?: if (isMotionPhoto) "MOTION" else null

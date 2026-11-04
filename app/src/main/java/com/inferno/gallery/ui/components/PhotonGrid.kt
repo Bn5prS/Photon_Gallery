@@ -497,7 +497,7 @@ fun PhotonGrid(
                             )
                         } else if (listItem is GalleryListItem.Item) {
                             val item = listItem.galleryItem
-                            val isSelected = selectedUris.contains(item.uri.toString())
+                            val isSelected = selectedUris.contains(item.uriString)
                             val isFav = favoriteIds.contains(item.id)
 
                             OptimizedThumbnailCell(
@@ -667,13 +667,18 @@ fun OptimizedThumbnailCell(
         Modifier
     }
 
+    val cellInteractionSource = remember { MutableInteractionSource() }
     val clickModifier = if (onLongClick != null) {
         Modifier.combinedClickable(
+            interactionSource = cellInteractionSource,
+            indication = null,
             onClick = clickHandler,
             onLongClick = longClickHandler
         )
     } else {
         Modifier.clickable(
+            interactionSource = cellInteractionSource,
+            indication = null,
             onClick = clickHandler
         )
     }
@@ -1299,7 +1304,7 @@ sealed class MosaicDisplayItem {
         val header: GalleryListItem.Header,
         val sourceIndex: Int
     ) : MosaicDisplayItem() {
-        override val key: String get() = "mosaic_header_${header.id}_$sourceIndex"
+        override val key: String get() = "mosaic_header_${header.id}"
         override val uris: List<String> get() = emptyList()
         override val sourceIndices: List<Int> get() = listOf(sourceIndex)
     }
@@ -1310,7 +1315,7 @@ sealed class MosaicDisplayItem {
         val aspectRatio: Float,
         val sourceIndex: Int
     ) : MosaicDisplayItem() {
-        override val key: String get() = "mosaic_big_${item.id}_${span}_$sourceIndex"
+        override val key: String get() = "mosaic_big_${item.id}_$span"
         override val uris: List<String> get() = listOf(item.uri.toString())
         override val sourceIndices: List<Int> get() = listOf(sourceIndex)
     }
@@ -1335,7 +1340,7 @@ sealed class MosaicDisplayItem {
         val item: GalleryItem,
         val sourceIndex: Int
     ) : MosaicDisplayItem() {
-        override val key: String get() = "mosaic_single_${item.id}_$sourceIndex"
+        override val key: String get() = "mosaic_single_${item.id}"
         override val uris: List<String> get() = listOf(item.uri.toString())
         override val sourceIndices: List<Int> get() = listOf(sourceIndex)
     }

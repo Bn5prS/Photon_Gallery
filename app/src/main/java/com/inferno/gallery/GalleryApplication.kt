@@ -146,8 +146,9 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
+        val decodeParallelism = Runtime.getRuntime().availableProcessors().coerceIn(6, 8)
         return ImageLoader.Builder(context)
-            .coroutineContext(Dispatchers.IO.limitedParallelism(4))
+            .coroutineContext(Dispatchers.IO.limitedParallelism(decodeParallelism))
             .components {
                 // Support high-performance system thumbnails for local MediaStore items
                 add(MediaStoreThumbnailFetcher.Factory(context))

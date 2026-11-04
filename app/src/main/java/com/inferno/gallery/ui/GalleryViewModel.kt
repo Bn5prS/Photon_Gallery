@@ -84,7 +84,8 @@ data class GalleryItem(
     val longitude: Double? = null,
     val fileHash: String? = null,
     val matchType: String? = null,
-    val matchSnippet: String? = null
+    val matchSnippet: String? = null,
+    val uriString: String = uri.toString()
 )
 
 @Immutable

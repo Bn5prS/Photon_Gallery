@@ -258,9 +258,11 @@ fun GalleryScreen(
     }
 
     // If initial composition clamped to 0 while PagingData was loading, restore to saved position once items load
-    LaunchedEffect(pagedMedia.itemCount) {
+    // Isolated via snapshotFlow so page appends NEVER recompose GalleryScreen during scrolling
+    LaunchedEffect(bucketName) {
+        val count = snapshotFlow { pagedMedia.itemCount }.first { it > 0 }
         val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
-        if (savedIndex > 0 && pagedMedia.itemCount > savedIndex && lazyGridState.firstVisibleItemIndex == 0) {
+        if (savedIndex > 0 && count > savedIndex && lazyGridState.firstVisibleItemIndex == 0) {
             lazyGridState.scrollToItem(savedIndex, savedOffset)
         }
     }
@@ -503,23 +505,25 @@ fun GalleryScreen(
             timelineLayoutMode = timelineLayoutMode,
             dateHeaderAlignment = dateHeaderAlignment,
             showMatchBadge = (bucketName == "search_text" || bucketName == "search_smart"),
-            headerContent = if (shouldShowMemoriesHeader) {
-                {
-                    MemoriesSpotlightCard(
-                        memoryGroups = onThisDayMemories,
-                        isDismissed = isMemoriesDismissed,
-                        onOpenMemory = { group ->
-                            activeMemoryReelGroup = group
-                        },
-                        onDismiss = {
-                            viewModel.dismissMemories()
-                        },
-                        onRestore = {
-                            viewModel.uncollapseMemories()
-                        }
-                    )
-                }
-            } else null
+            headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
+                if (shouldShowMemoriesHeader) {
+                    {
+                        MemoriesSpotlightCard(
+                            memoryGroups = onThisDayMemories,
+                            isDismissed = isMemoriesDismissed,
+                            onOpenMemory = { group ->
+                                activeMemoryReelGroup = group
+                            },
+                            onDismiss = {
+                                viewModel.dismissMemories()
+                            },
+                            onRestore = {
+                                viewModel.uncollapseMemories()
+                            }
+                        )
+                    }
+                } else null
+            }
         )
 
         // ── Initial sync loading ────────────────────────────────────────────
