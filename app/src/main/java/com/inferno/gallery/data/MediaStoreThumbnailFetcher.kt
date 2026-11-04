@@ -59,7 +59,17 @@ class MediaStoreThumbnailFetcher(
         // Fetch from system MediaProvider / MediaMetadataRetriever under concurrency limit
         var isFromSystem = false
         val bitmap: Bitmap? = try {
-            if (isVideo) {
+            if (uri.scheme == "file") {
+                // Direct file URI: decode downsampled under semaphore with HARDWARE bitmap
+                mediaProviderSemaphore.withPermit {
+                    coroutineContext.ensureActive()
+                    if (com.inferno.gallery.data.decoder.RawImageHelper.isRawUri(context, uri)) {
+                        com.inferno.gallery.data.decoder.RawImageHelper.decodeRawBitmap(context, uri, targetDim)
+                    } else {
+                        decodeDownsampledBitmap(context, uri, targetDim)
+                    }
+                }
+            } else if (isVideo) {
                 var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
                     try {
@@ -212,7 +222,7 @@ class MediaStoreThumbnailFetcher(
 
     class Factory(private val context: Context) : Fetcher.Factory<coil3.Uri> {
         override fun create(data: coil3.Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
-            val isLocalMedia = data.scheme == "content" && data.authority == "media"
+            val isLocalMedia = (data.scheme == "content" && data.authority == "media") || data.scheme == "file"
             if (!isLocalMedia) return null
 
             val width = (options.size.width as? Dimension.Pixels)?.px ?: Int.MAX_VALUE
@@ -225,7 +235,7 @@ class MediaStoreThumbnailFetcher(
 
     class AndroidUriFactory(private val context: Context) : Fetcher.Factory<android.net.Uri> {
         override fun create(data: android.net.Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
-            val isLocalMedia = data.scheme == "content" && data.authority == "media"
+            val isLocalMedia = (data.scheme == "content" && data.authority == "media") || data.scheme == "file"
             if (!isLocalMedia) return null
 
             val width = (options.size.width as? Dimension.Pixels)?.px ?: Int.MAX_VALUE

@@ -492,17 +492,7 @@ fun PhotonGrid(
                         if (listItem is GalleryListItem.Header && viewMode != ViewMode.Immersive) {
                             TimelineSectionHeader(
                                 title = listItem.title,
-                                modifier = Modifier.animateItem(
-                                    fadeInSpec = null,
-                                    fadeOutSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    ),
-                                    placementSpec = spring(
-                                        dampingRatio = 0.85f,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                ),
+                                modifier = Modifier,
                                 alignment = dateHeaderAlignment
                             )
                         } else if (listItem is GalleryListItem.Item) {
@@ -511,17 +501,7 @@ fun PhotonGrid(
                             val isFav = favoriteIds.contains(item.id)
 
                             OptimizedThumbnailCell(
-                                modifier = Modifier.animateItem(
-                                    fadeInSpec = null,
-                                    fadeOutSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    ),
-                                    placementSpec = spring(
-                                        dampingRatio = 0.85f,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                ),
+                                modifier = Modifier,
                                 item = item,
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -698,14 +678,13 @@ fun OptimizedThumbnailCell(
         )
     }
 
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 0.88f else 1.0f,
-        animationSpec = MotionTokens.snappySpring(),
-        label = "itemSelectionScale"
-    )
-    val selectionModifier = Modifier.graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+    val selectionModifier = if (isSelected) {
+        Modifier.graphicsLayer {
+            scaleX = 0.88f
+            scaleY = 0.88f
+        }
+    } else {
+        Modifier
     }
 
     // Single unified Box — provides the M3 surfaceContainer skeleton canvas tile
@@ -756,12 +735,29 @@ fun OptimizedThumbnailCell(
 
         // Selection overlay checkmark badge with solid white contrast border
         if (isSelected) {
+            val checkPadding = when {
+                gridCellsCount <= 4 -> 6.dp
+                gridCellsCount <= 6 -> 4.dp
+                else -> 2.dp
+            }
+            val checkBadgeSize = when {
+                gridCellsCount <= 3 -> 24.dp
+                gridCellsCount <= 5 -> 20.dp
+                gridCellsCount == 6 -> 17.dp
+                else -> 14.dp
+            }
+            val checkIconSize = when {
+                gridCellsCount <= 3 -> 15.dp
+                gridCellsCount <= 5 -> 12.dp
+                gridCellsCount == 6 -> 10.dp
+                else -> 8.5.dp
+            }
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(24.dp)
+                    .padding(checkPadding)
+                    .size(checkBadgeSize)
                     .background(MaterialTheme.colorScheme.primary, CircleShape)
                     .border(SelectionBorderStroke, CircleShape)
             ) {
@@ -769,7 +765,7 @@ fun OptimizedThumbnailCell(
                     imageVector = checkIconVector,
                     contentDescription = "Selected",
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(15.dp)
+                    modifier = Modifier.size(checkIconSize)
                 )
             }
         }
@@ -1063,7 +1059,7 @@ private fun Modifier.smoothGridPinchZoom(
                                 // Zoom OUT: pinching fingers -> more columns (e.g. 3 -> 4)
                                 else if (rawScale < 0.82f && now - lastChangeTime > 260L) {
                                     val currentCols = currentGridCount
-                                    if (currentCols < 6) {
+                                    if (currentCols < 8) {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         currentOnGridCountChange(currentCols + 1)
                                         lastChangeTime = now

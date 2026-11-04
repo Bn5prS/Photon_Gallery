@@ -187,7 +187,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 // Removed resolvedUriCache
 
 // Profiling switch for the prefetch pipeline (kept false to prevent thread competition during fling deceleration)
-private const val PREFETCH_EXPERIMENT_ENABLED = false
+private const val PREFETCH_EXPERIMENT_ENABLED = true
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -390,8 +390,8 @@ fun GalleryScreen(
                 val scrollingDown = firstIndex >= previousFirstIndex
                 previousFirstIndex = firstIndex
 
-                // Debounce burst ticks during high-velocity flings: only the newest position survives
-                delay(60L)
+                // Fast debounce: 25ms so prefetch initiates swiftly while scrolling
+                delay(25L)
 
                 val layoutInfo = lazyGridState.layoutInfo
                 val viewportWidth = layoutInfo.viewportSize.width.toFloat()
@@ -401,7 +401,7 @@ fun GalleryScreen(
                 val rowHeightPx = maxOf(viewportWidth / gridCellsCount, 1f)
                 val rowsVisible = kotlin.math.ceil(viewportHeight / rowHeightPx).toInt().coerceAtLeast(4)
                 val visibleCount = gridCellsCount * rowsVisible
-                val preloadCount = gridCellsCount * 2
+                val preloadCount = gridCellsCount * 3
 
                 val start: Int
                 val end: Int
@@ -419,12 +419,24 @@ fun GalleryScreen(
                     val galleryItem = listItem.galleryItem
                     val cacheKey = thumbnailMemoryKey(galleryItem.id, thumbSizePx)
                     if (imageLoader.memoryCache?.get(coil3.memory.MemoryCache.Key(cacheKey)) != null) continue
+
+                    val modelUri = if (galleryItem.uri != android.net.Uri.EMPTY && galleryItem.uri.scheme == "content") {
+                        galleryItem.uri
+                    } else if (galleryItem.localExists) {
+                        galleryItem.resolvedUri
+                    } else {
+                        galleryItem.uri
+                    }
+
                     val req = coil3.request.ImageRequest.Builder(context)
-                        .data(if (galleryItem.isVideo) galleryItem.uri else (if (galleryItem.localExists) galleryItem.resolvedUri else galleryItem.uri))
+                        .data(modelUri)
                         .size(thumbSizePx, thumbSizePx)
                         .precision(coil3.size.Precision.INEXACT)
                         .memoryCacheKey(cacheKey)
                         .diskCacheKey(cacheKey)
+                        .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                        .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                        .crossfade(false)
                         .build()
                     imageLoader.enqueue(req)
                 }

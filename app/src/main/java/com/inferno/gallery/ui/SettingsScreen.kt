@@ -1117,10 +1117,10 @@ fun SettingsScreen(
                                                 }
                                                 Spacer(modifier = Modifier.height(6.dp))
                                                 Slider(
-                                                    value = gridCellsCount.toFloat().coerceIn(2f, 6f),
+                                                    value = gridCellsCount.toFloat().coerceIn(2f, 8f),
                                                     onValueChange = { galleryViewModel.setGridCellsCount(it.toInt()) },
-                                                    valueRange = 2f..6f,
-                                                    steps = 3
+                                                    valueRange = 2f..8f,
+                                                    steps = 5
                                                 )
                                             }
 

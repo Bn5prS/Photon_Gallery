@@ -1175,7 +1175,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            _gridCellsCount.value = settingsRepository.gridCellsCountFlow.first().coerceIn(2, 6)
+            _gridCellsCount.value = settingsRepository.gridCellsCountFlow.first().coerceIn(2, 8)
         }
         viewModelScope.launch(Dispatchers.Default) {
             try {
@@ -2245,7 +2245,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setGridCellsCount(count: Int) {
-        val clamped = count.coerceIn(2, 6)
+        val clamped = count.coerceIn(2, 8)
         _gridCellsCount.value = clamped
         saveGridCellsJob?.cancel()
         saveGridCellsJob = viewModelScope.launch {

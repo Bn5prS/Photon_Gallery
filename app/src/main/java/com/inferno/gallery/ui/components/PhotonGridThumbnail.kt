@@ -64,9 +64,16 @@ fun BoxScope.PhotonGridThumbnail(
     val context = LocalContext.current
     val targetDimensionPx = remember(gridCellsCount) { thumbnailTargetPx(gridCellsCount) }
 
-    // Videos use the MediaStore content URI so MediaStoreThumbnailFetcher or VideoFrameDecoder
-    // handles them reliably. Local images use the direct file URI to bypass Binder IPC.
-    val modelUri = if (item.isVideo) item.uri else (if (item.localExists) item.resolvedUri else item.uri)
+    // Prefer the system MediaStore content URI for all media items so MediaStoreThumbnailFetcher
+    // uses ContentResolver.loadThumbnail (system-cached, hardware-accelerated, cancellable IPC).
+    // Only fall back to resolvedUri if item.uri is not a MediaStore content URI (e.g. private vault, file://).
+    val modelUri = if (item.uri != android.net.Uri.EMPTY && item.uri.scheme == "content") {
+        item.uri
+    } else if (item.localExists) {
+        item.resolvedUri
+    } else {
+        item.uri
+    }
 
     val imageRequest = remember(modelUri, targetDimensionPx) {
         val cacheKey = thumbnailMemoryKey(item.id, targetDimensionPx)
@@ -192,8 +199,8 @@ fun BoxScope.PhotonGridThumbnail(
         }
 
         LaunchedEffect(item.id, gridCellsCount) {
-            // Only perform disk I/O scan on spacious grids (1-4 columns) when badge text is null and not yet cached
-            if (gridCellsCount <= 4 && badgeText == null && com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(item.id) == null) {
+            // Only perform disk I/O scan on spacious grids (1-3 columns) when badge text is null and not yet cached
+            if (gridCellsCount <= 3 && badgeText == null && com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(item.id) == null) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     if (com.inferno.gallery.data.MotionPhotoHelper.isMotionPhotoFast(context, item)) {
                         isMotionPhoto = true
