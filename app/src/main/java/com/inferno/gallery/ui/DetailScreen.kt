@@ -1570,7 +1570,38 @@ fun DetailScreen(
                         )
                     }
 
+                    // Zoom value badge at bottom center
+                    val currentZoom = scale.floatValue
+                    val zoomText = if (currentZoom >= 100f) {
+                        "${currentZoom.toInt()}x"
+                    } else {
+                        val rounded = kotlin.math.round(currentZoom * 10f) / 10f
+                        if (rounded % 1f == 0f) {
+                            "${rounded.toInt()}x"
+                        } else {
+                            String.format(java.util.Locale.US, "%.1fx", rounded)
+                        }
+                    }
 
+                    Surface(
+                        shape = ShapeFull,
+                        color = Color.Black.copy(alpha = 0.65f),
+                        contentColor = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 3.dp)
+                    ) {
+                        Text(
+                            text = zoomText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.sp
+                            ),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
                 }
             } // end BoxWithConstraints
             } // end wrapper Box
