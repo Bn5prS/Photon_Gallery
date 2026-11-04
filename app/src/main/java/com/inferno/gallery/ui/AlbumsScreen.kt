@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -164,10 +165,10 @@ fun AlbumsScreen(
         albums.filter { it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && (it.itemCount > 0 || showEmptyAlbums) }
     }
 
-    val visibleAlbums = remember(unpinnedAlbums) {
-        unpinnedAlbums.take(6)
+    val visibleAlbums = remember(unpinnedAlbums, albumLayoutMode) {
+        if (albumLayoutMode == AlbumLayoutMode.LIST) unpinnedAlbums.take(6) else unpinnedAlbums.take(20)
     }
-    val hasMoreAlbums = unpinnedAlbums.size > 6
+    val hasMoreAlbums = unpinnedAlbums.size > (if (albumLayoutMode == AlbumLayoutMode.LIST) 6 else 20)
 
     // Persistent expand states for sections
     val pinnedExpanded by viewModel.albumsExpandedPinned.collectAsState()
@@ -268,22 +269,22 @@ fun AlbumsScreen(
             }
 
             if (pinnedExpanded) {
-                items(
-                    items = userPinnedAlbums,
-                    key = { "pinned_${it.bucketName}" }
-                ) { bucket ->
-                    val displayBucketName = when (bucket.bucketName) {
-                        "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
-                        else -> bucket.bucketName
-                    }
-                    var showCardMenu by remember { mutableStateOf(false) }
+                if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                    items(
+                        items = userPinnedAlbums,
+                        key = { "pinned_${it.bucketName}" }
+                    ) { bucket ->
+                        val displayBucketName = when (bucket.bucketName) {
+                            "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                            else -> bucket.bucketName
+                        }
+                        var showCardMenu by remember { mutableStateOf(false) }
 
-                    val albumShape = remember(customShapes, bucket.bucketName) {
-                        AlbumShapes.getShape(customShapes[bucket.bucketName])
-                    }
+                        val albumShape = remember(customShapes, bucket.bucketName) {
+                            AlbumShapes.getShape(customShapes[bucket.bucketName])
+                        }
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             AlbumListRow(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
@@ -295,42 +296,94 @@ fun AlbumsScreen(
                                     showCardMenu = true
                                 }
                             )
-                        } else {
-                            AlbumCard(
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                bucket = bucket.copy(bucketName = displayBucketName),
-                                showAlbumSize = showAlbumSize,
-                                customShape = albumShape,
-                                isCompact = true,
-                                isPinned = true,
-                                onClick = { onAlbumClick(bucket.bucketName) },
-                                onLongPress = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    showCardMenu = true
-                                }
+
+                            AlbumDropdownMenu(
+                                expanded = showCardMenu,
+                                onDismissRequest = { showCardMenu = false },
+                                bucketName = bucket.bucketName,
+                                isUserPinned = true,
+                                hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                onTogglePin = {
+                                    viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                        if (!success) {
+                                            Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                onChangeCover = { onChangeCover(bucket.bucketName) },
+                                onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                onChangeShape = { shapePickerBucket = bucket },
+                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
                             )
                         }
+                    }
+                } else {
+                    item(key = "content_pinned_carousel", span = { GridItemSpan(maxLineSpan) }) {
+                        val pinnedRowCount = if (userPinnedAlbums.size > 3) 2 else 1
+                        val pinnedCarouselHeight = if (pinnedRowCount == 2) 324.dp else 160.dp
 
-                        AlbumDropdownMenu(
-                            expanded = showCardMenu,
-                            onDismissRequest = { showCardMenu = false },
-                            bucketName = bucket.bucketName,
-                            isUserPinned = true,
-                            hasCustomCover = customCovers.containsKey(bucket.bucketName),
-                            hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                            onTogglePin = {
-                                viewModel.togglePinAlbum(bucket.bucketName) { success ->
-                                    if (!success) {
-                                        Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
-                                    }
+                        LazyHorizontalGrid(
+                            rows = GridCells.Fixed(pinnedRowCount),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(pinnedCarouselHeight),
+                            contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            items(
+                                items = userPinnedAlbums,
+                                key = { "pinned_${it.bucketName}" }
+                            ) { bucket ->
+                                val displayBucketName = when (bucket.bucketName) {
+                                    "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                                    else -> bucket.bucketName
                                 }
-                            },
-                            onChangeCover = { onChangeCover(bucket.bucketName) },
-                            onDeleteCover = { onDeleteCover(bucket.bucketName) },
-                            onChangeShape = { shapePickerBucket = bucket },
-                            onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
-                        )
+                                var showCardMenu by remember { mutableStateOf(false) }
+
+                                val albumShape = remember(customShapes, bucket.bucketName) {
+                                    AlbumShapes.getShape(customShapes[bucket.bucketName])
+                                }
+
+                                Box(modifier = Modifier.width(118.dp)) {
+                                    AlbumCard(
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        bucket = bucket.copy(bucketName = displayBucketName),
+                                        showAlbumSize = showAlbumSize,
+                                        customShape = albumShape,
+                                        isCompact = true,
+                                        isPinned = true,
+                                        onClick = { onAlbumClick(bucket.bucketName) },
+                                        onLongPress = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            showCardMenu = true
+                                        }
+                                    )
+
+                                    AlbumDropdownMenu(
+                                        expanded = showCardMenu,
+                                        onDismissRequest = { showCardMenu = false },
+                                        bucketName = bucket.bucketName,
+                                        isUserPinned = true,
+                                        hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                        hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                        onTogglePin = {
+                                            viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                                if (!success) {
+                                                    Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        },
+                                        onChangeCover = { onChangeCover(bucket.bucketName) },
+                                        onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                        onChangeShape = { shapePickerBucket = bucket },
+                                        onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -366,22 +419,22 @@ fun AlbumsScreen(
             }
 
             if (visibleAlbums.isNotEmpty()) {
-                items(
-                    items = visibleAlbums,
-                    key = { "album_${it.bucketName}" }
-                ) { bucket ->
-                    val displayBucketName = when (bucket.bucketName) {
-                        "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
-                        else -> bucket.bucketName
-                    }
-                    var showCardMenu by remember { mutableStateOf(false) }
+                if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                    items(
+                        items = visibleAlbums,
+                        key = { "album_${it.bucketName}" }
+                    ) { bucket ->
+                        val displayBucketName = when (bucket.bucketName) {
+                            "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                            else -> bucket.bucketName
+                        }
+                        var showCardMenu by remember { mutableStateOf(false) }
 
-                    val albumShape = remember(customShapes, bucket.bucketName) {
-                        AlbumShapes.getShape(customShapes[bucket.bucketName])
-                    }
+                        val albumShape = remember(customShapes, bucket.bucketName) {
+                            AlbumShapes.getShape(customShapes[bucket.bucketName])
+                        }
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             AlbumListRow(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
@@ -393,43 +446,95 @@ fun AlbumsScreen(
                                     showCardMenu = true
                                 }
                             )
-                        } else {
-                            AlbumCard(
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                bucket = bucket.copy(bucketName = displayBucketName),
-                                showAlbumSize = showAlbumSize,
-                                customShape = albumShape,
-                                isCompact = true,
-                                isPinned = false,
-                                onClick = { onAlbumClick(bucket.bucketName) },
-                                onLongPress = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    showCardMenu = true
-                                }
+
+                            // Context menu for albums
+                            AlbumDropdownMenu(
+                                expanded = showCardMenu,
+                                onDismissRequest = { showCardMenu = false },
+                                bucketName = bucket.bucketName,
+                                isUserPinned = false,
+                                hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                onTogglePin = {
+                                    viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                        if (!success) {
+                                            Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                onChangeCover = { onChangeCover(bucket.bucketName) },
+                                onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                onChangeShape = { shapePickerBucket = bucket },
+                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
                             )
                         }
+                    }
+                } else {
+                    item(key = "content_albums_carousel", span = { GridItemSpan(maxLineSpan) }) {
+                        val albumsRowCount = if (visibleAlbums.size > 3) 2 else 1
+                        val albumsCarouselHeight = if (albumsRowCount == 2) 324.dp else 160.dp
 
-                        // Context menu for albums
-                        AlbumDropdownMenu(
-                            expanded = showCardMenu,
-                            onDismissRequest = { showCardMenu = false },
-                            bucketName = bucket.bucketName,
-                            isUserPinned = false,
-                            hasCustomCover = customCovers.containsKey(bucket.bucketName),
-                            hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                            onTogglePin = {
-                                viewModel.togglePinAlbum(bucket.bucketName) { success ->
-                                    if (!success) {
-                                        Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
-                                    }
+                        LazyHorizontalGrid(
+                            rows = GridCells.Fixed(albumsRowCount),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(albumsCarouselHeight),
+                            contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            items(
+                                items = visibleAlbums,
+                                key = { "album_${it.bucketName}" }
+                            ) { bucket ->
+                                val displayBucketName = when (bucket.bucketName) {
+                                    "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                                    else -> bucket.bucketName
                                 }
-                            },
-                            onChangeCover = { onChangeCover(bucket.bucketName) },
-                            onDeleteCover = { onDeleteCover(bucket.bucketName) },
-                            onChangeShape = { shapePickerBucket = bucket },
-                            onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
-                        )
+                                var showCardMenu by remember { mutableStateOf(false) }
+
+                                val albumShape = remember(customShapes, bucket.bucketName) {
+                                    AlbumShapes.getShape(customShapes[bucket.bucketName])
+                                }
+
+                                Box(modifier = Modifier.width(118.dp)) {
+                                    AlbumCard(
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        bucket = bucket.copy(bucketName = displayBucketName),
+                                        showAlbumSize = showAlbumSize,
+                                        customShape = albumShape,
+                                        isCompact = true,
+                                        isPinned = false,
+                                        onClick = { onAlbumClick(bucket.bucketName) },
+                                        onLongPress = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            showCardMenu = true
+                                        }
+                                    )
+
+                                    AlbumDropdownMenu(
+                                        expanded = showCardMenu,
+                                        onDismissRequest = { showCardMenu = false },
+                                        bucketName = bucket.bucketName,
+                                        isUserPinned = false,
+                                        hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                        hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                        onTogglePin = {
+                                            viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                                if (!success) {
+                                                    Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        },
+                                        onChangeCover = { onChangeCover(bucket.bucketName) },
+                                        onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                        onChangeShape = { shapePickerBucket = bucket },
+                                        onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
