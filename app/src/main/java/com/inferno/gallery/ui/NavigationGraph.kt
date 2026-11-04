@@ -403,6 +403,14 @@ fun NavigationGraph(
                         val encoded = android.net.Uri.encode(media.id.toString())
                         val bucket = android.net.Uri.encode("person:$personId")
                         navController.navigate("detail/$encoded?bucket=$bucket")
+                    },
+                    onCreateCollage = { uris ->
+                        val encoded = android.net.Uri.encode(uris.joinToString(","))
+                        navController.navigate("collage?uris=$encoded")
+                    },
+                    onCreateStitch = { uris ->
+                        val encoded = android.net.Uri.encode(uris.joinToString(","))
+                        navController.navigate("stitch?uris=$encoded")
                     }
                 )
             }

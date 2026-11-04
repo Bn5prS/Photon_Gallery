@@ -59,6 +59,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.TopAppBar
+import com.inferno.gallery.ui.GalleryViewModel
+import com.inferno.gallery.ui.components.AlbumPickerSheet
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -118,6 +121,9 @@ fun PersonDetailScreen(
     onBack: () -> Unit,
     onMediaClick: (CoreMediaEntity) -> Unit,
     viewModel: PeopleViewModel = viewModel(),
+    galleryViewModel: GalleryViewModel = viewModel(),
+    onCreateCollage: ((List<String>) -> Unit)? = null,
+    onCreateStitch: ((List<String>) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -144,6 +150,10 @@ fun PersonDetailScreen(
 
     var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
     val confirmDeleteEnabled by viewModel.settingsRepository.confirmDeleteEnabledFlow.collectAsState(initial = true)
+    var showCopySheet by remember { mutableStateOf(false) }
+    var showMoveSheet by remember { mutableStateOf(false) }
+    var createMenuExpanded by remember { mutableStateOf(false) }
+    var moreMenuExpanded by remember { mutableStateOf(false) }
 
     val trashLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -376,12 +386,76 @@ fun PersonDetailScreen(
         )
     }
 
+    if (showCopySheet && selectedMedia.isNotEmpty()) {
+        val allAlbumsList by galleryViewModel.allAlbums.collectAsState()
+        val uris = remember(selectedMedia) { selectedMedia.map { Uri.parse(it.uriString) } }
+        AlbumPickerSheet(
+            title = stringResource(R.string.sheet_copy_to_album),
+            itemCount = uris.size,
+            albums = allAlbumsList,
+            showPrivateSpaceOption = false,
+            confirmPathButtonText = stringResource(R.string.sheet_copy_here),
+            onDismissRequest = { showCopySheet = false },
+            onSelectAlbum = { bucket ->
+                showCopySheet = false
+                galleryViewModel.copyMedia(uris, bucket) {
+                    selectedMediaIds = emptySet()
+                }
+            },
+            onSelectPath = { path ->
+                showCopySheet = false
+                galleryViewModel.copyMediaToPath(uris, path) {
+                    selectedMediaIds = emptySet()
+                }
+            }
+        )
+    }
+
+    if (showMoveSheet && selectedMedia.isNotEmpty()) {
+        val allAlbumsList by galleryViewModel.allAlbums.collectAsState()
+        val uris = remember(selectedMedia) { selectedMedia.map { Uri.parse(it.uriString) } }
+        AlbumPickerSheet(
+            title = stringResource(R.string.sheet_move_to_album),
+            itemCount = uris.size,
+            albums = allAlbumsList,
+            showPrivateSpaceOption = true,
+            confirmPathButtonText = stringResource(R.string.sheet_move_here),
+            onDismissRequest = { showMoveSheet = false },
+            onSelectAlbum = { bucket ->
+                showMoveSheet = false
+                galleryViewModel.moveMedia(uris, bucket) {
+                    selectedMediaIds = emptySet()
+                }
+            },
+            onSelectPath = { path ->
+                showMoveSheet = false
+                galleryViewModel.moveMediaToPath(uris, path) {
+                    selectedMediaIds = emptySet()
+                }
+            },
+            onSelectPrivateSpace = {
+                showMoveSheet = false
+                val activity = context as? androidx.fragment.app.FragmentActivity
+                if (activity != null) {
+                    galleryViewModel.vaultAuthManager.authenticate(
+                        activity = activity,
+                        onSuccess = {
+                            galleryViewModel.hideMedia(uris)
+                            selectedMediaIds = emptySet()
+                        },
+                        onFailure = {}
+                    )
+                }
+            }
+        )
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     if (isSelectionMode) {
                         Text(
@@ -413,6 +487,36 @@ fun PersonDetailScreen(
                 },
                 actions = {
                     if (isSelectionMode) {
+                        // Move to different cluster
+                        IconButton(
+                            onClick = { showMovePhotosPicker = true }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
+                                contentDescription = "Move to different cluster",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(IconSizeTokens.L)
+                            )
+                        }
+
+                        // Remove from cluster
+                        IconButton(
+                            onClick = {
+                                val count = selectedMediaIds.size
+                                viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())
+                                Toast.makeText(context, "Removed $count photo(s) from this cluster", Toast.LENGTH_SHORT).show()
+                                selectedMediaIds = emptySet()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_remove),
+                                contentDescription = "Remove from cluster",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(IconSizeTokens.L)
+                            )
+                        }
+
+                        // Select or Deselect All
                         IconButton(
                             onClick = {
                                 if (selectedMediaIds.size == mediaList.size) {
@@ -618,7 +722,7 @@ fun PersonDetailScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(108.dp)
+                            .size(104.dp)
                             .clip(CircleShape)
                             .clickable { showFeaturePhotoPicker = true },
                         contentAlignment = Alignment.Center
@@ -627,7 +731,7 @@ fun PersonDetailScreen(
                             shape = ShapeFull,
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             tonalElevation = 4.dp,
-                            modifier = Modifier.size(104.dp)
+                            modifier = Modifier.fillMaxSize()
                         ) {
                             val coverFile = person?.coverCropPath?.let { File(it) }
                             if (coverFile != null && coverFile.exists()) {
@@ -659,25 +763,6 @@ fun PersonDetailScreen(
                                         )
                                     }
                                 }
-                            }
-                        }
-
-                        // Floating camera affordance badge
-                        Surface(
-                            shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.surfaceContainerLow),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .align(Alignment.BottomEnd)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
-                                    contentDescription = "Change feature photo",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(IconSizeTokens.S)
-                                )
                             }
                         }
                     }
@@ -740,7 +825,7 @@ fun PersonDetailScreen(
                     },
                     onLongClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        selectedMediaIds = selectedMediaIds + media.id
+                        selectedMediaIds = if (isSelected) selectedMediaIds - media.id else selectedMediaIds + media.id
                     }
                 )
             }
@@ -780,6 +865,9 @@ fun PersonDetailScreen(
             .align(Alignment.BottomCenter)
             .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp)
     ) {
+        val isCreateEnabled = selectedMediaIds.size in 1..8
+        val isStitchEnabled = selectedMediaIds.size in 2..10
+
         Surface(
             shape = ShapeExtraLarge,
             color = MaterialTheme.colorScheme.secondaryContainer,
@@ -812,32 +900,77 @@ fun PersonDetailScreen(
                     )
                 }
 
-                // Move to another person
-                IconButton(
-                    onClick = { showMovePhotosPicker = true }
-                ) {
+                // Copy
+                IconButton(onClick = { showCopySheet = true }) {
                     Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
-                        contentDescription = "Move photos to another person",
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
+                        contentDescription = "Copy",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(IconSizeTokens.L)
                     )
                 }
 
-                // Remove from person
-                IconButton(
-                    onClick = {
-                        viewModel.removeMediaFromPerson(personId, selectedMediaIds.toList())
-                        Toast.makeText(context, "Removed from this person", Toast.LENGTH_SHORT).show()
-                        selectedMediaIds = emptySet()
-                    }
-                ) {
+                // Move
+                IconButton(onClick = { showMoveSheet = true }) {
                     Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_remove),
-                        contentDescription = "Remove from person",
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                        contentDescription = "Move",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(IconSizeTokens.L)
                     )
+                }
+
+                // Create (Collage/Stitch)
+                Box {
+                    IconButton(onClick = { createMenuExpanded = true }) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                            contentDescription = "Create",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(IconSizeTokens.L)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = createMenuExpanded,
+                        onDismissRequest = { createMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_collage)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                createMenuExpanded = false
+                                if (isCreateEnabled) {
+                                    val uris = selectedMedia.map { it.uriString }
+                                    onCreateCollage?.invoke(uris)
+                                } else {
+                                    Toast.makeText(context, "Collage supports up to 8 images", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_stitch)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                createMenuExpanded = false
+                                if (isStitchEnabled) {
+                                    val uris = selectedMedia.map { it.uriString }
+                                    onCreateStitch?.invoke(uris)
+                                } else {
+                                    Toast.makeText(context, "Select between 2 and 10 images to stitch", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    }
                 }
 
                 // Delete
@@ -856,6 +989,48 @@ fun PersonDetailScreen(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(IconSizeTokens.L)
                     )
+                }
+
+                // More options
+                Box {
+                    IconButton(onClick = { moreMenuExpanded = true }) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                            contentDescription = "More",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(IconSizeTokens.L)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = moreMenuExpanded,
+                        onDismissRequest = { moreMenuExpanded = false }
+                    ) {
+                        // Hide (Private Space)
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_hide)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                moreMenuExpanded = false
+                                val activity = context as? androidx.fragment.app.FragmentActivity
+                                if (activity != null) {
+                                    galleryViewModel.vaultAuthManager.authenticate(
+                                        activity = activity,
+                                        onSuccess = {
+                                            val uris = selectedMedia.map { Uri.parse(it.uriString) }
+                                            galleryViewModel.hideMedia(uris)
+                                            selectedMediaIds = emptySet()
+                                        },
+                                        onFailure = {}
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }

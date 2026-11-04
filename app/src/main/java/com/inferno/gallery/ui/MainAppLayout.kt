@@ -1308,7 +1308,9 @@ fun MainAppLayout(
                 com.inferno.gallery.ui.people.PersonDetailScreen(
                     personId = personId,
                     onBack = { nestedNavController.popBackStackSafely(backStackEntry) },
-                    onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) }
+                    onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) },
+                    onCreateCollage = onCreateCollage,
+                    onCreateStitch = onCreateStitch
                 )
             }
 
@@ -1334,7 +1336,9 @@ fun MainAppLayout(
                 com.inferno.gallery.ui.people.PersonDetailScreen(
                     personId = personId,
                     onBack = { nestedNavController.popBackStackSafely(backStackEntry) },
-                    onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) }
+                    onMediaClick = { media -> onPhotoClick(media.id.toString(), "person:$personId", null) },
+                    onCreateCollage = onCreateCollage,
+                    onCreateStitch = onCreateStitch
                 )
             }
 
