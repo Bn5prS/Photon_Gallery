@@ -1139,7 +1139,7 @@ fun DetailScreen(
                             model = request,
                             contentDescription = "Full-screen photo",
                             contentScale = ContentScale.Fit,
-                            filterQuality = if (scale.floatValue >= 10f) FilterQuality.None else FilterQuality.Low,
+                            filterQuality = if (scale.floatValue >= 30f) FilterQuality.None else FilterQuality.Low,
                             onSuccess = { state ->
                                 val size = state.painter.intrinsicSize
                                 if (size.width > 0f && size.height > 0f && size.width.isFinite() && size.height.isFinite()) {

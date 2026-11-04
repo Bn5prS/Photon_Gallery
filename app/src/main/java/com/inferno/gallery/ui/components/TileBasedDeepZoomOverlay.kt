@@ -349,7 +349,7 @@ fun TileBasedDeepZoomOverlay(
                     val screenWidth = drawWidth * s
                     val screenHeight = drawHeight * s
 
-                    val isSharpPixelMode = scale >= 10f
+                    val isSharpPixelMode = scale >= 30f
                     val tilePaint = android.graphics.Paint().apply {
                         isFilterBitmap = !isSharpPixelMode
                         isAntiAlias = !isSharpPixelMode
