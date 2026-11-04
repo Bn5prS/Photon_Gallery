@@ -86,6 +86,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
         val PEOPLE_GRID_CELLS_COUNT = intPreferencesKey("people_grid_cells_count")
         val PERSON_DETAIL_GRID_CELLS_COUNT = intPreferencesKey("person_detail_grid_cells_count")
+        val PINNED_PEOPLE_ORDER = stringPreferencesKey("pinned_people_order")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
         val ALBUMS_EXPANDED_MORE = booleanPreferencesKey("albums_expanded_more")
@@ -572,6 +573,27 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updatePersonDetailGridCellsCount(count: Int) {
         context.dataStore.edit { preferences ->
             preferences[PERSON_DETAIL_GRID_CELLS_COUNT] = count
+        }
+    }
+
+    val pinnedPeopleOrderFlow: Flow<List<Long>> = context.dataStore.data
+        .map { preferences ->
+            val str = preferences[PINNED_PEOPLE_ORDER] ?: ""
+            if (str.isEmpty()) emptyList()
+            else str.split(",").mapNotNull { it.trim().toLongOrNull() }
+        }
+
+    suspend fun recordPersonFavorited(personId: Long, isFavorite: Boolean) {
+        context.dataStore.edit { preferences ->
+            val currentStr = preferences[PINNED_PEOPLE_ORDER] ?: ""
+            val currentList = if (currentStr.isEmpty()) emptyList()
+            else currentStr.split(",").mapNotNull { it.trim().toLongOrNull() }
+            val newList = if (isFavorite) {
+                listOf(personId) + (currentList - personId)
+            } else {
+                currentList - personId
+            }
+            preferences[PINNED_PEOPLE_ORDER] = newList.joinToString(",")
         }
     }
 

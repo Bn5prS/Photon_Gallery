@@ -53,7 +53,7 @@ interface FaceDao {
                   AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
         FROM persons p
         WHERE p.isHidden = 0
-        ORDER BY faceCount DESC
+        ORDER BY p.isFavorite DESC, faceCount DESC
     """)
     fun observeAllVisiblePersons(): Flow<List<PersonEntity>>
 
@@ -79,7 +79,7 @@ interface FaceDao {
                 WHERE f.personId = p.id AND c.bucketName != 'Trash' 
                   AND c.uriString NOT IN (SELECT originalUri FROM vault_media)) AS faceCount
         FROM persons p
-        ORDER BY p.isHidden ASC, faceCount DESC
+        ORDER BY p.isFavorite DESC, p.isHidden ASC, faceCount DESC
     """)
     fun observeAllPersonsIncludingHidden(): Flow<List<PersonEntity>>
 

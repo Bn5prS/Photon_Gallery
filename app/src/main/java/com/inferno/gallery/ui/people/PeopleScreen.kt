@@ -20,6 +20,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -353,6 +354,30 @@ fun PeopleScreen(
                                         modifier = Modifier.size(IconSizeTokens.L)
                                     )
                                 }
+                            }
+                        }
+                        val selectedPeopleList = displayPeople.filter { selectedIds.contains(it.id) }
+                        if (selectedPeopleList.isNotEmpty()) {
+                            val anyNotFav = selectedPeopleList.any { !it.isFavorite }
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedPeopleList.forEach { p ->
+                                        if (p.isFavorite != anyNotFav) {
+                                            viewModel.toggleFavorite(p)
+                                        }
+                                    }
+                                    viewModel.clearSelection()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(
+                                        if (anyNotFav) R.drawable.ic_ms_favorite else R.drawable.ic_ms_favorite_filled
+                                    ),
+                                    contentDescription = if (anyNotFav) "Favorite selected people" else "Unfavorite selected people",
+                                    tint = if (!anyNotFav) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(IconSizeTokens.L)
+                                )
                             }
                         }
                         IconButton(
@@ -1128,21 +1153,22 @@ private fun PersonGridCard(
                 }
             }
 
-            // Favorite star badge
+            // Favorite heart badge
             if (person.isFavorite && !isSelected) {
                 Surface(
                     shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surfaceContainerLow),
                     modifier = Modifier
                         .size(24.dp)
                         .align(Alignment.BottomEnd)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_star),
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled),
                             contentDescription = "Favorite",
-                            modifier = Modifier.size(IconSizeTokens.S)
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                 }

@@ -42,6 +42,7 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     private val database = DatabaseProvider.getDatabase(application)
     private val faceDao = database.faceDao()
     private val clusteringManager = FaceClusteringManager.getInstance(application)
+    val settingsRepository = SettingsRepository.getInstance(application)
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -105,29 +106,47 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
         .combine(MutableStateFlow(Unit)) { selected, _ -> selected.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val promotedPersons: StateFlow<List<PersonEntity>> = faceDao.observePromotedPersons()
-        .combine(_searchQuery) { list, query ->
-            if (query.isBlank()) {
-                list
-            } else {
-                list.filter { person ->
-                    person.name?.contains(query, ignoreCase = true) == true
-                }
+    val promotedPersons: StateFlow<List<PersonEntity>> = combine(
+        faceDao.observePromotedPersons(),
+        settingsRepository.pinnedPeopleOrderFlow,
+        _searchQuery
+    ) { list, pinnedOrder, query ->
+        val filtered = if (query.isBlank()) {
+            list
+        } else {
+            list.filter { person ->
+                person.name?.contains(query, ignoreCase = true) == true
             }
         }
+        val orderMap = pinnedOrder.withIndex().associate { it.value to it.index }
+        filtered.sortedWith(
+            compareBy<PersonEntity> { !it.isFavorite }
+                .thenBy { orderMap[it.id] ?: Int.MAX_VALUE }
+                .thenByDescending { it.faceCount }
+        )
+    }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val allPersons: StateFlow<List<PersonEntity>> = faceDao.observeAllVisiblePersons()
-        .combine(_searchQuery) { list, query ->
-            if (query.isBlank()) {
-                list
-            } else {
-                list.filter { person ->
-                    person.name?.contains(query, ignoreCase = true) == true
-                }
+    val allPersons: StateFlow<List<PersonEntity>> = combine(
+        faceDao.observeAllVisiblePersons(),
+        settingsRepository.pinnedPeopleOrderFlow,
+        _searchQuery
+    ) { list, pinnedOrder, query ->
+        val filtered = if (query.isBlank()) {
+            list
+        } else {
+            list.filter { person ->
+                person.name?.contains(query, ignoreCase = true) == true
             }
         }
+        val orderMap = pinnedOrder.withIndex().associate { it.value to it.index }
+        filtered.sortedWith(
+            compareBy<PersonEntity> { !it.isFavorite }
+                .thenBy { orderMap[it.id] ?: Int.MAX_VALUE }
+                .thenByDescending { it.faceCount }
+        )
+    }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -143,8 +162,6 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     val pendingMergeSuggestions: StateFlow<List<MergeSuggestionWithPersons>> = faceDao.observePendingMergeSuggestions()
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val settingsRepository = SettingsRepository.getInstance(application)
 
     val isMergeCardDismissed: StateFlow<Boolean> = settingsRepository.peopleMergeCardDismissedFlow
         .flowOn(Dispatchers.IO)
@@ -289,7 +306,9 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleFavorite(person: PersonEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            faceDao.setPersonFavorite(person.id, !person.isFavorite)
+            val nextState = !person.isFavorite
+            faceDao.setPersonFavorite(person.id, nextState)
+            settingsRepository.recordPersonFavorited(person.id, nextState)
         }
     }
 
