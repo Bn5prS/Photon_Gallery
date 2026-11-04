@@ -1632,8 +1632,8 @@ fun DetailScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.65f),
-                                Color.Black.copy(alpha = 0.25f),
+                                Color.Black.copy(alpha = 0.40f),
+                                Color.Black.copy(alpha = 0.15f),
                                 Color.Transparent
                             )
                         )

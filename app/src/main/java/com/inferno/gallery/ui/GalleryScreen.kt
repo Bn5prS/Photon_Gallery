@@ -588,20 +588,26 @@ fun GalleryScreen(
             )
         }
 
-        // ── Top Gradient Scrim (Edge-to-Edge Status Bar Vignette) ──
+        // ── Feather-Light Top Status Bar Vignette ─────────────────────────────
         val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        val scrimHeight = statusBarTop + 36.dp
+        val scrimHeight = statusBarTop + 6.dp
+        val scrimColor = MaterialTheme.colorScheme.surface
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(scrimHeight)
                 .align(Alignment.TopCenter)
+                .graphicsLayer {
+                    val collapse = topBarCollapseFractionProvider()
+                    val scrollFraction = if (lazyGridState.firstVisibleItemIndex > 0) 1f
+                        else (lazyGridState.firstVisibleItemScrollOffset / 40f).coerceIn(0f, 1f)
+                    alpha = maxOf(collapse, scrollFraction)
+                }
                 .background(
                     Brush.verticalGradient(
-                        0.0f to MaterialTheme.colorScheme.surfaceContainerLow,
-                        0.35f to MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.90f),
-                        0.65f to MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.55f),
-                        0.85f to MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.18f),
+                        0.0f to scrimColor.copy(alpha = 0.45f),
+                        0.45f to scrimColor.copy(alpha = 0.22f),
+                        0.80f to scrimColor.copy(alpha = 0.06f),
                         1.0f to Color.Transparent
                     )
                 )
