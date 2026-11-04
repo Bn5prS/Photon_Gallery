@@ -138,6 +138,7 @@ fun AlbumsScreen(
     onDeleteCover: (String) -> Unit = {}
 ) {
     val albums by viewModel.allAlbums.collectAsState()
+    val userPinnedAlbums by viewModel.userPinnedAlbums.collectAsState()
     val userPinnedNames by viewModel.userPinnedFolderNames.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by viewModel.albumLayoutMode.collectAsState()
@@ -160,13 +161,11 @@ fun AlbumsScreen(
     val haptic = LocalHapticFeedback.current
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
 
-    val allDisplayAlbums = remember(albums, userPinnedNames, showEmptyAlbums) {
-        val valid = albums.filter {
-            it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && (it.itemCount > 0 || showEmptyAlbums)
+    val allDisplayAlbums = remember(albums, userPinnedAlbums, userPinnedNames, showEmptyAlbums) {
+        val validUnpinned = albums.filter {
+            it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && (it.itemCount > 0 || showEmptyAlbums)
         }
-        val pinned = valid.filter { it.bucketName in userPinnedNames }
-        val unpinned = valid.filter { it.bucketName !in userPinnedNames }
-        pinned + unpinned
+        userPinnedAlbums + validUnpinned
     }
 
     val visibleAlbums = remember(allDisplayAlbums, albumLayoutMode) {
