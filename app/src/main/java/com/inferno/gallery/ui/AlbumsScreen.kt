@@ -954,7 +954,7 @@ fun AlbumsScreen(
                                 Surface(
                                     modifier = Modifier.size(40.dp),
                                     shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    color = MaterialTheme.colorScheme.surface,
                                     shadowElevation = 0.dp
                                 ) {
                                     Box(

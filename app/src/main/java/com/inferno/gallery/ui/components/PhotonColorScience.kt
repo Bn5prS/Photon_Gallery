@@ -49,6 +49,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.core.graphics.ColorUtils
 import com.inferno.gallery.R
 import com.materialkolor.PaletteStyle
@@ -58,6 +60,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun PhotonPaletteCard(
     name: String,
+    subtitle: String,
     colors: List<Color>,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -79,7 +82,7 @@ fun PhotonPaletteCard(
                 else Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), containerShape)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
@@ -87,13 +90,23 @@ fun PhotonPaletteCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        maxLines = 1
+                    )
+                }
+            }
 
             if (isSelected) {
                 Icon(
@@ -105,19 +118,26 @@ fun PhotonPaletteCard(
             }
         }
 
+        // Modern proportional tonal swatch ribbon (replaces the old 4 dots)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
+            val weights = listOf(0.40f, 0.24f, 0.20f, 0.16f)
             colors.take(4).forEachIndexed { index, color ->
-                val circleSize = if (index == 0) 22.dp else 16.dp
                 Box(
                     modifier = Modifier
-                        .size(circleSize)
-                        .clip(CircleShape)
+                        .weight(weights.getOrElse(index) { 0.25f })
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(6.dp))
                         .background(color)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                        .border(
+                            width = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
                 )
             }
         }
@@ -149,43 +169,83 @@ fun PhotonPaletteGrid(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         chunkedStyles.forEach { rowStyles ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                rowStyles.forEach { style ->
-                    val effectiveSeed = if (style == PaletteStyle.Monochrome) Color.Gray else seedColor
-                    val previewScheme = rememberDynamicColorScheme(
-                        seedColor = effectiveSeed,
-                        isDark = isDark,
-                        isAmoled = isAmoled,
-                        style = style
-                    )
-
-                    val previewColors = listOf(
-                        previewScheme.primary,
-                        previewScheme.secondary,
-                        previewScheme.tertiary,
-                        previewScheme.surfaceContainerHighest
-                    )
-
-                    val formattedName = remember(style) {
-                        style.name.replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
-                    }
-
-                    val isSelected = currentStyle.equals(style.name, ignoreCase = true)
-
-                    PhotonPaletteCard(
-                        name = formattedName,
-                        colors = previewColors,
-                        isSelected = isSelected,
-                        onClick = { onStyleSelected(style.name) },
-                        modifier = Modifier.weight(1f)
-                    )
+            if (rowStyles.size == 1) {
+                val style = rowStyles.first()
+                val effectiveSeed = if (style == PaletteStyle.Monochrome) Color.Gray else seedColor
+                val previewScheme = rememberDynamicColorScheme(
+                    seedColor = effectiveSeed,
+                    isDark = isDark,
+                    isAmoled = isAmoled,
+                    style = style
+                )
+                val previewColors = listOf(
+                    previewScheme.primary,
+                    previewScheme.secondary,
+                    previewScheme.tertiary,
+                    previewScheme.surfaceContainerHighest
+                )
+                val formattedName = remember(style) {
+                    style.name.replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
                 }
+                val subtitle = when (style) {
+                    PaletteStyle.TonalSpot -> "Balanced harmony"
+                    PaletteStyle.Vibrant -> "High saturation"
+                    PaletteStyle.Expressive -> "Playful contrast"
+                    PaletteStyle.Neutral -> "Calm and muted"
+                    PaletteStyle.Monochrome -> "Pure greyscale"
+                    else -> ""
+                }
+                val isSelected = currentStyle.equals(style.name, ignoreCase = true)
 
-                if (rowStyles.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
+                PhotonPaletteCard(
+                    name = formattedName,
+                    subtitle = subtitle,
+                    colors = previewColors,
+                    isSelected = isSelected,
+                    onClick = { onStyleSelected(style.name) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowStyles.forEach { style ->
+                        val effectiveSeed = if (style == PaletteStyle.Monochrome) Color.Gray else seedColor
+                        val previewScheme = rememberDynamicColorScheme(
+                            seedColor = effectiveSeed,
+                            isDark = isDark,
+                            isAmoled = isAmoled,
+                            style = style
+                        )
+                        val previewColors = listOf(
+                            previewScheme.primary,
+                            previewScheme.secondary,
+                            previewScheme.tertiary,
+                            previewScheme.surfaceContainerHighest
+                        )
+                        val formattedName = remember(style) {
+                            style.name.replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
+                        }
+                        val subtitle = when (style) {
+                            PaletteStyle.TonalSpot -> "Balanced harmony"
+                            PaletteStyle.Vibrant -> "High saturation"
+                            PaletteStyle.Expressive -> "Playful contrast"
+                            PaletteStyle.Neutral -> "Calm and muted"
+                            PaletteStyle.Monochrome -> "Pure greyscale"
+                            else -> ""
+                        }
+                        val isSelected = currentStyle.equals(style.name, ignoreCase = true)
+
+                        PhotonPaletteCard(
+                            name = formattedName,
+                            subtitle = subtitle,
+                            colors = previewColors,
+                            isSelected = isSelected,
+                            onClick = { onStyleSelected(style.name) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
