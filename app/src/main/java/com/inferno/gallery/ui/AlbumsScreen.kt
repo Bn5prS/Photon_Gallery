@@ -86,8 +86,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
@@ -932,9 +934,9 @@ fun AlbumsScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(
-                                        start = SpacingTokens.XS,
-                                        end = SpacingTokens.XS,
-                                        top = 22.dp,
+                                        start = 2.dp,
+                                        end = 2.dp,
+                                        top = 20.dp,
                                         bottom = SpacingTokens.S
                                     ),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -961,12 +963,16 @@ fun AlbumsScreen(
                                 Spacer(modifier = Modifier.height(SpacingTokens.XS))
                                 Text(
                                     text = item.title,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = (-0.15).sp
                                     ),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center
                                 )
                             }
 
@@ -1772,27 +1778,31 @@ fun SegmentedCollectionsGrid(
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 16.dp),
+                                .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(item.iconRes),
                                 contentDescription = item.title,
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(IconSizeTokens.L)
+                                modifier = Modifier.size(22.dp)
                             )
-                            Spacer(modifier = Modifier.width(14.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = item.title,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Medium
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = (-0.1).sp
                                 ),
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 maxLines = 1,
+                                softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
                             item.count?.let { count ->
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
                                     shape = ShapeFull,
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -1801,7 +1811,7 @@ fun SegmentedCollectionsGrid(
                                     Text(
                                         text = "$count",
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                     )
                                 }
                             }
