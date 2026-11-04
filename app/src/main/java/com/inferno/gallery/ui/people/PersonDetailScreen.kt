@@ -543,10 +543,10 @@ fun PersonDetailScreen(
                             ) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(
-                                        if (p.isFavorite) R.drawable.ic_ms_favorite_filled else R.drawable.ic_ms_favorite
+                                        if (p.isFavorite) R.drawable.ic_ms_star_filled else R.drawable.ic_ms_star
                                     ),
                                     contentDescription = if (p.isFavorite) "Remove from favorites" else "Add to favorites",
-                                    tint = if (p.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (p.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }

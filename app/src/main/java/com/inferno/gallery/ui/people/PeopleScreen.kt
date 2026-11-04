@@ -372,10 +372,10 @@ fun PeopleScreen(
                             ) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(
-                                        if (anyNotFav) R.drawable.ic_ms_favorite else R.drawable.ic_ms_favorite_filled
+                                        if (anyNotFav) R.drawable.ic_ms_star else R.drawable.ic_ms_star_filled
                                     ),
                                     contentDescription = if (anyNotFav) "Favorite selected people" else "Unfavorite selected people",
-                                    tint = if (!anyNotFav) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (!anyNotFav) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
@@ -1153,7 +1153,7 @@ private fun PersonGridCard(
                 }
             }
 
-            // Favorite heart badge
+            // Favorite star badge
             if (person.isFavorite && !isSelected) {
                 Surface(
                     shape = ShapeFull,
@@ -1165,10 +1165,10 @@ private fun PersonGridCard(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled),
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_star_filled),
                             contentDescription = "Favorite",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(13.dp)
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
