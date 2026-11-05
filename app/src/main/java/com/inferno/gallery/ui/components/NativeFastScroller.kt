@@ -361,34 +361,29 @@ class NativeFastScroller @JvmOverloads constructor(
 
     // ── Touch Gestures & Scrubbing ──────────────────────────────────────────
 
-    private fun isTouchNearScroller(x: Float, y: Float): Boolean {
-        val touchStripWidth = dpToPx(48f)
-        val rightEdge = width.toFloat()
-        val touchStripLeft = rightEdge - touchStripWidth
-        if (x >= touchStripLeft) return true
-
-        if (thumbView.visibility == View.VISIBLE && thumbView.alpha > 0.1f) {
-            val thumbTop = thumbView.translationY
-            val thumbBottom = thumbTop + thumbView.height
-            val thumbBufferY = dpToPx(24f)
-            val thumbLeft = rightEdge - thumbView.width - dpToPx(20f)
-            if (x >= thumbLeft && y in (thumbTop - thumbBufferY)..(thumbBottom + thumbBufferY)) {
-                return true
-            }
+    private fun isTouchNearThumb(x: Float, y: Float): Boolean {
+        // Only allow interacting with the fast scroller if the thumb handle is actively visible
+        if (thumbView.visibility != View.VISIBLE || thumbView.alpha <= 0.1f) {
+            return false
         }
-        return false
+
+        val rightEdge = width.toFloat()
+        val thumbW = if (thumbView.width > 0) thumbView.width.toFloat() else dpToPx(36f)
+        val thumbH = if (thumbView.height > 0) thumbView.height.toFloat() else dpToPx(46f)
+
+        // Ergonomic touch target centered strictly around the visible thumb handle pill:
+        // 16dp horizontal slop inwards (total ~52dp from right edge) and 20dp vertical padding
+        val thumbLeft = rightEdge - thumbW - dpToPx(16f)
+        val thumbTop = thumbView.translationY - dpToPx(20f)
+        val thumbBottom = thumbView.translationY + thumbH + dpToPx(20f)
+
+        return x >= thumbLeft && y in thumbTop..thumbBottom
     }
 
     private fun calculateGrabOffset(touchY: Float) {
         val thumbTop = thumbView.translationY
-        val thumbBottom = thumbTop + thumbView.height
-        val touchBuffer = dpToPx(24f)
-        val isDirectlyOnThumb = touchY in (thumbTop - touchBuffer)..(thumbBottom + touchBuffer)
-        grabOffsetY = if (isDirectlyOnThumb) {
-            (touchY - thumbTop).coerceIn(0f, thumbView.height.toFloat())
-        } else {
-            thumbView.height / 2f
-        }
+        val thumbH = if (thumbView.height > 0) thumbView.height.toFloat() else dpToPx(46f)
+        grabOffsetY = (touchY - thumbTop).coerceIn(0f, thumbH)
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
@@ -397,7 +392,7 @@ class NativeFastScroller @JvmOverloads constructor(
 
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (isTouchNearScroller(ev.x, ev.y)) {
+                if (isTouchNearThumb(ev.x, ev.y)) {
                     isDragging = true
                     calculateGrabOffset(ev.y)
                     parent?.requestDisallowInterceptTouchEvent(true)
@@ -416,7 +411,7 @@ class NativeFastScroller @JvmOverloads constructor(
 
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (isTouchNearScroller(ev.x, ev.y)) {
+                if (!isDragging && isTouchNearThumb(ev.x, ev.y)) {
                     isDragging = true
                     calculateGrabOffset(ev.y)
                     parent?.requestDisallowInterceptTouchEvent(true)
@@ -424,16 +419,9 @@ class NativeFastScroller @JvmOverloads constructor(
                     startScrubbing(ev.y)
                     return true
                 }
-                return false
+                return isDragging
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!isDragging && isTouchNearScroller(ev.x, ev.y)) {
-                    isDragging = true
-                    calculateGrabOffset(ev.y)
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                    showHandle()
-                    startScrubbing(ev.y)
-                }
                 if (isDragging) {
                     updateScrubbing(ev.y)
                     return true

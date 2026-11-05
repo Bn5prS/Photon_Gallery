@@ -201,7 +201,6 @@ fun ExpressiveScrollBar(
             .pointerInput(totalItemsCount) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    down.consume()
 
                     val trackHeight = size.height.toFloat()
                     val currentHandleHeight = (38f + 8f * interactionProgress).dp.toPx()
@@ -218,11 +217,14 @@ fun ExpressiveScrollBar(
                     val isTouchOnHandle = down.position.y >= (handleY - touchBuffer) &&
                             down.position.y <= (handleY + currentHandleHeight + touchBuffer)
 
-                    val grabOffset = if (isTouchOnHandle) {
-                        (down.position.y - handleY).coerceIn(0f, currentHandleHeight)
-                    } else {
-                        currentHandleHeight / 2f
+                    // Strictly require touching the visible thumb handle to engage scrubbing.
+                    // Taps elsewhere on the track must NOT hijack or teleport scroll position.
+                    if (!isScrollbarVisible || !isTouchOnHandle) {
+                        return@awaitEachGesture
                     }
+
+                    down.consume()
+                    val grabOffset = (down.position.y - handleY).coerceIn(0f, currentHandleHeight)
 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     isPressed = true
