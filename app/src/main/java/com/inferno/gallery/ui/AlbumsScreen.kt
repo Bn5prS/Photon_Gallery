@@ -1155,14 +1155,9 @@ private fun UtilityCardRow(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(
-                                start = 2.dp,
-                                end = 2.dp,
-                                top = 20.dp,
-                                bottom = SpacingTokens.S
-                            ),
+                            .padding(horizontal = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Surface(
                             modifier = Modifier.size(40.dp),
