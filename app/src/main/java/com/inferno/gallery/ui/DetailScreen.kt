@@ -1683,7 +1683,14 @@ fun DetailScreen(
         }
         }
 
-        // ── Unified Solid Top App Bar ──
+        val onLensAction = {
+            if (currentItem != null) {
+                val targetUri = resolvedCurrentUri ?: currentItem.uri
+                com.inferno.gallery.ui.utils.GoogleLensUtils.launch(context, targetUri)
+            }
+        }
+
+        // ── iOS 18 Style Floating Top Islands ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
@@ -1703,27 +1710,21 @@ fun DetailScreen(
                             userInteractionTrigger++
                         }
                     }
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.40f),
-                                Color.Black.copy(alpha = 0.15f),
-                                Color.Transparent
-                            )
-                        )
-                    )
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Left Island: Circular back button
                     FilledTonalIconButton(
                         onClick = safeOnBack,
+                        shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.35f),
+                            containerColor = Color.Black.copy(alpha = 0.45f),
                             contentColor = Color.White
                         ),
                         modifier = Modifier.size(40.dp)
@@ -1731,101 +1732,115 @@ fun DetailScreen(
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
                             contentDescription = "Go back",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 12.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (currentItem != null) {
-                            val timestamp = remember(currentItem) {
-                                val raw = if (currentItem.dateModified > 0) currentItem.dateModified else currentItem.dateAdded
-                                if (raw > 1_000_000_000_000L) raw else raw * 1000L
-                            }
-                            val formattedDate = remember(timestamp) {
-                                java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
-                                    .format(java.util.Date(timestamp))
-                            }
-                            Text(
-                                text = formattedDate,
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
-                                ),
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = currentItem.name,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp
-                                ),
-                                color = Color.White.copy(alpha = 0.75f),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                    // Center Island: Floating metadata pill
+                    if (currentItem != null) {
+                        val timestamp = remember(currentItem) {
+                            val raw = if (currentItem.dateModified > 0) currentItem.dateModified else currentItem.dateAdded
+                            if (raw > 1_000_000_000_000L) raw else raw * 1000L
                         }
-                    }
+                        val formattedDate = remember(timestamp) {
+                            java.text.SimpleDateFormat("MMMM d, yyyy  h:mm a", java.util.Locale.getDefault())
+                                .format(java.util.Date(timestamp))
+                        }
 
-                    if (motionPhotoInfo?.isMotionPhoto == true) {
                         Surface(
-                            onClick = {
-                                isMotionLooping = !isMotionLooping
-                                isMotionPlaying = isMotionLooping
-                            },
                             shape = ShapeFull,
-                            color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.35f),
-                            contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                            color = Color.Black.copy(alpha = 0.45f),
+                            contentColor = Color.White,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp,
                             modifier = Modifier
-                                .padding(end = 8.dp)
-                                .height(36.dp)
+                                .weight(1f, fill = false)
+                                .padding(horizontal = 8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
-                                    contentDescription = "Motion Photo",
-                                    modifier = Modifier.size(16.dp)
+                                Text(
+                                    text = currentItem.name,
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    ),
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "LIVE",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
+                                    text = formattedDate,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp
+                                    ),
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
                     }
 
-                    Box {
-                        FilledTonalIconButton(
-                            onClick = { showMoreMenu = true },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = Color.Black.copy(alpha = 0.35f),
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                contentDescription = "More options",
-                                modifier = Modifier.size(22.dp)
-                            )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (motionPhotoInfo?.isMotionPhoto == true) {
+                            Surface(
+                                onClick = {
+                                    isMotionLooping = !isMotionLooping
+                                    isMotionPlaying = isMotionLooping
+                                },
+                                shape = ShapeFull,
+                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.45f),
+                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
+                                        contentDescription = "Motion Photo",
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "LIVE",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                }
+                            }
                         }
+
+                        // Right Island: Circular more button
+                        Box {
+                            FilledTonalIconButton(
+                                onClick = { showMoreMenu = true },
+                                shape = CircleShape,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color.Black.copy(alpha = 0.45f),
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_horiz),
+                                    contentDescription = "More options",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
                     androidx.compose.material3.DropdownMenu(
                         expanded = showMoreMenu,
@@ -1841,6 +1856,17 @@ fun DetailScreen(
                                 showInfoCard = true
                             }
                         )
+                        if (currentItem != null && !currentItem.isVideo) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Google Lens") },
+                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_google_lens), contentDescription = null) },
+                                enabled = currentItem.localExists,
+                                onClick = {
+                                    showMoreMenu = false
+                                    onLensAction()
+                                }
+                            )
+                        }
                         if (currentItem != null && motionPhotoInfo?.isMotionPhoto == true) {
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_export_motion_mp4)) },
@@ -2157,140 +2183,47 @@ fun DetailScreen(
             }
         }
 
-        val onLensAction = {
-            if (currentItem != null) {
-                val targetUri = resolvedCurrentUri ?: currentItem.uri
-                com.inferno.gallery.ui.utils.GoogleLensUtils.launch(context, targetUri)
-            }
-        }
 
-        if (!viewerFilmstripEnabled) {
-            // ── Material 3 Expressive Floating Bottom Action Dock (Preserved) ──
-            AnimatedVisibility(
-                visible = showUi,
-                enter = fadeIn(MotionTokens.gentleSpring()) +
-                        slideInVertically(MotionTokens.gentleSpring()) { it } +
-                        scaleIn(MotionTokens.snappySpring()),
-                exit  = fadeOut(MotionTokens.gentleSpring()) +
-                        slideOutVertically(MotionTokens.gentleSpring()) { it } +
-                        scaleOut(MotionTokens.gentleSpring()),
+
+        // ── iOS 18 Style Floating Action Dock ──
+        AnimatedVisibility(
+            visible = showUi,
+            enter = fadeIn(MotionTokens.gentleSpring()) +
+                    slideInVertically(MotionTokens.gentleSpring()) { it } +
+                    scaleIn(MotionTokens.snappySpring()),
+            exit  = fadeOut(MotionTokens.gentleSpring()) +
+                    slideOutVertically(MotionTokens.gentleSpring()) { it } +
+                    scaleOut(MotionTokens.gentleSpring()),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
+        ) {
+            ViewerActionButtonsRow(
+                currentItem = currentItem,
+                isTrash = bucketName == "Trash",
+                isFavorite = isFavorite,
+                onRestore = onRestoreAction,
+                onPermanentDelete = onPermanentDeleteAction,
+                onShare = onShareAction,
+                onEdit = onEditAction,
+                onFavorite = onFavoriteAction,
+                onDelete = onDeleteAction,
+                onInfo = { showInfoCard = true },
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 16.dp)
-            ) {
-                Surface(
-                    shape = ShapeFull,
-                    color = Color.Black.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                    tonalElevation = 0.dp,
-                    shadowElevation = 6.dp,
-                    modifier = Modifier
-                        .fillMaxWidth(0.88f)
-                        .widthIn(min = 280.dp, max = 360.dp)
-                        .height(54.dp)
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                userInteractionTrigger++
-                            }
-                        }
-                ) {
-                    ViewerActionButtonsRow(
-                        currentItem = currentItem,
-                        isTrash = bucketName == "Trash",
-                        isFavorite = isFavorite,
-                        onRestore = onRestoreAction,
-                        onPermanentDelete = onPermanentDeleteAction,
-                        onShare = onShareAction,
-                        onEdit = onEditAction,
-                        onFavorite = onFavoriteAction,
-                        onDelete = onDeleteAction,
-                        onLens = onLensAction,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        } else {
-            // ── Material 3 Expressive Docked Bottom Bar with Filmstrip ──
-            AnimatedVisibility(
-                visible = showUi,
-                enter = fadeIn(MotionTokens.gentleSpring()) +
-                        slideInVertically(MotionTokens.gentleSpring()) { it },
-                exit  = fadeOut(MotionTokens.gentleSpring()) +
-                        slideOutVertically(MotionTokens.gentleSpring()) { it },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                userInteractionTrigger++
-                            }
-                        }
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.45f),
-                                    Color.Black.copy(alpha = 0.80f)
-                                )
-                            )
-                        )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(top = 16.dp, bottom = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (galleryItems.size > 1) {
-                            ViewerFilmstripRow(
-                                galleryItems = galleryItems,
-                                currentPage = pagerState.currentPage,
-                                onThumbnailClick = { index ->
-                                    coroutineScope.launch { pagerState.animateScrollToPage(index) }
-                                },
-                                onScrollInProgress = { isFilmstripScrolling = it },
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ViewerActionButtonsRow(
-                                currentItem = currentItem,
-                                isTrash = bucketName == "Trash",
-                                isFavorite = isFavorite,
-                                onRestore = onRestoreAction,
-                                onPermanentDelete = onPermanentDeleteAction,
-                                onShare = onShareAction,
-                                onEdit = onEditAction,
-                                onFavorite = onFavoriteAction,
-                                onDelete = onDeleteAction,
-                                onLens = onLensAction,
-                                modifier = Modifier
-                                    .fillMaxWidth(0.92f)
-                                    .fillMaxHeight()
-                                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
+                    .widthIn(max = 380.dp)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            userInteractionTrigger++
                         }
                     }
-                }
-            }
+            )
         }
 
     }
+}
 }
 
 @Composable
@@ -2397,123 +2330,157 @@ private fun ViewerActionButtonsRow(
     onEdit: () -> Unit,
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
-    onLens: () -> Unit,
+    onInfo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isTrash) {
-            IconButton(
+            FilledTonalIconButton(
                 onClick = onRestore,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = Color.Black.copy(alpha = 0.45f),
+                    contentColor = Color.White
+                ),
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
                     contentDescription = "Restore",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            IconButton(
+            FilledTonalIconButton(
                 onClick = onPermanentDelete,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = Color.Black.copy(alpha = 0.45f),
+                    contentColor = Color.White
+                ),
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = "Permanently Delete",
                     tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         } else {
-            // Share
-            IconButton(
+            // Left: Standalone circular Share button
+            FilledTonalIconButton(
                 onClick = onShare,
                 enabled = currentItem?.localExists == true,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = Color.Black.copy(alpha = 0.45f),
+                    contentColor = Color.White
+                ),
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
                     contentDescription = stringResource(R.string.detail_share),
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            // Edit / Frame extractor
-            IconButton(
-                enabled = currentItem?.localExists == true,
-                onClick = onEdit,
-                modifier = Modifier.size(44.dp)
+            // Center Pill: [Favorite, Info, Edit]
+            Surface(
+                shape = ShapeFull,
+                color = Color.Black.copy(alpha = 0.45f),
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                modifier = Modifier.height(48.dp)
             ) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_edit),
-                    contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            // Favorite
-            val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
-            var heartBounce by remember { mutableStateOf(false) }
-            val heartScale by animateFloatAsState(
-                targetValue = if (heartBounce) 1.45f else 1f,
-                animationSpec = MotionTokens.bouncySpring(),
-                label = "heartScale",
-                finishedListener = { if (heartBounce) heartBounce = false }
-            )
-            IconButton(
-                onClick = {
-                    heartBounce = true
-                    onFavorite()
-                },
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                    contentDescription = stringResource(R.string.detail_favorite),
-                    tint = if (isFavorite) favoriteHarmonized else Color.White,
+                Row(
                     modifier = Modifier
-                        .size(24.dp)
-                        .graphicsLayer {
-                            scaleX = heartScale
-                            scaleY = heartScale
-                        }
-                )
+                        .fillMaxHeight()
+                        .padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Favorite with spring bounce animation
+                    val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
+                    var heartBounce by remember { mutableStateOf(false) }
+                    val heartScale by animateFloatAsState(
+                        targetValue = if (heartBounce) 1.45f else 1f,
+                        animationSpec = MotionTokens.bouncySpring(),
+                        label = "heartScale",
+                        finishedListener = { if (heartBounce) heartBounce = false }
+                    )
+                    IconButton(
+                        onClick = {
+                            heartBounce = true
+                            onFavorite()
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                            contentDescription = stringResource(R.string.detail_favorite),
+                            tint = if (isFavorite) favoriteHarmonized else Color.White,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer {
+                                    scaleX = heartScale
+                                    scaleY = heartScale
+                                }
+                        )
+                    }
+
+                    // Info / Details
+                    IconButton(
+                        onClick = onInfo,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                            contentDescription = stringResource(R.string.detail_details),
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    // Edit / Tune
+                    IconButton(
+                        enabled = currentItem?.localExists == true,
+                        onClick = onEdit,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_tune),
+                            contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
 
-            // Delete
-            IconButton(
+            // Right: Standalone circular Delete button
+            FilledTonalIconButton(
                 onClick = onDelete,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = Color.Black.copy(alpha = 0.45f),
+                    contentColor = Color.White
+                ),
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = stringResource(R.string.detail_delete),
                     tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
-            }
-
-            // Google Lens (Images only)
-            if (currentItem != null && !currentItem.isVideo) {
-                IconButton(
-                    onClick = onLens,
-                    enabled = currentItem.localExists,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_google_lens),
-                        contentDescription = "Google Lens",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
         }
     }

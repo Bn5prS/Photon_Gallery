@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -565,7 +566,7 @@ fun VideoPlayerItemWithResolvedUri(
             )
         }
 
-        // Video playback controls overlay: Reduced-width Slider Pill + Play/Pause button on right side
+        // iOS 18 Style Video Scrubber Capsule: Single unified floating pill
         AnimatedVisibility(
             visible = showControls && isCurrentPage,
             enter = slideInVertically(
@@ -579,119 +580,97 @@ fun VideoPlayerItemWithResolvedUri(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(
-                    bottom = if (viewerFilmstripEnabled) 138.dp else 82.dp,
-                    start = 16.dp,
-                    end = 16.dp
-                )
+                .padding(bottom = 76.dp, start = 16.dp, end = 16.dp)
         ) {
-            Row(
+            Surface(
+                shape = ShapeFull,
+                color = Color.Black.copy(alpha = 0.50f),
+                contentColor = Color.White,
+                tonalElevation = 0.dp,
+                shadowElevation = 4.dp,
                 modifier = Modifier
                     .fillMaxWidth(0.92f)
-                    .widthIn(max = 350.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .widthIn(max = 360.dp)
+                    .height(46.dp)
+                    .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
-                // Reduced-width Slider Pill
-                Surface(
-                    shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    tonalElevation = 2.dp,
-                    shadowElevation = 4.dp,
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
+                        .fillMaxSize()
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTime(dragPosition ?: currentPosition),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Slider(
-                            value = (dragPosition ?: currentPosition).toFloat(),
-                            onValueChange = {
-                                if (dragPosition == null) onScrubbingChanged?.invoke(true)
-                                dragPosition = it.toLong()
-                            },
-                            onValueChangeFinished = {
-                                dragPosition?.let {
-                                    exoPlayer.seekTo(it)
-                                    currentPosition = it
+                    // Play / Pause button on left
+                    IconButton(
+                        onClick = {
+                            if (isPlaying) {
+                                exoPlayer.pause()
+                            } else {
+                                if (exoPlayer.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                                    exoPlayer.seekTo(0)
                                 }
-                                dragPosition = null
-                                onScrubbingChanged?.invoke(false)
-                            },
-                            valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                activeTickColor = Color.Transparent,
-                                inactiveTickColor = Color.Transparent
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 6.dp)
-                        )
-
-                        Text(
-                            text = formatTime(videoDuration),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        
-                        // Audio mute/unmute
-                        FilledTonalIconButton(
-                            onClick = { isMuted = !isMuted },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
-                                contentDescription = if (isMuted) "Unmute" else "Mute",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Video play/pause button on right side of the video slider pill
-                Surface(
-                    onClick = {
-                        if (isPlaying) {
-                            exoPlayer.pause()
-                        } else {
-                            if (exoPlayer.playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                                exoPlayer.seekTo(0)
+                                exoPlayer.play()
                             }
-                            exoPlayer.play()
-                        }
-                    },
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    tonalElevation = 2.dp,
-                    shadowElevation = 4.dp,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(if (isPlaying) R.drawable.ic_ms_pause else R.drawable.ic_ms_play_arrow),
                             contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Text(
+                        text = formatTime(dragPosition ?: currentPosition),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                        color = Color.White.copy(alpha = 0.90f)
+                    )
+
+                    Slider(
+                        value = (dragPosition ?: currentPosition).toFloat(),
+                        onValueChange = {
+                            if (dragPosition == null) onScrubbingChanged?.invoke(true)
+                            dragPosition = it.toLong()
+                        },
+                        onValueChangeFinished = {
+                            dragPosition?.let {
+                                exoPlayer.seekTo(it)
+                                currentPosition = it
+                            }
+                            dragPosition = null
+                            onScrubbingChanged?.invoke(false)
+                        },
+                        valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = Color(0xFF2979FF),
+                            inactiveTrackColor = Color.White.copy(alpha = 0.25f),
+                            activeTickColor = Color.Transparent,
+                            inactiveTickColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 6.dp)
+                    )
+
+                    Text(
+                        text = formatTime(videoDuration),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                        color = Color.White.copy(alpha = 0.65f)
+                    )
+
+                    // Audio mute / unmute button on right
+                    IconButton(
+                        onClick = { isMuted = !isMuted },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
+                            contentDescription = if (isMuted) "Unmute" else "Mute",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

@@ -71,3 +71,4 @@ Replicate the clean, floating iOS Photos viewer aesthetic in Photon Gallery's fu
 - Tune exact padding and touch targets for 48dp accessibility.
 - Connect existing click handlers and state flows (`onShare`, `onFavorite`, `onEdit`, `onDelete`, `onRestore`, `onPermanentDelete`, `showInfoCard`, `showMoreMenu`).
 - Ensure single-tap gestures seamlessly toggle visibility of all floating islands in unison.
+
