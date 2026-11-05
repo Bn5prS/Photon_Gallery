@@ -1125,28 +1125,28 @@ fun MainAppLayout(
             composable(
                 route = "albums",
                 enterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums") {
+                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums") {
                         fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 exitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums") {
+                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums") {
                         fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popEnterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums") {
+                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums") {
                         fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popExitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums") {
+                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums") {
                         fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
@@ -1184,6 +1184,7 @@ fun MainAppLayout(
                     onNavigateToPeople = { nestedNavController.navigate("people_list") },
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onNavigateToAllAlbums = { nestedNavController.navigate("all_albums") },
+                    onNavigateToPinnedAlbums = { nestedNavController.navigate("pinned_albums") },
                     onChangeCover = { albumName ->
                         pendingCoverAlbumName = albumName
                         pickCoverLauncher.launch(
@@ -1357,28 +1358,28 @@ fun MainAppLayout(
             composable(
                 route = "album/{bucketName}",
                 enterTransition = {
-                    if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "search") {
+                    if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums" || initialState.destination.route == "search") {
                         fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 exitTransition = {
-                    if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "search") {
+                    if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums" || targetState.destination.route == "search") {
                         fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popEnterTransition = {
-                    if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "search") {
+                    if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums" || initialState.destination.route == "search") {
                         fadeIn(MotionTokens.fastEffectsSpec())
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popExitTransition = {
-                    if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "search") {
+                    if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums" || targetState.destination.route == "search") {
                         fadeOut(MotionTokens.fastEffectsSpec())
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
@@ -1497,6 +1498,71 @@ fun MainAppLayout(
                         nestedNavController.navigate("album/$encoded")
                     },
                     onChangeCover = { bucketName -> 
+                        pendingCoverAlbumName = bucketName
+                        pickCoverLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    onDeleteCover = { bucketName ->
+                        viewModel.removeAlbumCustomCover(bucketName)
+                    }
+                )
+            }
+            composable(
+                route = "pinned_albums",
+                enterTransition = {
+                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "albums") {
+                        fadeIn(MotionTokens.snappySpring())
+                    } else {
+                        getEnterTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "albums") {
+                        fadeOut(MotionTokens.snappySpring())
+                    } else {
+                        getExitTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "albums") {
+                        fadeIn(MotionTokens.snappySpring())
+                    } else {
+                        getEnterTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                },
+                popExitTransition = {
+                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "albums") {
+                        fadeOut(MotionTokens.snappySpring())
+                    } else {
+                        getExitTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                }
+            ) {
+                var pendingCoverAlbumName by remember { mutableStateOf<String?>(null) }
+                val pickCoverLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.PickVisualMedia()
+                ) { uri ->
+                    if (uri != null) {
+                        val albumName = pendingCoverAlbumName
+                        if (albumName != null) {
+                            viewModel.setAlbumCustomCover(albumName, uri.toString())
+                        }
+                    }
+                    pendingCoverAlbumName = null
+                }
+                PinnedAlbumsScreen(
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = this,
+                    galleryViewModel = viewModel,
+                    onBackClick = { nestedNavController.popBackStackSafely() },
+                    onAlbumClick = { bucketName ->
+                        viewModel.resetGridScrollPosition(bucketName)
+                        viewModel.setBucket(bucketName)
+                        val encoded = android.net.Uri.encode(bucketName)
+                        nestedNavController.navigate("album/$encoded")
+                    },
+                    onChangeCover = { bucketName ->
                         pendingCoverAlbumName = bucketName
                         pickCoverLauncher.launch(
                             androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)

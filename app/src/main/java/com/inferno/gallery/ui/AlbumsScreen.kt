@@ -114,6 +114,7 @@ import com.inferno.gallery.ui.components.FloatingTipCard
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.inferno.gallery.ui.utils.pressScale
+import com.inferno.gallery.ui.components.PinnedQuadCover
 import com.inferno.gallery.ui.theme.photonColors
 import java.text.NumberFormat
 import java.util.Locale
@@ -134,6 +135,7 @@ fun AlbumsScreen(
     onNavigateToPlacesList: () -> Unit = {},
     onNavigateToPeople: () -> Unit = {},
     onNavigateToAllAlbums: () -> Unit = {},
+    onNavigateToPinnedAlbums: () -> Unit = {},
     onChangeCover: (String) -> Unit = {},
     onDeleteCover: (String) -> Unit = {}
 ) {
@@ -161,17 +163,26 @@ fun AlbumsScreen(
     val haptic = LocalHapticFeedback.current
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
 
-    val allDisplayAlbums = remember(albums, userPinnedAlbums, userPinnedNames, showEmptyAlbums) {
-        val validUnpinned = albums.filter {
+    val unpinnedAlbums = remember(albums, userPinnedNames, showEmptyAlbums) {
+        albums.filter {
             it.bucketName != "Favorites" && it.bucketName != "Trash" && it.bucketName != "All" && it.bucketName !in userPinnedNames && (it.itemCount > 0 || showEmptyAlbums)
         }
-        userPinnedAlbums + validUnpinned
     }
 
-    val visibleAlbums = remember(allDisplayAlbums, albumLayoutMode) {
-        if (albumLayoutMode == AlbumLayoutMode.LIST) allDisplayAlbums.take(8) else allDisplayAlbums.take(24)
+    val totalDisplayCount = remember(unpinnedAlbums.size, userPinnedAlbums.size) {
+        unpinnedAlbums.size + (if (userPinnedAlbums.isNotEmpty()) 1 else 0)
     }
-    val hasMoreAlbums = allDisplayAlbums.size > (if (albumLayoutMode == AlbumLayoutMode.LIST) 8 else 24)
+
+    val visibleUnpinnedLimit = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+        if (userPinnedAlbums.isNotEmpty()) 7 else 8
+    } else {
+        if (userPinnedAlbums.isNotEmpty()) 23 else 24
+    }
+
+    val visibleAlbums = remember(unpinnedAlbums, visibleUnpinnedLimit) {
+        unpinnedAlbums.take(visibleUnpinnedLimit)
+    }
+    val hasMoreAlbums = unpinnedAlbums.size > visibleUnpinnedLimit
 
     // Persistent expand states for sections
     val albumsExpanded by viewModel.albumsExpandedMore.collectAsState()
@@ -263,7 +274,7 @@ fun AlbumsScreen(
         item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
                 title = stringResource(R.string.section_albums),
-                count = if (allDisplayAlbums.isNotEmpty()) allDisplayAlbums.size else null,
+                count = if (totalDisplayCount > 0) totalDisplayCount else null,
                 isExpanded = albumsExpanded,
                 onToggle = { viewModel.toggleAlbumsExpandedMore() },
                 seeAllText = stringResource(R.string.action_show_all),
@@ -288,8 +299,17 @@ fun AlbumsScreen(
                 )
             }
 
-            if (visibleAlbums.isNotEmpty()) {
+            if (visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) {
                 if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                    if (userPinnedAlbums.isNotEmpty()) {
+                        item(key = "row_pinned_hub") {
+                            PinnedHubListRow(
+                                pinnedAlbums = userPinnedAlbums,
+                                onClick = onNavigateToPinnedAlbums
+                            )
+                        }
+                    }
+
                     items(
                         items = visibleAlbums,
                         key = { "album_${it.bucketName}" }
@@ -342,7 +362,8 @@ fun AlbumsScreen(
                     }
                 } else {
                     item(key = "content_albums_carousel", span = { GridItemSpan(maxLineSpan) }) {
-                        val albumsRowCount = if (visibleAlbums.size > 3) 2 else 1
+                        val totalCarouselItems = visibleAlbums.size + (if (userPinnedAlbums.isNotEmpty()) 1 else 0)
+                        val albumsRowCount = if (totalCarouselItems > 3) 2 else 1
                         val albumsCarouselHeight = if (albumsRowCount == 2) 324.dp else 160.dp
 
                         LazyHorizontalGrid(
@@ -354,6 +375,18 @@ fun AlbumsScreen(
                             horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
                             verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                         ) {
+                            if (userPinnedAlbums.isNotEmpty()) {
+                                item(key = "card_pinned_hub") {
+                                    Box(modifier = Modifier.width(118.dp)) {
+                                        PinnedHubCard(
+                                            pinnedAlbums = userPinnedAlbums,
+                                            isCompact = true,
+                                            onClick = onNavigateToPinnedAlbums
+                                        )
+                                    }
+                                }
+                            }
+
                             items(
                                 items = visibleAlbums,
                                 key = { "album_${it.bucketName}" }
@@ -1403,6 +1436,173 @@ fun AlbumListRow(
                 }
             }
 
+        }
+    }
+}
+
+// ── Pinned Albums Collection Hub Card & Row ──
+
+@Composable
+fun PinnedHubCard(
+    pinnedAlbums: List<AlbumBucket>,
+    modifier: Modifier = Modifier,
+    isCompact: Boolean = true,
+    onClick: () -> Unit = {}
+) {
+    val cardShape = if (isCompact) ShapeLarge else ShapeLargeIncreased
+    val defaultCoverShape = if (isCompact) ShapeSmall else ShapeMedium
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .pressScale(pressedScale = 0.96f)
+            .clip(cardShape)
+            .clickable(onClick = onClick),
+        shape = cardShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = if (isCompact) 6.dp else 8.dp,
+                    top = if (isCompact) 6.dp else 8.dp,
+                    end = if (isCompact) 6.dp else 8.dp,
+                    bottom = if (isCompact) 8.dp else 10.dp
+                ),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(defaultCoverShape)
+            ) {
+                PinnedQuadCover(
+                    pinnedAlbums = pinnedAlbums,
+                    tileShape = defaultCoverShape,
+                    showPinBadge = true
+                )
+            }
+
+            Spacer(modifier = Modifier.height(SpacingTokens.XS))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.section_pinned),
+                    style = if (isCompact) {
+                        MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                    } else {
+                        MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                    },
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_pin),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(IconSizeTokens.S)
+                )
+            }
+
+            val countText = if (pinnedAlbums.size == 1) "1 album" else "${pinnedAlbums.size} albums"
+            Text(
+                text = countText,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun PinnedHubListRow(
+    pinnedAlbums: List<AlbumBucket>,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    Surface(
+        shape = ShapeLarge,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .pressScale(pressedScale = 0.98f)
+            .clip(ShapeLarge)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(SpacingTokens.S),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(ShapeMedium)
+            ) {
+                PinnedQuadCover(
+                    pinnedAlbums = pinnedAlbums,
+                    tileShape = ShapeMedium,
+                    showPinBadge = false
+                )
+            }
+
+            Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                ) {
+                    Text(
+                        text = stringResource(R.string.section_pinned),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_pin),
+                        contentDescription = "Pinned",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(IconSizeTokens.S)
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                val countText = if (pinnedAlbums.size == 1) "1 album" else "${pinnedAlbums.size} albums"
+                Text(
+                    text = countText,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(IconSizeTokens.M)
+            )
         }
     }
 }

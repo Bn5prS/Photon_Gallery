@@ -49,7 +49,7 @@
     <string name="album_trash">Recycle Bin</string>
     <string name="album_archive">Archive</string>
     <string name="album_vault">Private Vault</string>
-    <string name="pinned_albums">Pinned</string>
+    <string name="pinned_albums">Pinned Albums</string>
     <string name="all_albums">All Albums</string>
     <string name="media_types">Media Types</string>
     <string name="new_album">New Album</string>
@@ -115,7 +115,6 @@
     <string name="language_system_default">System Default</string>
 
     <string name="section_pinned">Pinned</string>
-    <string name="pinned_albums">Pinned albums</string>
     <string name="pinned_albums_empty_title">No pinned albums</string>
     <string name="pinned_albums_empty_sub">Pin albums from their 3-dot menu for quick access</string>
     <string name="section_albums">Albums</string>

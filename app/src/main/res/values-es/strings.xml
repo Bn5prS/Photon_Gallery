@@ -49,7 +49,7 @@
     <string name="album_trash">Papelera</string>
     <string name="album_archive">Archivo</string>
     <string name="album_vault">Caja fuerte privada</string>
-    <string name="pinned_albums">Fijados</string>
+    <string name="pinned_albums">Álbumes fijados</string>
     <string name="all_albums">Todos los álbumes</string>
     <string name="media_types">Tipos de medios</string>
     <string name="new_album">Nuevo álbum</string>
@@ -115,7 +115,6 @@
     <string name="language_system_default">Predeterminado del sistema</string>
 
     <string name="section_pinned">Fijados</string>
-    <string name="pinned_albums">Álbumes fijados</string>
     <string name="pinned_albums_empty_title">No hay álbumes fijados</string>
     <string name="pinned_albums_empty_sub">Fija álbumes desde su menú de 3 puntos para acceder rápidamente</string>
     <string name="section_albums">Álbumes</string>
