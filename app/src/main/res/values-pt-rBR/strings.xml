@@ -1,7 +1,7 @@
 <resources>
     <!-- Application Brand -->
     <string name="app_name">Photon Gallery</string>
-    <string name="app_description">Uma galeria Android offline e de código aberto projetada para privacidade, desempenho e visuais impressionantes.</string>
+    <string name="app_description">Uma galeria Android de código aberto projetada com foco em privacidade, desempenho e visuais impressionantes.</string>
 
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Fotos</string>
@@ -143,7 +143,8 @@
     <string name="setting_high_refresh_sub">Fixar tela no máximo de 90Hz / 120Hz para rolagem fluida</string>
     <string name="setting_dock_style">Estilo da barra de navegação</string>
     <string name="setting_dock_floating">Pílula flutuante</string>
-    <string name="setting_dock_classic">Barra clássica</string>
+    <string name="setting_dock_classic">Barra de navegação de largura total</string>
+    <string name="setting_dock_classic_sub">Estender a barra de navegação por toda a largura da tela em vez de uma pílula flutuante</string>
     <string name="setting_dock_videos">Mostrar aba de vídeos</string>
     <string name="setting_dock_videos_sub">Exibir um atalho dedicado para vídeos na barra</string>
     <string name="setting_grid_columns">Densidade da grade</string>
@@ -175,7 +176,7 @@
     <string name="setting_smart_search_title">Busca semântica por IA</string>
     <string name="setting_smart_search_desc">Busca visual CLIP no dispositivo usando descrições em linguagem natural</string>
     <string name="setting_face_clustering">Reconhecimento facial e pessoas</string>
-    <string name="setting_face_clustering_desc">Agrupar rostros semelhantes em álbuns privados de pessoas offline</string>
+    <string name="setting_face_clustering_desc">Agrupar rostros semelhantes em álbuns privados de pessoas no dispositivo</string>
     <string name="setting_ocr_search">Busca de texto em fotos (OCR)</string>
     <string name="setting_ocr_search_desc">Buscar texto em capturas de tela, documentos e recibos</string>
     <string name="setting_download_models">Baixar modelos de IA</string>
@@ -189,7 +190,7 @@
     <string name="setting_trash_retention">Esvaziar lixeira automaticamente</string>
     <string name="setting_trash_retention_sub">Excluir permanentemente itens da lixeira após 30 dias</string>
     <string name="setting_privacy_policy">Aviso de privacidade</string>
-    <string name="setting_privacy_policy_sub">100% offline, sem rastreadores ou telemetria, privado por padrão</string>
+    <string name="setting_privacy_policy_sub">Local no dispositivo, sem rastreadores ou telemetria, privado por padrão</string>
     <string name="setting_app_version">Versão do app</string>
     <string name="setting_github_repo">Repositório no GitHub</string>
     <string name="setting_github_repo_sub">Ver código-fonte, apoiar o projeto ou contribuir</string>
@@ -330,7 +331,7 @@
     <string name="update_status_build">Instalado: v%1$s (Compilação %2$d)</string>
     <string name="setting_display_preferences_title">Preferências de exibição</string>
     <string name="setting_media_viewer_title">Visualizador de mídia</string>
-    <string name="setting_media_viewer_sub">Iluminação ambiente, fundo desfocado, minimapa e brilho</string>
+    <string name="setting_media_viewer_sub">Fundo desfocado, minimapa e brilho</string>
     <string name="setting_typography_layout_title">Tipografia e layout</string>
     <string name="setting_typography_layout_sub">Fontes, escala, alinhamento da linha do tempo e emblemas</string>
     <string name="setting_custom_color_title">Cor do tema personalizada</string>

@@ -932,11 +932,23 @@ fun AlbumsScreen(
                         onClick = {
                             val activity = context as? androidx.fragment.app.FragmentActivity
                             if (activity != null) {
-                                viewModel.vaultAuthManager.authenticate(
-                                    activity = activity,
-                                    onSuccess = onNavigateToVault,
-                                    onFailure = {}
-                                )
+                                if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                    if (viewModel.vaultAuthManager.canAuthenticateWithBiometrics(activity)) {
+                                        viewModel.vaultAuthManager.authenticate(
+                                            activity = activity,
+                                            negativeButtonText = "Use PIN",
+                                            onSuccess = onNavigateToVault,
+                                            onNegativeButton = onNavigateToVault,
+                                            onFailure = { onNavigateToVault() }
+                                        )
+                                    } else {
+                                        onNavigateToVault()
+                                    }
+                                } else {
+                                    onNavigateToVault()
+                                }
+                            } else {
+                                onNavigateToVault()
                             }
                         }
                     )

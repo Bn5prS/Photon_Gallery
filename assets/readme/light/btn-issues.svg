@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="170" height="48" viewBox="0 0 170 48">
+  <rect width="170" height="48" rx="24" fill="#EADDFF" stroke="#D2C2EB" stroke-width="1"/>
+  <svg x="18" y="14" width="20" height="20" viewBox="0 0 24 24">
+    <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z" fill="#6750A4"/>
+  </svg>
+  <text x="48" y="29.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14.5" font-weight="700" fill="#21005D">Report Issue</text>
+</svg>

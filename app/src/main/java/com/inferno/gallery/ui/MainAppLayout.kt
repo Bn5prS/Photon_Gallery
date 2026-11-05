@@ -1727,9 +1727,12 @@ fun MainAppLayout(
                                                 if (activity != null) {
                                                     viewModel.vaultAuthManager.authenticate(
                                                         activity = activity,
+                                                        negativeButtonText = "Cancel",
+                                                        unlockSession = false,
                                                         onSuccess = {
                                                             val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
                                                             viewModel.hideMedia(uris)
+                                                            viewModel.vaultAuthManager.lock()
                                                             viewModel.clearSelection()
                                                         },
                                                         onFailure = {}
@@ -2617,9 +2620,12 @@ fun MainAppLayout(
                                         if (activity != null) {
                                             viewModel.vaultAuthManager.authenticate(
                                                 activity = activity,
+                                                negativeButtonText = "Cancel",
+                                                unlockSession = false,
                                                 onSuccess = {
                                                     val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
                                                     viewModel.hideMedia(uris)
+                                                    viewModel.vaultAuthManager.lock()
                                                     viewModel.clearSelection()
                                                 },
                                                 onFailure = {}

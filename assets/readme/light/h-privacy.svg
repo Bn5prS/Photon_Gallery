@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="68" viewBox="0 0 1000 68">
+  <rect width="1000" height="68" rx="0" fill="#EAF7EC" stroke="#CEE9D1" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape Medallion: Cookie7 -->
+  <path d="M 42.0 13.9 C 44.0 13.9 46.1 14.7 47.7 16.3 C 48.9 17.5 50.6 18.3 52.4 18.5 C 56.8 19.0 60.0 23.0 59.5 27.4 C 59.3 29.2 59.7 31.0 60.7 32.5 C 63.0 36.3 61.9 41.2 58.1 43.6 C 56.6 44.6 55.4 46.0 54.8 47.7 C 53.4 51.9 48.8 54.1 44.6 52.6 C 42.9 52.0 41.1 52.0 39.4 52.6 C 35.2 54.1 30.6 51.9 29.2 47.7 C 28.6 46.0 27.4 44.6 25.9 43.6 C 22.1 41.2 21.0 36.3 23.3 32.5 C 24.3 31.0 24.7 29.2 24.5 27.4 C 24.0 23.0 27.2 19.0 31.6 18.5 C 33.4 18.3 35.1 17.5 36.3 16.3 C 37.9 14.7 40.0 13.9 42.0 13.9 Z" fill="#2E6A38"/>
+  
+  <!-- Google Material Symbol -->
+  <svg x="31" y="23" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" fill="#FFFFFF"/>
+  </svg>
+  
+  <!-- Title Typography -->
+  <text x="78" y="41.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#181D18">Network Usage &amp; Privacy</text>
+</svg>

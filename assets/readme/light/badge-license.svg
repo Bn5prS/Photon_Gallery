@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="103" height="36" viewBox="0 0 103 36">
+  <rect width="103" height="36" rx="18" fill="#FFF5F5" stroke="#F5D0D2" stroke-width="1.2"/>
+  <svg x="12" y="9" width="18" height="18" viewBox="0 0 24 24">
+    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" fill="#9C4146"/>
+  </svg>
+  <text x="38" y="22.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12.5" font-weight="600" fill="#370B0E">GPL-3.0</text>
+</svg>

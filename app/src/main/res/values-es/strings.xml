@@ -143,7 +143,8 @@
     <string name="setting_high_refresh_sub">Fijar pantalla al máximo de 90Hz / 120Hz para desplazamiento fluido</string>
     <string name="setting_dock_style">Estilo de barra de navegación</string>
     <string name="setting_dock_floating">Píldora flotante</string>
-    <string name="setting_dock_classic">Barra clásica</string>
+    <string name="setting_dock_classic">Barra de navegación de ancho completo</string>
+    <string name="setting_dock_classic_sub">Extender la barra de navegación a todo el ancho de la pantalla en lugar de una píldora flotante</string>
     <string name="setting_dock_videos">Mostrar pestaña de videos</string>
     <string name="setting_dock_videos_sub">Mostrar un acceso directo dedicado para videos en la barra</string>
     <string name="setting_grid_columns">Densidad de cuadrícula</string>
@@ -330,7 +331,7 @@
     <string name="update_status_build">Instalado: v%1$s (Compilación %2$d)</string>
     <string name="setting_display_preferences_title">Preferencias de pantalla</string>
     <string name="setting_media_viewer_title">Visor de medios</string>
-    <string name="setting_media_viewer_sub">Iluminación ambiental, fondo borroso, minimapa y brillo</string>
+    <string name="setting_media_viewer_sub">Fondo borroso, minimapa y brillo</string>
     <string name="setting_typography_layout_title">Tipografía y diseño</string>
     <string name="setting_typography_layout_sub">Fuentes, escala, alineación de cronología e insignias</string>
     <string name="setting_custom_color_title">Color de tema personalizado</string>

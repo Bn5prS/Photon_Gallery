@@ -294,7 +294,6 @@ fun DetailScreen(
 
     val maxBrightnessEnabled by settingsRepo.maxBrightnessEnabledFlow.collectAsState(initial = false)
     val viewerBlurEffect by settingsRepo.viewerBlurEffectFlow.collectAsState(initial = false)
-    val viewerDynamicColor by settingsRepo.viewerDynamicColorFlow.collectAsState(initial = false)
     val viewerZoomMinimapEnabled by settingsRepo.viewerZoomMinimapEnabledFlow.collectAsState(initial = true)
     val viewerFilmstripEnabled = false // Feature backed up: re-bind to settingsRepo.viewerFilmstripEnabledFlow when requested
 
@@ -434,49 +433,6 @@ fun DetailScreen(
         value = uri
     }
 
-    val ambientColorCache = remember { android.util.LruCache<String, Color>(64) }
-    var extractedAmbientColor by remember { mutableStateOf<Color?>(null) }
-
-    LaunchedEffect(currentItem?.uri, viewerDynamicColor) {
-        if (!viewerDynamicColor || currentItem == null) {
-            extractedAmbientColor = null
-            return@LaunchedEffect
-        }
-        val cacheKey = currentItem.uri.toString()
-        val cached = ambientColorCache.get(cacheKey)
-        if (cached != null) {
-            extractedAmbientColor = cached
-            return@LaunchedEffect
-        }
-
-        val color = withContext(Dispatchers.IO) {
-            try {
-                val req = ImageRequest.Builder(context)
-                    .data(currentItem.uri)
-                    .size(48, 48)
-                    .precision(coil3.size.Precision.INEXACT)
-                    .allowHardware(false)
-                    .build()
-                val result = context.imageLoader.execute(req)
-                val image = (result as? coil3.request.SuccessResult)?.image
-                val bitmap = when (image) {
-                    is BitmapImage -> image.bitmap
-                    is DrawableImage -> drawableToBitmap(image.drawable)
-                    else -> null
-                }
-                if (bitmap != null) {
-                    val extracted = extractAmbientMoodColor(bitmap)
-                    if (extracted != Color.Unspecified) extracted else null
-                } else null
-            } catch (e: Exception) {
-                null
-            }
-        }
-        if (color != null) {
-            ambientColorCache.put(cacheKey, color)
-        }
-        extractedAmbientColor = color
-    }
 
 
     var activeHighlight by remember { mutableStateOf(highlightText) }
@@ -514,6 +470,7 @@ fun DetailScreen(
 
     var showUi by remember { mutableStateOf(!isFromSearch) }
     var isFilmstripOverview by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showInfoCard by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -525,7 +482,8 @@ fun DetailScreen(
     var isFilmstripScrolling by remember { mutableStateOf(false) }
     var userInteractionTrigger by remember { mutableLongStateOf(0L) }
 
-    val isAnyToolOrMenuOpen =                               showInfoCard ||
+    val isAnyToolOrMenuOpen = showMoreMenu ||
+                              showInfoCard ||
                               showRenameDialog ||
                               showDeleteConfirmDialog ||
                               showCopySheet ||
@@ -843,8 +801,11 @@ fun DetailScreen(
                 if (activity != null) {
                     viewModel.vaultAuthManager.authenticate(
                         activity = activity,
+                        negativeButtonText = "Cancel",
+                        unlockSession = false,
                         onSuccess = {
                             viewModel.hideMedia(listOf(currentItem.uri))
+                            viewModel.vaultAuthManager.lock()
                             safeOnBack()
                         },
                         onFailure = {}
@@ -888,39 +849,13 @@ fun DetailScreen(
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
 
     val baseCanvasColor = Color.Black
-    val targetBgColor = if (viewerDynamicColor) {
-        extractedAmbientColor ?: baseCanvasColor
-    } else {
-        baseCanvasColor
-    }
-    val animatedBgColor by animateColorAsState(
-        targetValue = targetBgColor,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "viewerBgColor"
-    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(animatedBgColor.copy(alpha = bgAlpha)),
+            .background(baseCanvasColor.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center
     ) {
-        if (viewerDynamicColor && !viewerBlurEffect && extractedAmbientColor != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                animatedBgColor.copy(alpha = 0.35f * bgAlpha),
-                                animatedBgColor.copy(alpha = 0.12f * bgAlpha),
-                                Color.Black.copy(alpha = 0.98f * bgAlpha)
-                            ),
-                            radius = 1400f
-                        )
-                    )
-            )
-        }
 
         if (viewerBlurEffect && currentItem != null) {
             val blurRequest = remember(currentItem.uri) {
@@ -939,18 +874,12 @@ fun DetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .blur(36.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                        .alpha(if (viewerDynamicColor) 0.50f * bgAlpha else 0.40f * bgAlpha)
+                        .alpha(0.40f * bgAlpha)
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            if (viewerDynamicColor) {
-                                animatedBgColor.copy(alpha = 0.35f * bgAlpha)
-                            } else {
-                                Color.Black.copy(alpha = 0.82f * bgAlpha)
-                            }
-                        )
+                        .background(Color.Black.copy(alpha = 0.82f * bgAlpha))
                 )
             }
         }
@@ -1728,7 +1657,7 @@ fun DetailScreen(
                         onClick = safeOnBack,
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.45f),
+                            containerColor = Color.Black.copy(alpha = 0.78f),
                             contentColor = Color.White
                         ),
                         modifier = Modifier.size(40.dp)
@@ -1753,7 +1682,7 @@ fun DetailScreen(
 
                         Surface(
                             shape = ShapeFull,
-                            color = Color.Black.copy(alpha = 0.45f),
+                            color = Color.Black.copy(alpha = 0.78f),
                             contentColor = Color.White,
                             tonalElevation = 0.dp,
                             shadowElevation = 0.dp,
@@ -1802,7 +1731,7 @@ fun DetailScreen(
                                     isMotionPlaying = isMotionLooping
                                 },
                                 shape = ShapeFull,
-                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.45f),
+                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.78f),
                                 contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
                                 modifier = Modifier.height(36.dp)
                             ) {
@@ -1828,9 +1757,215 @@ fun DetailScreen(
                             }
                         }
 
-                        // Balance back button so center pill remains centered when no LIVE badge
-                        if (motionPhotoInfo?.isMotionPhoto != true) {
-                            Spacer(modifier = Modifier.size(40.dp))
+                        // Right Island: Circular more button
+                        Box {
+                            FilledTonalIconButton(
+                                onClick = { showMoreMenu = true },
+                                shape = CircleShape,
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = Color.Black.copy(alpha = 0.78f),
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_horiz),
+                                    contentDescription = stringResource(R.string.cd_more_options),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            androidx.compose.material3.DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false },
+                                shape = MaterialTheme.shapes.large,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.detail_details)) },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showInfoCard = true
+                                    }
+                                )
+                                if (currentItem != null && !currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Google Lens") },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_google_lens), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onLensAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && motionPhotoInfo?.isMotionPhoto == true) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_export_motion_mp4)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_movie), contentDescription = null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            coroutineScope.launch {
+                                                val exported = MotionPhotoHelper.exportMotionVideo(context, currentItem, motionPhotoInfo!!)
+                                                if (exported != null) {
+                                                    Toast.makeText(context, "Motion video saved to Movies/Photon_Motion", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    Toast.makeText(context, "Failed to export motion video", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                                if (currentItem != null) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_open_with)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_open_in_new), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            val mimeType = context.contentResolver.getType(uri) ?: if (currentItem.isVideo) "video/*" else "image/*"
+                                            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(uri, mimeType)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            try {
+                                                context.startActivity(Intent.createChooser(viewIntent, "Open with"))
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "No app available to open this file", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && !currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_set_wallpaper)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
+                                                setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                putExtra("mimeType", "image/*")
+                                            }
+                                            try {
+                                                context.startActivity(Intent.createChooser(intent, "Set as..."))
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                }
+                                if (currentItem != null) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_copy)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showCopySheet = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_move)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showMoveSheet = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && !currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_rotate)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            // Keep 3-dot menu open so the user can tap Rotate repeatedly
+                                            val target = currentItem
+                                            pendingRotateItem = target
+                                            val currentTarget = targetRotationMap[target.id] ?: 0f
+                                            val nextTarget = currentTarget + 90f
+                                            targetRotationMap[target.id] = nextTarget
+                                            val anim = animRotationMap[target.id]
+                                            coroutineScope.launch {
+                                                anim?.animateTo(
+                                                    targetValue = nextTarget,
+                                                    animationSpec = androidx.compose.animation.core.spring(
+                                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                                    )
+                                                )
+                                            }
+                                            viewModel.rotateMedia(
+                                                context = context,
+                                                item = target,
+                                                degrees = 90,
+                                                onSecurityException = { pendingIntent ->
+                                                    pendingRotateItem = target
+                                                    rotateLauncher.launch(
+                                                        androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                                if (currentItem != null) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_rename)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showRenameDialog = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_extract_frame)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            onNavigateToFrameExtractor(uri)
+                                        }
+                                    )
+                                }
+                                // Hide (Private Space)
+                                if (currentItem != null) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_move_vault)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val activity = context as? androidx.fragment.app.FragmentActivity
+                                            if (activity != null) {
+                                                viewModel.vaultAuthManager.authenticate(
+                                                    activity = activity,
+                                                    negativeButtonText = "Cancel",
+                                                    unlockSession = false,
+                                                    onSuccess = {
+                                                        viewModel.hideMedia(listOf(currentItem.uri))
+                                                        viewModel.vaultAuthManager.lock()
+                                                        safeOnBack()
+                                                    },
+                                                    onFailure = {}
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                 }
             }
@@ -2134,80 +2269,71 @@ private fun ViewerActionButtonsRow(
     onInfo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Box(
         modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        contentAlignment = Alignment.Center
     ) {
-        if (isTrash) {
-            FilledTonalIconButton(
-                onClick = onRestore,
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = Color.Black.copy(alpha = 0.45f),
-                    contentColor = Color.White
-                ),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                    contentDescription = "Restore",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+        Surface(
+            shape = ShapeFull,
+            color = Color.Black.copy(alpha = 0.78f),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier.height(52.dp)
+        ) {
+            if (isTrash) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onRestore,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                            contentDescription = "Restore",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
 
-            FilledTonalIconButton(
-                onClick = onPermanentDelete,
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = Color.Black.copy(alpha = 0.45f),
-                    contentColor = Color.White
-                ),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                    contentDescription = "Permanently Delete",
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        } else {
-            // Left: Standalone circular Share button
-            FilledTonalIconButton(
-                onClick = onShare,
-                enabled = currentItem?.localExists == true,
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = Color.Black.copy(alpha = 0.45f),
-                    contentColor = Color.White
-                ),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
-                    contentDescription = stringResource(R.string.detail_share),
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            // Center Pill: [Favorite, Info, Edit]
-            Surface(
-                shape = ShapeFull,
-                color = Color.Black.copy(alpha = 0.45f),
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-                modifier = Modifier.height(48.dp)
-            ) {
+                    IconButton(
+                        onClick = onPermanentDelete,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                            contentDescription = "Permanently Delete",
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            } else {
                 Row(
                     modifier = Modifier
                         .fillMaxHeight()
                         .padding(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Share
+                    IconButton(
+                        onClick = onShare,
+                        enabled = currentItem?.localExists == true,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                            contentDescription = stringResource(R.string.detail_share),
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
                     // Favorite with spring bounce animation
                     val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
                     var heartBounce by remember { mutableStateOf(false) }
@@ -2263,92 +2389,21 @@ private fun ViewerActionButtonsRow(
                             modifier = Modifier.size(22.dp)
                         )
                     }
-                }
-            }
 
-            // Right: Standalone circular Delete button
-            FilledTonalIconButton(
-                onClick = onDelete,
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = Color.Black.copy(alpha = 0.45f),
-                    contentColor = Color.White
-                ),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                    contentDescription = stringResource(R.string.detail_delete),
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(22.dp)
-                )
+                    // Delete
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                            contentDescription = stringResource(R.string.detail_delete),
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
         }
     }
-}
-
-
-private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
-    if (drawable is android.graphics.drawable.BitmapDrawable && drawable.bitmap != null) {
-        return drawable.bitmap
-    }
-    val width = if (drawable.intrinsicWidth <= 0) 1 else drawable.intrinsicWidth
-    val height = if (drawable.intrinsicHeight <= 0) 1 else drawable.intrinsicHeight
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(bitmap)
-    drawable.setBounds(0, 0, canvas.width, canvas.height)
-    drawable.draw(canvas)
-    return bitmap
-}
-
-private fun extractAmbientMoodColor(bitmap: Bitmap): Color {
-    val width = bitmap.width
-    val height = bitmap.height
-    if (width <= 0 || height <= 0) return Color.Unspecified
-
-    val pixels = IntArray(width * height)
-    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-    var totalWeight = 0f
-    var sumR = 0f
-    var sumG = 0f
-    var sumB = 0f
-    val hsv = FloatArray(3)
-
-    for (pixel in pixels) {
-        val a = (pixel shr 24) and 0xff
-        if (a < 128) continue
-
-        android.graphics.Color.colorToHSV(pixel, hsv)
-        val s = hsv[1]
-        val v = hsv[2]
-
-        // Skip near-black voids or blown highlights
-        if (v < 0.08f || (v > 0.94f && s < 0.12f)) continue
-
-        val weight = 1f + (s * 3.5f)
-        val r = (pixel shr 16) and 0xff
-        val g = (pixel shr 8) and 0xff
-        val b = pixel and 0xff
-
-        sumR += r * weight
-        sumG += g * weight
-        sumB += b * weight
-        totalWeight += weight
-    }
-
-    if (totalWeight <= 0f) return Color.Unspecified
-
-    val avgR = (sumR / totalWeight).toInt().coerceIn(0, 255)
-    val avgG = (sumG / totalWeight).toInt().coerceIn(0, 255)
-    val avgB = (sumB / totalWeight).toInt().coerceIn(0, 255)
-
-    android.graphics.Color.colorToHSV(android.graphics.Color.rgb(avgR, avgG, avgB), hsv)
-
-    if (hsv[1] < 0.08f) return Color.Unspecified
-
-    hsv[1] = (hsv[1] * 0.40f).coerceIn(0.10f, 0.30f)
-    hsv[2] = 0.08f
-
-    return Color(android.graphics.Color.HSVToColor(hsv))
 }

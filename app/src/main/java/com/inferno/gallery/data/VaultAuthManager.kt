@@ -55,26 +55,69 @@ class VaultAuthManager {
     }
 
     /**
-     * Trigger biometric/device-credential authentication on demand.
+     * Returns the allowed authenticators bitmask.
+     * When a custom Vault PIN is configured, strictly BIOMETRIC_STRONG is returned.
+     * DEVICE_CREDENTIAL must NEVER be allowed when custom PIN is configured,
+     * preventing lockscreen PIN / pattern bypass of the vault.
+     */
+    fun getAllowedAuthenticators(hasCustomPin: Boolean): Int {
+        return if (hasCustomPin) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        }
+    }
+
+    /**
+     * Check if strong biometrics are available and enrolled on the device.
+     */
+    fun canAuthenticateWithBiometrics(context: Context): Boolean {
+        val biometricManager = BiometricManager.from(context)
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+
+    /**
+     * Trigger biometric authentication on demand.
+     * When a custom Vault PIN is configured, DEVICE_CREDENTIAL is NEVER allowed,
+     * strictly requiring BIOMETRIC_STRONG to prevent lockscreen PIN bypass.
      */
     fun authenticateWithBiometrics(
         activity: FragmentActivity,
         title: String = "Private Space",
         subtitle: String = "Authenticate to access hidden photos",
+        negativeButtonText: String = "Use PIN",
+        unlockSession: Boolean = true,
         onSuccess: () -> Unit = {},
+        onNegativeButton: () -> Unit = {},
         onFailure: (String) -> Unit = {}
     ) {
+        val hasCustomPin = isPinConfigured(activity)
+        val biometricManager = BiometricManager.from(activity)
+
+        if (hasCustomPin) {
+            val canBio = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            if (canBio != BiometricManager.BIOMETRIC_SUCCESS) {
+                // Biometrics not available/enrolled; fallback to PIN
+                onNegativeButton()
+                return
+            }
+        }
+
         val executor = ContextCompat.getMainExecutor(activity)
         val biometricPrompt = BiometricPrompt(activity, executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    _isAuthenticated.value = true
+                    if (unlockSession) {
+                        _isAuthenticated.value = true
+                    }
                     onSuccess()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
-                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                    if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        onNegativeButton()
+                    } else if (errorCode != BiometricPrompt.ERROR_USER_CANCELED) {
                         onFailure(errString.toString())
                     }
                 }
@@ -85,25 +128,46 @@ class VaultAuthManager {
             }
         )
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
-            .setAllowedAuthenticators(
+
+        if (hasCustomPin) {
+            // Strictly enforce BIOMETRIC_STRONG without DEVICE_CREDENTIAL.
+            // BiometricPrompt requires negative button text when DEVICE_CREDENTIAL is not used.
+            promptInfoBuilder
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .setNegativeButtonText(negativeButtonText)
+        } else {
+            // Fallback when no custom PIN has been configured
+            promptInfoBuilder.setAllowedAuthenticators(
                 BiometricManager.Authenticators.BIOMETRIC_STRONG or
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL
             )
-            .build()
+        }
 
-        biometricPrompt.authenticate(promptInfo)
+        biometricPrompt.authenticate(promptInfoBuilder.build())
     }
 
     fun authenticate(
         activity: FragmentActivity,
         title: String = "Private Space",
         subtitle: String = "Authenticate to access hidden photos",
+        negativeButtonText: String = "Use PIN",
+        unlockSession: Boolean = true,
         onSuccess: () -> Unit = {},
+        onNegativeButton: () -> Unit = {},
         onFailure: (String) -> Unit = {}
     ) {
-        authenticateWithBiometrics(activity, title, subtitle, onSuccess, onFailure)
+        authenticateWithBiometrics(
+            activity = activity,
+            title = title,
+            subtitle = subtitle,
+            negativeButtonText = negativeButtonText,
+            unlockSession = unlockSession,
+            onSuccess = onSuccess,
+            onNegativeButton = onNegativeButton,
+            onFailure = onFailure
+        )
     }
 }

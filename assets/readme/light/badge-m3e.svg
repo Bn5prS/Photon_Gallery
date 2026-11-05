@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="207" height="36" viewBox="0 0 207 36">
+  <rect width="207" height="36" rx="18" fill="#FAF5FF" stroke="#E3D4F5" stroke-width="1.2"/>
+  <svg x="12" y="9" width="18" height="18" viewBox="0 0 24 24">
+    <path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l2.06-2.06C9.18 19.49 10.54 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9s1.5.67 1.5 1.5S7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" fill="#6750A4"/>
+  </svg>
+  <text x="38" y="22.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12.5" font-weight="600" fill="#21005D">Material 3 Expressive</text>
+</svg>

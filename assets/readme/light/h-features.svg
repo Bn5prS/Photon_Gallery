@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="68" viewBox="0 0 1000 68">
+  <rect width="1000" height="68" rx="0" fill="#E7F8EE" stroke="#CFEAD8" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape Medallion: Cookie9 -->
+  <path d="M 42.0 13.6 C 43.5 13.6 45.1 14.1 46.3 15.2 C 47.5 16.4 49.1 17.0 50.8 16.9 C 54.1 16.8 56.9 19.1 57.4 22.4 C 57.6 24.0 58.4 25.5 59.8 26.6 C 62.4 28.6 63.0 32.2 61.3 35.0 C 60.4 36.4 60.1 38.1 60.4 39.7 C 61.1 42.9 59.3 46.1 56.1 47.1 C 54.6 47.7 53.2 48.8 52.4 50.2 C 50.9 53.1 47.4 54.4 44.4 53.2 C 42.9 52.5 41.1 52.5 39.6 53.2 C 36.6 54.4 33.1 53.1 31.6 50.2 C 30.8 48.8 29.4 47.7 27.9 47.1 C 24.7 46.1 22.9 42.9 23.6 39.7 C 23.9 38.1 23.6 36.4 22.7 35.0 C 21.0 32.2 21.6 28.6 24.2 26.6 C 25.6 25.5 26.4 24.0 26.6 22.4 C 27.1 19.1 29.9 16.8 33.2 16.9 C 34.9 17.0 36.5 16.4 37.7 15.2 C 38.9 14.1 40.5 13.6 42.0 13.6 Z" fill="#006C4C"/>
+  
+  <!-- Google Material Symbol -->
+  <svg x="31" y="23" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z" fill="#FFFFFF"/>
+  </svg>
+  
+  <!-- Title Typography -->
+  <text x="78" y="41.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#191C1A">Key Features</text>
+</svg>

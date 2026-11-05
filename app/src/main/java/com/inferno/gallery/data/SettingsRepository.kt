@@ -812,10 +812,7 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
-    val viewerDynamicColorFlow: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[VIEWER_DYNAMIC_COLOR] ?: false
-        }
+    val viewerDynamicColorFlow: Flow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
 
     suspend fun updateViewerDynamicColor(enabled: Boolean) {
         context.dataStore.edit { preferences ->

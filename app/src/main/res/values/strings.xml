@@ -1,7 +1,7 @@
 <resources>
     <!-- Application Brand -->
     <string name="app_name">Photon Gallery</string>
-    <string name="app_description">An open-source, offline Android gallery designed around privacy, performance, and stunning visuals.</string>
+    <string name="app_description">An open-source, privacy-first Android gallery designed around performance and stunning visuals.</string>
 
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Photos</string>
@@ -143,7 +143,8 @@
     <string name="setting_high_refresh_sub">Lock display to maximum 90Hz / 120Hz for fluid scrolling</string>
     <string name="setting_dock_style">Navigation Dock Style</string>
     <string name="setting_dock_floating">Floating Pill</string>
-    <string name="setting_dock_classic">Classic Bar</string>
+    <string name="setting_dock_classic">Full-Length Navigation Bar</string>
+    <string name="setting_dock_classic_sub">Extend the navigation bar across the full screen width instead of a floating pill</string>
     <string name="setting_dock_videos">Show Videos Tab</string>
     <string name="setting_dock_videos_sub">Display a dedicated shortcut for videos in the dock</string>
     <string name="setting_grid_columns">Grid Density</string>
@@ -175,7 +176,7 @@
     <string name="setting_smart_search_title">Semantic AI Search</string>
     <string name="setting_smart_search_desc">On-device CLIP visual search using natural language descriptions</string>
     <string name="setting_face_clustering">Face Recognition &amp; People</string>
-    <string name="setting_face_clustering_desc">Group similar faces into private offline people albums</string>
+    <string name="setting_face_clustering_desc">Group similar faces into private on-device people albums</string>
     <string name="setting_ocr_search">On-Device OCR Text Search</string>
     <string name="setting_ocr_search_desc">Search text inside screenshots, signs, documents, and receipts</string>
     <string name="setting_download_models">Download AI Models</string>
@@ -189,7 +190,7 @@
     <string name="setting_trash_retention">Auto-Empty Recycle Bin</string>
     <string name="setting_trash_retention_sub">Permanently delete items in recycle bin after 30 days</string>
     <string name="setting_privacy_policy">Privacy Notice</string>
-    <string name="setting_privacy_policy_sub">100% offline, zero trackers, zero analytics, private by design</string>
+    <string name="setting_privacy_policy_sub">Local-first, zero trackers, zero analytics, private by design</string>
     <string name="setting_app_version">App Version</string>
     <string name="setting_github_repo">GitHub Repository</string>
     <string name="setting_github_repo_sub">View source code, star the project, or contribute</string>
@@ -330,7 +331,7 @@
     <string name="update_status_build">Installed: v%1$s (Build %2$d)</string>
     <string name="setting_display_preferences_title">Display Preferences</string>
     <string name="setting_media_viewer_title">Media Viewer</string>
-    <string name="setting_media_viewer_sub">Ambient lighting, blurred backdrop, minimap and brightness</string>
+    <string name="setting_media_viewer_sub">Blurred backdrop, minimap and brightness</string>
     <string name="setting_typography_layout_title">Typography &amp; Layout</string>
     <string name="setting_typography_layout_sub">Fonts, scaling, timeline alignment and album badges</string>
     <string name="setting_custom_color_title">Custom Theme Color</string>

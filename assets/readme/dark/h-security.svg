@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="68" viewBox="0 0 1000 68">
+  <rect width="1000" height="68" rx="0" fill="#142028" stroke="#1F333F" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape Medallion: Cookie4 -->
+  <path d="M 57.6 49.6 C 55.0 52.1 51.1 53.3 47.1 51.6 C 46.6 51.3 46.0 51.1 45.4 50.8 C 43.2 49.9 40.8 49.9 38.6 50.8 C 38.0 51.1 37.5 51.3 36.9 51.6 C 29.0 55.0 21.0 47.0 24.4 39.1 C 24.7 38.5 24.9 38.0 25.2 37.4 C 26.1 35.2 26.1 32.8 25.2 30.6 C 24.9 30.0 24.7 29.5 24.4 28.9 C 21.0 21.0 29.0 13.0 36.9 16.4 C 37.5 16.7 38.0 16.9 38.6 17.2 C 40.8 18.1 43.2 18.1 45.4 17.2 C 46.0 16.9 46.5 16.7 47.1 16.4 C 55.0 13.0 63.0 21.0 59.6 28.9 C 59.3 29.5 59.1 30.0 58.8 30.6 C 57.9 32.8 57.9 35.2 58.9 37.4 C 59.1 38.0 59.3 38.5 59.6 39.1 C 61.3 43.0 60.2 47.0 57.6 49.6 Z" fill="#1B4965"/>
+  
+  <!-- Google Material Symbol -->
+  <svg x="31" y="23" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" fill="#9AD0F5"/>
+  </svg>
+  
+  <!-- Title Typography -->
+  <text x="78" y="41.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#DEE3E8">Security &amp; Private Space</text>
+</svg>

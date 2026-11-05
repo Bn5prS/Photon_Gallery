@@ -818,17 +818,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val viewerDynamicColor: StateFlow<Boolean> = repository.viewerDynamicColorFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
-
-    fun setViewerDynamicColor(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.updateViewerDynamicColor(enabled)
-        }
-    }
 
     val viewerFilmstripEnabled: StateFlow<Boolean> = repository.viewerFilmstripEnabledFlow.stateIn(
         scope = viewModelScope,

@@ -188,7 +188,6 @@ fun SettingsScreen(
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val hapticsStrength by viewModel.hapticsStrength.collectAsState()
     val viewerBlurEffect by viewModel.viewerBlurEffect.collectAsState()
-    val viewerDynamicColor by viewModel.viewerDynamicColor.collectAsState()
     val viewerZoomMinimapEnabled by viewModel.viewerZoomMinimapEnabled.collectAsState()
     val confirmDelete by viewModel.confirmDeleteEnabled.collectAsState()
     val autoCleanTrash by viewModel.autoCleanTrashEnabled.collectAsState()
@@ -923,15 +922,6 @@ fun SettingsScreen(
                                 items = listOf(
                                     {
                                         SwitchSettingItem(
-                                            title = stringResource(R.string.setting_dynamic_ambient_title),
-                                            subtitle = stringResource(R.string.setting_dynamic_ambient_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                                            checked = viewerDynamicColor,
-                                            onCheckedChange = { viewModel.setViewerDynamicColor(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
                                             title = stringResource(R.string.setting_blur_viewer_bg_title),
                                             subtitle = stringResource(R.string.setting_blur_viewer_bg_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
@@ -1172,7 +1162,7 @@ fun SettingsScreen(
                                         val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_dock_classic),
-                                            subtitle = stringResource(R.string.setting_dock_videos_sub),
+                                            subtitle = stringResource(R.string.setting_dock_classic_sub),
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
                                             checked = isDockFullWidth,
                                             onCheckedChange = { isChecked ->
@@ -1443,7 +1433,7 @@ fun SettingsScreen(
                                             }
 
                                             Text(
-                                                text = "Index text in images entirely on-device for instant, offline search.",
+                                                text = "Index text in images entirely on-device for instant search.",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -1591,7 +1581,7 @@ fun SettingsScreen(
                                         }
 
                                         Text(
-                                            text = "Download on-device OpenAI CLIP ViT-B/16 model (~150MB) to search photos using natural descriptions (e.g. 'dog sleeping on green rug', 'sunset at beach with friends'). Runs 100% offline on CPU.",
+                                            text = "Download on-device OpenAI CLIP ViT-B/16 model (~150MB) to search photos using natural descriptions (e.g. 'dog sleeping on green rug', 'sunset at beach with friends'). Runs entirely on-device on CPU.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1903,7 +1893,7 @@ fun SettingsScreen(
                                             }
 
                                             Text(
-                                                text = "Download lightweight MobileFaceNet (~13MB) to cluster and group people directly on your device with 100% offline privacy.",
+                                                text = "Download lightweight MobileFaceNet (~13MB) to cluster and group people directly on your device with complete privacy.",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )

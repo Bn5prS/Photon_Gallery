@@ -1,7 +1,7 @@
 <resources>
     <!-- Application Brand -->
     <string name="app_name">Photon Gallery</string>
-    <string name="app_description">Eine quelloffene Offline-Android-Galerie für Privatsphäre, Performance und beeindruckende Optik.</string>
+    <string name="app_description">Eine quelloffene Android-Galerie mit Fokus auf Privatsphäre, Performance und beeindruckende Optik.</string>
 
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Fotos</string>
@@ -143,7 +143,8 @@
     <string name="setting_high_refresh_sub">Display auf 90Hz / 120Hz für flüssiges Scrollen fixieren</string>
     <string name="setting_dock_style">Navigationsleisten-Stil</string>
     <string name="setting_dock_floating">Schwebende Pille</string>
-    <string name="setting_dock_classic">Klassische Leiste</string>
+    <string name="setting_dock_classic">Navigationsleiste in voller Breite</string>
+    <string name="setting_dock_classic_sub">Die Navigationsleiste über die gesamte Bildschirmbreite anstelle einer schwebenden Leiste erweitern</string>
     <string name="setting_dock_videos">Registerkarte Videos anzeigen</string>
     <string name="setting_dock_videos_sub">Dedizierten Schnellzugriff für Videos in der Leiste anzeigen</string>
     <string name="setting_grid_columns">Rasterdichte</string>
@@ -175,7 +176,7 @@
     <string name="setting_smart_search_title">Semantische KI-Suche</string>
     <string name="setting_smart_search_desc">Lokale CLIP-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
     <string name="setting_face_clustering">Gesichtserkennung &amp; Personen</string>
-    <string name="setting_face_clustering_desc">Ähnliche Gesichter in privaten Offline-Personenalben gruppieren</string>
+    <string name="setting_face_clustering_desc">Ähnliche Gesichter in privaten Personenalben auf dem Gerät gruppieren</string>
     <string name="setting_ocr_search">Lokale OCR-Textsuche</string>
     <string name="setting_ocr_search_desc">Text in Screenshots, Schildern, Dokumenten und Belegen suchen</string>
     <string name="setting_download_models">KI-Modelle herunterladen</string>
@@ -189,7 +190,7 @@
     <string name="setting_trash_retention">Papierkorb automatisch leeren</string>
     <string name="setting_trash_retention_sub">Elemente im Papierkorb nach 30 Tagen endgültig löschen</string>
     <string name="setting_privacy_policy">Datenschutzhinweis</string>
-    <string name="setting_privacy_policy_sub">100% offline, keine Tracker, keine Telemetrie, absolut privat</string>
+    <string name="setting_privacy_policy_sub">Lokal auf dem Gerät, keine Tracker, keine Telemetrie, absolut privat</string>
     <string name="setting_app_version">App-Version</string>
     <string name="setting_github_repo">GitHub-Repository</string>
     <string name="setting_github_repo_sub">Quellcode ansehen, Projekt bewerten oder beitragen</string>
@@ -330,7 +331,7 @@
     <string name="update_status_build">Installiert: v%1$s (Build %2$d)</string>
     <string name="setting_display_preferences_title">Anzeigeeinstellungen</string>
     <string name="setting_media_viewer_title">Medienbetrachter</string>
-    <string name="setting_media_viewer_sub">Umgebungslicht, unscharfer Hintergrund, Minimap und Helligkeit</string>
+    <string name="setting_media_viewer_sub">Unscharfer Hintergrund, Minimap und Helligkeit</string>
     <string name="setting_typography_layout_title">Typografie &amp; Layout</string>
     <string name="setting_typography_layout_sub">Schriftarten, Skalierung, Ausrichtung und Albengrößen</string>
     <string name="setting_custom_color_title">Benutzerdefinierte Designfarbe</string>

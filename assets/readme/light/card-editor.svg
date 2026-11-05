@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="116" viewBox="0 0 450 116">
+  <rect width="450" height="116" rx="26" fill="#FCF8FD" stroke="#ECE5EE" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape -->
+  <path d="M 81.0 58.0 L 80.4 60.5 L 78.8 62.7 L 76.4 64.5 L 73.4 65.8 L 70.3 66.5 L 67.3 66.8 L 64.8 67.0 L 63.0 67.2 L 61.8 67.8 L 61.2 69.0 L 61.0 70.8 L 60.8 73.3 L 60.5 76.3 L 59.8 79.4 L 58.5 82.4 L 56.7 84.8 L 54.5 86.4 L 52.0 87.0 L 49.5 86.4 L 47.3 84.8 L 45.5 82.4 L 44.2 79.4 L 43.5 76.3 L 43.2 73.3 L 43.0 70.8 L 42.8 69.0 L 42.2 67.8 L 41.0 67.2 L 39.2 67.0 L 36.7 66.8 L 33.7 66.5 L 30.6 65.8 L 27.6 64.5 L 25.2 62.7 L 23.6 60.5 L 23.0 58.0 L 23.6 55.5 L 25.2 53.3 L 27.6 51.5 L 30.6 50.2 L 33.7 49.5 L 36.7 49.2 L 39.2 49.0 L 41.0 48.8 L 42.2 48.2 L 42.8 47.0 L 43.0 45.2 L 43.2 42.7 L 43.5 39.7 L 44.2 36.6 L 45.5 33.6 L 47.3 31.2 L 49.5 29.6 L 52.0 29.0 L 54.5 29.6 L 56.7 31.2 L 58.5 33.6 L 59.8 36.6 L 60.5 39.7 L 60.8 42.7 L 61.0 45.2 L 61.2 47.0 L 61.8 48.2 L 63.0 48.8 L 64.8 49.0 L 67.3 49.2 L 70.3 49.5 L 73.4 50.2 L 76.4 51.5 L 78.8 53.3 L 80.4 55.5 Z" fill="#9C4146"/>
+  
+  <!-- Material Symbol -->
+  <svg x="40" y="46" width="24" height="24" viewBox="0 0 24 24">
+    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#FFFFFF"/>
+  </svg>
+  
+  <!-- Tonal Badge -->
+  <g transform="translate(335, 16)">
+    <rect width="95" height="24" rx="12" fill="#FFDADA"/>
+    <text x="47.5" y="16.5" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="#733338" text-anchor="middle">Full Suite</text>
+  </g>
+  
+  <!-- Title Typography -->
+  <text x="98" y="38" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="16.5" font-weight="700" fill="#1D1B20">Photo Editor &amp; Markup</text>
+  
+  <!-- Description (Pure SVG text) -->
+  <text x="98" y="66" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="450" fill="#49454E">Crop, draw, highlight, blur redaction, add text,</text>
+  <text x="98" y="85" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="450" fill="#49454E">and tune color filters with lossless export.</text>
+</svg>

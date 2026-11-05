@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="68" viewBox="0 0 1000 68">
+  <rect width="1000" height="68" rx="0" fill="#FFF0EB" stroke="#FCD6C7" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape Medallion: Pill -->
+  <path d="M 57.7 18.3 C 60.5 21.2 62.4 24.9 62.8 29.1 C 62.9 29.7 62.9 30.4 63.0 31.0 C 63.0 35.8 61.0 40.5 57.6 43.9 C 55.7 45.8 53.8 47.7 51.9 49.6 C 48.5 53.0 43.8 55.0 39.0 55.0 C 38.4 54.9 37.7 54.9 37.1 54.8 C 28.7 53.9 22.1 47.3 21.2 38.9 C 21.1 38.3 21.1 37.6 21.0 37.0 C 21.0 32.2 23.0 27.5 26.4 24.1 C 28.3 22.2 30.2 20.3 32.1 18.4 C 35.5 15.0 40.2 13.0 45.0 13.0 C 45.6 13.1 46.3 13.1 46.9 13.2 C 51.1 13.6 54.8 15.5 57.7 18.3 Z" fill="#8A3314"/>
+  
+  <!-- Google Material Symbol -->
+  <svg x="31" y="23" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FFFFFF"/>
+  </svg>
+  
+  <!-- Title Typography -->
+  <text x="78" y="41.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#241611">Contributing</text>
+</svg>

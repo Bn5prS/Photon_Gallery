@@ -439,8 +439,11 @@ fun PersonDetailScreen(
                 if (activity != null) {
                     galleryViewModel.vaultAuthManager.authenticate(
                         activity = activity,
+                        negativeButtonText = "Cancel",
+                        unlockSession = false,
                         onSuccess = {
                             galleryViewModel.hideMedia(uris)
+                            galleryViewModel.vaultAuthManager.lock()
                             selectedMediaIds = emptySet()
                         },
                         onFailure = {}
@@ -1020,9 +1023,12 @@ fun PersonDetailScreen(
                                 if (activity != null) {
                                     galleryViewModel.vaultAuthManager.authenticate(
                                         activity = activity,
+                                        negativeButtonText = "Cancel",
+                                        unlockSession = false,
                                         onSuccess = {
                                             val uris = selectedMedia.map { Uri.parse(it.uriString) }
                                             galleryViewModel.hideMedia(uris)
+                                            galleryViewModel.vaultAuthManager.lock()
                                             selectedMediaIds = emptySet()
                                         },
                                         onFailure = {}

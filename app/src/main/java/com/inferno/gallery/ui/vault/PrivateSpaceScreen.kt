@@ -5,6 +5,10 @@ import androidx.compose.ui.res.stringResource
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -88,6 +92,36 @@ fun PrivateSpaceScreen(
     val shakeOffset = remember { Animatable(0f) }
     var showOptionsMenu by remember { mutableStateOf(false) }
 
+    // ── Session Invalidation on Exit / Background / Disposal ────────────────
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_PAUSE) {
+                viewModel.vaultAuthManager.lock()
+                selectedIds = emptySet()
+                enteredPin = ""
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.vaultAuthManager.lock()
+            selectedIds = emptySet()
+            enteredPin = ""
+        }
+    }
+
+    BackHandler {
+        if (isSelectionMode) {
+            selectedIds = emptySet()
+        } else {
+            viewModel.vaultAuthManager.lock()
+            selectedIds = emptySet()
+            enteredPin = ""
+            onNavigateBack()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -123,6 +157,8 @@ fun PrivateSpaceScreen(
                                         selectedIds = emptySet()
                                     } else {
                                         viewModel.vaultAuthManager.lock()
+                                        selectedIds = emptySet()
+                                        enteredPin = ""
                                         onNavigateBack()
                                     }
                                 },
@@ -191,6 +227,7 @@ fun PrivateSpaceScreen(
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 viewModel.vaultAuthManager.lock()
                                                 enteredPin = ""
+                                                selectedIds = emptySet()
                                             }
                                         )
                                         DropdownMenuItem(
@@ -199,6 +236,7 @@ fun PrivateSpaceScreen(
                                             onClick = {
                                                 showOptionsMenu = false
                                                 viewModel.vaultAuthManager.lock()
+                                                selectedIds = emptySet()
                                                 isChangingPinMode = true
                                                 isPinConfigured = false
                                                 setupStage = PinSetupStage.ENTER_NEW_PIN
@@ -397,7 +435,9 @@ fun PrivateSpaceScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     viewModel.vaultAuthManager.authenticateWithBiometrics(
                                         activity = it,
+                                        negativeButtonText = "Cancel",
                                         onSuccess = { enteredPin = "" },
+                                        onNegativeButton = {},
                                         onFailure = {}
                                     )
                                 }

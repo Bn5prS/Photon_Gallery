@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="163" height="36" viewBox="0 0 163 36">
+  <rect width="163" height="36" rx="18" fill="#14221B" stroke="#20382D" stroke-width="1.2"/>
+  <svg x="12" y="9" width="18" height="18" viewBox="0 0 24 24">
+    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z" fill="#8BF8CA"/>
+  </svg>
+  <text x="38" y="22.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12.5" font-weight="600" fill="#CBEBDD">3.0K+ Downloads</text>
+</svg>

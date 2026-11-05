@@ -595,6 +595,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     val isVaultUnlocked: StateFlow<Boolean> = vaultAuthManager.isAuthenticated
 
+    fun lockVault() {
+        vaultAuthManager.lock()
+    }
+
     fun hideMedia(uris: List<Uri>) {
         viewModelScope.launch(Dispatchers.IO) {
             val count = vaultRepository.hideMedia(uris).size
@@ -1154,7 +1158,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun recordMediaView(mediaId: String) {
-        // No-op for offline gallery
+        // No-op for local-first gallery
     }
 
     fun renameMedia(

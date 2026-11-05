@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="270" height="58" viewBox="0 0 270 58">
+  <rect width="270" height="58" rx="29" fill="#D0BCFF"/>
+  <circle cx="32" cy="29" r="19" fill="#381E72"/>
+  <svg x="21" y="18" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z" fill="#D0BCFF"/>
+  </svg>
+  <text x="64" y="23" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="10.5" font-weight="700" letter-spacing="0.6" fill="#4F378B">FREE &amp; OPEN SOURCE</text>
+  <text x="64" y="42" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="15.5" font-weight="700" fill="#21005D">Download Latest Release</text>
+</svg>

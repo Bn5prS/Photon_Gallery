@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="116" viewBox="0 0 450 116">
+  <rect width="450" height="116" rx="26" fill="#1A1722" stroke="#2E2738" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape -->
+  <path d="M 52 29 Q 59.54 50.46 81 58 Q 59.54 65.54 52 87 Q 44.46 65.54 23 58 Q 44.46 50.46 52 29 Z" fill="#80D5E4"/>
+  
+  <!-- Material Symbol -->
+  <svg x="40" y="46" width="24" height="24" viewBox="0 0 24 24">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#00363D"/>
+  </svg>
+  
+  <!-- Tonal Badge -->
+  <g transform="translate(335, 16)">
+    <rect width="95" height="24" rx="12" fill="#1B2D31"/>
+    <text x="47.5" y="16.5" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="#80D5E4" text-anchor="middle">MobileCLIP</text>
+  </g>
+  
+  <!-- Title Typography -->
+  <text x="98" y="38" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="16.5" font-weight="700" fill="#E6E1E5">On-Device AI Search</text>
+  
+  <!-- Description (Pure SVG text) -->
+  <text x="98" y="66" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="450" fill="#CAC4D0">Find photos by natural description using local</text>
+  <text x="98" y="85" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="450" fill="#CAC4D0">MobileCLIP neural embeddings on-device.</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="68" viewBox="0 0 1000 68">
+  <rect width="1000" height="68" rx="0" fill="#251F14" stroke="#3A3121" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape Medallion: Fan -->
+  <path d="M 61.2 53.1 C 60.4 53.9 59.5 54.5 58.3 54.8 C 57.6 55.0 56.4 55.0 54.1 55.0 C 45.2 55.0 36.3 55.0 27.4 55.0 C 23.9 55.0 21.0 52.2 21.0 48.7 C 21.0 38.9 21.0 29.1 21.0 19.3 C 21.0 15.8 23.9 13.0 27.4 13.1 C 28.3 13.1 29.1 13.1 30.0 13.1 C 48.0 13.6 62.4 28.0 62.9 45.9 C 62.9 45.9 62.9 46.0 62.9 46.0 C 63.0 48.3 63.0 49.4 62.8 50.2 C 62.5 51.3 62.0 52.3 61.2 53.1 Z" fill="#755600"/>
+  
+  <!-- Google Material Symbol -->
+  <svg x="31" y="23" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="#F5C77E"/>
+  </svg>
+  
+  <!-- Title Typography -->
+  <text x="78" y="41.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#E8E2D7">App Permissions</text>
+</svg>

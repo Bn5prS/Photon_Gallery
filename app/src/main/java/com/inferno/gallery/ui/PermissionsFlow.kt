@@ -1024,7 +1024,7 @@ private fun SetupAiPage(
             Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
             Text(
-                text = "Supercharge your gallery with private, 100% offline semantic search and facial recognition — your photos never leave your device.",
+                text = "Supercharge your gallery with private, on-device semantic search and facial recognition — your photos never leave your device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -1191,7 +1191,7 @@ private fun SetupAiPage(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "OpenAI CLIP ViT-B/16 • ~150 MB • 100% Offline (CPU)",
+                                text = "OpenAI CLIP ViT-B/16 • ~150 MB • On-Device (CPU)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1430,7 +1430,7 @@ private fun SetupAiPage(
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                                 Text(
-                                    text = "AI Model downloaded and verified (147 MB). Ready for offline search.",
+                                    text = "AI Model downloaded and verified (147 MB). Ready for smart search.",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -1514,7 +1514,7 @@ private fun SetupAiPage(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "On-Device MobileFaceNet • ~13 MB • 100% Offline (CPU)",
+                                text = "On-Device MobileFaceNet • ~13 MB • On-Device (CPU)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1751,7 +1751,7 @@ private fun SetupAiPage(
                                         modifier = Modifier.size(IconSizeTokens.M)
                                     )
                                     Text(
-                                        text = "Face Model downloaded and verified (13 MB). Ready for offline face clustering.",
+                                        text = "Face Model downloaded and verified (13 MB). Ready for face grouping.",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )

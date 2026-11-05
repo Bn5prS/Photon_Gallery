@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="68" viewBox="0 0 1000 68">
+  <rect width="1000" height="68" rx="0" fill="#FFF8ED" stroke="#F6E4C4" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape Medallion: Ghostish -->
+  <path d="M 42.0 13.0 C 53.1 13.0 62.0 22.0 62.0 33.0 C 62.0 37.0 62.0 41.0 62.0 44.9 C 62.0 51.1 55.4 55.0 50.0 52.0 C 49.1 51.5 48.2 51.0 47.2 50.5 C 45.8 49.7 44.1 49.3 42.4 49.3 C 42.1 49.3 41.9 49.3 41.6 49.3 C 39.9 49.3 38.2 49.7 36.8 50.5 C 35.8 51.0 34.9 51.5 34.0 52.0 C 28.6 55.0 22.0 51.1 22.0 44.9 C 22.0 41.0 22.0 37.0 22.0 33.0 C 22.0 22.0 30.9 13.0 42.0 13.0 Z" fill="#7D5700"/>
+  
+  <!-- Google Material Symbol -->
+  <svg x="31" y="23" width="22" height="22" viewBox="0 0 24 24">
+    <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="#FFFFFF"/>
+  </svg>
+  
+  <!-- Title Typography -->
+  <text x="78" y="41.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#1E1B16">Getting Started</text>
+</svg>

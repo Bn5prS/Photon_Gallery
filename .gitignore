@@ -32,6 +32,7 @@ crash.png
 crash*.png
 crash*.txt
 .superpowers/
+docs/superpowers/
 
 # ============================================================
 # Sensitive Info, Signing Keys & Credentials (CRITICAL)

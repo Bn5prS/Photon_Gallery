@@ -143,7 +143,8 @@
     <string name="setting_high_refresh_sub">Verrouiller l\'écran à 90Hz / 120Hz pour un défilement ultra-fluide</string>
     <string name="setting_dock_style">Style de barre de navigation</string>
     <string name="setting_dock_floating">Pilule flottante</string>
-    <string name="setting_dock_classic">Barre classique</string>
+    <string name="setting_dock_classic">Barre de navigation pleine largeur</string>
+    <string name="setting_dock_classic_sub">"Étendre la barre de navigation sur toute la largeur de l'écran au lieu d'une pilule flottante"</string>
     <string name="setting_dock_videos">Afficher l\'onglet Vidéos</string>
     <string name="setting_dock_videos_sub">Afficher un raccourci dédié aux vidéos dans la barre</string>
     <string name="setting_grid_columns">Densité de la grille</string>
@@ -330,7 +331,7 @@
     <string name="update_status_build">Installé : v%1$s (Version %2$d)</string>
     <string name="setting_display_preferences_title">Préférences d\'affichage</string>
     <string name="setting_media_viewer_title">Visionneuse de médias</string>
-    <string name="setting_media_viewer_sub">Éclairage ambiant, arrière-plan flou, mini-carte et luminosité</string>
+    <string name="setting_media_viewer_sub">Arrière-plan flou, mini-carte et luminosité</string>
     <string name="setting_typography_layout_title">Typographie et disposition</string>
     <string name="setting_typography_layout_sub">Polices, échelle, alignement chronologique et badges</string>
     <string name="setting_custom_color_title">Couleur de thème personnalisée</string>

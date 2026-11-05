@@ -584,7 +584,7 @@ fun VideoPlayerItemWithResolvedUri(
         ) {
             Surface(
                 shape = ShapeFull,
-                color = Color.Black.copy(alpha = 0.50f),
+                color = Color.Black.copy(alpha = 0.78f),
                 contentColor = Color.White,
                 tonalElevation = 0.dp,
                 shadowElevation = 4.dp,

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="126" height="36" viewBox="0 0 126 36">
+  <rect width="126" height="36" rx="18" fill="#221C28" stroke="#372D42" stroke-width="1.2"/>
+  <svg x="12" y="9" width="18" height="18" viewBox="0 0 24 24">
+    <path d="M2 2h20L12 12 2 22V2zm20 20H2l10-10 10 10z" fill="#D0BCFF"/>
+  </svg>
+  <text x="38" y="22.5" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12.5" font-weight="600" fill="#E6DDF2">Kotlin 2.2</text>
+</svg>

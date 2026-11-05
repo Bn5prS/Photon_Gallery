@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="116" viewBox="0 0 450 116">
+  <rect width="450" height="116" rx="26" fill="#FCF8FD" stroke="#ECE5EE" stroke-width="1.2"/>
+  
+  <!-- Official Material 3 Expressive Shape -->
+  <path d="M 81.0 58.0 L 79.5 60.4 L 75.8 62.2 L 71.6 63.3 L 68.7 64.1 L 68.1 65.5 L 69.6 68.1 L 71.8 71.9 L 73.2 75.8 L 72.5 78.5 L 69.8 79.2 L 65.9 77.8 L 62.2 75.6 L 59.5 74.1 L 58.1 74.7 L 57.3 77.6 L 56.2 81.8 L 54.4 85.5 L 52.0 87.0 L 49.6 85.5 L 47.8 81.8 L 46.7 77.6 L 45.9 74.7 L 44.5 74.1 L 41.9 75.6 L 38.1 77.8 L 34.2 79.2 L 31.5 78.5 L 30.8 75.8 L 32.2 71.9 L 34.4 68.2 L 35.9 65.5 L 35.3 64.1 L 32.4 63.3 L 28.2 62.2 L 24.5 60.4 L 23.0 58.0 L 24.5 55.6 L 28.2 53.8 L 32.4 52.7 L 35.3 51.9 L 35.9 50.5 L 34.4 47.8 L 32.2 44.1 L 30.8 40.2 L 31.5 37.5 L 34.2 36.8 L 38.1 38.2 L 41.8 40.4 L 44.5 41.9 L 45.9 41.3 L 46.7 38.4 L 47.8 34.2 L 49.6 30.5 L 52.0 29.0 L 54.4 30.5 L 56.2 34.2 L 57.3 38.4 L 58.1 41.3 L 59.5 41.9 L 62.1 40.4 L 65.9 38.2 L 69.8 36.8 L 72.5 37.5 L 73.2 40.2 L 71.8 44.1 L 69.6 47.9 L 68.1 50.5 L 68.7 51.9 L 71.6 52.7 L 75.8 53.8 L 79.5 55.6 Z" fill="#2E6A38"/>
+  
+  <!-- Material Symbol -->
+  <svg x="40" y="46" width="24" height="24" viewBox="0 0 24 24">
+    <path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zm2-8h6v8H5v-8zm5-6H6L5 5H2v2h12V5h-3z" fill="#FFFFFF"/>
+  </svg>
+  
+  <!-- Tonal Badge -->
+  <g transform="translate(342, 16)">
+    <rect width="88" height="24" rx="12" fill="#D3EBD5"/>
+    <text x="43.8" y="16.5" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="#165123" text-anchor="middle">Smart Bin</text>
+  </g>
+  
+  <!-- Title Typography -->
+  <text x="98" y="38" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="16.5" font-weight="700" fill="#1D1B20">Duplicate Cleaner &amp; Trash</text>
+  
+  <!-- Description (Pure SVG text) -->
+  <text x="98" y="66" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="450" fill="#49454E">Perceptual similarity detection for duplicate cleanup</text>
+  <text x="98" y="85" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="450" fill="#49454E">and a soft-delete trash bin with auto-purge.</text>
+</svg>
