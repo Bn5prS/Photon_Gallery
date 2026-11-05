@@ -21,6 +21,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -126,17 +128,22 @@ fun ExpressiveScrollBar(
     val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
     val haptic = LocalHapticFeedback.current
 
-    // Auto-hide visibility based on scroll / interaction
-    val isScrolling = listState?.isScrollInProgress == true || gridState?.isScrollInProgress == true
+    // Auto-hide visibility based on scroll / interaction via snapshotFlow (zero composition reads)
     var isScrollbarVisible by remember(listState, gridState) { mutableStateOf(false) }
 
-    LaunchedEffect(isScrolling, isInteracting) {
-        if (isScrolling || isInteracting) {
-            isScrollbarVisible = true
-        } else {
-            kotlinx.coroutines.delay(1200L)
-            isScrollbarVisible = false
+    LaunchedEffect(listState, gridState, isInteracting) {
+        snapshotFlow {
+            (listState?.isScrollInProgress == true || gridState?.isScrollInProgress == true) || isInteracting
         }
+            .distinctUntilChanged()
+            .collect { active ->
+                if (active) {
+                    isScrollbarVisible = true
+                } else {
+                    kotlinx.coroutines.delay(1200L)
+                    isScrollbarVisible = false
+                }
+            }
     }
 
     val scrollbarAlpha by animateFloatAsState(
@@ -154,11 +161,15 @@ fun ExpressiveScrollBar(
 
     // Throttled grid scroll dispatcher: 30Hz throttle to prevent main-thread choking & Coil queue flooding
     LaunchedEffect(isDragging) {
-        if (!isDragging) return@LaunchedEffect
+        if (!isDragging) {
+            com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = false
+            return@LaunchedEffect
+        }
+        com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = true
         var lastScrolledIndex = -1
         while (isDragging) {
             val target = pendingScrollIndex
-            if (target >= 0 && target != lastScrolledIndex) {
+            if (target >= 0) {
                 lastScrolledIndex = target
                 try {
                     gridState?.scrollToItem(target)
@@ -170,7 +181,7 @@ fun ExpressiveScrollBar(
             kotlinx.coroutines.delay(32L)
         }
         val finalTarget = pendingScrollIndex
-        if (finalTarget >= 0 && finalTarget != lastScrolledIndex) {
+        if (finalTarget >= 0) {
             try {
                 gridState?.scrollToItem(finalTarget)
                 listState?.scrollToItem(finalTarget)
@@ -237,9 +248,7 @@ fun ExpressiveScrollBar(
                         }
 
                         val maxIndex = total - 1
-                        val loadedItems = gridState?.layoutInfo?.totalItemsCount ?: listState?.layoutInfo?.totalItemsCount ?: maxIndex
-                        val effectiveMax = minOf(maxIndex, maxOf(loadedItems - 1, 0))
-                        val rawIndex = (newProgress * maxIndex).toInt().coerceIn(0, if (effectiveMax > 0) effectiveMax else maxIndex)
+                        val rawIndex = (newProgress * maxIndex).toInt().coerceIn(0, maxIndex)
                         pendingScrollIndex = rawIndex
                     }
 

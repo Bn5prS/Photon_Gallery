@@ -7,6 +7,8 @@ import com.inferno.gallery.ui.utils.pressScale
 import com.inferno.gallery.ui.components.PhotonEmptyState
 import com.inferno.gallery.ui.components.thumbnailMemoryKey
 import com.inferno.gallery.ui.components.thumbnailTargetPx
+import com.inferno.gallery.ui.components.toGalleryItem
+import com.inferno.gallery.data.TimelineLayoutMode
 import com.inferno.gallery.ui.theme.MotionTokens
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -217,6 +219,7 @@ fun GalleryScreen(
     }
 
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
+    val nativeTimelineItems by viewModel.nativeTimelineItems.collectAsState()
 
     var previousFilter by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(selectedFilterIndex) }
     var previousBucket by rememberSaveable { mutableStateOf(bucketName) }
@@ -446,8 +449,14 @@ fun GalleryScreen(
     }
     // ──────────────────────────────────────────────────────────────────────────────────────
 
-    val isGridEmpty = remember(pagedMedia) {
-        derivedStateOf { pagedMedia.itemCount == 0 }
+    val isGridEmpty = remember(timelineLayoutMode, pagedMedia, nativeTimelineItems) {
+        derivedStateOf {
+            if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
+                pagedMedia.itemCount == 0
+            } else {
+                nativeTimelineItems.isEmpty()
+            }
+        }
     }
 
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -487,48 +496,97 @@ fun GalleryScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-        com.inferno.gallery.ui.components.PhotonGrid(
-            pagedMedia = pagedMedia,
-            lazyGridState = lazyGridState,
-            gridCellsCount = gridCellsCount,
-            onGridCountChange = onGridCountChange,
-            isSelectionMode = isSelectionMode,
-            selectedUris = selectedUris,
-            onMediaClick = onMediaClick,
-            viewMode = viewMode,
-            thumbnailCornerRadius = thumbnailCornerRadius,
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope,
-            viewModel = viewModel,
-            modifier = modifier,
-            contentPadding = contentPadding,
-            timelineLayoutMode = timelineLayoutMode,
-            dateHeaderAlignment = dateHeaderAlignment,
-            showMatchBadge = (bucketName == "search_text" || bucketName == "search_smart"),
-            headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
-                if (shouldShowMemoriesHeader) {
-                    {
-                        MemoriesSpotlightCard(
-                            memoryGroups = onThisDayMemories,
-                            isDismissed = isMemoriesDismissed,
-                            onOpenMemory = { group ->
-                                activeMemoryReelGroup = group
-                            },
-                            onDismiss = {
-                                viewModel.dismissMemories()
-                            },
-                            onRestore = {
-                                viewModel.uncollapseMemories()
-                            }
-                        )
-                    }
-                } else null
-            }
-        )
+        if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
+            com.inferno.gallery.ui.components.PhotonGrid(
+                pagedMedia = pagedMedia,
+                lazyGridState = lazyGridState,
+                gridCellsCount = gridCellsCount,
+                onGridCountChange = onGridCountChange,
+                isSelectionMode = isSelectionMode,
+                selectedUris = selectedUris,
+                onMediaClick = onMediaClick,
+                viewMode = viewMode,
+                thumbnailCornerRadius = thumbnailCornerRadius,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                viewModel = viewModel,
+                modifier = modifier,
+                contentPadding = contentPadding,
+                timelineLayoutMode = timelineLayoutMode,
+                dateHeaderAlignment = dateHeaderAlignment,
+                showMatchBadge = (bucketName == "search_text" || bucketName == "search_smart"),
+                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
+                    if (shouldShowMemoriesHeader) {
+                        {
+                            MemoriesSpotlightCard(
+                                memoryGroups = onThisDayMemories,
+                                isDismissed = isMemoriesDismissed,
+                                onOpenMemory = { group ->
+                                    activeMemoryReelGroup = group
+                                },
+                                onDismiss = {
+                                    viewModel.dismissMemories()
+                                },
+                                onRestore = {
+                                    viewModel.uncollapseMemories()
+                                }
+                            )
+                        }
+                    } else null
+                }
+            )
+        } else {
+            com.inferno.gallery.ui.components.NativePhotonGrid(
+                items = nativeTimelineItems,
+                gridCellsCount = gridCellsCount,
+                onGridCountChange = onGridCountChange,
+                isSelectionMode = isSelectionMode,
+                selectedUris = selectedUris,
+                favoriteIds = favoriteIds,
+                onMediaClick = onMediaClick,
+                onToggleSelection = { media -> viewModel.toggleSelection(media.uriString) },
+                onMediaLongClick = { media -> viewModel.toggleSelection(media.uriString) },
+                thumbnailCornerRadius = thumbnailCornerRadius,
+                contentPadding = contentPadding,
+                dateHeaderAlignment = dateHeaderAlignment,
+                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
+                    if (shouldShowMemoriesHeader) {
+                        {
+                            MemoriesSpotlightCard(
+                                memoryGroups = onThisDayMemories,
+                                isDismissed = isMemoriesDismissed,
+                                onOpenMemory = { group ->
+                                    activeMemoryReelGroup = group
+                                },
+                                onDismiss = {
+                                    viewModel.dismissMemories()
+                                },
+                                onRestore = {
+                                    viewModel.uncollapseMemories()
+                                }
+                            )
+                        }
+                    } else null
+                },
+                scrollToTopTrigger = if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
+                    viewModel.videosScrollToTopTrigger
+                } else {
+                    viewModel.photosScrollToTopTrigger
+                },
+                scrollToTopKey = selectedFilterIndex to bucketName,
+                onSaveScrollPosition = { index, offset ->
+                    viewModel.saveGridScrollPosition(bucketName, index, offset)
+                }
+            )
+        }
 
         // ── Initial sync loading ────────────────────────────────────────────
         val isSyncRunning by viewModel.isInitialSyncRunning.collectAsState()
-        val isNotLoading = pagedMedia.loadState.refresh is androidx.paging.LoadState.NotLoading
+        val isNotLoading = if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
+            pagedMedia.loadState.refresh is androidx.paging.LoadState.NotLoading
+        } else {
+            true
+        }
         AnimatedVisibility(
             visible = isGridEmpty.value && isSyncRunning,
             enter = fadeIn(MotionTokens.snappySpring()),
@@ -621,39 +679,41 @@ fun GalleryScreen(
             }
         }
 
-        val isCenterAlignment = dateHeaderAlignment == "CENTER"
-        DynamicDateBadge(
-            // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
-            // composition subscribed the whole GalleryScreen to state that is written every
-            // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
-            // happen inside DynamicDateBadge's own (small) restart scope.
-            visible = { showDateBadge },
-            dateText = { activeDateBadge },
-            isCenter = isCenterAlignment,
-            modifier = Modifier
-                .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
-                .padding(
-                    top = topBarContentPadding + 12.dp,
-                    start = if (isCenterAlignment) 0.dp else 4.dp
-                )
-                .graphicsLayer {
-                    translationY = -topBarCollapseFractionProvider() * maxUpwardShiftPx
-                }
-        )
+        if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
+            val isCenterAlignment = dateHeaderAlignment == "CENTER"
+            DynamicDateBadge(
+                // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
+                // composition subscribed the whole GalleryScreen to state that is written every
+                // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
+                // happen inside DynamicDateBadge's own (small) restart scope.
+                visible = { showDateBadge },
+                dateText = { activeDateBadge },
+                isCenter = isCenterAlignment,
+                modifier = Modifier
+                    .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
+                    .padding(
+                        top = topBarContentPadding + 12.dp,
+                        start = if (isCenterAlignment) 0.dp else 4.dp
+                    )
+                    .graphicsLayer {
+                        translationY = -topBarCollapseFractionProvider() * maxUpwardShiftPx
+                    }
+            )
 
-        FastScroller(
-            lazyGridState = lazyGridState,
-            pagedMedia = pagedMedia,
-            headerOffset = if (shouldShowMemoriesHeader) 1 else 0,
-            gridCellsCount = gridCellsCount,
-            totalMediaCount = totalMediaCount,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(
-                    top = contentPadding.calculateTopPadding(),
-                    bottom = contentPadding.calculateBottomPadding()
-                )
-        )
+            FastScroller(
+                lazyGridState = lazyGridState,
+                pagedMedia = pagedMedia,
+                headerOffset = if (shouldShowMemoriesHeader) 1 else 0,
+                gridCellsCount = gridCellsCount,
+                totalMediaCount = totalMediaCount,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(
+                        top = contentPadding.calculateTopPadding(),
+                        bottom = contentPadding.calculateBottomPadding()
+                    )
+            )
+        }
 
         // Full-screen Memory Reel Viewer
         val activeGroup = activeMemoryReelGroup

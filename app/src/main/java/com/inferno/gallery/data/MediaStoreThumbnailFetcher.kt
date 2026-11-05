@@ -38,6 +38,16 @@ class MediaStoreThumbnailFetcher(
 
     override suspend fun fetch(): FetchResult? = withContext(Dispatchers.IO) {
         coroutineContext.ensureActive()
+
+        // 90ms Fling Throttle (Simple Gallery Pattern):
+        // If the user is actively flinging or dragging the fast scrollbar, delay thumbnail fetch.
+        // If the cell scrolls off-screen before 90ms, the coroutine is cancelled immediately,
+        // avoiding ContentResolver.loadThumbnail IPCs, hardware bitmap decodes, and GC thrashing.
+        if (ThumbnailScrollThrottle.isFastScrolling) {
+            kotlinx.coroutines.delay(90L)
+            coroutineContext.ensureActive()
+        }
+
         val isVideo = uri.toString().contains("video", ignoreCase = true)
         
         // Dynamically resolve target dimension based on Coil request size (clamped 128..512)
@@ -73,16 +83,12 @@ class MediaStoreThumbnailFetcher(
                 var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
                     try {
-                        val b = context.contentResolver.loadThumbnail(uri, targetSize, signal)
-                        android.util.Log.d("MediaStoreFetcher", "loadThumbnail SUCCESS: ${b.width}x${b.height}, cfg=${b.config} for $uri")
-                        b
+                        context.contentResolver.loadThumbnail(uri, targetSize, signal)
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
-                    } catch (e: android.os.OperationCanceledException) {
-                        android.util.Log.d("MediaStoreFetcher", "loadThumbnail CANCELED for $uri")
+                    } catch (_: android.os.OperationCanceledException) {
                         null
-                    } catch (e: Throwable) {
-                        android.util.Log.e("MediaStoreFetcher", "loadThumbnail FAILED: ${e.javaClass.simpleName}: ${e.message} for $uri")
+                    } catch (_: Throwable) {
                         null
                     }
                 }

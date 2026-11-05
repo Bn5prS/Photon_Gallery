@@ -61,6 +61,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.snapshotFlow
@@ -205,6 +206,20 @@ fun PhotonGrid(
             }
     }
 
+    LaunchedEffect(lazyGridState) {
+        snapshotFlow { lazyGridState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = scrolling
+            }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = false
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Box(modifier = basePinchModifier) {
             when (timelineLayoutMode) {
@@ -277,7 +292,7 @@ fun PhotonGrid(
                                     if (item.sourceIndex < pagedMedia.itemCount) {
                                         pagedMedia[item.sourceIndex]
                                     }
-                                    val isSelected = selectedUris.contains(item.item.uri.toString())
+                                    val isSelected = selectedUris.contains(item.item.uriString)
                                     val isFav = favoriteIds.contains(item.item.id)
                                     OptimizedThumbnailCell(
                                         modifier = Modifier,
@@ -314,7 +329,7 @@ fun PhotonGrid(
                                                 for (i in 0..1) {
                                                     val subItem = item.items.getOrNull(i)
                                                     if (subItem != null) {
-                                                        val isSubSelected = selectedUris.contains(subItem.uri.toString())
+                                                        val isSubSelected = selectedUris.contains(subItem.uriString)
                                                         val isSubFav = favoriteIds.contains(subItem.id)
                                                         OptimizedThumbnailCell(
                                                             modifier = Modifier
@@ -346,7 +361,7 @@ fun PhotonGrid(
                                                 for (i in 2..3) {
                                                     val subItem = item.items.getOrNull(i)
                                                     if (subItem != null) {
-                                                        val isSubSelected = selectedUris.contains(subItem.uri.toString())
+                                                        val isSubSelected = selectedUris.contains(subItem.uriString)
                                                         val isSubFav = favoriteIds.contains(subItem.id)
                                                         OptimizedThumbnailCell(
                                                             modifier = Modifier
@@ -388,7 +403,7 @@ fun PhotonGrid(
                                             for (i in 0..1) {
                                                 val subItem = item.items.getOrNull(i)
                                                 if (subItem != null) {
-                                                    val isSubSelected = selectedUris.contains(subItem.uri.toString())
+                                                    val isSubSelected = selectedUris.contains(subItem.uriString)
                                                     val isSubFav = favoriteIds.contains(subItem.id)
                                                     OptimizedThumbnailCell(
                                                         modifier = Modifier
@@ -419,7 +434,7 @@ fun PhotonGrid(
                                     if (item.sourceIndex < pagedMedia.itemCount) {
                                         pagedMedia[item.sourceIndex]
                                     }
-                                    val isSelected = selectedUris.contains(item.item.uri.toString())
+                                    val isSelected = selectedUris.contains(item.item.uriString)
                                     val isFav = favoriteIds.contains(item.item.id)
                                     OptimizedThumbnailCell(
                                         modifier = Modifier,
@@ -647,7 +662,7 @@ fun OptimizedThumbnailCell(
     val cellShape = remember(thumbnailCornerRadius) {
         if (thumbnailCornerRadius > 0f) RoundedCornerShape(thumbnailCornerRadius.dp) else null
     }
-    val sharedContentKey = remember(item.uri) { "photo_${item.uri}" }
+    val sharedContentKey = remember(item.uriString) { "photo_${item.uriString}" }
 
     // Shared bounds transition is active for standard grid densities (1-5 columns)
     val sharedTransitionModifier = if (gridCellsCount <= 5) {

@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -261,6 +262,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     engine.sync(forceFullSync = true)
                 }
                 refreshMemories()
+                nativeTimelineRepository.refresh()
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Refresh failed", e)
             } finally {
@@ -413,11 +415,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     }
                     _isInitialSyncRunning.value = false
                     refreshMemories()
+                nativeTimelineRepository.refresh()
                     scanPhotoSpheres()
                 } else {
                     try {
                         com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
                         refreshMemories()
+                nativeTimelineRepository.refresh()
                         scanPhotoSpheres()
                     } catch (e: Exception) {
                         Log.e("GalleryViewModel", "Startup sync failed: ${e.message}")
@@ -726,6 +730,31 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun setFilterIndex(index: Int) {
         viewModelScope.launch {
             settingsRepository.updateSelectedFilterIndex(index)
+        }
+    }
+
+    val nativeTimelineRepository = com.inferno.gallery.data.NativeTimelineRepository(
+        database = database,
+        scope = viewModelScope
+    )
+    val nativeTimelineItems: StateFlow<List<com.inferno.gallery.data.NativeTimelineItem>> =
+        nativeTimelineRepository.timelineItems
+
+    init {
+        viewModelScope.launch {
+            combine(
+                combine(_currentBucket, selectedFilterIndex, sortOrder) { b, f, o -> Triple(b, f, o) },
+                combine(viewMode, excludedFolders, favoritesManager.favoritesFlow) { m, e, fav -> Triple(m, e, fav) }
+            ) { (b, f, o), (m, e, fav) ->
+                nativeTimelineRepository.updatePipeline(
+                    bucket = b,
+                    filterIndex = f,
+                    sortOrder = o,
+                    viewMode = m,
+                    excluded = e,
+                    favIds = fav
+                )
+            }.collect()
         }
     }
 
@@ -2874,6 +2903,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             GalleryItem(
                 id = entity.id.toString(),
                 uri = uri,
+                uriString = entity.uriString,
                 bucketName = entity.bucketName,
                 dateAdded = entity.dateAdded,
                 size = entity.size,
