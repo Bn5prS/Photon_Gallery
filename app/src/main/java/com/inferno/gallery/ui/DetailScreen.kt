@@ -2033,6 +2033,7 @@ fun DetailScreen(
                 }
             }
         }
+    }
 
         ExifDetailsSheet(
             isOpen = showInfoCard,
@@ -2221,9 +2222,7 @@ fun DetailScreen(
                     }
             )
         }
-
     }
-}
 }
 
 @Composable
