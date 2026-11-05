@@ -1849,7 +1849,7 @@ fun DetailScreen(
                             }
                             if (currentItem != null) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_edit)) },
+                                    text = { Text(stringResource(R.string.action_rename)) },
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {

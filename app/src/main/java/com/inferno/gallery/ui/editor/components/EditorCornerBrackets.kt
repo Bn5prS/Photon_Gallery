@@ -98,16 +98,15 @@ fun EditorCornerBrackets(
                         currentCropRect.bottom * h
                     )
 
-                    val handle = EditorCornerBracketsMath.hitTestScreen(
+                    val hitHandle = EditorCornerBracketsMath.hitTestScreen(
                         touchX = down.position.x,
                         touchY = down.position.y,
                         boxRect = activeFrame,
                         touchRadiusPx = touchRadiusPx
                     )
 
-                    if (handle == CornerHandle.NONE) {
-                        return@awaitEachGesture
-                    }
+                    // Any touch outside corner and edge handles is treated as inside canvas (pan / pinch zoom photo)
+                    val handle = if (hitHandle == CornerHandle.NONE) CornerHandle.INSIDE else hitHandle
 
                     val pw = if (currentPhotoWidth > 0f) currentPhotoWidth else w
                     val ph = if (currentPhotoHeight > 0f) currentPhotoHeight else h
@@ -152,9 +151,10 @@ fun EditorCornerBrackets(
                         currentOnDragHandleStateChange(false)
 
                     } else {
-                        // ── INSIDE CROP BOX: 1-FINGER SWIPE PAN & 2-FINGER PINCH-TO-ZOOM ──
+                        // ── PHOTO PAN (1-FINGER) & PINCH-TO-ZOOM (2-FINGER) ANYWHERE ON CANVAS ──
                         activeHandle = CornerHandle.INSIDE
                         isInteracting = true
+                        currentOnDragHandleStateChange(true)
                         down.consume()
 
                         var prevPointerCount = 1
@@ -174,7 +174,7 @@ fun EditorCornerBrackets(
                                 val currentDist = (p1.position - p2.position).getDistance()
                                 val prevDist = (p1.previousPosition - p2.previousPosition).getDistance()
 
-                                val zoomFactor = if (prevDist > 0f) currentDist / prevDist else 1f
+                                val zoomFactor = if (prevPointerCount >= 2 && prevDist > 0f) currentDist / prevDist else 1f
                                 val panDelta = if (prevPointerCount >= 2) currentCentroid - prevCentroid else Offset.Zero
 
                                 if (zoomFactor != 1f || panDelta != Offset.Zero) {
@@ -231,6 +231,7 @@ fun EditorCornerBrackets(
 
                         activeHandle = CornerHandle.NONE
                         isInteracting = false
+                        currentOnDragHandleStateChange(false)
                     }
                 }
             }
