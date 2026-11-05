@@ -319,22 +319,6 @@ fun AlbumsScreen(
         }
 
         if (albumsExpanded) {
-            // Layout switcher & sort control bar
-            item(key = "albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
-                AlbumsControlBar(
-                    currentLayout = albumLayoutMode,
-                    onLayoutChange = { newLayout ->
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.setAlbumLayoutMode(newLayout)
-                    },
-                    currentSort = albumSortOrder,
-                    onSortChange = { newSort ->
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.setAlbumSortOrder(newSort)
-                    }
-                )
-            }
-
             if (visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) {
                 if (albumLayoutMode == AlbumLayoutMode.LIST) {
                     if (userPinnedAlbums.isNotEmpty()) {

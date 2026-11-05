@@ -398,6 +398,8 @@
     <string name="menu_sort_order">Sortierreihenfolge</string>
     <string name="view_mode_immersive">Immersive Ansicht</string>
     <string name="view_mode_grouped">Gruppierte Ansicht</string>
+    <string name="layout_grid_view">Rasteransicht</string>
+    <string name="layout_list_view">Listenansicht</string>
     <string name="sort_date_taken_newest">Aufnahmedatum (neueste)</string>
     <string name="sort_date_taken_oldest">Aufnahmedatum (älteste)</string>
     <string name="sort_date_added_newest">Hinzugefügt am (neueste)</string>

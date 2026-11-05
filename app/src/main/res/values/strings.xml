@@ -398,6 +398,8 @@
     <string name="menu_sort_order">Sort Order</string>
     <string name="view_mode_immersive">Immersive View</string>
     <string name="view_mode_grouped">Grouped View</string>
+    <string name="layout_grid_view">Grid View</string>
+    <string name="layout_list_view">List View</string>
     <string name="sort_date_taken_newest">Date Taken (Newest)</string>
     <string name="sort_date_taken_oldest">Date Taken (Oldest)</string>
     <string name="sort_date_added_newest">Date Added (Newest)</string>

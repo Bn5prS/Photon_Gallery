@@ -398,6 +398,8 @@
     <string name="menu_sort_order">Ordem de classificação</string>
     <string name="view_mode_immersive">Visualização imersiva</string>
     <string name="view_mode_grouped">Visualização agrupada</string>
+    <string name="layout_grid_view">Visualização em grade</string>
+    <string name="layout_list_view">Visualização em lista</string>
     <string name="sort_date_taken_newest">Data da captura (mais recente)</string>
     <string name="sort_date_taken_oldest">Data da captura (mais antiga)</string>
     <string name="sort_date_added_newest">Data de adição (mais recente)</string>
