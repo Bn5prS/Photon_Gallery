@@ -57,6 +57,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.DiffUtil
@@ -175,6 +177,9 @@ fun NativePhotonGrid(
     onMediaClick: (GalleryItem) -> Unit = {},
     onToggleSelection: ((NativeTimelineItem.Media) -> Unit)? = null,
     onMediaLongClick: ((NativeTimelineItem.Media) -> Unit)? = null,
+    onStartDragSelection: ((initialUri: String, isSelecting: Boolean) -> Unit)? = null,
+    onUpdateDragSelection: ((uris: Set<String>) -> Unit)? = null,
+    onEndDragSelection: (() -> Unit)? = null,
     thumbnailCornerRadius: Float = 0f,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     dateHeaderAlignment: String = "LEFT",
@@ -217,11 +222,31 @@ fun NativePhotonGrid(
     }
 
     val currentOnGridCountChange by rememberUpdatedState(onGridCountChange)
+    val currentSelectedUris by rememberUpdatedState(selectedUris)
     val currentOnMediaClick by rememberUpdatedState(onMediaClick)
     val currentOnToggleSelection by rememberUpdatedState(onToggleSelection)
     val currentOnMediaLongClick by rememberUpdatedState(onMediaLongClick)
+    val currentOnStartDragSelection by rememberUpdatedState(onStartDragSelection)
+    val currentOnUpdateDragSelection by rememberUpdatedState(onUpdateDragSelection)
+    val currentOnEndDragSelection by rememberUpdatedState(onEndDragSelection)
     val currentOnScrolledAwayFromTop by rememberUpdatedState(onScrolledAwayFromTop)
     val currentOnSaveScrollPosition by rememberUpdatedState(onSaveScrollPosition)
+
+    val dragSelectHelper = remember {
+        NativeGridDragSelectHelper(
+            selectedUrisProvider = { currentSelectedUris },
+            onStartDragSelection = { uri, isSelecting ->
+                currentOnStartDragSelection?.invoke(uri, isSelecting)
+            },
+            onUpdateDragSelection = { uris ->
+                currentOnUpdateDragSelection?.invoke(uris)
+            },
+            onEndDragSelection = {
+                currentOnEndDragSelection?.invoke()
+            },
+            density = density.density
+        )
+    }
 
     val safeSpanCount = gridCellsCount.coerceIn(1, 8)
 
@@ -273,9 +298,13 @@ fun NativePhotonGrid(
         }
     }
 
+    val nestedScrollInterop = rememberNestedScrollInteropConnection()
+
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(nestedScrollInterop),
             factory = { ctx ->
                 val scroller = NativeFastScroller(ctx).apply {
                     layoutParams = ViewGroup.LayoutParams(
@@ -287,6 +316,7 @@ fun NativePhotonGrid(
                 val rv = RecyclerView(ctx).apply {
                     id = View.generateViewId()
                     setHasFixedSize(true)
+                    isNestedScrollingEnabled = true
                     setItemViewCacheSize(20)
                     @Suppress("DEPRECATION")
                     isDrawingCacheEnabled = false
@@ -328,8 +358,10 @@ fun NativePhotonGrid(
                             currentOnMediaClick(media.toGalleryItem())
                         },
                         onToggleSelection = { media -> currentOnToggleSelection?.invoke(media) },
-                        onMediaLongClick = { media ->
-                            if (currentOnMediaLongClick != null) {
+                        onMediaLongClick = { position, media ->
+                            if (currentOnStartDragSelection != null) {
+                                dragSelectHelper.startDragSelect(position)
+                            } else if (currentOnMediaLongClick != null) {
                                 currentOnMediaLongClick?.invoke(media)
                             } else {
                                 currentOnToggleSelection?.invoke(media)
@@ -337,6 +369,8 @@ fun NativePhotonGrid(
                         }
                     )
                     this.adapter = adapter
+                    dragSelectHelper.attach(this, adapter)
+                    addOnItemTouchListener(dragSelectHelper)
 
                     // SpanSizeLookup: Header & Compose Header = spanCount, Media = 1
                     gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
@@ -513,6 +547,7 @@ fun NativePhotonGrid(
                 scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
             },
             onRelease = { scroller ->
+                dragSelectHelper.detach()
                 val rv = scroller.attachedRecyclerView
                 if (hasRestoredScroll) {
                     val lm = rv?.layoutManager as? GridLayoutManager
@@ -577,6 +612,9 @@ fun NativePhotonGrid(
     onMediaClick: (GalleryItem) -> Unit = {},
     onToggleSelection: ((NativeTimelineItem.Media) -> Unit)? = null,
     onMediaLongClick: ((NativeTimelineItem.Media) -> Unit)? = null,
+    onStartDragSelection: ((initialUri: String, isSelecting: Boolean) -> Unit)? = null,
+    onUpdateDragSelection: ((uris: Set<String>) -> Unit)? = null,
+    onEndDragSelection: (() -> Unit)? = null,
     thumbnailCornerRadius: Float = 0f,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     dateHeaderAlignment: String = "LEFT",
@@ -598,6 +636,9 @@ fun NativePhotonGrid(
     onMediaClick = onMediaClick,
     onToggleSelection = onToggleSelection,
     onMediaLongClick = onMediaLongClick,
+    onStartDragSelection = onStartDragSelection,
+    onUpdateDragSelection = onUpdateDragSelection,
+    onEndDragSelection = onEndDragSelection,
     thumbnailCornerRadius = thumbnailCornerRadius,
     contentPadding = contentPadding,
     dateHeaderAlignment = dateHeaderAlignment,
@@ -625,7 +666,7 @@ private class NativePhotonAdapter(
     var dateHeaderAlignment: String,
     val onMediaClick: (NativeTimelineItem.Media) -> Unit,
     val onToggleSelection: (NativeTimelineItem.Media) -> Unit,
-    val onMediaLongClick: (NativeTimelineItem.Media) -> Unit
+    val onMediaLongClick: (position: Int, media: NativeTimelineItem.Media) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     var selectedUris: Set<String> = initialSelectedUris
@@ -772,7 +813,7 @@ private class NativePhotonAdapter(
                         if (actualPos in 0 until differ.currentList.size) {
                             val item = differ.currentList[actualPos] as? NativeTimelineItem.Media
                             if (item != null) {
-                                onMediaLongClick(item)
+                                onMediaLongClick(position, item)
                             }
                         }
                     }
@@ -1262,5 +1303,222 @@ private class GridSpacingItemDecoration(
         } else {
             outRect.set(0, spacingPx, 0, 0)
         }
+    }
+}
+
+/**
+ * Fluid, touch-driven drag-to-select controller for [NativePhotonGrid].
+ *
+ * Implements 120 FPS continuous multi-item selection with edge auto-scrolling
+ * and tactile haptic ticks across item boundaries.
+ */
+private class NativeGridDragSelectHelper(
+    private val selectedUrisProvider: () -> Set<String>,
+    private val onStartDragSelection: (String, Boolean) -> Unit,
+    private val onUpdateDragSelection: (Set<String>) -> Unit,
+    private val onEndDragSelection: () -> Unit,
+    private val density: Float
+) : RecyclerView.OnItemTouchListener {
+
+    private var recyclerView: RecyclerView? = null
+    private var adapter: NativePhotonAdapter? = null
+
+    var isDragSelecting = false
+        private set
+
+    private var dragStartIndex = RecyclerView.NO_POSITION
+    private var lastActiveIndex = RecyclerView.NO_POSITION
+    private var isSelectingMode = true
+
+    // Auto-scroll configuration
+    private val autoScrollThresholdPx = 70f * density
+    private val maxScrollSpeedPx = 28f * density
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var autoScrollActive = false
+
+    private val autoScrollRunnable = object : Runnable {
+        override fun run() {
+            val rv = recyclerView ?: return
+            if (!isDragSelecting) {
+                autoScrollActive = false
+                return
+            }
+
+            val rvHeight = rv.height.toFloat()
+            if (rvHeight <= 0f) {
+                autoScrollActive = false
+                return
+            }
+
+            val topPad = rv.paddingTop.toFloat()
+            val bottomPad = rv.paddingBottom.toFloat()
+
+            val scrollDelta = when {
+                lastTouchY < topPad + autoScrollThresholdPx -> {
+                    val factor = ((topPad + autoScrollThresholdPx - lastTouchY) / autoScrollThresholdPx).coerceIn(0f, 1f)
+                    -(maxScrollSpeedPx * factor).toInt().coerceAtLeast(1)
+                }
+                lastTouchY > (rvHeight - bottomPad - autoScrollThresholdPx) -> {
+                    val factor = ((lastTouchY - (rvHeight - bottomPad - autoScrollThresholdPx)) / autoScrollThresholdPx).coerceIn(0f, 1f)
+                    (maxScrollSpeedPx * factor).toInt().coerceAtLeast(1)
+                }
+                else -> 0
+            }
+
+            if (scrollDelta != 0) {
+                rv.scrollBy(0, scrollDelta)
+                updateSelectionAtPoint(lastTouchX, lastTouchY)
+                rv.postOnAnimation(this)
+            } else {
+                autoScrollActive = false
+            }
+        }
+    }
+
+    fun attach(rv: RecyclerView, ad: NativePhotonAdapter) {
+        this.recyclerView = rv
+        this.adapter = ad
+    }
+
+    fun detach() {
+        finishDragSelect()
+        this.recyclerView = null
+        this.adapter = null
+    }
+
+    fun startDragSelect(position: Int) {
+        val rv = recyclerView ?: return
+        val ad = adapter ?: return
+        if (position < 0 || position >= ad.itemCount) return
+        val item = ad.getItem(position) as? NativeTimelineItem.Media ?: return
+
+        isDragSelecting = true
+        dragStartIndex = position
+        lastActiveIndex = position
+
+        val currentlySelected = selectedUrisProvider().contains(item.uriString)
+        isSelectingMode = !currentlySelected
+
+        rv.parent?.requestDisallowInterceptTouchEvent(true)
+        rv.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+
+        onStartDragSelection(item.uriString, isSelectingMode)
+    }
+
+    private fun updateSelectionAtPoint(rawX: Float, rawY: Float) {
+        val rv = recyclerView ?: return
+        val ad = adapter ?: return
+        if (!isDragSelecting || dragStartIndex == RecyclerView.NO_POSITION) return
+
+        val clampedX = rawX.coerceIn(
+            rv.paddingLeft.toFloat() + 2f,
+            (rv.width - rv.paddingRight).toFloat().coerceAtLeast(rv.paddingLeft + 4f) - 2f
+        )
+        val clampedY = rawY.coerceIn(
+            rv.paddingTop.toFloat() + 2f,
+            (rv.height - rv.paddingBottom).toFloat().coerceAtLeast(rv.paddingTop + 4f) - 2f
+        )
+
+        val child = rv.findChildViewUnder(clampedX, clampedY) ?: return
+        val pos = rv.getChildAdapterPosition(child)
+        if (pos == RecyclerView.NO_POSITION || pos < 0 || pos >= ad.itemCount) return
+        if (pos == lastActiveIndex) return
+
+        lastActiveIndex = pos
+        val start = minOf(dragStartIndex, pos)
+        val end = maxOf(dragStartIndex, pos)
+
+        val uris = mutableSetOf<String>()
+        for (i in start..end) {
+            val it = ad.getItem(i)
+            if (it is NativeTimelineItem.Media) {
+                uris.add(it.uriString)
+            }
+        }
+
+        if (uris.isNotEmpty()) {
+            rv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            onUpdateDragSelection(uris)
+        }
+    }
+
+    private fun checkStartAutoScroll() {
+        val rv = recyclerView ?: return
+        val rvHeight = rv.height.toFloat()
+        if (rvHeight <= 0f) return
+
+        val topPad = rv.paddingTop.toFloat()
+        val bottomPad = rv.paddingBottom.toFloat()
+
+        val needsScroll = lastTouchY < topPad + autoScrollThresholdPx ||
+                lastTouchY > (rvHeight - bottomPad - autoScrollThresholdPx)
+
+        if (needsScroll && !autoScrollActive) {
+            autoScrollActive = true
+            rv.postOnAnimation(autoScrollRunnable)
+        }
+    }
+
+    override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+        if (!isDragSelecting) return false
+
+        if (e.pointerCount > 1) {
+            finishDragSelect()
+            return false
+        }
+
+        when (e.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                lastTouchX = e.x
+                lastTouchY = e.y
+                updateSelectionAtPoint(e.x, e.y)
+                checkStartAutoScroll()
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                finishDragSelect()
+                return true
+            }
+        }
+        return true
+    }
+
+    override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+        if (!isDragSelecting) return
+
+        if (e.pointerCount > 1) {
+            finishDragSelect()
+            return
+        }
+
+        when (e.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                lastTouchX = e.x
+                lastTouchY = e.y
+                updateSelectionAtPoint(e.x, e.y)
+                checkStartAutoScroll()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                finishDragSelect()
+            }
+        }
+    }
+
+    override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+        if (disallowIntercept && isDragSelecting) {
+            recyclerView?.parent?.requestDisallowInterceptTouchEvent(true)
+        }
+    }
+
+    fun finishDragSelect() {
+        if (!isDragSelecting) return
+        isDragSelecting = false
+        autoScrollActive = false
+        recyclerView?.removeCallbacks(autoScrollRunnable)
+        dragStartIndex = RecyclerView.NO_POSITION
+        lastActiveIndex = RecyclerView.NO_POSITION
+        recyclerView?.parent?.requestDisallowInterceptTouchEvent(false)
+        onEndDragSelection()
     }
 }

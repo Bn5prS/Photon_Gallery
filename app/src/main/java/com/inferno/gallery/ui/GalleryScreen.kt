@@ -551,6 +551,15 @@ fun GalleryScreen(
                 onMediaClick = onMediaClick,
                 onToggleSelection = { media -> viewModel.toggleSelection(media.uriString) },
                 onMediaLongClick = { media -> viewModel.toggleSelection(media.uriString) },
+                onStartDragSelection = { uri, isSelecting ->
+                    viewModel.startDragSelection(uri, isSelecting)
+                },
+                onUpdateDragSelection = { uris ->
+                    viewModel.updateDragSelection(uris)
+                },
+                onEndDragSelection = {
+                    viewModel.endDragSelection()
+                },
                 thumbnailCornerRadius = thumbnailCornerRadius,
                 contentPadding = contentPadding,
                 dateHeaderAlignment = dateHeaderAlignment,

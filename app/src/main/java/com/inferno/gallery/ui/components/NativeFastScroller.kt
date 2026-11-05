@@ -627,6 +627,8 @@ class NativeFastScroller @JvmOverloads constructor(
         }
 
         private val chevronPath = Path()
+        private val pillPath = Path()
+        private val cornerRadii = FloatArray(8)
         private val pillRect = RectF()
 
         private var interactionProgress: Float = 0f
@@ -681,24 +683,35 @@ class NativeFastScroller @JvmOverloads constructor(
 
             val currentWidth = baseWidth + (expandedWidth - baseWidth) * interactionProgress
             val currentHeight = baseHeight + (expandedHeight - baseHeight) * interactionProgress
-            val cornerRadius = dpToPx(8f)
+            val cornerRadius = dpToPx(10f)
 
             val pillLeft = width.toFloat() - currentWidth
             val pillTop = (height.toFloat() - currentHeight) / 2f
             val pillRight = width.toFloat()
             val pillBottom = pillTop + currentHeight
 
-            // 1. Draw Expressive M3 rounded handle pill (strictly NO outlines, NO borders)
+            // 1. Draw Expressive M3 handle pill: rounded on left edges, flat on right screen edges
             pillRect.set(pillLeft, pillTop, pillRight, pillBottom)
-            canvas.drawRoundRect(pillRect, cornerRadius, cornerRadius, pillPaint)
+            cornerRadii[0] = cornerRadius // Top-left X
+            cornerRadii[1] = cornerRadius // Top-left Y
+            cornerRadii[2] = 0f           // Top-right X (flat against screen edge)
+            cornerRadii[3] = 0f           // Top-right Y
+            cornerRadii[4] = 0f           // Bottom-right X (flat against screen edge)
+            cornerRadii[5] = 0f           // Bottom-right Y
+            cornerRadii[6] = cornerRadius // Bottom-left X
+            cornerRadii[7] = cornerRadius // Bottom-left Y
 
-            // 2. Draw unfolding chevrons icon
-            val centerX = pillLeft + currentWidth / 2f
+            pillPath.reset()
+            pillPath.addRoundRect(pillRect, cornerRadii, Path.Direction.CW)
+            canvas.drawPath(pillPath, pillPaint)
+
+            // 2. Draw unfolding chevrons icon with increased gap between arrows
+            val centerX = pillLeft + currentWidth / 2f + dpToPx(1f)
             val centerY = pillTop + currentHeight / 2f
 
-            val arrowHalfW = dpToPx(3.5f + 0.5f * interactionProgress)
+            val arrowHalfW = dpToPx(3.75f + 0.5f * interactionProgress)
             val arrowH = dpToPx(2.5f)
-            val arrowGap = dpToPx(2.0f)
+            val arrowGap = dpToPx(5.0f)
 
             chevronPath.reset()
             // Up chevron
