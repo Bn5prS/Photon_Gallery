@@ -85,7 +85,8 @@ fun VideoPlayerItem(
     modifier: Modifier = Modifier,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
-    onPinchExpand: (() -> Unit)? = null
+    onPinchExpand: (() -> Unit)? = null,
+    onScrubbingChanged: ((Boolean) -> Unit)? = null
 ) {
     VideoPlayerItemWithResolvedUri(
         uri = uri,
@@ -94,7 +95,8 @@ fun VideoPlayerItem(
         modifier = modifier,
         onTap = onTap,
         onPinchOverview = onPinchOverview,
-        onPinchExpand = onPinchExpand
+        onPinchExpand = onPinchExpand,
+        onScrubbingChanged = onScrubbingChanged
     )
 }
 
@@ -107,7 +109,8 @@ fun VideoPlayerItemWithResolvedUri(
     modifier: Modifier = Modifier,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
-    onPinchExpand: (() -> Unit)? = null
+    onPinchExpand: (() -> Unit)? = null,
+    onScrubbingChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val exoPlayer = remember(uri) {
@@ -615,13 +618,17 @@ fun VideoPlayerItemWithResolvedUri(
 
                         Slider(
                             value = (dragPosition ?: currentPosition).toFloat(),
-                            onValueChange = { dragPosition = it.toLong() },
+                            onValueChange = {
+                                if (dragPosition == null) onScrubbingChanged?.invoke(true)
+                                dragPosition = it.toLong()
+                            },
                             onValueChangeFinished = {
                                 dragPosition?.let {
                                     exoPlayer.seekTo(it)
                                     currentPosition = it
                                 }
                                 dragPosition = null
+                                onScrubbingChanged?.invoke(false)
                             },
                             valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
                             colors = SliderDefaults.colors(

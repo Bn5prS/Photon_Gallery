@@ -80,6 +80,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -507,6 +508,30 @@ fun DetailScreen(
 
     var showUi by remember { mutableStateOf(!isFromSearch) }
     var isFilmstripOverview by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showInfoCard by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showCopySheet by remember { mutableStateOf(false) }
+    var showMoveSheet by remember { mutableStateOf(false) }
+    var isMotionPlaying by remember { mutableStateOf(false) }
+    var isMotionLooping by remember { mutableStateOf(false) }
+    var isVideoScrubbing by remember { mutableStateOf(false) }
+    var isFilmstripScrolling by remember { mutableStateOf(false) }
+    var userInteractionTrigger by remember { mutableLongStateOf(0L) }
+
+    val isAnyToolOrMenuOpen = showMoreMenu ||
+                              showInfoCard ||
+                              showRenameDialog ||
+                              showDeleteConfirmDialog ||
+                              showCopySheet ||
+                              showMoveSheet ||
+                              isFilmstripOverview ||
+                              isMotionPlaying ||
+                              isMotionLooping ||
+                              isVideoScrubbing ||
+                              isFilmstripScrolling
+
     val overviewProgress by animateFloatAsState(
         targetValue = if (isFilmstripOverview) 1f else 0f,
         animationSpec = spring(
@@ -527,16 +552,27 @@ fun DetailScreen(
         }
     }
 
-    // Auto hide UI after 4 seconds of inactivity — skip if in filmstrip overview
-    LaunchedEffect(showUi, pagerState.isScrollInProgress, pagerState.currentPage, isFilmstripOverview) {
-        if (showUi && !isFilmstripOverview) {
+    // Auto hide UI after 4 seconds of inactivity — never hide if user is using any tools or opened 3-dot menu
+    LaunchedEffect(
+        showUi,
+        pagerState.isScrollInProgress,
+        pagerState.currentPage,
+        isAnyToolOrMenuOpen,
+        userInteractionTrigger
+    ) {
+        if (showUi && !isAnyToolOrMenuOpen) {
             kotlinx.coroutines.delay(4000)
             showUi = false
         }
     }
 
+    LaunchedEffect(isAnyToolOrMenuOpen) {
+        if (isAnyToolOrMenuOpen) {
+            showUi = true
+        }
+    }
+
     var currentScale by remember { mutableStateOf(1f) }
-    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var pendingDeleteItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingDeletePage by remember { mutableStateOf<Int?>(null) }
     
@@ -581,12 +617,8 @@ fun DetailScreen(
         }
     }
 
-    var showRenameDialog by remember { mutableStateOf(false) }
     var pendingRenameItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingRenameNewName by remember { mutableStateOf("") }
-    var showMoreMenu by remember { mutableStateOf(false) }
-    var showCopySheet by remember { mutableStateOf(false) }
-    var showMoveSheet by remember { mutableStateOf(false) }
 
     val renameLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -800,13 +832,10 @@ fun DetailScreen(
         )
     }
 
-    var showInfoCard by remember { mutableStateOf(false) }
     var currentExif by remember { mutableStateOf<DetailedExifData?>(null) }
     
     var motionPhotoInfo by remember { mutableStateOf<MotionPhotoInfo?>(null) }
     var extractedMotionVideo by remember { mutableStateOf<java.io.File?>(null) }
-    var isMotionPlaying by remember { mutableStateOf(false) }
-    var isMotionLooping by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(currentItem) {
         isMotionPlaying = false
@@ -1050,6 +1079,7 @@ fun DetailScreen(
                                 isCurrentPage = page == pagerState.currentPage,
                                 showControls = showUi && !isFilmstripOverview,
                                 modifier = Modifier.fillMaxSize(),
+                                onScrubbingChanged = { isVideoScrubbing = it },
                                 onTap = {
                                     if (isFilmstripOverview) {
                                         coroutineScope.launch {
@@ -1629,6 +1659,12 @@ fun DetailScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            userInteractionTrigger++
+                        }
+                    }
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -2079,6 +2115,12 @@ fun DetailScreen(
                         .fillMaxWidth(0.88f)
                         .widthIn(min = 280.dp, max = 360.dp)
                         .height(54.dp)
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                userInteractionTrigger++
+                            }
+                        }
                 ) {
                     ViewerActionButtonsRow(
                         currentItem = currentItem,
@@ -2112,6 +2154,12 @@ fun DetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                userInteractionTrigger++
+                            }
+                        }
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -2136,6 +2184,7 @@ fun DetailScreen(
                                 onThumbnailClick = { index ->
                                     coroutineScope.launch { pagerState.animateScrollToPage(index) }
                                 },
+                                onScrollInProgress = { isFilmstripScrolling = it },
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
                         }
@@ -2175,9 +2224,13 @@ private fun ViewerFilmstripRow(
     galleryItems: List<GalleryItem>,
     currentPage: Int,
     onThumbnailClick: (Int) -> Unit,
+    onScrollInProgress: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    LaunchedEffect(listState.isScrollInProgress) {
+        onScrollInProgress(listState.isScrollInProgress)
+    }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidth = configuration.screenWidthDp.dp
