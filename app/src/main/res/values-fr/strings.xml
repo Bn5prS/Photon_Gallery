@@ -115,6 +115,9 @@
     <string name="language_system_default">Valeur par défaut du système</string>
 
     <string name="section_pinned">Épinglés</string>
+    <string name="pinned_albums">Albums épinglés</string>
+    <string name="pinned_albums_empty_title">Aucun album épinglé</string>
+    <string name="pinned_albums_empty_sub">Épinglez des albums depuis leur menu à 3 points pour un accès rapide</string>
     <string name="section_albums">Albums</string>
     <string name="section_places">Lieux</string>
     <string name="section_documents">Documents</string>

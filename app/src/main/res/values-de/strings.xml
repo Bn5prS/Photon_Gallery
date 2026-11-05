@@ -115,6 +115,9 @@
     <string name="language_system_default">Systemstandard</string>
 
     <string name="section_pinned">Angeheftet</string>
+    <string name="pinned_albums">Angeheftete Alben</string>
+    <string name="pinned_albums_empty_title">Keine angehefteten Alben</string>
+    <string name="pinned_albums_empty_sub">Heften Sie Alben über das 3-Punkte-Menü für schnellen Zugriff an</string>
     <string name="section_albums">Alben</string>
     <string name="section_places">Orte</string>
     <string name="section_documents">Dokumente</string>

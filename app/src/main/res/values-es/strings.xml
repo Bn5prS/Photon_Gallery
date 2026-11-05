@@ -115,6 +115,9 @@
     <string name="language_system_default">Predeterminado del sistema</string>
 
     <string name="section_pinned">Fijados</string>
+    <string name="pinned_albums">Álbumes fijados</string>
+    <string name="pinned_albums_empty_title">No hay álbumes fijados</string>
+    <string name="pinned_albums_empty_sub">Fija álbumes desde su menú de 3 puntos para acceder rápidamente</string>
     <string name="section_albums">Álbumes</string>
     <string name="section_places">Lugares</string>
     <string name="section_documents">Documentos</string>
