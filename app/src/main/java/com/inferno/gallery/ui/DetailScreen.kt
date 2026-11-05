@@ -514,7 +514,6 @@ fun DetailScreen(
 
     var showUi by remember { mutableStateOf(!isFromSearch) }
     var isFilmstripOverview by remember { mutableStateOf(false) }
-    var showMoreMenu by remember { mutableStateOf(false) }
     var showInfoCard by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -526,8 +525,7 @@ fun DetailScreen(
     var isFilmstripScrolling by remember { mutableStateOf(false) }
     var userInteractionTrigger by remember { mutableLongStateOf(0L) }
 
-    val isAnyToolOrMenuOpen = showMoreMenu ||
-                              showInfoCard ||
+    val isAnyToolOrMenuOpen =                               showInfoCard ||
                               showRenameDialog ||
                               showDeleteConfirmDialog ||
                               showCopySheet ||
@@ -1830,212 +1828,10 @@ fun DetailScreen(
                             }
                         }
 
-                        // Right Island: Circular more button
-                        Box {
-                            FilledTonalIconButton(
-                                onClick = { showMoreMenu = true },
-                                shape = CircleShape,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color.Black.copy(alpha = 0.45f),
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_horiz),
-                                    contentDescription = "More options",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                    androidx.compose.material3.DropdownMenu(
-                        expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false },
-                        shape = MaterialTheme.shapes.large,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ) {
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(stringResource(R.string.detail_details)) },
-                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
-                            onClick = {
-                                showMoreMenu = false
-                                showInfoCard = true
-                            }
-                        )
-                        if (currentItem != null && !currentItem.isVideo) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Google Lens") },
-                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_google_lens), contentDescription = null) },
-                                enabled = currentItem.localExists,
-                                onClick = {
-                                    showMoreMenu = false
-                                    onLensAction()
-                                }
-                            )
+                        // Balance back button so center pill remains centered when no LIVE badge
+                        if (motionPhotoInfo?.isMotionPhoto != true) {
+                            Spacer(modifier = Modifier.size(40.dp))
                         }
-                        if (currentItem != null && motionPhotoInfo?.isMotionPhoto == true) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_export_motion_mp4)) },
-                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_movie), contentDescription = null) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    coroutineScope.launch {
-                                        val exported = MotionPhotoHelper.exportMotionVideo(context, currentItem, motionPhotoInfo!!)
-                                        if (exported != null) {
-                                            Toast.makeText(context, "Motion video saved to Movies/Photon_Motion", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            Toast.makeText(context, "Failed to export motion video", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                        if (currentItem != null) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_open_with)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_open_in_new), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        val uri = resolvedCurrentUri ?: currentItem.uri
-                                        val mimeType = context.contentResolver.getType(uri) ?: if (currentItem.isVideo) "video/*" else "image/*"
-                                        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(uri, mimeType)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        try {
-                                            context.startActivity(Intent.createChooser(viewIntent, "Open with"))
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "No app available to open this file", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                )
-                            }
-                            if (currentItem != null && !currentItem.isVideo) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.detail_set_wallpaper)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
-                                            setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                            putExtra("mimeType", "image/*")
-                                        }
-                                        try {
-                                            context.startActivity(Intent.createChooser(intent, "Set as..."))
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                )
-                            }
-                            if (currentItem != null) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_copy)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        showCopySheet = true
-                                    }
-                                )
-                            }
-                            if (currentItem != null) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_move)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        showMoveSheet = true
-                                    }
-                                )
-                            }
-                            if (currentItem != null && !currentItem.isVideo) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_rotate)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        // Keep 3-dot menu open so the user can tap Rotate repeatedly
-                                        val target = currentItem
-                                        pendingRotateItem = target
-                                        val currentTarget = targetRotationMap[target.id] ?: 0f
-                                        val nextTarget = currentTarget + 90f
-                                        targetRotationMap[target.id] = nextTarget
-                                        val anim = animRotationMap[target.id]
-                                        coroutineScope.launch {
-                                            anim?.animateTo(
-                                                targetValue = nextTarget,
-                                                animationSpec = androidx.compose.animation.core.spring(
-                                                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                                                )
-                                            )
-                                        }
-                                        viewModel.rotateMedia(
-                                            context = context,
-                                            item = target,
-                                            degrees = 90,
-                                            onSecurityException = { pendingIntent ->
-                                                pendingRotateItem = target
-                                                rotateLauncher.launch(
-                                                    androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
-                                                )
-                                            }
-                                        )
-                                    }
-                                )
-                            }
-                            if (currentItem != null) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_rename)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        showRenameDialog = true
-                                    }
-                                )
-                            }
-                            if (currentItem != null && currentItem.isVideo) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_extract_frame)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        val uri = resolvedCurrentUri ?: currentItem.uri
-                                        onNavigateToFrameExtractor(uri)
-                                    }
-                                )
-                            }
-                            // Hide (Private Space)
-                            if (currentItem != null) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.detail_move_vault)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
-                                    enabled = currentItem.localExists,
-                                    onClick = {
-                                        showMoreMenu = false
-                                        val activity = context as? androidx.fragment.app.FragmentActivity
-                                        if (activity != null) {
-                                            viewModel.vaultAuthManager.authenticate(
-                                                activity = activity,
-                                                onSuccess = {
-                                                    viewModel.hideMedia(listOf(currentItem.uri))
-                                                    safeOnBack()
-                                                },
-                                                onFailure = {}
-                                            )
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
