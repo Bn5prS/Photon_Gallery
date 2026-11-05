@@ -182,6 +182,8 @@ fun NativePhotonGrid(
     scrollToTopTrigger: Flow<Unit>? = null,
     scrollToTopKey: Any? = null,
     onScrolledAwayFromTop: ((Boolean) -> Unit)? = null,
+    initialFirstVisibleItemIndex: Int = 0,
+    initialFirstVisibleItemScrollOffset: Int = 0,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -231,11 +233,14 @@ fun NativePhotonGrid(
     }
 
     var targetRecyclerView by remember { mutableStateOf<RecyclerView?>(null) }
+    var hasRestoredScroll by remember(scrollToTopKey) { mutableStateOf(false) }
 
     if (scrollToTopTrigger != null) {
         LaunchedEffect(scrollToTopTrigger) {
             scrollToTopTrigger.collect {
+                hasRestoredScroll = true
                 targetRecyclerView?.scrollToPosition(0)
+                currentOnSaveScrollPosition?.invoke(0, 0)
             }
         }
     }
@@ -243,6 +248,7 @@ fun NativePhotonGrid(
     LaunchedEffect(scrollToTopKey) {
         if (scrollToTopKey != null) {
             targetRecyclerView?.scrollToPosition(0)
+            currentOnSaveScrollPosition?.invoke(0, 0)
         }
     }
 
@@ -288,6 +294,13 @@ fun NativePhotonGrid(
                     }
                     layoutManager = gridLayoutManager
 
+                    if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0) {
+                        gridLayoutManager.scrollToPositionWithOffset(
+                            initialFirstVisibleItemIndex,
+                            initialFirstVisibleItemScrollOffset
+                        )
+                    }
+
                     val adapter = NativePhotonAdapter(
                         context = ctx,
                         imageLoader = imageLoader,
@@ -298,7 +311,16 @@ fun NativePhotonGrid(
                         initialSelectedUris = selectedUris,
                         initialFavoriteIds = favoriteIds,
                         dateHeaderAlignment = dateHeaderAlignment,
-                        onMediaClick = { media -> currentOnMediaClick(media.toGalleryItem()) },
+                        onMediaClick = { media ->
+                            val lm = gridLayoutManager
+                            val firstPos = lm.findFirstVisibleItemPosition()
+                            if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                                val firstView = lm.findViewByPosition(firstPos)
+                                val topOffset = firstView?.top ?: 0
+                                currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                            }
+                            currentOnMediaClick(media.toGalleryItem())
+                        },
                         onToggleSelection = { media -> currentOnToggleSelection?.invoke(media) },
                         onMediaLongClick = { media ->
                             if (currentOnMediaLongClick != null) {
@@ -331,13 +353,15 @@ fun NativePhotonGrid(
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
                         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                             super.onScrollStateChanged(recyclerView, newState)
-                            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                            if (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
                                 val lm = recyclerView.layoutManager as? GridLayoutManager
                                 if (lm != null) {
                                     val firstPos = lm.findFirstVisibleItemPosition()
-                                    val firstView = lm.findViewByPosition(firstPos)
-                                    val topOffset = firstView?.top ?: 0
-                                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                                    if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                                        val firstView = lm.findViewByPosition(firstPos)
+                                        val topOffset = firstView?.top ?: 0
+                                        currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                                    }
                                 }
                             }
                         }
@@ -347,6 +371,12 @@ fun NativePhotonGrid(
                             val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
                             val isScrolled = lm.findFirstVisibleItemPosition() > 0 || recyclerView.computeVerticalScrollOffset() > 32
                             currentOnScrolledAwayFromTop?.invoke(isScrolled)
+                            val firstPos = lm.findFirstVisibleItemPosition()
+                            if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                                val firstView = lm.findViewByPosition(firstPos)
+                                val topOffset = firstView?.top ?: 0
+                                currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                            }
                         }
                     })
 
@@ -451,7 +481,24 @@ fun NativePhotonGrid(
                 adapter.updateFavorites(favoriteIds)
 
                 // Update items
-                adapter.submitList(items)
+                if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
+                    adapter.submitList(items) {
+                        if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0) {
+                            val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
+                            layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
+                            hasRestoredScroll = true
+                        }
+                    }
+                    recyclerView.post {
+                        if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0) {
+                            val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
+                            layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
+                            hasRestoredScroll = true
+                        }
+                    }
+                } else {
+                    adapter.submitList(items)
+                }
 
                 // Update padding
                 recyclerView.setPadding(leftPaddingPx, topPaddingPx, rightPaddingPx, bottomPaddingPx)
@@ -459,6 +506,15 @@ fun NativePhotonGrid(
             },
             onRelease = { scroller ->
                 val rv = scroller.attachedRecyclerView
+                val lm = rv?.layoutManager as? GridLayoutManager
+                if (lm != null) {
+                    val firstPos = lm.findFirstVisibleItemPosition()
+                    if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                        val firstView = lm.findViewByPosition(firstPos)
+                        val topOffset = firstView?.top ?: 0
+                        currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                    }
+                }
                 rv?.adapter = null
                 scroller.detachRecyclerView()
                 targetRecyclerView = null
@@ -518,6 +574,8 @@ fun NativePhotonGrid(
     scrollToTopTrigger: Flow<Unit>? = null,
     scrollToTopKey: Any? = null,
     onScrolledAwayFromTop: ((Boolean) -> Unit)? = null,
+    initialFirstVisibleItemIndex: Int = 0,
+    initialFirstVisibleItemScrollOffset: Int = 0,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) = NativePhotonGrid(
     items = items,
@@ -537,6 +595,8 @@ fun NativePhotonGrid(
     scrollToTopTrigger = scrollToTopTrigger,
     scrollToTopKey = scrollToTopKey,
     onScrolledAwayFromTop = onScrolledAwayFromTop,
+    initialFirstVisibleItemIndex = initialFirstVisibleItemIndex,
+    initialFirstVisibleItemScrollOffset = initialFirstVisibleItemScrollOffset,
     onSaveScrollPosition = onSaveScrollPosition
 )
 

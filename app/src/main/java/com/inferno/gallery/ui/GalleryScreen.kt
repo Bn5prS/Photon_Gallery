@@ -310,16 +310,18 @@ fun GalleryScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val onMediaClick = remember(viewModel, bucketName, onPhotoClick, lazyGridState) {
+    val onMediaClick = remember(viewModel, bucketName, onPhotoClick, lazyGridState, timelineLayoutMode) {
         { item: GalleryItem ->
             if (viewModel.isSelectionMode.value) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
-                viewModel.saveGridScrollPosition(
-                    bucketName,
-                    lazyGridState.firstVisibleItemIndex,
-                    lazyGridState.firstVisibleItemScrollOffset
-                )
+                if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
+                    viewModel.saveGridScrollPosition(
+                        bucketName,
+                        lazyGridState.firstVisibleItemIndex,
+                        lazyGridState.firstVisibleItemScrollOffset
+                    )
+                }
                 viewModel.setInitialDetailItem(item, bucketName)
                 val query = if (bucketName == "search_text" || bucketName == "search_smart") viewModel.searchQuery.value else null
                 onPhotoClick(item.id, bucketName, query)
@@ -536,8 +538,11 @@ fun GalleryScreen(
                 }
             )
         } else {
+            val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
             com.inferno.gallery.ui.components.NativePhotonGrid(
                 items = nativeTimelineItems,
+                initialFirstVisibleItemIndex = savedIndex,
+                initialFirstVisibleItemScrollOffset = savedOffset,
                 gridCellsCount = gridCellsCount,
                 onGridCountChange = onGridCountChange,
                 isSelectionMode = isSelectionMode,

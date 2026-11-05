@@ -3177,6 +3177,21 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         scrollPositions.remove(key)
     }
 
+    fun syncGridScrollToMedia(bucket: String?, mediaId: String) {
+        val initialId = _initialDetailItem.value?.id
+        // If user is still viewing the item they opened, preserve their exact pixel scroll position
+        if (initialId != null && initialId == mediaId) {
+            return
+        }
+        val items = nativeTimelineItems.value
+        if (items.isNotEmpty()) {
+            val index = items.indexOfFirst { it is com.inferno.gallery.data.NativeTimelineItem.Media && it.id == mediaId }
+            if (index >= 0) {
+                saveGridScrollPosition(bucket, index, 0)
+            }
+        }
+    }
+
     private val _albumsScrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val albumsScrollToTopTrigger: SharedFlow<Unit> = _albumsScrollToTopTrigger.asSharedFlow()
 

@@ -375,6 +375,12 @@ fun DetailScreen(
     }
 
     val currentItem = galleryItems.getOrNull(pagerState.currentPage)
+    LaunchedEffect(currentItem?.id) {
+        val item = currentItem
+        if (item != null) {
+            viewModel.syncGridScrollToMedia(bucketName, item.id)
+        }
+    }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, currentItem) {
