@@ -3164,16 +3164,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveGridScrollPosition(bucket: String?, index: Int, offset: Int) {
         val key = bucket ?: "main_gallery"
+        android.util.Log.d("NativePhotonGrid", "saveGridScrollPosition: key=$key index=$index offset=$offset")
         scrollPositions[key] = Pair(index, offset)
     }
 
     fun getSavedGridScrollPosition(bucket: String?): Pair<Int, Int> {
         val key = bucket ?: "main_gallery"
-        return scrollPositions[key] ?: Pair(0, 0)
+        val pos = scrollPositions[key] ?: Pair(0, 0)
+        android.util.Log.d("NativePhotonGrid", "getSavedGridScrollPosition: key=$key -> index=${pos.first} offset=${pos.second}")
+        return pos
     }
 
     fun resetGridScrollPosition(bucket: String?) {
         val key = bucket ?: "main_gallery"
+        android.util.Log.d("NativePhotonGrid", "resetGridScrollPosition: key=$key")
         scrollPositions.remove(key)
     }
 
@@ -3181,12 +3185,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         val initialId = _initialDetailItem.value?.id
         // If user is still viewing the item they opened, preserve their exact pixel scroll position
         if (initialId != null && initialId == mediaId) {
+            android.util.Log.d("NativePhotonGrid", "syncGridScrollToMedia: same item $mediaId, preserving scroll")
             return
         }
         val items = nativeTimelineItems.value
         if (items.isNotEmpty()) {
             val index = items.indexOfFirst { it is com.inferno.gallery.data.NativeTimelineItem.Media && it.id == mediaId }
             if (index >= 0) {
+                android.util.Log.d("NativePhotonGrid", "syncGridScrollToMedia: swiped to item $mediaId at grid index $index")
                 saveGridScrollPosition(bucket, index, 0)
             }
         }

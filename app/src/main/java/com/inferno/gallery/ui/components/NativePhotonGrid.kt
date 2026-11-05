@@ -233,7 +233,10 @@ fun NativePhotonGrid(
     }
 
     var targetRecyclerView by remember { mutableStateOf<RecyclerView?>(null) }
-    var hasRestoredScroll by remember(scrollToTopKey) { mutableStateOf(false) }
+    var hasRestoredScroll by remember(scrollToTopKey) { mutableStateOf(initialFirstVisibleItemIndex <= 0) }
+    var lastScrollToTopKey by remember { mutableStateOf(scrollToTopKey) }
+
+    android.util.Log.d("NativePhotonGrid", "NativePhotonGrid recomposed: initialIndex=$initialFirstVisibleItemIndex offset=$initialFirstVisibleItemScrollOffset hasRestoredScroll=$hasRestoredScroll")
 
     if (scrollToTopTrigger != null) {
         LaunchedEffect(scrollToTopTrigger) {
@@ -246,7 +249,10 @@ fun NativePhotonGrid(
     }
 
     LaunchedEffect(scrollToTopKey) {
-        if (scrollToTopKey != null) {
+        if (scrollToTopKey != null && lastScrollToTopKey != scrollToTopKey) {
+            android.util.Log.d("NativePhotonGrid", "scrollToTopKey changed: $lastScrollToTopKey -> $scrollToTopKey, resetting scroll to 0")
+            lastScrollToTopKey = scrollToTopKey
+            hasRestoredScroll = true
             targetRecyclerView?.scrollToPosition(0)
             currentOnSaveScrollPosition?.invoke(0, 0)
         }
@@ -353,7 +359,7 @@ fun NativePhotonGrid(
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
                         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                             super.onScrollStateChanged(recyclerView, newState)
-                            if (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                            if (hasRestoredScroll && (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING)) {
                                 val lm = recyclerView.layoutManager as? GridLayoutManager
                                 if (lm != null) {
                                     val firstPos = lm.findFirstVisibleItemPosition()
@@ -371,11 +377,13 @@ fun NativePhotonGrid(
                             val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
                             val isScrolled = lm.findFirstVisibleItemPosition() > 0 || recyclerView.computeVerticalScrollOffset() > 32
                             currentOnScrolledAwayFromTop?.invoke(isScrolled)
-                            val firstPos = lm.findFirstVisibleItemPosition()
-                            if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
-                                val firstView = lm.findViewByPosition(firstPos)
-                                val topOffset = firstView?.top ?: 0
-                                currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                            if (hasRestoredScroll && recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
+                                val firstPos = lm.findFirstVisibleItemPosition()
+                                if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                                    val firstView = lm.findViewByPosition(firstPos)
+                                    val topOffset = firstView?.top ?: 0
+                                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                                }
                             }
                         }
                     })
@@ -483,15 +491,15 @@ fun NativePhotonGrid(
                 // Update items
                 if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
                     adapter.submitList(items) {
-                        if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0) {
-                            val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
-                            layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
-                            hasRestoredScroll = true
-                        }
+                        val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
+                        android.util.Log.d("NativePhotonGrid", "submitList commitCallback: restoring to targetPos=$targetPos offset=$initialFirstVisibleItemScrollOffset (itemCount=${adapter.itemCount})")
+                        layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
+                        hasRestoredScroll = true
                     }
                     recyclerView.post {
-                        if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0) {
+                        if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && adapter.itemCount > 0) {
                             val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
+                            android.util.Log.d("NativePhotonGrid", "recyclerView.post: restoring to targetPos=$targetPos offset=$initialFirstVisibleItemScrollOffset")
                             layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
                             hasRestoredScroll = true
                         }
@@ -506,13 +514,15 @@ fun NativePhotonGrid(
             },
             onRelease = { scroller ->
                 val rv = scroller.attachedRecyclerView
-                val lm = rv?.layoutManager as? GridLayoutManager
-                if (lm != null) {
-                    val firstPos = lm.findFirstVisibleItemPosition()
-                    if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
-                        val firstView = lm.findViewByPosition(firstPos)
-                        val topOffset = firstView?.top ?: 0
-                        currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                if (hasRestoredScroll) {
+                    val lm = rv?.layoutManager as? GridLayoutManager
+                    if (lm != null) {
+                        val firstPos = lm.findFirstVisibleItemPosition()
+                        if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                            val firstView = lm.findViewByPosition(firstPos)
+                            val topOffset = firstView?.top ?: 0
+                            currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                        }
                     }
                 }
                 rv?.adapter = null
