@@ -1099,7 +1099,7 @@ fun AlbumCard(
             .build()
     }
 
-    // Outer Card Container (Google Photos style enclosed card — clean tonal, no outlines)
+    // Outer Card Container (Enclosed card — clean tonal, no outlines)
     Surface(
         modifier = modifier
             .fillMaxWidth()

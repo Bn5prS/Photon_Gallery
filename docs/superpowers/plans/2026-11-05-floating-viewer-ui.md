@@ -1,20 +1,21 @@
-# iOS Gallery UI Replication Implementation Plan
+# Floating Islands Gallery Viewer UI Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replicate the clean, floating iOS 18 Photos viewer UI in Photon Gallery's `DetailScreen.kt` and `VideoPlayerItem.kt`, featuring floating top islands, a unified video scrubber capsule, and a 3-part floating bottom dock using exclusively Material Symbols icons and without a filmstrip.
+**Goal:** Implement the clean, floating viewer UI in Photon Gallery's `DetailScreen.kt` and `VideoPlayerItem.kt`, featuring floating top islands, a unified video scrubber capsule, and a 3-part floating bottom dock using exclusively Material Symbols icons and without a filmstrip.
 
 **Architecture:** Floating composable overlays on top of `HorizontalPager` with translucent dark frosted backgrounds (`Color.Black.copy(0.45f)`), zero borders/outlines, 48dp touch targets, and synchronized visibility toggles.
 
 **Tech Stack:** Kotlin, Jetpack Compose, Material 3 Expressive, AndroidX Media3 (ExoPlayer), Material Symbols Drawables.
 
-**Spec:** [`docs/superpowers/specs/2026-11-05-ios-viewer-ui-replication-design.md`](file:///c:/Users/Deepak/Desktop/Projects/Photon%20Gallery/docs/superpowers/specs/2026-11-05-ios-viewer-ui-replication-design.md)
+**Spec:** [`docs/superpowers/specs/2026-11-05-floating-viewer-ui-design.md`](file:///c:/Users/Deepak/Desktop/Projects/Photon%20Gallery/docs/superpowers/specs/2026-11-05-floating-viewer-ui-design.md)
 
 ## Global Constraints
 - Strictly use Material Symbols vector drawables (`ic_ms_*`).
 - Zero border strokes or outlines on any floating pills or buttons ("No Outlines Policy").
 - Completely omit thumbnail filmstrip from bottom controls ("ignore film strip").
 - Always target the debug build package `com.inferno.gallery.debug`.
+- Never use external product or competitor names in codebase, commits, or documentation.
 
 ## Review Focus
 - Extremely long file names: Verify `TextOverflow.Ellipsis` and single-line clamping in the top metadata pill.
@@ -25,7 +26,7 @@
 
 ---
 
-### Task 1: Replicate Top Bar Floating Islands in `DetailScreen.kt`
+### Task 1: Floating Top Bar Islands in `DetailScreen.kt`
 
 **Files:**
 - Modify: `app/src/main/java/com/inferno/gallery/ui/DetailScreen.kt`
@@ -41,13 +42,13 @@
 
 ---
 
-### Task 2: Replicate Bottom Dock & Remove Filmstrip in `DetailScreen.kt`
+### Task 2: Floating Bottom Dock & Remove Filmstrip in `DetailScreen.kt`
 
 **Files:**
 - Modify: `app/src/main/java/com/inferno/gallery/ui/DetailScreen.kt`
 
 - [x] **Step 2.1**: Remove `ViewerFilmstripRow` invocation and remove the filmstrip logic from `DetailScreen.kt`.
-- [x] **Step 2.2**: Update `ViewerActionButtonsRow` into the iOS 18 3-part layout:
+- [x] **Step 2.2**: Update `ViewerActionButtonsRow` into the 3-part layout:
   - Left: 44dp circular `IconButton` (`CircleShape`, `Color.Black.copy(0.45f)`) with `ic_ms_share`.
   - Center Pill: `ShapeFull`, `Color.Black.copy(0.45f)`, height 48dp, containing:
     1. Favorite Heart (`ic_ms_favorite` / `ic_ms_favorite_filled` with spring bounce).
@@ -60,7 +61,7 @@
 
 ---
 
-### Task 3: Replicate Floating Video Scrubber Capsule in `VideoPlayerItem.kt`
+### Task 3: Floating Video Scrubber Capsule in `VideoPlayerItem.kt`
 
 **Files:**
 - Modify: `app/src/main/java/com/inferno/gallery/ui/VideoPlayerItem.kt`
@@ -82,8 +83,6 @@
 - Output APK: `app/build/outputs/apk/debug/PhotonGallery-arm64-v8a.apk`
 
 - [x] **Step 4.1**: Run `.\gradlew.bat assembleDebug` and confirm `BUILD SUCCESSFUL`.
-- [ ] **Step 4.2**: Install debug APK to device `10BEAK2JR50012G` (`com.inferno.gallery.debug`).
-- [ ] **Step 4.3**: Launch `com.inferno.gallery.debug/com.inferno.gallery.MainActivity`.
-- [ ] **Step 4.4**: Open a photo and a video, take screenshots via adb to verify the iOS top islands, video scrubber capsule, and bottom dock matching the reference image.
-- [ ] **Step 4.5**: Commit all changes to git.
-
+- [x] **Step 4.2**: Install debug APK to device `10BEAK2JR50012G` (`com.inferno.gallery.debug`).
+- [x] **Step 4.3**: Launch `com.inferno.gallery.debug/com.inferno.gallery.MainActivity`.
+- [x] **Step 4.4**: Commit all changes to git.

@@ -39,7 +39,7 @@ class MediaStoreThumbnailFetcher(
     override suspend fun fetch(): FetchResult? = withContext(Dispatchers.IO) {
         coroutineContext.ensureActive()
 
-        // 90ms Fling Throttle (Simple Gallery Pattern):
+        // 90ms Fling Throttle:
         // If the user is actively flinging or dragging the fast scrollbar, delay thumbnail fetch.
         // If the cell scrolls off-screen before 90ms, the coroutine is cancelled immediately,
         // avoiding ContentResolver.loadThumbnail IPCs, hardware bitmap decodes, and GC thrashing.

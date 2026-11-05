@@ -154,10 +154,10 @@ data class GridColorScheme(
 /**
  * Ultra-high performance native Android [RecyclerView] embedded via Compose [AndroidView].
  *
- * Implements Google Photos & Simple Gallery 120 FPS fluid scrolling:
+ * Implements 120 FPS fluid scrolling:
  * - Hosted within [NativeFastScroller] with RenderThread translation and instant date bubble.
  * - Dedicated [RecyclerView.RecycledViewPool] for media cells and timeline headers.
- * - Simple Gallery 100ms fling throttle: skips image decodes during high-velocity flings,
+ * - 100ms fling throttle: skips image decodes during high-velocity flings,
  *   displaying clean [surfaceContainer] tiles until scroll motion settles.
  * - Dynamic span counts (1 to 8 columns) with pinch-to-zoom [ScaleGestureDetector].
  * - Zero outlines or borders, respecting Material 3 Expressive guidelines.

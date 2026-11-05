@@ -566,7 +566,7 @@ fun VideoPlayerItemWithResolvedUri(
             )
         }
 
-        // iOS 18 Style Video Scrubber Capsule: Single unified floating pill
+        // Floating Video Scrubber Capsule: Single unified floating pill
         AnimatedVisibility(
             visible = showControls && isCurrentPage,
             enter = slideInVertically(

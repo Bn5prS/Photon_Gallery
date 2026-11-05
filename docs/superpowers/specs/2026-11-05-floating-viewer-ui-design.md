@@ -1,21 +1,22 @@
-# iOS Gallery UI Replication Design
+# Floating Islands Gallery Viewer UI Design
 
 ## 1. Intent and Why
-Replicate the clean, floating iOS Photos viewer aesthetic in Photon Gallery's full-screen viewer (`DetailScreen.kt`) and video player controls (`VideoPlayerItem.kt`). The goal is to provide a minimalist, distraction-free viewing experience where controls float elegantly as translucent islands over the media rather than being anchored in heavy full-width gradient bars.
+Provide a clean, floating viewer aesthetic in Photon Gallery's full-screen viewer (`DetailScreen.kt`) and video player controls (`VideoPlayerItem.kt`). The goal is to provide a minimalist, distraction-free viewing experience where controls float elegantly as translucent islands over the media rather than being anchored in heavy full-width gradient bars.
 
 ## 2. Goals, Non-Goals, and Anti-Goals
 - **Goals**:
-  - Replicate the floating 3-island top bar (Back button, File metadata pill, 3-dot menu).
-  - Replicate the floating 3-part bottom dock (Share on left, grouped [Favorite, Info, Edit] center pill, Trash on right).
-  - Replicate the unified video scrubber capsule (Play/Pause, Scrubber slider, Mute/Unmute) floating above the bottom dock.
+  - Implement the floating 3-island top bar (Back button, File metadata pill, 3-dot menu).
+  - Implement the floating 3-part bottom dock (Share on left, grouped [Favorite, Info, Edit] center pill, Trash on right).
+  - Implement the unified video scrubber capsule (Play/Pause, Scrubber slider, Mute/Unmute) floating above the bottom dock.
   - Maintain smooth show/hide behavior on single tap with auto-hide timer pausing when menus or sheets are open.
   - Keep all existing functionalities intact (Share, Favorite, Edit, Lens, Info, Trash/Delete, 3-dot options).
 - **Non-Goals**:
   - Filmstrip thumbnail strip: explicitly excluded as per user instructions ("ignore film strip").
-  - iOS-native iconography: only Material Symbols icons (`ic_ms_*`) will be used as per user instructions.
+  - External iconography: only Material Symbols icons (`ic_ms_*`) will be used as per user instructions.
 - **Anti-Goals**:
   - No outlines, strokes, or borders on buttons/pills (strict adherence to "No Outlines Policy").
   - No heavy full-screen or edge-to-edge dark gradients covering the photo.
+  - Never use external product or competitor names in codebase, commits, or documentation.
 
 ## 3. Constraints
 - **Iconography**: Exclusively use Material Symbols vector drawables (`ic_ms_arrow_back`, `ic_ms_more_horiz`, `ic_ms_share`, `ic_ms_favorite`, `ic_ms_info`, `ic_ms_tune`, `ic_ms_delete`, `ic_ms_play_arrow`, `ic_ms_pause`, `ic_ms_volume_up`, `ic_ms_volume_off`).
@@ -24,14 +25,14 @@ Replicate the clean, floating iOS Photos viewer aesthetic in Photon Gallery's fu
 - **Android Target**: minSdk 31, Jetpack Compose Material 3 Expressive.
 
 ## 4. Approaches Considered
-- **Approach A: Exact iOS 18 Triple-Island Layout (Selected)**:
+- **Approach A: Triple-Island Floating Layout (Selected)**:
   - Top bar features 3 floating islands: circular Back button, center Pill with File Name + Date/Time, and circular More (`•••`) button.
   - Bottom dock features 3 floating elements: standalone circular Share button on left, center Pill holding [Favorite, Info, Edit], and standalone circular Trash button on right.
   - Video scrubber is a single floating capsule with Play/Pause, Slider, and Mute/Unmute.
-  - *Why selected*: Accurately replicates the iOS reference image provided by the user, maintaining its distinct visual hierarchy and rhythm.
+  - *Why selected*: Distinct visual hierarchy and clean floating rhythm.
 - **Approach B: Single Continuous Capsule Dock**:
   - Merged all 5 bottom actions into one wide continuous capsule.
-  - *Why rejected*: Lacks the distinctive floating rhythm and grouping from the user's reference screenshot.
+  - *Why rejected*: Lacks the distinctive floating rhythm and grouping.
 
 ## 5. Detailed Component Specifications
 
@@ -71,4 +72,3 @@ Replicate the clean, floating iOS Photos viewer aesthetic in Photon Gallery's fu
 - Tune exact padding and touch targets for 48dp accessibility.
 - Connect existing click handlers and state flows (`onShare`, `onFavorite`, `onEdit`, `onDelete`, `onRestore`, `onPermanentDelete`, `showInfoCard`, `showMoreMenu`).
 - Ensure single-tap gestures seamlessly toggle visibility of all floating islands in unison.
-

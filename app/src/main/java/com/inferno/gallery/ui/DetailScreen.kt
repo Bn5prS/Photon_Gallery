@@ -1696,7 +1696,7 @@ fun DetailScreen(
             }
         }
 
-        // ── iOS 18 Style Floating Top Islands ──
+        // ── Floating Top Islands ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
@@ -2192,7 +2192,7 @@ fun DetailScreen(
 
 
 
-        // ── iOS 18 Style Floating Action Dock ──
+        // ── Floating Action Dock ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
