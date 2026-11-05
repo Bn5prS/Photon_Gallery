@@ -650,6 +650,7 @@ fun DetailScreen(
     }
 
     val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
+    val targetRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
 
     androidx.compose.runtime.DisposableEffect(useFullScreenGlobal) {
         val prevLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: false
@@ -1034,7 +1035,8 @@ fun DetailScreen(
             val offsetX = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
             val offsetY = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
             val animJob = remember(item.id) { androidx.compose.runtime.mutableStateOf<kotlinx.coroutines.Job?>(null) }
-            val animRotation = remember(item.id) { androidx.compose.animation.core.Animatable(0f) }
+            val currentTargetRot = targetRotationMap[item.id] ?: 0f
+            val animRotation = remember(item.id) { androidx.compose.animation.core.Animatable(currentTargetRot) }
             DisposableEffect(item.id) {
                 animRotationMap[item.id] = animRotation
                 onDispose { animRotationMap.remove(item.id) }
@@ -1452,11 +1454,24 @@ fun DetailScreen(
                                     }
                                 }
                                 .graphicsLayer {
-                                    scaleX = scale.floatValue
-                                    scaleY = scale.floatValue
+                                    val rotZ = animRotation.value
+                                    val theta = Math.toRadians(rotZ.toDouble())
+                                    val sinSq = (kotlin.math.sin(theta) * kotlin.math.sin(theta)).toFloat()
+                                    val composableW = parentWidth
+                                    val composableH = parentHeight
+                                    val imgW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
+                                    val imgH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imgW / imageAspectRatio else composableH
+                                    val fitScale = if (imgH > composableW && imgH > 0f && composableH > 0f && composableW > 0f) {
+                                        val maxRotScale = minOf(composableW / imgH, composableH / imgW, 1f)
+                                        1f - (1f - maxRotScale) * sinSq
+                                    } else {
+                                        1f
+                                    }
+                                    scaleX = scale.floatValue * fitScale
+                                    scaleY = scale.floatValue * fitScale
                                     translationX = offsetX.floatValue
                                     translationY = offsetY.floatValue
-                                    rotationZ = animRotation.value
+                                    rotationZ = rotZ
                                 }
                         )
 
@@ -1915,10 +1930,13 @@ fun DetailScreen(
                                         // Keep 3-dot menu open so the user can tap Rotate repeatedly
                                         val target = currentItem
                                         pendingRotateItem = target
+                                        val currentTarget = targetRotationMap[target.id] ?: 0f
+                                        val nextTarget = currentTarget + 90f
+                                        targetRotationMap[target.id] = nextTarget
                                         val anim = animRotationMap[target.id]
                                         coroutineScope.launch {
                                             anim?.animateTo(
-                                                targetValue = ((anim?.value ?: 0f) + 90f),
+                                                targetValue = nextTarget,
                                                 animationSpec = androidx.compose.animation.core.spring(
                                                     dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
                                                     stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow

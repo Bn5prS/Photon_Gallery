@@ -1196,60 +1196,84 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+    private fun calculateRotatedOrientation(currentOrient: Int, degrees: Int): Int {
+        return when (degrees) {
+            90 -> when (currentOrient) {
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+            }
+            180 -> when (currentOrient) {
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+            }
+            270, -90 -> when (currentOrient) {
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+            }
+            else -> currentOrient
+        }
+    }
+
     fun rotateMedia(
         context: android.content.Context,
         item: GalleryItem,
-        degrees: Int = 90,
+        degrees: Int,
         onSecurityException: (android.app.PendingIntent) -> Unit,
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch(Dispatchers.IO) {
+            var success = false
+            val uri = item.uri
             try {
-                val uri = item.uri
-                var success = false
                 val isJpegOrHeic = item.name.endsWith(".jpg", ignoreCase = true) ||
                                   item.name.endsWith(".jpeg", ignoreCase = true) ||
                                   item.name.endsWith(".heic", ignoreCase = true) ||
                                   item.name.endsWith(".webp", ignoreCase = true)
 
                 if (isJpegOrHeic) {
-                    try {
-                        val file = if (item.path.isNotBlank()) File(item.path) else null
-                        if (file != null && file.exists() && file.canWrite()) {
+                    val filePath = if (item.path.isNotBlank()) {
+                        item.path
+                    } else {
+                        try {
+                            context.contentResolver.query(
+                                uri,
+                                arrayOf(android.provider.MediaStore.Images.Media.DATA),
+                                null, null, null
+                            )?.use { cursor ->
+                                if (cursor.moveToFirst()) {
+                                    val idx = cursor.getColumnIndex(android.provider.MediaStore.Images.Media.DATA)
+                                    if (idx >= 0) cursor.getString(idx) else null
+                                } else null
+                            }
+                        } catch (_: Exception) { null }
+                    }
+
+                    val file = if (!filePath.isNullOrBlank()) File(filePath) else null
+                    val hasAllFilesAccess = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager()
+                    val canWriteDirectly = file != null && file.exists() && (hasAllFilesAccess || file.canWrite())
+
+                    if (canWriteDirectly && file != null) {
+                        try {
                             val exif = androidx.exifinterface.media.ExifInterface(file)
                             val currentOrient = exif.getAttributeInt(
                                 androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
                                 androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
                             )
-                            val newOrient = when (degrees) {
-                                90 -> when (currentOrient) {
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-                                    else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                }
-                                180 -> when (currentOrient) {
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                    else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                }
-                                270, -90 -> when (currentOrient) {
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-                                    else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                }
-                                else -> currentOrient
-                            }
+                            val newOrient = calculateRotatedOrientation(currentOrient, degrees)
                             exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, newOrient.toString())
                             exif.saveAttributes()
                             success = true
-                        }
-                    } catch (_: Exception) {}
+                        } catch (_: Exception) {}
+                    }
 
                     if (!success) {
                         try {
@@ -1261,40 +1285,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                         androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
                                         androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
                                     )
-                                val newOrient = when (degrees) {
-                                    90 -> when (currentOrient) {
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-                                        else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                    }
-                                    180 -> when (currentOrient) {
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                        else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                    }
-                                    270, -90 -> when (currentOrient) {
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
-                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
-                                        else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
-                                    }
-                                    else -> currentOrient
+                                    val newOrient = calculateRotatedOrientation(currentOrient, degrees)
+                                    exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, newOrient.toString())
+                                    exif.saveAttributes()
+                                    success = true
                                 }
-                                exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, newOrient.toString())
-                                exif.saveAttributes()
-                                success = true
                             }
+                        } catch (sec: SecurityException) {
+                            throw sec
+                        } catch (_: Exception) {
+                            // Fall back to bitmap rotation
                         }
-                    } catch (sec: SecurityException) {
-                        throw sec
-                    } catch (_: Exception) {
-                        // Fall back to bitmap rotation
-                    }
                     }
                 }
 
@@ -1318,34 +1319,37 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         context.contentResolver.update(uri, cv, null, null)
                     } catch (_: Exception) {}
 
-                    val imageLoader = coil3.SingletonImageLoader.get(context)
-                    imageLoader.memoryCache?.clear()
-                    imageLoader.diskCache?.clear()
-
-                    val currentDetailMedia = _detailMedia.value
-                    val updatedList = currentDetailMedia.map {
-                        if (it.id == item.id) {
-                            it.copy(dateModified = now)
-                        } else {
-                            it
-                        }
-                    }
-                    _detailMedia.value = updatedList
-
                     if (item.path.isNotBlank()) {
                         android.media.MediaScannerConnection.scanFile(context, arrayOf(item.path), null, null)
                     }
 
+                    // Invalidate grid thumbnail cache entries for this item so grid displays the new rotation
+                    try {
+                        val imageLoader = coil3.SingletonImageLoader.get(context)
+                        for (cols in 1..8) {
+                            val key = com.inferno.gallery.ui.components.thumbnailMemoryKey(
+                                item.id,
+                                com.inferno.gallery.ui.components.thumbnailTargetPx(cols)
+                            )
+                            imageLoader.memoryCache?.remove(coil3.memory.MemoryCache.Key(key))
+                        }
+                    } catch (_: Exception) {}
+
                     withContext(Dispatchers.Main) {
-                        showToast("Photo rotated")
                         onSuccess()
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        showToast("Failed to rotate photo")
                     }
                 }
             } catch (securityException: SecurityException) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && !android.os.Environment.isExternalStorageManager()) {
+                    try {
+                        val manageIntent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = android.net.Uri.parse("package:${context.packageName}")
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(manageIntent)
+                        return@launch
+                    } catch (_: Exception) {}
+                }
                 val recoverable = securityException as? android.app.RecoverableSecurityException
                 if (recoverable != null) {
                     withContext(Dispatchers.Main) {
