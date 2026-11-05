@@ -57,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -111,6 +112,13 @@ enum class StitchAlignment { START, CENTER, END }
 
 // ── StitchScreen ─────────────────────────────────────────────────────────────
 
+@Stable
+private class StitchZoomState {
+    var scale by mutableFloatStateOf(1f)
+    var fitScale by mutableFloatStateOf(1f)
+    var toggleFit by mutableStateOf<() -> Unit>({})
+}
+
 @Composable
 fun StitchScreen(
     initialUris: List<String>,
@@ -129,6 +137,8 @@ fun StitchScreen(
     var alignment by remember { mutableStateOf(StitchAlignment.CENTER) }
     var scaleMode by remember { mutableStateOf(StitchScaleMode.FILL) }
     var bgColor by remember { mutableStateOf(Color.Black) }
+
+    val zoomState = remember { StitchZoomState() }
 
     // ── UI state ─────────────────────────────────────────────────────────────
     var isSaving by remember { mutableStateOf(false) }
@@ -184,7 +194,8 @@ fun StitchScreen(
                         spacingDp = spacingDp,
                         bgColor = bgColor,
                         alignment = alignment,
-                        scaleMode = scaleMode
+                        scaleMode = scaleMode,
+                        zoomState = zoomState
                     )
                 }
             }
@@ -230,7 +241,7 @@ fun StitchScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             // Left: Back button
             Surface(
@@ -255,60 +266,104 @@ fun StitchScreen(
                 }
             }
 
-            // Right: Header & Save Action Pill
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shadowElevation = 0.dp,
-                modifier = Modifier.height(48.dp)
+            // Right: Header & Save Action Pill with Zoom Badge aligned to the left
+            Column(
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(start = 14.dp, end = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.height(48.dp)
                 ) {
-                    Text(
-                        "Stitch",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-
-                    Surface(
-                        shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(
+                        modifier = Modifier.padding(start = 14.dp, end = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "${stitchItems.size}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            "Stitch",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            softWrap = false
                         )
-                    }
 
-                    FilledTonalButton(
-                        enabled = !isSaving && stitchItems.size >= 2,
-                        onClick = {
-                            if (!isSaving) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showSaveSheet = true
-                            }
-                        },
-                        shape = ShapeFull,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Text(
+                                "${stitchItems.size}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        FilledTonalButton(
+                            enabled = !isSaving && stitchItems.size >= 2,
+                            onClick = {
+                                if (!isSaving) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showSaveSheet = true
+                                }
+                            },
+                            shape = ShapeFull,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_download), contentDescription = "Save", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Export",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+
+                // ── Zoom badge just below Stitch text, left-aligned with the top pill ──
+                val isFitted = kotlin.math.abs(zoomState.scale - zoomState.fitScale) < 0.03f
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier
+                        .pressScale(0.96f)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            zoomState.toggleFit()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_download), contentDescription = "Save", modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_aspect_ratio),
+                            contentDescription = "Toggle Fit / 100%",
+                            modifier = Modifier.size(14.dp),
+                            tint = if (isFitted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Text(
-                            "Export",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            text = when {
+                                isFitted -> "Fit • ${(zoomState.scale * 100).roundToInt()}%"
+                                kotlin.math.abs(zoomState.scale - 1.0f) < 0.03f -> "100%"
+                                else -> "${(zoomState.scale * 100).roundToInt()}%"
+                            },
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (isFitted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -387,7 +442,8 @@ private fun StitchPreview(
     spacingDp: Float,
     bgColor: Color,
     alignment: StitchAlignment = StitchAlignment.CENTER,
-    scaleMode: StitchScaleMode = StitchScaleMode.FILL
+    scaleMode: StitchScaleMode = StitchScaleMode.FILL,
+    zoomState: StitchZoomState
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -730,49 +786,16 @@ private fun StitchPreview(
             }
         }
 
-        // ── Floating scale / fit indicator pill ──────────────────────────────
-        val isFitted = kotlin.math.abs(scale - fitScale) < 0.03f
-        val isFull = kotlin.math.abs(scale - 1.0f) < 0.03f
-
-        Surface(
-            shape = ShapeFull,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 4.dp,
-            shadowElevation = 6.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-                .clickable {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (isFitted) {
-                        animateTo(1.0f, 0f, 0f)
-                    } else {
-                        animateTo(fitScale, 0f, 0f)
-                    }
+        SideEffect {
+            zoomState.scale = scale
+            zoomState.fitScale = fitScale
+            zoomState.toggleFit = {
+                val isFitted = kotlin.math.abs(scale - fitScale) < 0.03f
+                if (isFitted) {
+                    animateTo(1.0f, 0f, 0f)
+                } else {
+                    animateTo(fitScale, 0f, 0f)
                 }
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_aspect_ratio),
-                    contentDescription = "Toggle Fit / 100%",
-                    modifier = Modifier.size(16.dp),
-                    tint = if (isFitted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = when {
-                        isFitted -> "Fit • ${(scale * 100).roundToInt()}%"
-                        isFull -> "100%"
-                        else -> "${(scale * 100).roundToInt()}%"
-                    },
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (isFitted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
             }
         }
     }
@@ -840,12 +863,12 @@ private fun ReorderableThumbnailStrip(
                             shadowElevation = liftElevation.toPx()
                         }
                         .zIndex(if (isDragging) 10f else 0f)
-                        .clip(ShapeLarge)
+                        .clip(RectangleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         .border(
-                            width = if (isDragging) 2.5.dp else 0.dp,
+                            width = if (isDragging) 2.dp else 0.dp,
                             color = if (isDragging) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            shape = ShapeLarge
+                            shape = RectangleShape
                         )
                         .pointerInput(index, items.size) {
                             detectDragGesturesAfterLongPress(
@@ -891,7 +914,9 @@ private fun ReorderableThumbnailStrip(
                             .build(),
                         contentDescription = "Image ${index + 1}",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RectangleShape)
                     )
 
                     // Order number badge
@@ -925,7 +950,7 @@ private fun ReorderableThumbnailStrip(
                                 alpha = removeBadgeAlpha
                             }
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.error)
+                            .background(MaterialTheme.colorScheme.errorContainer)
                             .clickable(enabled = !isDragging) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onRemove(index)
@@ -944,13 +969,13 @@ private fun ReorderableThumbnailStrip(
 
             // Add more button
             Surface(
-                shape = ShapeLarge,
+                shape = RectangleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.primary,
                 shadowElevation = 0.dp,
                 modifier = Modifier
                     .size(68.dp)
-                    .clip(ShapeLarge)
+                    .clip(RectangleShape)
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onAddMore()
@@ -1006,11 +1031,11 @@ private fun StitchControlsPanel(
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // ── Row 1: Direction Selection with Full Space ──
+            // ── Row 1: Direction Selection (Compact & Symmetric) ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1027,8 +1052,8 @@ private fun StitchControlsPanel(
                     shadowElevation = 0.dp
                 ) {
                     Row(
-                        modifier = Modifier.padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         StitchPillOption(
                             selected = orientation == StitchOrientation.VERTICAL,
@@ -1046,7 +1071,7 @@ private fun StitchControlsPanel(
                 }
             }
 
-            // ── Row 2: Scale Mode & Alignment (Spacious side-by-side) ──
+            // ── Row 2: Scale Mode & Alignment ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1068,8 +1093,8 @@ private fun StitchControlsPanel(
                         shadowElevation = 0.dp
                     ) {
                         Row(
-                            modifier = Modifier.padding(3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             StitchPillOption(
                                 selected = scaleMode == StitchScaleMode.FILL,
@@ -1108,7 +1133,7 @@ private fun StitchControlsPanel(
                             shadowElevation = 0.dp
                         ) {
                             Row(
-                                modifier = Modifier.padding(3.dp),
+                                modifier = Modifier.padding(2.dp),
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 StitchIconPillOption(
@@ -1145,7 +1170,7 @@ private fun StitchControlsPanel(
                     text = "Gap",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(42.dp)
+                    modifier = Modifier.width(44.dp)
                 )
                 Slider(
                     value = spacingDp,
@@ -1162,18 +1187,23 @@ private fun StitchControlsPanel(
                     shape = ShapeFull,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shadowElevation = 0.dp
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.height(28.dp)
                 ) {
-                    Text(
-                        text = "${spacingDp.roundToInt()} dp",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
+                    Box(
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${spacingDp.roundToInt()} dp",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
 
-            // ── Row 4: Background Color Palette (Full-width LazyRow) ──
+            // ── Row 4: Background Color Palette ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1183,7 +1213,7 @@ private fun StitchControlsPanel(
                     text = "Color",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(42.dp)
+                    modifier = Modifier.width(44.dp)
                 )
                 val presetColors = listOf(
                     Color.Black,
@@ -1204,7 +1234,7 @@ private fun StitchControlsPanel(
                         val isSelected = bgColor == color
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(28.dp)
                                 .clip(CircleShape)
                                 .background(color)
                                 .pressScale(0.94f)
@@ -1220,7 +1250,7 @@ private fun StitchControlsPanel(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
                                     contentDescription = "Selected",
                                     tint = if (isLight) Color.Black else Color.White,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
                             }
                         }
@@ -1249,24 +1279,24 @@ private fun StitchPillOption(
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         shadowElevation = 0.dp,
         modifier = Modifier
-            .height(32.dp)
+            .height(28.dp)
             .pressScale(0.96f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 0.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 0.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
                 )
             }
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 softWrap = false
             )
@@ -1292,14 +1322,14 @@ private fun StitchIconPillOption(
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         shadowElevation = 0.dp,
         modifier = Modifier
-            .size(32.dp)
+            .size(28.dp)
             .pressScale(0.96f)
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }
