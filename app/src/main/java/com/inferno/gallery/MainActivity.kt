@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.activity.viewModels
 import com.inferno.gallery.ui.SettingsViewModel
+import com.inferno.gallery.ui.GalleryViewModel
 import com.inferno.gallery.ui.ThemeMode
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -37,6 +38,7 @@ import com.inferno.gallery.ui.components.UpdateDialog
 
 class MainActivity : FragmentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
+    private val galleryViewModel: GalleryViewModel by viewModels()
 
     private val _viewIntentUri = kotlinx.coroutines.flow.MutableStateFlow<android.net.Uri?>(null)
     val viewIntentUri: kotlinx.coroutines.flow.StateFlow<android.net.Uri?> = _viewIntentUri.asStateFlow()
@@ -54,6 +56,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        val startTime = android.os.SystemClock.uptimeMillis()
+        splashScreen.setKeepOnScreenCondition {
+            settingsViewModel.isLoading.value ||
+                (!galleryViewModel.isNativeTimelineLoaded.value && (android.os.SystemClock.uptimeMillis() - startTime < 800L))
+        }
         super.onCreate(savedInstanceState)
         
         forcePeakDisplayRefreshRate()
@@ -78,8 +85,9 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val isLoading by settingsViewModel.isLoading.collectAsState()
-            splashScreen.setKeepOnScreenCondition { isLoading }
-            if (isLoading) return@setContent
+            val isTimelineLoaded by galleryViewModel.isNativeTimelineLoaded.collectAsState()
+            val isWaitingForTimeline = !isTimelineLoaded && (android.os.SystemClock.uptimeMillis() - startTime < 800L)
+            if (isLoading || isWaitingForTimeline) return@setContent
             
             val useFullScreen by settingsViewModel.useFullScreen.collectAsState()
 

@@ -96,6 +96,12 @@ class NativeTimelineRepository(
     private val _timelineItems = MutableStateFlow<List<NativeTimelineItem>>(emptyList())
     val timelineItems: StateFlow<List<NativeTimelineItem>> = _timelineItems.asStateFlow()
 
+    private val _isInitialLoaded = MutableStateFlow(false)
+    val isInitialLoaded: StateFlow<Boolean> = _isInitialLoaded.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private val invalidationObserver = object : InvalidationTracker.Observer("core_media", "vault_media") {
         override fun onInvalidated(tables: Set<String>) {
             scope.launch(ioDispatcher) {
@@ -361,15 +367,21 @@ class NativeTimelineRepository(
     }
 
     private suspend fun reload() {
-        val items = fetchTimelineItemsDirect(
-            bucket = _currentBucket.value,
-            sortOrder = _sortOrder.value,
-            filterIndex = _filterIndex.value,
-            viewMode = _viewMode.value,
-            excluded = _excludedFolders.value,
-            favIds = _favIds.value
-        )
-        _timelineItems.value = items
+        _isLoading.value = true
+        try {
+            val items = fetchTimelineItemsDirect(
+                bucket = _currentBucket.value,
+                sortOrder = _sortOrder.value,
+                filterIndex = _filterIndex.value,
+                viewMode = _viewMode.value,
+                excluded = _excludedFolders.value,
+                favIds = _favIds.value
+            )
+            _timelineItems.value = items
+        } finally {
+            _isLoading.value = false
+            _isInitialLoaded.value = true
+        }
     }
 
     fun close() {

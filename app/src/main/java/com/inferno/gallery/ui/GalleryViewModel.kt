@@ -751,6 +751,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val nativeTimelineItems: StateFlow<List<com.inferno.gallery.data.NativeTimelineItem>> =
         nativeTimelineRepository.timelineItems
 
+    val isNativeTimelineLoading: StateFlow<Boolean> =
+        nativeTimelineRepository.isLoading
+
+    val isNativeTimelineLoaded: StateFlow<Boolean> =
+        nativeTimelineRepository.isInitialLoaded
+
     init {
         viewModelScope.launch {
             combine(

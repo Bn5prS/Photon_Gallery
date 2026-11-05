@@ -599,10 +599,12 @@ fun GalleryScreen(
 
         // ── Initial sync loading ────────────────────────────────────────────
         val isSyncRunning by viewModel.isInitialSyncRunning.collectAsState()
+        val isNativeTimelineLoading by viewModel.isNativeTimelineLoading.collectAsState()
+        val isNativeTimelineLoaded by viewModel.isNativeTimelineLoaded.collectAsState()
         val isNotLoading = if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
             pagedMedia.loadState.refresh is androidx.paging.LoadState.NotLoading
         } else {
-            true
+            isNativeTimelineLoaded && !isNativeTimelineLoading
         }
         AnimatedVisibility(
             visible = isGridEmpty.value && isSyncRunning,
