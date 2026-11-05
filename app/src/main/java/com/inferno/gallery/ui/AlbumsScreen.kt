@@ -214,6 +214,7 @@ fun AlbumsScreen(
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val documentsExpanded by viewModel.albumsExpandedDocuments.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
+    val utilitiesExpanded by viewModel.albumsExpandedUtilities.collectAsState()
 
     val selectAtLeastTwoToast = stringResource(R.string.toast_select_at_least_two_photos)
     val pickCollageLauncher = rememberLauncherForActivityResult(
@@ -898,12 +899,13 @@ fun AlbumsScreen(
         item(key = "header_more_tools", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
                 title = stringResource(R.string.section_utilities),
-                isCollapsible = false
+                isExpanded = utilitiesExpanded,
+                onToggle = { viewModel.toggleAlbumsExpandedUtilities() },
+                isCollapsible = true
             )
         }
 
-        // Row 1: Smart Buckets (Favorites, Screenshots, Videos, Vault)
-        item(key = "row_utilities", span = { GridItemSpan(maxLineSpan) }) {
+        item(key = "content_utilities_and_tools", span = { GridItemSpan(maxLineSpan) }) {
             val favTitle = stringResource(R.string.album_favorites)
             val screenTitle = stringResource(R.string.album_screenshots)
             val vidTitle = stringResource(R.string.album_videos)
@@ -947,11 +949,6 @@ fun AlbumsScreen(
                 )
             }
 
-            UtilityCardRow(items = utilities)
-        }
-
-        // Row 2: Creation & Actionable Tools (Collage, Stitch, Editor, Clean Up)
-        item(key = "row_tools", span = { GridItemSpan(maxLineSpan) }) {
             val collageTitle = stringResource(R.string.action_collage)
             val stitchTitle = stringResource(R.string.action_stitch)
             val editorTitle = stringResource(R.string.action_edit)
@@ -994,70 +991,18 @@ fun AlbumsScreen(
                 )
             }
 
-            UtilityCardRow(items = tools)
-        }
-
-        // Dedicated Recycle Bin row
-        item(key = "row_trash", span = { GridItemSpan(maxLineSpan) }) {
-            Surface(
-                onClick = { onAlbumClick("Trash") },
-                shape = ShapeLarge,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                shadowElevation = 0.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-                    .pressScale(pressedScale = 0.98f)
+            AnimatedVisibility(
+                visible = utilitiesExpanded,
+                enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
+                exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Surface(
-                        modifier = Modifier.size(36.dp),
-                        shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        shadowElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                contentDescription = stringResource(R.string.album_trash),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.album_trash),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (trashCount > 0) {
-                        Surface(
-                            shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ) {
-                            Text(
-                                text = "$trashCount",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
-                        modifier = Modifier.size(IconSizeTokens.M)
-                    )
+                    UtilityCardRow(items = utilities)
+                    UtilityCardRow(items = tools)
+                    TrashRow(trashCount = trashCount, onAlbumClick = onAlbumClick)
                 }
             }
         }
@@ -1214,6 +1159,75 @@ private fun UtilityCardRow(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TrashRow(
+    trashCount: Int,
+    onAlbumClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = { onAlbumClick("Trash") },
+        shape = ShapeLarge,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .pressScale(pressedScale = 0.98f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                shadowElevation = 0.dp
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        contentDescription = stringResource(R.string.album_trash),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = stringResource(R.string.album_trash),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            if (trashCount > 0) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    Text(
+                        text = "$trashCount",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
+                modifier = Modifier.size(IconSizeTokens.M)
+            )
         }
     }
 }

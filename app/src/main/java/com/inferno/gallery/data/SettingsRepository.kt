@@ -94,6 +94,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val ALBUMS_EXPANDED_PLACES = booleanPreferencesKey("albums_expanded_places")
         val ALBUMS_EXPANDED_MEDIA_TYPES = booleanPreferencesKey("albums_expanded_media_types")
         val ALBUMS_EXPANDED_DOCUMENTS = booleanPreferencesKey("albums_expanded_documents")
+        val ALBUMS_EXPANDED_UTILITIES = booleanPreferencesKey("albums_expanded_utilities")
         val DOC_CLASSIFIER_VERSION = intPreferencesKey("doc_classifier_version")
 
         // Theme Customization
@@ -172,6 +173,9 @@ class SettingsRepository private constructor(private val context: Context) {
     val albumsExpandedDocumentsFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences -> preferences[ALBUMS_EXPANDED_DOCUMENTS] ?: true }
 
+    val albumsExpandedUtilitiesFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ALBUMS_EXPANDED_UTILITIES] ?: true }
+
     suspend fun updateAlbumsExpandedPinned(expanded: Boolean) {
         context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_PINNED] = expanded }
     }
@@ -194,6 +198,10 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateAlbumsExpandedDocuments(expanded: Boolean) {
         context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_DOCUMENTS] = expanded }
+    }
+
+    suspend fun updateAlbumsExpandedUtilities(expanded: Boolean) {
+        context.dataStore.edit { preferences -> preferences[ALBUMS_EXPANDED_UTILITIES] = expanded }
     }
 
     val docClassifierVersionFlow: Flow<Int> = context.dataStore.data

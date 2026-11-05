@@ -303,6 +303,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         started = SharingStarted.Eagerly,
         initialValue = true
     )
+    val albumsExpandedUtilities: StateFlow<Boolean> = settingsRepository.albumsExpandedUtilitiesFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
 
     fun toggleAlbumsExpandedPinned() {
         viewModelScope.launch {
@@ -337,6 +342,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun toggleAlbumsExpandedDocuments() {
         viewModelScope.launch {
             settingsRepository.updateAlbumsExpandedDocuments(!albumsExpandedDocuments.value)
+        }
+    }
+
+    fun toggleAlbumsExpandedUtilities() {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsExpandedUtilities(!albumsExpandedUtilities.value)
         }
     }
 
