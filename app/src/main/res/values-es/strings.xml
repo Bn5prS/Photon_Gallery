@@ -423,6 +423,8 @@
     <string name="people_merge_similar">Combinar rostros similares</string>
     <string name="people_filter_count">Filtrar por recuento de fotos</string>
     <string name="cleaner_select_copies">Seleccionar copias</string>
+    <string name="cleaner_exact_hash_badge">Estos archivos tienen exactamente el mismo contenido, verificado mediante hash de archivo</string>
+    <string name="cleaner_exact_hash_match">Coincidencia de hash exacta</string>
     <string name="action_collage">Collage</string>
     <string name="action_stitch">Unir fotos</string>
     <string name="action_hide">Ocultar</string>

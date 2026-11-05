@@ -423,6 +423,8 @@
     <string name="people_merge_similar">Merge Similar Faces</string>
     <string name="people_filter_count">Filter by photo count</string>
     <string name="cleaner_select_copies">Select Copies</string>
+    <string name="cleaner_exact_hash_badge">These files have exact same content, verified using file hash</string>
+    <string name="cleaner_exact_hash_match">Exact Hash Match</string>
     <string name="action_collage">Collage</string>
     <string name="action_stitch">Stitch</string>
     <string name="action_hide">Hide</string>

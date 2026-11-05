@@ -323,39 +323,70 @@ fun DuplicateCleanerScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(16.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${exactDuplicates.size} Exact Duplicate Sets",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Up to ${android.text.format.Formatter.formatShortFileSize(context, totalWasteBytes)} reclaimable",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${exactDuplicates.size} Exact Duplicate Sets",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Up to ${android.text.format.Formatter.formatShortFileSize(context, totalWasteBytes)} reclaimable",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            FilledTonalButton(
+                                onClick = { autoSelectDuplicates() },
+                                shape = ShapeFull,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            ) {
+                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services), contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.cleaner_select_copies), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                            }
                         }
 
-                        FilledTonalButton(
-                            onClick = { autoSelectDuplicates() },
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
                             shape = ShapeFull,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            shadowElevation = 0.dp
                         ) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services), contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.cleaner_select_copies), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = stringResource(R.string.cleaner_exact_hash_badge),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
                         }
                     }
                 }
@@ -445,14 +476,26 @@ private fun DuplicateGroupCard(
                     )
                     Surface(
                         shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.secondaryContainer
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shadowElevation = 0.dp
                     ) {
-                        Text(
-                            text = "Exact Hash Match",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.cleaner_exact_hash_match),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
                     }
                 }
 
