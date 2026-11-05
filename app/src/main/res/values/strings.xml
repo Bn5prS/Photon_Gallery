@@ -309,7 +309,7 @@
     <string name="setting_folder_visibility_title">Folder Visibility</string>
     <string name="setting_excluded_folders_desc">Excluded folders won\'t appear in the Photos tab or Albums grid. You can still access them by searching.</string>
     <string name="about_developer">DEVELOPER</string>
-    <string name="about_creator_maintainer">Creator &amp; Lead Maintainer</string>
+    <string name="about_creator_maintainer">Lead Maintainer</string>
     <string name="about_star_project">Star Project</string>
     <string name="about_updates_delivery">Updates &amp; Delivery</string>
     <string name="about_check_updates">Check for Updates</string>

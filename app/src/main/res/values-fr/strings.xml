@@ -309,7 +309,7 @@
     <string name="setting_folder_visibility_title">Visibilité des dossiers</string>
     <string name="setting_excluded_folders_desc">Les dossiers exclus n\'apparaîtront ni dans Photos ni dans Albums. Ils restent accessibles via la recherche.</string>
     <string name="about_developer">DÉVELOPPEUR</string>
-    <string name="about_creator_maintainer">Créateur et mainteneur principal</string>
+    <string name="about_creator_maintainer">Mainteneur principal</string>
     <string name="about_star_project">Ajouter une étoile</string>
     <string name="about_updates_delivery">Mises à jour et distribution</string>
     <string name="about_check_updates">Vérifier les mises à jour</string>

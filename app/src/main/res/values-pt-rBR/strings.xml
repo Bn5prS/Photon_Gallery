@@ -309,7 +309,7 @@
     <string name="setting_folder_visibility_title">Visibilidade de pastas</string>
     <string name="setting_excluded_folders_desc">Pastas excluídas não aparecerão na aba Fotos nem em Álbuns. Você ainda pode acessá-las pela busca.</string>
     <string name="about_developer">DESENVOLVEDOR</string>
-    <string name="about_creator_maintainer">Criador e mantenedor principal</string>
+    <string name="about_creator_maintainer">Mantenedor principal</string>
     <string name="about_star_project">Dar estrela no projeto</string>
     <string name="about_updates_delivery">Atualizações e versões</string>
     <string name="about_check_updates">Verificar atualizações</string>

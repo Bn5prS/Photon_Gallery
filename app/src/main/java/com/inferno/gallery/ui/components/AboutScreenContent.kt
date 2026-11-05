@@ -255,7 +255,7 @@ fun AboutScreenContent(
                                 modifier = Modifier.padding(vertical = 10.dp, horizontal = 14.dp)
                             ) {
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_code),
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_github),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
@@ -273,8 +273,7 @@ fun AboutScreenContent(
                         Surface(
                             modifier = Modifier.weight(1f),
                             shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = if (isDark) 0.85f else 0.92f),
                             onClick = {
                                 haptic.tick()
                                 uriHandler.openUri("https://github.com/Bn5prS/Photon_Gallery")
@@ -288,7 +287,7 @@ fun AboutScreenContent(
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_star),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -296,7 +295,7 @@ fun AboutScreenContent(
                                     text = stringResource(R.string.about_star_project),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
