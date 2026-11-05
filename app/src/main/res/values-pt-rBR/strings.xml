@@ -14,6 +14,7 @@
     <string name="action_confirm">Confirmar</string>
     <string name="action_delete">Excluir</string>
     <string name="action_share">Compartilhar</string>
+    <string name="action_rotate">Girar</string>
     <string name="action_rename">Renomear</string>
     <string name="action_edit">Editar</string>
     <string name="action_details">Detalhes</string>

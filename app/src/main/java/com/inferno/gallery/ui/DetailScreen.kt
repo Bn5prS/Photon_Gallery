@@ -634,6 +634,23 @@ fun DetailScreen(
         }
     }
 
+    var pendingRotateItem by remember { mutableStateOf<GalleryItem?>(null) }
+    val rotateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val item = pendingRotateItem
+            if (item != null) {
+                viewModel.rotateMedia(context, item, 90, onSecurityException = {}) {
+                    // Success callback
+                }
+            }
+        }
+        pendingRotateItem = null
+    }
+
+    val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
+
     androidx.compose.runtime.DisposableEffect(useFullScreenGlobal) {
         val prevLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: false
         val prevLightNavBars = insetsController?.isAppearanceLightNavigationBars ?: false
@@ -1017,6 +1034,11 @@ fun DetailScreen(
             val offsetX = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
             val offsetY = remember(item.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
             val animJob = remember(item.id) { androidx.compose.runtime.mutableStateOf<kotlinx.coroutines.Job?>(null) }
+            val animRotation = remember(item.id) { androidx.compose.animation.core.Animatable(0f) }
+            DisposableEffect(item.id) {
+                animRotationMap[item.id] = animRotation
+                onDispose { animRotationMap.remove(item.id) }
+            }
 
             androidx.compose.runtime.LaunchedEffect(pagerState.currentPage, item.id) {
                 if (pagerState.currentPage != page) {
@@ -1434,6 +1456,7 @@ fun DetailScreen(
                                     scaleY = scale.floatValue
                                     translationX = offsetX.floatValue
                                     translationY = offsetY.floatValue
+                                    rotationZ = animRotation.value
                                 }
                         )
 
@@ -1880,6 +1903,44 @@ fun DetailScreen(
                                     onClick = {
                                         showMoreMenu = false
                                         showMoveSheet = true
+                                    }
+                                )
+                            }
+                            if (currentItem != null && !currentItem.isVideo) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_rotate)) },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = null) },
+                                    enabled = currentItem.localExists,
+                                    onClick = {
+                                        showMoreMenu = false
+                                        val target = currentItem
+                                        pendingRotateItem = target
+                                        val anim = animRotationMap[target.id]
+                                        coroutineScope.launch {
+                                            anim?.animateTo(
+                                                targetValue = (anim.value + 90f),
+                                                animationSpec = androidx.compose.animation.core.spring(
+                                                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                                )
+                                            )
+                                        }
+                                        viewModel.rotateMedia(
+                                            context = context,
+                                            item = target,
+                                            degrees = 90,
+                                            onSecurityException = { pendingIntent ->
+                                                pendingRotateItem = target
+                                                rotateLauncher.launch(
+                                                    androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+                                                )
+                                            },
+                                            onSuccess = {
+                                                coroutineScope.launch {
+                                                    anim?.snapTo(0f)
+                                                }
+                                            }
+                                        )
                                     }
                                 )
                             }

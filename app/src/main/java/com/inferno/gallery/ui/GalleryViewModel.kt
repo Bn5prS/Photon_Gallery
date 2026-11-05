@@ -1196,6 +1196,134 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+    fun rotateMedia(
+        context: android.content.Context,
+        item: GalleryItem,
+        degrees: Int = 90,
+        onSecurityException: (android.app.PendingIntent) -> Unit,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val uri = item.uri
+                var success = false
+                val isJpegOrHeic = item.name.endsWith(".jpg", ignoreCase = true) ||
+                                  item.name.endsWith(".jpeg", ignoreCase = true) ||
+                                  item.name.endsWith(".heic", ignoreCase = true) ||
+                                  item.name.endsWith(".webp", ignoreCase = true)
+
+                if (isJpegOrHeic) {
+                    try {
+                        val pfd = context.contentResolver.openFileDescriptor(uri, "rw")
+                        if (pfd != null) {
+                            pfd.use { fd ->
+                                val exif = androidx.exifinterface.media.ExifInterface(fd.fileDescriptor)
+                                val currentOrient = exif.getAttributeInt(
+                                    androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+                                    androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                                )
+                                val newOrient = when (degrees) {
+                                    90 -> when (currentOrient) {
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                                        else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                                    }
+                                    180 -> when (currentOrient) {
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                                        else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                                    }
+                                    270, -90 -> when (currentOrient) {
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
+                                        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                                        else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
+                                    }
+                                    else -> currentOrient
+                                }
+                                exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, newOrient.toString())
+                                exif.saveAttributes()
+                                success = true
+                            }
+                        }
+                    } catch (sec: SecurityException) {
+                        throw sec
+                    } catch (_: Exception) {
+                        // Fall back to bitmap rotation
+                    }
+                }
+
+                if (!success) {
+                    val exportResult = com.inferno.gallery.ui.editor.engine.ImageExportWorker.exportImage(
+                        context = context,
+                        sourceUri = uri,
+                        cropState = com.inferno.gallery.ui.editor.model.CropState(rotation = degrees),
+                        tuneValues = com.inferno.gallery.ui.editor.model.TuneValues(),
+                        overwrite = true
+                    )
+                    success = exportResult.isSuccess
+                }
+
+                if (success) {
+                    val now = System.currentTimeMillis()
+                    val cv = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, now / 1000)
+                    }
+                    try {
+                        context.contentResolver.update(uri, cv, null, null)
+                    } catch (_: Exception) {}
+
+                    val imageLoader = coil3.SingletonImageLoader.get(context)
+                    imageLoader.memoryCache?.clear()
+                    imageLoader.diskCache?.clear()
+
+                    val currentDetailMedia = _detailMedia.value
+                    val updatedList = currentDetailMedia.map {
+                        if (it.id == item.id) {
+                            it.copy(dateModified = now)
+                        } else {
+                            it
+                        }
+                    }
+                    _detailMedia.value = updatedList
+
+                    if (item.path.isNotBlank()) {
+                        android.media.MediaScannerConnection.scanFile(context, arrayOf(item.path), null, null)
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        showToast("Photo rotated")
+                        onSuccess()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        showToast("Failed to rotate photo")
+                    }
+                }
+            } catch (securityException: SecurityException) {
+                val recoverable = securityException as? android.app.RecoverableSecurityException
+                if (recoverable != null) {
+                    withContext(Dispatchers.Main) {
+                        onSecurityException(recoverable.userAction.actionIntent)
+                    }
+                } else {
+                    val pendingIntent = android.provider.MediaStore.createWriteRequest(context.contentResolver, listOf(item.uri))
+                    withContext(Dispatchers.Main) {
+                        onSecurityException(pendingIntent)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    showToast("Error rotating: ${e.message}")
+                }
+            }
+        }
+    }
 
 
     private val _gridCellsCount = MutableStateFlow(4)
