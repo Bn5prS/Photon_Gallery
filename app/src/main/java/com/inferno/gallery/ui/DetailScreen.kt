@@ -1912,13 +1912,13 @@ fun DetailScreen(
                                     leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = null) },
                                     enabled = currentItem.localExists,
                                     onClick = {
-                                        showMoreMenu = false
+                                        // Keep 3-dot menu open so the user can tap Rotate repeatedly
                                         val target = currentItem
                                         pendingRotateItem = target
                                         val anim = animRotationMap[target.id]
                                         coroutineScope.launch {
                                             anim?.animateTo(
-                                                targetValue = (anim.value + 90f),
+                                                targetValue = ((anim?.value ?: 0f) + 90f),
                                                 animationSpec = androidx.compose.animation.core.spring(
                                                     dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
                                                     stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
@@ -1934,11 +1934,6 @@ fun DetailScreen(
                                                 rotateLauncher.launch(
                                                     androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
                                                 )
-                                            },
-                                            onSuccess = {
-                                                coroutineScope.launch {
-                                                    anim?.snapTo(0f)
-                                                }
                                             }
                                         )
                                     }
