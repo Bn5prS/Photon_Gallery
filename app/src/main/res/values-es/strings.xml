@@ -121,7 +121,7 @@
     <string name="section_places">Lugares</string>
     <string name="section_documents">Documentos</string>
     <string name="section_capture_modes">Modos de captura</string>
-    <string name="section_utilities">Utilidades</string>
+    <string name="section_utilities">Utilidades y herramientas</string>
     <string name="action_show_all">Ver todo</string>
     <string name="settings_category_theme_sub">Tema, colores, negro AMOLED y preferencias de pantalla</string>
     <string name="settings_category_layout_sub">Columnas de cuadrícula, estilo de barra y formas de álbumes</string>
@@ -541,4 +541,5 @@ No podrás escanear nuevos rostros hasta descargarlo de nuevo. Las personas y et
     <string name="toast_pin_incorrect">PIN incorrecto</string>
     <string name="toast_vault_restored">Restaurado a la galería</string>
     <string name="toast_vault_deleted">Eliminado permanentemente</string>
+    <string name="toast_select_at_least_two_photos">Selecciona al menos 2 fotos</string>
 </resources>

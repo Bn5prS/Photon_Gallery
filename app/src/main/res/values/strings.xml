@@ -121,7 +121,7 @@
     <string name="section_places">Places</string>
     <string name="section_documents">Documents</string>
     <string name="section_capture_modes">Capture Modes</string>
-    <string name="section_utilities">Utilities</string>
+    <string name="section_utilities">Utilities &amp; Tools</string>
     <string name="action_show_all">Show all</string>
     <string name="settings_category_theme_sub">Theme, colors, AMOLED black, and display preferences</string>
     <string name="settings_category_layout_sub">Grid columns, dock style, and album shapes</string>
@@ -541,4 +541,5 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="toast_pin_incorrect">Incorrect PIN</string>
     <string name="toast_vault_restored">Restored to gallery</string>
     <string name="toast_vault_deleted">Deleted permanently</string>
+    <string name="toast_select_at_least_two_photos">Select at least 2 photos</string>
 </resources>

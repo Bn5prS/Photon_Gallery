@@ -205,6 +205,10 @@ fun NavigationGraph(
                         )
                         navController.navigate("stitch?uris=$encoded")
                     },
+                    onOpenEditor = { uri ->
+                        val encoded = android.net.Uri.encode(uri)
+                        navController.navigate("editor?uri=$encoded")
+                    },
                     onNavigateToVault = { navController.navigate("vault") },
                     viewModel = galleryViewModel
                 )

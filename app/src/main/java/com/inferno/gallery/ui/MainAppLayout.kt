@@ -177,6 +177,7 @@ fun MainAppLayout(
     onPhotoClick: (String, String?, String?) -> Unit,
     onCreateCollage: (List<String>) -> Unit = {},
     onCreateStitch: (List<String>) -> Unit = {},
+    onOpenEditor: (String) -> Unit = {},
     onNavigateToVault: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel()
@@ -1185,6 +1186,9 @@ fun MainAppLayout(
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onNavigateToAllAlbums = { nestedNavController.navigate("all_albums") },
                     onNavigateToPinnedAlbums = { nestedNavController.navigate("pinned_albums") },
+                    onCreateCollage = onCreateCollage,
+                    onCreateStitch = onCreateStitch,
+                    onOpenEditor = onOpenEditor,
                     onChangeCover = { albumName ->
                         pendingCoverAlbumName = albumName
                         pickCoverLauncher.launch(

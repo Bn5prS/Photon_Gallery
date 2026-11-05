@@ -121,7 +121,7 @@
     <string name="section_places">Locais</string>
     <string name="section_documents">Documentos</string>
     <string name="section_capture_modes">Modos de captura</string>
-    <string name="section_utilities">Utilitários</string>
+    <string name="section_utilities">Utilitários e ferramentas</string>
     <string name="action_show_all">Ver tudo</string>
     <string name="settings_category_theme_sub">Tema, cores, preto AMOLED e preferências de exibição</string>
     <string name="settings_category_layout_sub">Colunas da grade, estilo de barra e formas dos álbuns</string>
@@ -541,4 +541,5 @@ Você não poderá detectar novos rostos até baixá-lo novamente. As pessoas e 
     <string name="toast_pin_incorrect">PIN incorreto</string>
     <string name="toast_vault_restored">Restaurado para a galeria</string>
     <string name="toast_vault_deleted">Excluído permanentemente</string>
+    <string name="toast_select_at_least_two_photos">Selecione pelo menos 2 fotos</string>
 </resources>

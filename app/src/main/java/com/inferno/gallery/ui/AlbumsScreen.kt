@@ -10,6 +10,9 @@ package com.inferno.gallery.ui
 import android.net.Uri
 import android.text.format.Formatter
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import com.inferno.gallery.data.BucketNames
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -136,6 +139,9 @@ fun AlbumsScreen(
     onNavigateToPeople: () -> Unit = {},
     onNavigateToAllAlbums: () -> Unit = {},
     onNavigateToPinnedAlbums: () -> Unit = {},
+    onCreateCollage: (List<String>) -> Unit = {},
+    onCreateStitch: (List<String>) -> Unit = {},
+    onOpenEditor: (String) -> Unit = {},
     onChangeCover: (String) -> Unit = {},
     onDeleteCover: (String) -> Unit = {}
 ) {
@@ -208,6 +214,35 @@ fun AlbumsScreen(
     val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
     val documentsExpanded by viewModel.albumsExpandedDocuments.collectAsState()
     val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
+
+    val selectAtLeastTwoToast = stringResource(R.string.toast_select_at_least_two_photos)
+    val pickCollageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 8)
+    ) { uris ->
+        if (uris.size >= 2) {
+            onCreateCollage(uris.map { it.toString() })
+        } else if (uris.size == 1) {
+            Toast.makeText(context, selectAtLeastTwoToast, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val pickStitchLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris ->
+        if (uris.size >= 2) {
+            onCreateStitch(uris.map { it.toString() })
+        } else if (uris.size == 1) {
+            Toast.makeText(context, selectAtLeastTwoToast, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val pickEditorLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            onOpenEditor(uri.toString())
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.setTopBarCollapsed(false)
@@ -867,6 +902,7 @@ fun AlbumsScreen(
             )
         }
 
+        // Row 1: Smart Buckets (Favorites, Screenshots, Videos, Vault)
         item(key = "row_utilities", span = { GridItemSpan(maxLineSpan) }) {
             val favTitle = stringResource(R.string.album_favorites)
             val screenTitle = stringResource(R.string.album_screenshots)
@@ -911,124 +947,46 @@ fun AlbumsScreen(
                 )
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = SpacingTokens.XS),
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-            ) {
-                utilities.forEachIndexed { index, item ->
-                    val cardShape = when (index) {
-                        0 -> RoundedCornerShape(
-                            topStart = 16.dp,
-                            bottomStart = 16.dp,
-                            topEnd = 12.dp,
-                            bottomEnd = 12.dp
-                        )
-                        utilities.lastIndex -> RoundedCornerShape(
-                            topStart = 12.dp,
-                            bottomStart = 12.dp,
-                            topEnd = 16.dp,
-                            bottomEnd = 16.dp
-                        )
-                        else -> ShapeMedium
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(0.88f)
-                            .pressScale(pressedScale = 0.96f)
-                            .clip(cardShape)
-                            .clickable { item.onClick() },
-                        shape = cardShape,
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        shadowElevation = 0.dp
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(
-                                        start = 2.dp,
-                                        end = 2.dp,
-                                        top = 20.dp,
-                                        bottom = SpacingTokens.S
-                                    ),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Bottom
-                            ) {
-                                Surface(
-                                    modifier = Modifier.size(40.dp),
-                                    shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shadowElevation = 0.dp
-                                ) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(item.iconRes),
-                                            contentDescription = item.title,
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.size(IconSizeTokens.L)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(SpacingTokens.XS))
-                                Text(
-                                    text = item.title,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        letterSpacing = (-0.15).sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-
-                            item.count?.let { count ->
-                                Surface(
-                                    shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(
-                                            top = if (index == utilities.lastIndex) 8.dp else 6.dp,
-                                            end = if (index == utilities.lastIndex) 10.dp else 6.dp
-                                        )
-                                ) {
-                                    Text(
-                                        text = "$count",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            UtilityCardRow(items = utilities)
         }
 
-        item(key = "content_more_tools", span = { GridItemSpan(maxLineSpan) }) {
-            val trashTitle = stringResource(R.string.album_trash)
+        // Row 2: Creation & Actionable Tools (Collage, Stitch, Editor, Clean Up)
+        item(key = "row_tools", span = { GridItemSpan(maxLineSpan) }) {
+            val collageTitle = stringResource(R.string.action_collage)
+            val stitchTitle = stringResource(R.string.action_stitch)
+            val editorTitle = stringResource(R.string.action_edit)
             val cleanUpTitle = stringResource(R.string.utility_clean_up)
-            val toolItems = remember(trashCount, trashTitle, cleanUpTitle) {
+
+            val tools = remember(collageTitle, stitchTitle, editorTitle, cleanUpTitle) {
                 listOf(
-                    CollectionBlockItem(
-                        title = trashTitle,
-                        iconRes = R.drawable.ic_ms_delete,
-                        count = trashCount,
-                        onClick = { onAlbumClick("Trash") }
+                    UtilityItem(
+                        title = collageTitle,
+                        iconRes = R.drawable.ic_ms_dashboard,
+                        onClick = {
+                            pickCollageLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
                     ),
-                    CollectionBlockItem(
+                    UtilityItem(
+                        title = stitchTitle,
+                        iconRes = R.drawable.ic_ms_merge,
+                        onClick = {
+                            pickStitchLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    ),
+                    UtilityItem(
+                        title = editorTitle,
+                        iconRes = R.drawable.ic_ms_tune,
+                        onClick = {
+                            pickEditorLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    ),
+                    UtilityItem(
                         title = cleanUpTitle,
                         iconRes = R.drawable.ic_ms_cleaning_services,
                         onClick = onNavigateToDuplicateCleaner
@@ -1036,10 +994,72 @@ fun AlbumsScreen(
                 )
             }
 
-            SegmentedCollectionsGrid(
-                items = toolItems,
-                modifier = Modifier.fillMaxWidth()
-            )
+            UtilityCardRow(items = tools)
+        }
+
+        // Dedicated Recycle Bin row
+        item(key = "row_trash", span = { GridItemSpan(maxLineSpan) }) {
+            Surface(
+                onClick = { onAlbumClick("Trash") },
+                shape = ShapeLarge,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shadowElevation = 0.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .pressScale(pressedScale = 0.98f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(36.dp),
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                        shadowElevation = 0.dp
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                contentDescription = stringResource(R.string.album_trash),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.album_trash),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (trashCount > 0) {
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Text(
+                                text = "$trashCount",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                }
+            }
         }
     }
     }
@@ -1091,6 +1111,117 @@ data class UtilityItem(
     val count: Int? = null,
     val onClick: () -> Unit
 )
+
+@Composable
+private fun UtilityCardRow(
+    items: List<UtilityItem>,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = SpacingTokens.XS),
+        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+    ) {
+        items.forEachIndexed { index, item ->
+            val cardShape = when (index) {
+                0 -> RoundedCornerShape(
+                    topStart = 16.dp,
+                    bottomStart = 16.dp,
+                    topEnd = 12.dp,
+                    bottomEnd = 12.dp
+                )
+                items.lastIndex -> RoundedCornerShape(
+                    topStart = 12.dp,
+                    bottomStart = 12.dp,
+                    topEnd = 16.dp,
+                    bottomEnd = 16.dp
+                )
+                else -> ShapeMedium
+            }
+
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .aspectRatio(0.88f)
+                    .pressScale(pressedScale = 0.96f)
+                    .clip(cardShape)
+                    .clickable { item.onClick() },
+                shape = cardShape,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shadowElevation = 0.dp
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(
+                                start = 2.dp,
+                                end = 2.dp,
+                                top = 20.dp,
+                                bottom = SpacingTokens.S
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 0.dp
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(item.iconRes),
+                                    contentDescription = item.title,
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(IconSizeTokens.L)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.15).sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    item.count?.let { count ->
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(
+                                    top = if (index == items.lastIndex) 8.dp else 6.dp,
+                                    end = if (index == items.lastIndex) 10.dp else 6.dp
+                                )
+                        ) {
+                            Text(
+                                text = "$count",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // ── Shared M3 Expressive Album Card (28dp Squircle, Single Thumbnail) ──
 

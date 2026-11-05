@@ -121,7 +121,7 @@
     <string name="section_places">Orte</string>
     <string name="section_documents">Dokumente</string>
     <string name="section_capture_modes">Aufnahmemodi</string>
-    <string name="section_utilities">Dienstprogramme</string>
+    <string name="section_utilities">Dienstprogramme &amp; Tools</string>
     <string name="action_show_all">Alle anzeigen</string>
     <string name="settings_category_theme_sub">Design, Farben, AMOLED-Schwarz und Anzeigeoptionen</string>
     <string name="settings_category_layout_sub">Rasterspalten, Dock-Stil und Albumformen</string>
@@ -541,4 +541,5 @@ Neue Gesichter können erst nach erneutem Download erkannt werden. Vorhandene Pe
     <string name="toast_pin_incorrect">Falsche PIN</string>
     <string name="toast_vault_restored">In Galerie wiederhergestellt</string>
     <string name="toast_vault_deleted">Dauerhaft gelöscht</string>
+    <string name="toast_select_at_least_two_photos">Wählen Sie mindestens 2 Fotos aus</string>
 </resources>

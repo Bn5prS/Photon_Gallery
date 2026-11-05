@@ -121,7 +121,7 @@
     <string name="section_places">Lieux</string>
     <string name="section_documents">Documents</string>
     <string name="section_capture_modes">Modes de capture</string>
-    <string name="section_utilities">Utilitaires</string>
+    <string name="section_utilities">Utilitaires et outils</string>
     <string name="action_show_all">Tout afficher</string>
     <string name="settings_category_theme_sub">Thème, couleurs, noir AMOLED et préférences d\'affichage</string>
     <string name="settings_category_layout_sub">Colonnes de la grille, style du dock et formes d\'albums</string>
@@ -541,4 +541,5 @@ Vous ne pourrez plus détecter de nouveaux visages sans le retélécharger. Les 
     <string name="toast_pin_incorrect">Code PIN incorrect</string>
     <string name="toast_vault_restored">Restauré dans la galerie</string>
     <string name="toast_vault_deleted">Supprimé définitivement</string>
+    <string name="toast_select_at_least_two_photos">Sélectionnez au moins 2 photos</string>
 </resources>
