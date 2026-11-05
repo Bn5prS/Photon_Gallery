@@ -57,8 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.AsyncListDiffer
 import androidx.recyclerview.widget.DiffUtil
@@ -298,13 +296,9 @@ fun NativePhotonGrid(
         }
     }
 
-    val nestedScrollInterop = rememberNestedScrollInteropConnection()
-
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(nestedScrollInterop),
+            modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 val scroller = NativeFastScroller(ctx).apply {
                     layoutParams = ViewGroup.LayoutParams(
@@ -707,9 +701,11 @@ private class NativePhotonAdapter(
         differ.submitList(list, commitCallback)
     }
 
-    fun getItem(position: Int): NativeTimelineItem {
+    fun getItem(position: Int): NativeTimelineItem? {
         val actualPos = if (hasHeader) position - 1 else position
-        return differ.currentList[actualPos]
+        return if (actualPos in 0 until differ.currentList.size) {
+            differ.currentList[actualPos]
+        } else null
     }
 
     override fun getItemCount(): Int = differ.currentList.size + (if (hasHeader) 1 else 0)
@@ -719,6 +715,7 @@ private class NativePhotonAdapter(
         return when (getItem(position)) {
             is NativeTimelineItem.Header -> VIEW_TYPE_HEADER
             is NativeTimelineItem.Media -> VIEW_TYPE_MEDIA
+            null -> VIEW_TYPE_MEDIA
         }
     }
 
@@ -842,6 +839,7 @@ private class NativePhotonAdapter(
                     thumbnailCornerRadius = thumbnailCornerRadius
                 )
             }
+            null -> {}
         }
     }
 

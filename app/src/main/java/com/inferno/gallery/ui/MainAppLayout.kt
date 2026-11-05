@@ -486,9 +486,10 @@ fun MainAppLayout(
                     velocityY > 150f -> 0f
                     // Swiping up (negative velocity) -> hide top bar!
                     velocityY < -150f -> -topBarHeightPx
-                    // Low velocity release: check user's drag direction
-                    lastScrollDelta > 0f -> 0f // User dragged down -> expand
-                    lastScrollDelta < 0f -> -topBarHeightPx // User dragged up -> collapse
+                    // Moderate drag direction
+                    lastScrollDelta > 8f -> 0f // User dragged down -> expand
+                    lastScrollDelta < -8f -> -topBarHeightPx // User dragged up -> collapse
+                    // Low velocity or micro-drag release: snap to nearest state
                     topBarOffsetY > -topBarHeightPx * 0.5f -> 0f
                     else -> -topBarHeightPx
                 }

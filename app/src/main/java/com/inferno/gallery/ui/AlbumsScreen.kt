@@ -270,6 +270,16 @@ fun AlbumsScreen(
                 }
             }
 
+            LaunchedEffect(lazyGridState) {
+                snapshotFlow {
+                    lazyGridState.firstVisibleItemIndex > 0 || lazyGridState.firstVisibleItemScrollOffset > 32
+                }
+                    .distinctUntilChanged()
+                    .collect { isScrolled ->
+                        viewModel.setTopBarCollapsed(isScrolled)
+                    }
+            }
+
             val isRefreshing by viewModel.isRefreshing.collectAsState()
             val pullToRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
 

@@ -588,6 +588,9 @@ fun GalleryScreen(
                     viewModel.photosScrollToTopTrigger
                 },
                 scrollToTopKey = selectedFilterIndex to bucketName,
+                onScrolledAwayFromTop = { isScrolled ->
+                    viewModel.setTopBarCollapsed(isScrolled)
+                },
                 onSaveScrollPosition = { index, offset ->
                     viewModel.saveGridScrollPosition(bucketName, index, offset)
                 }
