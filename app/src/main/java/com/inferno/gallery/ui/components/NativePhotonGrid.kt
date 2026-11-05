@@ -322,7 +322,7 @@ fun NativePhotonGrid(
                             val firstPos = lm.findFirstVisibleItemPosition()
                             if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
                                 val firstView = lm.findViewByPosition(firstPos)
-                                val topOffset = firstView?.top ?: 0
+                                val topOffset = (firstView?.top ?: topPaddingPx) - topPaddingPx
                                 currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
                             }
                             currentOnMediaClick(media.toGalleryItem())
@@ -365,7 +365,7 @@ fun NativePhotonGrid(
                                     val firstPos = lm.findFirstVisibleItemPosition()
                                     if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
                                         val firstView = lm.findViewByPosition(firstPos)
-                                        val topOffset = firstView?.top ?: 0
+                                        val topOffset = (firstView?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop
                                         currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
                                     }
                                 }
@@ -381,7 +381,7 @@ fun NativePhotonGrid(
                                 val firstPos = lm.findFirstVisibleItemPosition()
                                 if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
                                     val firstView = lm.findViewByPosition(firstPos)
-                                    val topOffset = firstView?.top ?: 0
+                                    val topOffset = (firstView?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop
                                     currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
                                 }
                             }
@@ -520,7 +520,7 @@ fun NativePhotonGrid(
                         val firstPos = lm.findFirstVisibleItemPosition()
                         if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
                             val firstView = lm.findViewByPosition(firstPos)
-                            val topOffset = firstView?.top ?: 0
+                            val topOffset = (firstView?.top ?: rv.paddingTop) - rv.paddingTop
                             currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
                         }
                     }
