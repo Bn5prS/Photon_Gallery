@@ -86,6 +86,7 @@ import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.ShapeSmall
+import com.inferno.gallery.ui.utils.pressScale
 import com.inferno.gallery.workers.MediaSyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -900,14 +901,13 @@ private fun ReorderableThumbnailStrip(
                             .size(20.dp)
                             .align(Alignment.TopStart),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
-                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
-                        shadowElevation = 2.dp
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+                        shadowElevation = 0.dp
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "${index + 1}",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 maxLines = 1,
                                 softWrap = false,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -924,9 +924,8 @@ private fun ReorderableThumbnailStrip(
                             .graphicsLayer {
                                 alpha = removeBadgeAlpha
                             }
-                            .border(BorderStroke(1.5.dp, Color.White), CircleShape)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f))
+                            .background(MaterialTheme.colorScheme.error)
                             .clickable(enabled = !isDragging) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onRemove(index)
@@ -1007,122 +1006,146 @@ private fun StitchControlsPanel(
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
                 .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── Row 1: Direction & Scale with ample horizontal scrolling ──
+            // ── Row 1: Direction Selection with Full Space ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Direction Segmented Button
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Direction",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
+                Text(
+                    text = "Direction",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shadowElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        StitchPillOption(
                             selected = orientation == StitchOrientation.VERTICAL,
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onOrientationChange(StitchOrientation.VERTICAL)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            icon = {}
-                        ) {
-                            Text(
-                                "Vertical",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        SegmentedButton(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_unfold_more),
+                            label = "Vertical",
+                            onClick = { onOrientationChange(StitchOrientation.VERTICAL) }
+                        )
+                        StitchPillOption(
                             selected = orientation == StitchOrientation.HORIZONTAL,
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onOrientationChange(StitchOrientation.HORIZONTAL)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            icon = {}
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_swap_horiz),
+                            label = "Horizontal",
+                            onClick = { onOrientationChange(StitchOrientation.HORIZONTAL) }
+                        )
+                    }
+                }
+            }
+
+            // ── Row 2: Scale Mode & Alignment (Spacious side-by-side) ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Scale mode (Fill vs Fit)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Scale",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shadowElevation = 0.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(
-                                "Horizontal",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                                softWrap = false
+                            StitchPillOption(
+                                selected = scaleMode == StitchScaleMode.FILL,
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_crop),
+                                label = "Fill",
+                                onClick = { onScaleModeChange(StitchScaleMode.FILL) }
+                            )
+                            StitchPillOption(
+                                selected = scaleMode == StitchScaleMode.FIT,
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_aspect_ratio),
+                                label = "Fit",
+                                onClick = { onScaleModeChange(StitchScaleMode.FIT) }
                             )
                         }
                     }
                 }
 
-                // Scale mode Segmented Button
-                Column(modifier = Modifier.weight(0.85f)) {
-                    Text(
-                        text = "Scale",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = scaleMode == StitchScaleMode.FILL,
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onScaleModeChange(StitchScaleMode.FILL)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            icon = {}
+                // Alignment (Left / Center / Right with icons) - only for Vertical orientation
+                AnimatedVisibility(
+                    visible = orientation == StitchOrientation.VERTICAL,
+                    enter = fadeIn(MotionTokens.gentleSpring()) + scaleIn(MotionTokens.gentleSpring(), initialScale = 0.9f),
+                    exit = fadeOut(MotionTokens.gentleSpring()) + scaleOut(MotionTokens.gentleSpring(), targetScale = 0.9f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Align",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Surface(
+                            shape = ShapeFull,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shadowElevation = 0.dp
                         ) {
-                            Text(
-                                "Fill",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        SegmentedButton(
-                            selected = scaleMode == StitchScaleMode.FIT,
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onScaleModeChange(StitchScaleMode.FIT)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            icon = {}
-                        ) {
-                            Text(
-                                "Fit",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                            Row(
+                                modifier = Modifier.padding(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                StitchIconPillOption(
+                                    selected = alignment == StitchAlignment.START,
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_format_align_left),
+                                    contentDescription = "Align Left",
+                                    onClick = { onAlignmentChange(StitchAlignment.START) }
+                                )
+                                StitchIconPillOption(
+                                    selected = alignment == StitchAlignment.CENTER,
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_format_align_center),
+                                    contentDescription = "Align Center",
+                                    onClick = { onAlignmentChange(StitchAlignment.CENTER) }
+                                )
+                                StitchIconPillOption(
+                                    selected = alignment == StitchAlignment.END,
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_format_align_right),
+                                    contentDescription = "Align Right",
+                                    onClick = { onAlignmentChange(StitchAlignment.END) }
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // ── Row 2: Gap spacing slider ────────────────────────────────────
+            // ── Row 3: Gap spacing slider ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
                     text = "Gap",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.width(36.dp)
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(42.dp)
                 )
                 Slider(
                     value = spacingDp,
@@ -1139,152 +1162,145 @@ private fun StitchControlsPanel(
                     shape = ShapeFull,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.width(48.dp)
+                    shadowElevation = 0.dp
                 ) {
                     Text(
-                        text = "${spacingDp.roundToInt()}dp",
+                        text = "${spacingDp.roundToInt()} dp",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
             }
 
-            // ── Row 3: Alignment (vertical only) + Background color ──────────
+            // ── Row 4: Background Color Palette (Full-width LazyRow) ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                AnimatedVisibility(
-                    visible = orientation == StitchOrientation.VERTICAL,
-                    enter = fadeIn(MotionTokens.gentleSpring()) + scaleIn(MotionTokens.gentleSpring(), initialScale = 0.85f),
-                    exit = fadeOut(MotionTokens.gentleSpring()) + scaleOut(MotionTokens.gentleSpring(), targetScale = 0.85f),
+                Text(
+                    text = "Color",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(42.dp)
+                )
+                val presetColors = listOf(
+                    Color.Black,
+                    Color.White,
+                    MaterialTheme.colorScheme.surfaceContainer,
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    MaterialTheme.colorScheme.tertiaryContainer,
+                    MaterialTheme.colorScheme.errorContainer
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Column {
-                        Text(
-                            text = "Align",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = alignment == StitchAlignment.START,
-                                onClick = {
+                    itemsIndexed(presetColors) { _, color ->
+                        val isSelected = bgColor == color
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .pressScale(0.94f)
+                                .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    onAlignmentChange(StitchAlignment.START)
+                                    onBgColorChange(color)
                                 },
-                                shape = SegmentedButtonDefaults.itemShape(0, 3),
-                                icon = {}
-                            ) {
-                                Text(
-                                    "Left",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    maxLines = 1,
-                                    softWrap = false
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                                    contentDescription = "Selected",
+                                    tint = if (isLight) Color.Black else Color.White,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            }
-                            SegmentedButton(
-                                selected = alignment == StitchAlignment.CENTER,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    onAlignmentChange(StitchAlignment.CENTER)
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(1, 3),
-                                icon = {}
-                            ) {
-                                Text(
-                                    "Center",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                            SegmentedButton(
-                                selected = alignment == StitchAlignment.END,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    onAlignmentChange(StitchAlignment.END)
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(2, 3),
-                                icon = {}
-                            ) {
-                                Text(
-                                    "Right",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Background colour picker
-                Column(
-                    modifier = if (orientation == StitchOrientation.VERTICAL) Modifier.wrapContentWidth() else Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "Background",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    val presetColors = listOf(
-                        Color.Black,
-                        Color.White,
-                        MaterialTheme.colorScheme.surfaceContainer,
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.secondaryContainer,
-                        MaterialTheme.colorScheme.tertiaryContainer,
-                        MaterialTheme.colorScheme.errorContainer
-                    )
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        itemsIndexed(presetColors) { _, color ->
-                            val isSelected = bgColor == color
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(
-                                        width = if (isSelected) 2.5.dp else 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                        shape = CircleShape
-                                    )
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onBgColorChange(color)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    val isLight = (color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f) > 0.5f
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
-                                        contentDescription = null,
-                                        tint = if (isLight) Color.Black else Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StitchPillOption(
+    selected: Boolean,
+    label: String,
+    icon: ImageVector? = null,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    Surface(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
+        shape = ShapeFull,
+        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        shadowElevation = 0.dp,
+        modifier = Modifier
+            .height(32.dp)
+            .pressScale(0.96f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@Composable
+private fun StitchIconPillOption(
+    selected: Boolean,
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    Surface(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
+        shape = ShapeFull,
+        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        shadowElevation = 0.dp,
+        modifier = Modifier
+            .size(32.dp)
+            .pressScale(0.96f)
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
