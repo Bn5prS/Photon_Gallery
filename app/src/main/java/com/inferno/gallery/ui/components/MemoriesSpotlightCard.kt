@@ -24,12 +24,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -79,10 +77,10 @@ import com.inferno.gallery.ui.utils.pressScale
 @Composable
 fun MemoriesSpotlightCard(
     memoryGroups: List<MemoryDayGroup>,
-    isDismissed: Boolean,
+    isDismissed: Boolean = false,
     onOpenMemory: (MemoryDayGroup) -> Unit,
-    onDismiss: () -> Unit,
-    onRestore: () -> Unit,
+    onDismiss: () -> Unit = {},
+    onRestore: () -> Unit = {},
     modifier: Modifier = Modifier,
     style: MemoriesCarouselStyle = MemoriesCarouselStyle.SPOTLIGHT
 ) {
@@ -112,49 +110,15 @@ fun MemoriesSpotlightCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
             ) {
-                // Section Header: Clean "Memories" title + circular dismiss button (no cluttered count badges)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = SpacingTokens.M),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Memories",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    // Circular dismiss button (tonal surfaceContainerHigh, zero shadow, zero outline)
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onDismiss()
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 0.dp,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                    contentDescription = "Hide memories to banner",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+                // Section Header: Clean "Memories" typography matching timeline date headers
+                Text(
+                    text = "Memories",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = SpacingTokens.M)
+                )
 
                 // Render selected style
                 when (style) {
