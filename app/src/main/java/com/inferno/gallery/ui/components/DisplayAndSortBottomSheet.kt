@@ -4,22 +4,18 @@ package com.inferno.gallery.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -52,7 +48,8 @@ import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import com.inferno.gallery.ui.theme.ShapeMedium
 
 /**
- * Half-height bottom sheet for controlling View Mode and Sort Order with Material 3 Expressive styling.
+ * Compact bottom sheet for controlling View Mode and Sort Order with pure solid tonal layering.
+ * Features an integrated View Mode segmented bar and balanced 4-row inline sort controls.
  */
 @Composable
 fun DisplayAndSortBottomSheet(
@@ -74,14 +71,16 @@ fun DisplayAndSortBottomSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         shape = ShapeEdgeTop,
+        tonalElevation = 0.dp,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.5f)
+                .wrapContentHeight()
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp)
+                .padding(bottom = 16.dp)
         ) {
             // Header with Title and Close button
             Row(
@@ -102,7 +101,7 @@ fun DisplayAndSortBottomSheet(
                 )
             }
 
-            // View Mode / Layout Section
+            // View Mode Section
             Text(
                 text = stringResource(R.string.menu_view_mode).uppercase(),
                 style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
@@ -111,46 +110,61 @@ fun DisplayAndSortBottomSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            Row(
+            // Balanced Full-Width View Mode Segmented Control
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                shape = ShapeMedium,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
             ) {
-                if (isAlbumsScreen) {
-                    ViewModeToggle(
-                        title = stringResource(R.string.layout_grid_view),
-                        icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
-                        isSelected = albumLayoutMode == AlbumLayoutMode.GRID,
-                        onClick = { onAlbumLayoutModeChange(AlbumLayoutMode.GRID) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ViewModeToggle(
-                        title = stringResource(R.string.layout_list_view),
-                        icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
-                        isSelected = albumLayoutMode == AlbumLayoutMode.LIST,
-                        onClick = { onAlbumLayoutModeChange(AlbumLayoutMode.LIST) },
-                        modifier = Modifier.weight(1f)
-                    )
-                } else {
-                    ViewModeToggle(
-                        title = stringResource(R.string.view_mode_grouped),
-                        icon = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                        isSelected = viewMode == ViewMode.Grouped,
-                        onClick = { onViewModeChange(ViewMode.Grouped) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ViewModeToggle(
-                        title = stringResource(R.string.view_mode_immersive),
-                        icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
-                        isSelected = viewMode == ViewMode.Immersive,
-                        onClick = { onViewModeChange(ViewMode.Immersive) },
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (isAlbumsScreen) {
+                        ViewModePill(
+                            title = stringResource(R.string.layout_grid_view),
+                            subtitle = null,
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
+                            isSelected = albumLayoutMode == AlbumLayoutMode.GRID,
+                            onClick = { onAlbumLayoutModeChange(AlbumLayoutMode.GRID) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        ViewModePill(
+                            title = stringResource(R.string.layout_list_view),
+                            subtitle = null,
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
+                            isSelected = albumLayoutMode == AlbumLayoutMode.LIST,
+                            onClick = { onAlbumLayoutModeChange(AlbumLayoutMode.LIST) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        ViewModePill(
+                            title = stringResource(R.string.view_mode_grouped),
+                            subtitle = stringResource(R.string.view_mode_with_dates),
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                            isSelected = viewMode == ViewMode.Grouped,
+                            onClick = { onViewModeChange(ViewMode.Grouped) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        ViewModePill(
+                            title = stringResource(R.string.view_mode_immersive),
+                            subtitle = stringResource(R.string.view_mode_clean_grid),
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
+                            isSelected = viewMode == ViewMode.Immersive,
+                            onClick = { onViewModeChange(ViewMode.Immersive) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
@@ -163,46 +177,95 @@ fun DisplayAndSortBottomSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            val sortOptions: List<Pair<SortOrder, String>> = if (isAlbumsScreen) {
-                listOf(
-                    SortOrder.NameAsc to stringResource(R.string.sort_name_a_to_z),
-                    SortOrder.NameDesc to stringResource(R.string.sort_name_z_to_a),
-                    SortOrder.DateModifiedNewToOld to stringResource(R.string.sort_date_added_newest),
-                    SortOrder.DateModifiedOldToNew to stringResource(R.string.sort_date_added_oldest),
-                    SortOrder.NewToOld to stringResource(R.string.sort_date_taken_newest),
-                    SortOrder.OldToNew to stringResource(R.string.sort_date_taken_oldest),
-                    SortOrder.CountDesc to stringResource(R.string.sort_count_most),
-                    SortOrder.CountAsc to stringResource(R.string.sort_count_least),
-                    SortOrder.BigToSmall to stringResource(R.string.sort_size_big_to_small),
-                    SortOrder.SmallToBig to stringResource(R.string.sort_size_small_to_big)
-                )
-            } else {
-                listOf(
-                    SortOrder.NewToOld to stringResource(R.string.sort_date_taken_newest),
-                    SortOrder.OldToNew to stringResource(R.string.sort_date_taken_oldest),
-                    SortOrder.DateModifiedNewToOld to stringResource(R.string.sort_date_added_newest),
-                    SortOrder.DateModifiedOldToNew to stringResource(R.string.sort_date_added_oldest),
-                    SortOrder.BigToSmall to stringResource(R.string.sort_size_big_to_small),
-                    SortOrder.SmallToBig to stringResource(R.string.sort_size_small_to_big),
-                    SortOrder.NameAsc to stringResource(R.string.sort_name_a_to_z),
-                    SortOrder.NameDesc to stringResource(R.string.sort_name_z_to_a)
-                )
-            }
+            val currentSort = if (isAlbumsScreen) albumSortOrder else sortOrder
+            val onSelectSort: (SortOrder) -> Unit = if (isAlbumsScreen) onAlbumSortOrderChange else onSortOrderChange
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(sortOptions) { (option, label) ->
-                    val isSelected = if (isAlbumsScreen) albumSortOrder == option else sortOrder == option
-                    SortOptionRow(
-                        label = label,
-                        isSelected = isSelected,
-                        onClick = {
-                            if (isAlbumsScreen) onAlbumSortOrderChange(option) else onSortOrderChange(option)
-                        }
+                if (isAlbumsScreen) {
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_name),
+                        option1Label = stringResource(R.string.sort_opt_a_to_z),
+                        option1 = SortOrder.NameAsc,
+                        option2Label = stringResource(R.string.sort_opt_z_to_a),
+                        option2 = SortOrder.NameDesc,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_date_added),
+                        option1Label = stringResource(R.string.sort_opt_newest),
+                        option1 = SortOrder.DateModifiedNewToOld,
+                        option2Label = stringResource(R.string.sort_opt_oldest),
+                        option2 = SortOrder.DateModifiedOldToNew,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_date_taken),
+                        option1Label = stringResource(R.string.sort_opt_newest),
+                        option1 = SortOrder.NewToOld,
+                        option2Label = stringResource(R.string.sort_opt_oldest),
+                        option2 = SortOrder.OldToNew,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_count),
+                        option1Label = stringResource(R.string.sort_opt_most),
+                        option1 = SortOrder.CountDesc,
+                        option2Label = stringResource(R.string.sort_opt_least),
+                        option2 = SortOrder.CountAsc,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_size),
+                        option1Label = stringResource(R.string.sort_opt_large_to_small),
+                        option1 = SortOrder.BigToSmall,
+                        option2Label = stringResource(R.string.sort_opt_small_to_large),
+                        option2 = SortOrder.SmallToBig,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                } else {
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_date_taken),
+                        option1Label = stringResource(R.string.sort_opt_newest),
+                        option1 = SortOrder.NewToOld,
+                        option2Label = stringResource(R.string.sort_opt_oldest),
+                        option2 = SortOrder.OldToNew,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_date_added),
+                        option1Label = stringResource(R.string.sort_opt_newest),
+                        option1 = SortOrder.DateModifiedNewToOld,
+                        option2Label = stringResource(R.string.sort_opt_oldest),
+                        option2 = SortOrder.DateModifiedOldToNew,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_size),
+                        option1Label = stringResource(R.string.sort_opt_large_to_small),
+                        option1 = SortOrder.BigToSmall,
+                        option2Label = stringResource(R.string.sort_opt_small_to_large),
+                        option2 = SortOrder.SmallToBig,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
+                    )
+                    InlineSortRow(
+                        categoryTitle = stringResource(R.string.sort_cat_name),
+                        option1Label = stringResource(R.string.sort_opt_a_to_z),
+                        option1 = SortOrder.NameAsc,
+                        option2Label = stringResource(R.string.sort_opt_z_to_a),
+                        option2 = SortOrder.NameDesc,
+                        selectedSort = currentSort,
+                        onSortChange = onSelectSort
                     )
                 }
             }
@@ -211,9 +274,124 @@ fun DisplayAndSortBottomSheet(
 }
 
 @Composable
-private fun ViewModeToggle(
+private fun ViewModePill(
     title: String,
+    subtitle: String?,
     icon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = spring(),
+        label = "viewModePillBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(),
+        label = "viewModePillContent"
+    )
+    val subtitleColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        animationSpec = spring(),
+        label = "viewModePillSub"
+    )
+
+    Surface(
+        shape = ShapeMedium,
+        color = backgroundColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .clip(ShapeMedium)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = contentColor
+                )
+            }
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = subtitleColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlineSortRow(
+    categoryTitle: String,
+    option1Label: String,
+    option1: SortOrder,
+    option2Label: String,
+    option2: SortOrder,
+    selectedSort: SortOrder,
+    onSortChange: (SortOrder) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = categoryTitle,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SortPill(
+                label = option1Label,
+                isSelected = selectedSort == option1,
+                onClick = { onSortChange(option1) }
+            )
+            SortPill(
+                label = option2Label,
+                isSelected = selectedSort == option2,
+                onClick = { onSortChange(option2) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SortPill(
+    label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -222,91 +400,47 @@ private fun ViewModeToggle(
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         animationSpec = spring(),
-        label = "viewModeToggleBg"
+        label = "sortPillBg"
     )
-    val contentColor by animateColorAsState(
+    val textColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = spring(),
-        label = "viewModeToggleContent"
+        label = "sortPillText"
     )
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
 
     Surface(
+        shape = ShapeMedium,
+        color = backgroundColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .clip(ShapeMedium)
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onClick()
-            },
-        shape = ShapeMedium,
-        color = backgroundColor,
-        border = BorderStroke(1.dp, borderColor)
+            }
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                color = contentColor
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = textColor
             )
-        }
-    }
-}
-
-@Composable
-private fun SortOptionRow(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        animationSpec = spring(),
-        label = "sortRowBg"
-    )
-    val textColor = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ShapeMedium)
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
+            if (isSelected) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp)
+                )
             }
-            .background(bgColor)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            color = textColor
-        )
-        if (isSelected) {
-            Icon(
-                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
         }
     }
 }
-
