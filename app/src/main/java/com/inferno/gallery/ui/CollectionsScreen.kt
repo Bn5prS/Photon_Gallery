@@ -81,9 +81,12 @@ import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun CollectionsScreen(
     modifier: Modifier = Modifier,
+    sharedTransitionScope: androidx.compose.animation.SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
     viewModel: GalleryViewModel = viewModel(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     onAlbumClick: (String) -> Unit = {},

@@ -92,8 +92,8 @@ fun FloatingNavigationPill(
 
     Row(
         modifier = modifier
-            .fillMaxWidth(0.92f)
-            .widthIn(min = 320.dp, max = 390.dp)
+            .fillMaxWidth(0.95f)
+            .widthIn(min = 320.dp, max = 420.dp)
             .pointerInput(Unit) {},
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -111,13 +111,13 @@ fun FloatingNavigationPill(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 6.dp, vertical = 7.dp),
+                    .padding(horizontal = 4.dp, vertical = 7.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 val tabCount = 3
                 val totalWidth = maxWidth
                 val tabWidth = totalWidth / tabCount
-                val pillHorizontalInset = 2.dp
+                val pillHorizontalInset = 1.5.dp
                 val pillWidth = tabWidth - (pillHorizontalInset * 2)
 
                 // Smooth M3 Expressive sliding animation via MotionTokens.snappySpring (defaultSpatialSpec)
@@ -156,7 +156,7 @@ fun FloatingNavigationPill(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     SlidingPillTabItem(
-                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(22.dp)) },
+                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(20.dp)) },
                         label = stringResource(R.string.nav_photos),
                         isSelected = selectedIndex == 0,
                         modifier = Modifier.weight(1f),
@@ -168,7 +168,7 @@ fun FloatingNavigationPill(
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
                                 contentDescription = stringResource(R.string.nav_albums),
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         },
                         label = stringResource(R.string.nav_albums),
@@ -182,7 +182,7 @@ fun FloatingNavigationPill(
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
                                 contentDescription = stringResource(R.string.nav_collections),
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         },
                         label = stringResource(R.string.nav_collections),
@@ -312,7 +312,7 @@ fun SlidingPillTabItem(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         ) {
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 AnimatedVisibility(
@@ -330,7 +330,7 @@ fun SlidingPillTabItem(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         icon()
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                 }
 
