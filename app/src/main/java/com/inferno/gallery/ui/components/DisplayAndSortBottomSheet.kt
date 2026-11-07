@@ -4,8 +4,10 @@ package com.inferno.gallery.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -111,17 +113,15 @@ fun DisplayAndSortBottomSheet(
             )
 
             // Balanced Full-Width View Mode Segmented Control
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = ShapeMedium,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(ShapeMedium)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(4.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (isAlbumsScreen) {
@@ -300,16 +300,15 @@ private fun ViewModePill(
     )
 
     Surface(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
         shape = ShapeMedium,
         color = backgroundColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = modifier
-            .clip(ShapeMedium)
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            }
     ) {
         Column(
             modifier = Modifier
@@ -409,19 +408,18 @@ private fun SortPill(
     )
 
     Surface(
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
         shape = ShapeMedium,
         color = backgroundColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = modifier
-            .clip(ShapeMedium)
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {

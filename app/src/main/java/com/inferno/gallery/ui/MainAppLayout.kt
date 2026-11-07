@@ -2615,7 +2615,7 @@ fun MainAppLayout(
 
     if (showDisplaySortSheet) {
         DisplayAndSortBottomSheet(
-            isAlbumsScreen = (currentRoute == "albums"),
+            isAlbumsScreen = (currentRoute == "albums" || currentRoute == "all_albums" || currentRoute == "pinned_albums"),
             viewMode = viewMode,
             onViewModeChange = { viewModel.setViewMode(it) },
             albumLayoutMode = albumLayoutMode,

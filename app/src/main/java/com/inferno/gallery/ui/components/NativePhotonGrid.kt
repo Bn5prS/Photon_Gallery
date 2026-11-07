@@ -519,6 +519,8 @@ fun NativePhotonGrid(
                 // Update items
                 if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
                     adapter.submitList(items) {
+                        layoutManager.spanSizeLookup.invalidateSpanIndexCache()
+                        recyclerView.invalidateItemDecorations()
                         val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
                         android.util.Log.d("NativePhotonGrid", "submitList commitCallback: restoring to targetPos=$targetPos offset=$initialFirstVisibleItemScrollOffset (itemCount=${adapter.itemCount})")
                         layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
@@ -533,7 +535,10 @@ fun NativePhotonGrid(
                         }
                     }
                 } else {
-                    adapter.submitList(items)
+                    adapter.submitList(items) {
+                        layoutManager.spanSizeLookup.invalidateSpanIndexCache()
+                        recyclerView.invalidateItemDecorations()
+                    }
                 }
 
                 // Update padding

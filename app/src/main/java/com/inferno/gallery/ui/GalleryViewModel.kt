@@ -645,7 +645,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = SortOrder.NewToOld
     )
 
@@ -657,14 +657,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = SortOrder.NameAsc
     )
 
     val albumLayoutMode: StateFlow<AlbumLayoutMode> = settingsRepository.albumLayoutModeFlow
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = AlbumLayoutMode.GRID
         )
 
@@ -691,12 +691,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         try {
             ViewMode.valueOf(it)
         } catch (e: Exception) {
-            ViewMode.Immersive
+            ViewMode.Grouped
         }
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ViewMode.Immersive
+        started = SharingStarted.Eagerly,
+        initialValue = ViewMode.Grouped
     )
 
     val dockStyle: StateFlow<DockStyle> = settingsRepository.dockStyleFlow.map {

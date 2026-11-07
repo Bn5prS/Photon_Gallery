@@ -220,15 +220,21 @@ fun GalleryScreen(
 
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
     val nativeTimelineItems by viewModel.nativeTimelineItems.collectAsState()
+    val viewMode by viewModel.viewMode.collectAsState()
+    val sortOrder by viewModel.sortOrder.collectAsState()
 
     var previousFilter by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(selectedFilterIndex) }
     var previousBucket by rememberSaveable { mutableStateOf(bucketName) }
+    var previousSortOrder by rememberSaveable { mutableStateOf(sortOrder) }
+    var previousViewMode by rememberSaveable { mutableStateOf(viewMode) }
 
-    // Only scroll to top when filter or bucket ACTUALLY changes, NOT when returning from detail screen
-    LaunchedEffect(selectedFilterIndex, bucketName) {
-        if (previousFilter != selectedFilterIndex || previousBucket != bucketName) {
+    // Only scroll to top when filter, bucket, sortOrder, or viewMode ACTUALLY changes, NOT when returning from detail screen
+    LaunchedEffect(selectedFilterIndex, bucketName, sortOrder, viewMode) {
+        if (previousFilter != selectedFilterIndex || previousBucket != bucketName || previousSortOrder != sortOrder || previousViewMode != viewMode) {
             previousFilter = selectedFilterIndex
             previousBucket = bucketName
+            previousSortOrder = sortOrder
+            previousViewMode = viewMode
             viewModel.resetGridScrollPosition(bucketName)
             lazyGridState.scrollToItem(0, 0)
         }
@@ -270,7 +276,6 @@ fun GalleryScreen(
         }
     }
 
-    val viewMode by viewModel.viewMode.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUrisRaw by viewModel.selectedUris.collectAsState()
     // Re-wrap so the grid receives a stable, content-comparable type. See StableUriSet.
@@ -590,7 +595,7 @@ fun GalleryScreen(
                 } else {
                     viewModel.photosScrollToTopTrigger
                 },
-                scrollToTopKey = selectedFilterIndex to bucketName,
+                scrollToTopKey = Triple(selectedFilterIndex, bucketName, sortOrder to viewMode),
                 onScrolledAwayFromTop = { isScrolled ->
                     viewModel.setTopBarCollapsed(isScrolled)
                 },

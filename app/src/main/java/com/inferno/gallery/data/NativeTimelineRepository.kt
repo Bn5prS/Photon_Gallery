@@ -13,6 +13,7 @@ import com.inferno.gallery.ui.ViewMode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -102,9 +103,12 @@ class NativeTimelineRepository(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private var reloadJob: Job? = null
+
     private val invalidationObserver = object : InvalidationTracker.Observer("core_media", "vault_media") {
         override fun onInvalidated(tables: Set<String>) {
-            scope.launch(ioDispatcher) {
+            reloadJob?.cancel()
+            reloadJob = scope.launch(ioDispatcher) {
                 reload()
             }
         }
@@ -116,7 +120,7 @@ class NativeTimelineRepository(
         } catch (_: Exception) {
             // Allows test environments with fake/mock databases
         }
-        scope.launch(ioDispatcher) {
+        reloadJob = scope.launch(ioDispatcher) {
             reload()
         }
     }
@@ -128,7 +132,8 @@ class NativeTimelineRepository(
     fun setBucket(bucket: String?) {
         if (_currentBucket.value != bucket) {
             _currentBucket.value = bucket
-            scope.launch(ioDispatcher) {
+            reloadJob?.cancel()
+            reloadJob = scope.launch(ioDispatcher) {
                 reload()
             }
         }
@@ -137,7 +142,8 @@ class NativeTimelineRepository(
     fun setSortOrder(order: SortOrder) {
         if (_sortOrder.value != order) {
             _sortOrder.value = order
-            scope.launch(ioDispatcher) {
+            reloadJob?.cancel()
+            reloadJob = scope.launch(ioDispatcher) {
                 reload()
             }
         }
@@ -147,7 +153,8 @@ class NativeTimelineRepository(
         if (_currentBucket.value != bucket || _sortOrder.value != order) {
             _currentBucket.value = bucket
             _sortOrder.value = order
-            scope.launch(ioDispatcher) {
+            reloadJob?.cancel()
+            reloadJob = scope.launch(ioDispatcher) {
                 reload()
             }
         }
@@ -175,7 +182,8 @@ class NativeTimelineRepository(
         _viewMode.value = viewMode
         _excludedFolders.value = excluded
         _favIds.value = favIds
-        scope.launch(ioDispatcher) {
+        reloadJob?.cancel()
+        reloadJob = scope.launch(ioDispatcher) {
             reload()
         }
     }
