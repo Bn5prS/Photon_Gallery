@@ -671,7 +671,7 @@ fun MainAppLayout(
                                         onClick = { showDisplaySortSheet = true }
                                     ) {
                                         Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
                                             contentDescription = stringResource(R.string.menu_view_mode) + " & " + stringResource(R.string.menu_sort_order),
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -780,7 +780,7 @@ fun MainAppLayout(
                                             onClick = { showDisplaySortSheet = true }
                                         ) {
                                             Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
                                                 contentDescription = stringResource(R.string.menu_view_mode) + " & " + stringResource(R.string.menu_sort_order),
                                                 modifier = Modifier.size(20.dp)
                                             )

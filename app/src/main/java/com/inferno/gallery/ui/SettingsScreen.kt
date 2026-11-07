@@ -55,7 +55,6 @@ import com.inferno.gallery.ui.components.PhotonPaletteGrid
 import com.inferno.gallery.ui.components.PhotonCustomColorSection
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
-import com.inferno.gallery.ui.theme.SpacingTokens
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.core.graphics.ColorUtils
@@ -63,6 +62,7 @@ import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.IconSizeTokens
+import com.inferno.gallery.ui.theme.SpacingTokens
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -1195,7 +1195,7 @@ fun SettingsScreen(
                                             Column(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                                                    .padding(horizontal = 16.dp, vertical = 8.dp),
                                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
                                                 Text(
