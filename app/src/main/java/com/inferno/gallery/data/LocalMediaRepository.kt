@@ -78,8 +78,9 @@ class LocalMediaRepository(
         val isAllRequest = folderName == null
         
         var selection = when {
+            isTrashRequest -> null // Don't filter by MEDIA_TYPE because trashed files often have MEDIA_TYPE reset to 0 in MediaStore.Files
             isFavoritesRequest -> "$baseSelection AND ${MediaStore.MediaColumns.IS_FAVORITE} = 1"
-            folderName != null && !isTrashRequest -> "$baseSelection AND ${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
+            folderName != null -> "$baseSelection AND ${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
             else -> baseSelection
         }
         
@@ -211,14 +212,29 @@ class LocalMediaRepository(
 
     suspend fun getTrashedMediaIds(): Set<Long> = withContext(Dispatchers.IO) {
         val ids = mutableSetOf<Long>()
-        val projection = arrayOf(MediaStore.Images.Media._ID)
-        val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
-        
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
         val bundle = android.os.Bundle().apply {
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
-            putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
         }
 
+        fun queryUri(uri: android.net.Uri) {
+            try {
+                contentResolver.query(uri, projection, bundle, null)?.use { cursor ->
+                    val idCol = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
+                    if (idCol >= 0) {
+                        while (cursor.moveToNext()) {
+                            ids.add(cursor.getLong(idCol))
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Query both Images and Video tables directly with MATCH_ONLY
+        queryUri(MediaStore.Images.Media.getContentUri("external"))
+        queryUri(MediaStore.Video.Media.getContentUri("external"))
+
+        // Also query Files table without strict MEDIA_TYPE filter to handle OEMs resetting MEDIA_TYPE on trash
         try {
             contentResolver.query(
                 MediaStore.Files.getContentUri("external"),
@@ -226,15 +242,15 @@ class LocalMediaRepository(
                 bundle,
                 null
             )?.use { cursor ->
-                val idCol = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                val idCol = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
                 if (idCol >= 0) {
                     while (cursor.moveToNext()) {
                         ids.add(cursor.getLong(idCol))
                     }
                 }
             }
-        } catch (_: SecurityException) {
-        }
+        } catch (_: Exception) {}
+
         ids
     }
 }

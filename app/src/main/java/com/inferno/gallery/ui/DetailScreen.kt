@@ -401,6 +401,14 @@ fun DetailScreen(
                         val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
                         val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
                         if (!file.exists() || isHidden) {
+                            try {
+                                android.media.MediaScannerConnection.scanFile(
+                                    context.applicationContext,
+                                    arrayOf(item.path),
+                                    null,
+                                    null
+                                )
+                            } catch (_: Exception) {}
                             withContext(Dispatchers.Main) {
                                 viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
                                 if (galleryItems.size <= 1) {
@@ -425,6 +433,14 @@ fun DetailScreen(
                 val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
                 val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(currentItem.path)
                 if (!file.exists() || isHidden) {
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                            context.applicationContext,
+                            arrayOf(currentItem.path),
+                            null,
+                            null
+                        )
+                    } catch (_: Exception) {}
                     withContext(Dispatchers.Main) {
                         viewModel.notifyExternalMediaModifiedOrDeleted(currentItem.uri.toString())
                         if (galleryItems.size <= 1) {

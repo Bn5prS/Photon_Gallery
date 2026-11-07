@@ -537,7 +537,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         bucketName: String? = null
     ): Pair<Boolean, Uri> {
         if (bucketName == "Trash") {
-            return false to uri
+            return true to uri
         }
         val file = if (path.isNotEmpty()) java.io.File(path) else null
         val exists = file != null && file.exists()

@@ -64,4 +64,18 @@ class NoMediaUtilsTest {
         assertTrue("Cache should now contain directory", cache.containsKey(folder.absolutePath))
         assertTrue(NoMediaUtils.isPathHiddenByNoMedia(img2.absolutePath, cache))
     }
+
+    @Test
+    fun testDotFileIsHidden() {
+        val folder = tempFolder.newFolder("NormalFolder")
+        val dotImage = File(folder, ".hidden_photo.jpg").apply { createNewFile() }
+        assertTrue("File starting with dot must be hidden", NoMediaUtils.isPathHiddenByNoMedia(dotImage.absolutePath))
+    }
+
+    @Test
+    fun testDirectoryDirectlyContainingNoMediaIsHidden() {
+        val folder = tempFolder.newFolder("AlbumFolder")
+        File(folder, ".nomedia").apply { createNewFile() }
+        assertTrue("Directory itself containing .nomedia must be identified as hidden", NoMediaUtils.isPathHiddenByNoMedia(folder.absolutePath))
+    }
 }

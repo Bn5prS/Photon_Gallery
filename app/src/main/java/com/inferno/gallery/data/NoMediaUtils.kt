@@ -25,7 +25,9 @@ object NoMediaUtils {
     fun isPathHiddenByNoMedia(filePath: String, cache: MutableMap<String, Boolean>? = null): Boolean {
         if (filePath.isBlank()) return false
         val file = File(filePath)
-        return isDirectoryHiddenByNoMedia(file.parentFile, cache)
+        if (file.name.startsWith(".")) return true
+        val dir = if (file.isDirectory) file else file.parentFile
+        return isDirectoryHiddenByNoMedia(dir, cache)
     }
 
     /**
