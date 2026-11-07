@@ -281,7 +281,12 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val themePaletteStyleFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
-            preferences[THEME_PALETTE_STYLE] ?: "Expressive"
+            val stored = preferences[THEME_PALETTE_STYLE]
+            if (stored == null || stored.equals("Expressive", ignoreCase = true)) {
+                "TonalSpot"
+            } else {
+                stored
+            }
         }
 
     val themeContrastLevelFlow: Flow<Float> = context.dataStore.data

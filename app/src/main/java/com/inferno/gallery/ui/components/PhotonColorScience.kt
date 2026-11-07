@@ -157,7 +157,6 @@ fun PhotonPaletteGrid(
         listOf(
             PaletteStyle.TonalSpot,
             PaletteStyle.Vibrant,
-            PaletteStyle.Expressive,
             PaletteStyle.Neutral,
             PaletteStyle.Monochrome
         )
@@ -190,7 +189,6 @@ fun PhotonPaletteGrid(
                 val subtitle = when (style) {
                     PaletteStyle.TonalSpot -> "Balanced harmony"
                     PaletteStyle.Vibrant -> "High saturation"
-                    PaletteStyle.Expressive -> "Playful contrast"
                     PaletteStyle.Neutral -> "Calm and muted"
                     PaletteStyle.Monochrome -> "Pure greyscale"
                     else -> ""
@@ -230,7 +228,6 @@ fun PhotonPaletteGrid(
                         val subtitle = when (style) {
                             PaletteStyle.TonalSpot -> "Balanced harmony"
                             PaletteStyle.Vibrant -> "High saturation"
-                            PaletteStyle.Expressive -> "Playful contrast"
                             PaletteStyle.Neutral -> "Calm and muted"
                             PaletteStyle.Monochrome -> "Pure greyscale"
                             else -> ""

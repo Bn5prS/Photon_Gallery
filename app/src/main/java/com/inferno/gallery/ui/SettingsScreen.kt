@@ -856,8 +856,8 @@ fun SettingsScreen(
                                             "TonalSpot" -> "Tonal Spot"
                                             "Neutral" -> "Neutral"
                                             "Vibrant" -> "Vibrant"
-                                            "Expressive" -> "Expressive"
                                             "Monochrome" -> "Monochrome"
+                                            "Expressive" -> "Tonal Spot"
                                             else -> themePaletteStyle
                                         }
 

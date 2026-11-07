@@ -74,7 +74,8 @@ fun PhotonGalleryTheme(
         }
 
         val resolvedStyle = try {
-            PaletteStyle.valueOf(paletteStyleName)
+            val style = PaletteStyle.valueOf(paletteStyleName)
+            if (style == PaletteStyle.Expressive) PaletteStyle.TonalSpot else style
         } catch (e: Exception) {
             PaletteStyle.TonalSpot
         }
