@@ -14,16 +14,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -45,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -54,21 +57,23 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.inferno.gallery.R
+import com.inferno.gallery.data.MemoriesCarouselStyle
 import com.inferno.gallery.data.MemoryDayGroup
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeFull
-import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
 
 /**
- * Material 3 Expressive Spotlight Hero Card for "On This Day" memories.
+ * Material 3 Memories Spotlight supporting two clean layout styles:
+ * 1. STORIES: Space-saving vertical story cards (~116.dp x 160.dp) in a LazyRow.
+ * 2. SPOTLIGHT: Wide hero card (~80% width) with adjacent memories peeking in (Google Photos style).
  *
- * Designed to be non-intrusive:
- * - Single compact card that scrolls naturally with the feed.
- * - Layered swipeable deck when multiple years are available.
- * - Smooth dismiss with quick-collapse into an ambient timeline banner pill.
- * - Smooth animated size transition preventing any layout snapping.
+ * Design Refinements:
+ * - No heavy solid blocks covering the photos.
+ * - Clean, non-cluttered typography directly over a soft bottom gradient scrim.
+ * - Zero artificial outlines or drop shadows (shadowElevation = 0.dp, tonalElevation = 0.dp).
+ * - Smooth collapse/restore animation into ambient timeline banner.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +83,8 @@ fun MemoriesSpotlightCard(
     onOpenMemory: (MemoryDayGroup) -> Unit,
     onDismiss: () -> Unit,
     onRestore: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: MemoriesCarouselStyle = MemoriesCarouselStyle.SPOTLIGHT
 ) {
     if (memoryGroups.isEmpty()) return
 
@@ -99,155 +105,70 @@ fun MemoriesSpotlightCard(
         label = "MemoriesSpotlightTransition",
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S)
+            .padding(vertical = SpacingTokens.S)
     ) { dismissed ->
         if (!dismissed) {
-            val pagerState = rememberPagerState(pageCount = { memoryGroups.size })
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+            ) {
+                // Section Header: Clean "Memories" title + circular dismiss button (no cluttered count badges)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.M),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Memories",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-            HorizontalPager(
-                state = pagerState,
-                contentPadding = PaddingValues(0.dp),
-                pageSpacing = SpacingTokens.S,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(204.dp)
-            ) { page ->
-                val group = memoryGroups.getOrNull(page) ?: return@HorizontalPager
-                val context = LocalContext.current
-                val imageRequest = remember(group.coverItem.uri) {
-                    ImageRequest.Builder(context)
-                        .data(if (group.coverItem.localExists) group.coverItem.resolvedUri else group.coverItem.uri)
-                        .size(800, 600)
-                        .crossfade(true)
-                        .memoryCachePolicy(CachePolicy.ENABLED)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .build()
+                    // Circular dismiss button (tonal surfaceContainerHigh, zero shadow, zero outline)
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onDismiss()
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                    contentDescription = "Hide memories to banner",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Surface(
-                    shape = ShapeLargeIncreased,
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 2.dp,
-                    shadowElevation = 4.dp,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pressScale(pressedScale = 0.98f)
-                        .clip(ShapeLargeIncreased)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onOpenMemory(group)
-                        }
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Background Hero Image
-                        AsyncImage(
-                            model = imageRequest,
-                            contentDescription = group.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                // Render selected style
+                when (style) {
+                    MemoriesCarouselStyle.STORIES -> {
+                        CompactStoryReelsContent(
+                            memoryGroups = memoryGroups,
+                            onOpenMemory = onOpenMemory
                         )
-
-                        // Directional cinematic gradient scrim
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.40f),
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.88f)
-                                        )
-                                    )
-                                )
+                    }
+                    MemoriesCarouselStyle.SPOTLIGHT -> {
+                        MultiBrowsePeekContent(
+                            memoryGroups = memoryGroups,
+                            onOpenMemory = onOpenMemory
                         )
-
-                        // Top Row: Minimal story bars (if multi) & Dismiss Button
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = SpacingTokens.M, end = SpacingTokens.S, top = SpacingTokens.S),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (memoryGroups.size > 1) {
-                                Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(end = SpacingTokens.S),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    memoryGroups.forEachIndexed { index, _ ->
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(3.dp)
-                                                .clip(ShapeFull)
-                                                .background(
-                                                    if (index == page) Color.White
-                                                    else if (index < page) Color.White.copy(alpha = 0.65f)
-                                                    else Color.White.copy(alpha = 0.25f)
-                                                )
-                                        )
-                                    }
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-
-                            // Dismiss Button (collapses into ambient timeline banner)
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onDismiss()
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = Color.Black.copy(alpha = 0.35f),
-                                    contentColor = Color.White,
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                            contentDescription = "Hide memories to banner",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Bottom Row: Clean Title & Date (entire card is clickable)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomStart)
-                                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.M),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                text = group.title,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = group.formattedDate,
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = Color.White.copy(alpha = 0.85f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
                 }
             }
@@ -264,10 +185,11 @@ fun MemoriesSpotlightCard(
                 shape = ShapeFull,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                tonalElevation = 2.dp,
-                shadowElevation = 1.dp,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = SpacingTokens.M)
                     .pressScale(pressedScale = 0.98f)
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -288,8 +210,10 @@ fun MemoriesSpotlightCard(
                     ) {
                         Surface(
                             shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp,
                             modifier = Modifier.size(28.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -314,6 +238,8 @@ fun MemoriesSpotlightCard(
                         shape = ShapeFull,
                         color = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
                         modifier = Modifier
                             .pressScale(pressedScale = 0.92f)
                             .clickable {
@@ -328,6 +254,256 @@ fun MemoriesSpotlightCard(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. STYLE: Compact Story Reels (LazyRow of vertical cards with soft bottom scrim)
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun CompactStoryReelsContent(
+    memoryGroups: List<MemoryDayGroup>,
+    onOpenMemory: (MemoryDayGroup) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = SpacingTokens.M),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        items(
+            items = memoryGroups,
+            key = { it.key }
+        ) { group ->
+            CompactMemoryReelCard(
+                group = group,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onOpenMemory(group)
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun CompactMemoryReelCard(
+    group: MemoryDayGroup,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val imageRequest = remember(group.coverItem.uri) {
+        ImageRequest.Builder(context)
+            .data(if (group.coverItem.localExists) group.coverItem.resolvedUri else group.coverItem.uri)
+            .size(400, 600)
+            .crossfade(true)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
+
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .width(116.dp)
+            .height(160.dp)
+            .pressScale(pressedScale = 0.96f)
+            .clip(RoundedCornerShape(22.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = group.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Soft bottom gradient scrim (no heavy solid block)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(68.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.72f)
+                            )
+                        )
+                    )
+            )
+
+            // Clean typography directly over scrim
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                Text(
+                    text = group.title,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp
+                    ),
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${group.items.size} photos",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    color = Color.White.copy(alpha = 0.82f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. STYLE: Multi-Browse Peek Deck (Google Photos Style with soft bottom scrim)
+// ─────────────────────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MultiBrowsePeekContent(
+    memoryGroups: List<MemoryDayGroup>,
+    onOpenMemory: (MemoryDayGroup) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val pagerState = rememberPagerState(pageCount = { memoryGroups.size })
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            pageSpacing = 12.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(196.dp)
+        ) { page ->
+            val group = memoryGroups.getOrNull(page) ?: return@HorizontalPager
+            val context = LocalContext.current
+            val imageRequest = remember(group.coverItem.uri) {
+                ImageRequest.Builder(context)
+                    .data(if (group.coverItem.localExists) group.coverItem.resolvedUri else group.coverItem.uri)
+                    .size(800, 600)
+                    .crossfade(true)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .build()
+            }
+
+            Surface(
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pressScale(pressedScale = 0.98f)
+                    .clip(RoundedCornerShape(26.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenMemory(group)
+                    }
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = imageRequest,
+                        contentDescription = group.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Soft bottom gradient scrim (no heavy solid block, no play button badge)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(84.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.75f)
+                                    )
+                                )
+                            )
+                    )
+
+                    // Clean typography directly over scrim
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomStart)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = group.title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${group.formattedDate} • ${group.items.size} photos",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = Color.White.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        // Tonal Indicator Dots if multi-page
+        if (memoryGroups.size > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                memoryGroups.forEachIndexed { index, _ ->
+                    val isSelected = pagerState.currentPage == index
+                    Surface(
+                        shape = ShapeFull,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(width = if (isSelected) 18.dp else 6.dp, height = 6.dp)
+                    ) {}
                 }
             }
         }

@@ -221,6 +221,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = true
     )
 
+    val memoriesCarouselStyle: StateFlow<com.inferno.gallery.data.MemoriesCarouselStyle> = settingsRepository.memoriesCarouselStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.data.MemoriesCarouselStyle.SPOTLIGHT
+    )
+
     fun dismissMemories() {
         _isMemoriesDismissed.value = true
         viewModelScope.launch(Dispatchers.IO) {

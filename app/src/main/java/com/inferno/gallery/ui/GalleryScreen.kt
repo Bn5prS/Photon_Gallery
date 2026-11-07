@@ -286,6 +286,7 @@ fun GalleryScreen(
     val onThisDayMemories by viewModel.onThisDayMemories.collectAsState()
     val isMemoriesDismissed by viewModel.isMemoriesDismissed.collectAsState()
     val showMemoriesSetting by viewModel.showMemoriesSetting.collectAsState()
+    val memoriesCarouselStyle by viewModel.memoriesCarouselStyle.collectAsState()
     var activeMemoryReelGroup by remember { mutableStateOf<MemoryDayGroup?>(null) }
 
     val shouldShowMemoriesHeader = bucketName == null &&
@@ -517,12 +518,13 @@ fun GalleryScreen(
                 timelineLayoutMode = timelineLayoutMode,
                 dateHeaderAlignment = dateHeaderAlignment,
                 showMatchBadge = (bucketName == "search_text" || bucketName == "search_smart"),
-                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
+                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed, memoriesCarouselStyle) {
                     if (shouldShowMemoriesHeader) {
                         {
                             MemoriesSpotlightCard(
                                 memoryGroups = onThisDayMemories,
                                 isDismissed = isMemoriesDismissed,
+                                style = memoriesCarouselStyle,
                                 onOpenMemory = { group ->
                                     activeMemoryReelGroup = group
                                 },
@@ -563,12 +565,13 @@ fun GalleryScreen(
                 thumbnailCornerRadius = thumbnailCornerRadius,
                 contentPadding = contentPadding,
                 dateHeaderAlignment = dateHeaderAlignment,
-                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
+                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed, memoriesCarouselStyle) {
                     if (shouldShowMemoriesHeader) {
                         {
                             MemoriesSpotlightCard(
                                 memoryGroups = onThisDayMemories,
                                 isDismissed = isMemoriesDismissed,
+                                style = memoriesCarouselStyle,
                                 onOpenMemory = { group ->
                                     activeMemoryReelGroup = group
                                 },

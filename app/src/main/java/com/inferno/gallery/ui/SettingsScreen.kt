@@ -55,6 +55,7 @@ import com.inferno.gallery.ui.components.PhotonPaletteGrid
 import com.inferno.gallery.ui.components.PhotonCustomColorSection
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
+import com.inferno.gallery.ui.theme.SpacingTokens
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.core.graphics.ColorUtils
@@ -169,6 +170,7 @@ fun SettingsScreen(
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
     val showMemories by viewModel.showMemories.collectAsState()
     val memoriesDismissed by viewModel.memoriesDismissed.collectAsState()
+    val memoriesCarouselStyle by viewModel.memoriesCarouselStyle.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
@@ -1187,6 +1189,91 @@ fun SettingsScreen(
                                             checked = showMemories,
                                             onCheckedChange = { viewModel.setShowMemories(it) }
                                         )
+                                    }
+                                    if (showMemories) {
+                                        add {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.setting_memories_style_title),
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+
+                                                Surface(
+                                                    shape = ShapeFull,
+                                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                                    tonalElevation = 0.dp,
+                                                    shadowElevation = 0.dp,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(44.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .padding(4.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        val styles = com.inferno.gallery.data.MemoriesCarouselStyle.entries
+                                                        styles.forEachIndexed { index, style ->
+                                                            val isSelected = style == memoriesCarouselStyle
+                                                            val shape = com.inferno.gallery.ui.theme.getSegmentShape(
+                                                                index = index,
+                                                                total = styles.size,
+                                                                outerCorner = 20.dp,
+                                                                innerCorner = 6.dp
+                                                            )
+                                                            Surface(
+                                                                shape = shape,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                                tonalElevation = 0.dp,
+                                                                shadowElevation = 0.dp,
+                                                                modifier = Modifier
+                                                                    .weight(1f)
+                                                                    .fillMaxHeight()
+                                                                    .clip(shape)
+                                                                    .clickable { viewModel.setMemoriesCarouselStyle(style) }
+                                                            ) {
+                                                                Box(
+                                                                    contentAlignment = Alignment.Center,
+                                                                    modifier = Modifier.fillMaxSize()
+                                                                ) {
+                                                                    val label = when (style) {
+                                                                        com.inferno.gallery.data.MemoriesCarouselStyle.STORIES -> stringResource(R.string.setting_memories_style_stories)
+                                                                        com.inferno.gallery.data.MemoriesCarouselStyle.SPOTLIGHT -> stringResource(R.string.setting_memories_style_spotlight)
+                                                                    }
+                                                                    Text(
+                                                                        text = label,
+                                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                                        ),
+                                                                        maxLines = 1,
+                                                                        overflow = TextOverflow.Ellipsis
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                val desc = when (memoriesCarouselStyle) {
+                                                    com.inferno.gallery.data.MemoriesCarouselStyle.STORIES -> stringResource(R.string.setting_memories_style_stories_desc)
+                                                    com.inferno.gallery.data.MemoriesCarouselStyle.SPOTLIGHT -> stringResource(R.string.setting_memories_style_spotlight_desc)
+                                                }
+                                                Text(
+                                                    text = desc,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
                                     }
                                     if (showMemories && memoriesDismissed) {
                                         add {

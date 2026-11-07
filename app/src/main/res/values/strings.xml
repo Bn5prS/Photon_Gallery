@@ -361,6 +361,11 @@
     <string name="setting_dock_navigation_title">Dock &amp; Navigation</string>
     <string name="setting_restore_spotlight_title">Restore Spotlight Banner</string>
     <string name="setting_restore_spotlight_sub">Re-display the dismissed memories banner on the main feed</string>
+    <string name="setting_memories_style_title">Memories Carousel Layout</string>
+    <string name="setting_memories_style_stories">Stories</string>
+    <string name="setting_memories_style_stories_desc">Row of vertical story cards showing multiple memories side-by-side</string>
+    <string name="setting_memories_style_spotlight">Spotlight</string>
+    <string name="setting_memories_style_spotlight_desc">Wide hero card with adjacent memories peeking in from the sides</string>
     <string name="setting_font_scale_title">Font Scale</string>
     <string name="setting_font_scale_sub">Adjust text size flexibility across the app</string>
     <string name="setting_live_typography_preview">Live Typography Preview</string>

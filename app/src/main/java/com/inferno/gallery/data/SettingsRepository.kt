@@ -15,6 +15,18 @@ import kotlinx.coroutines.flow.map
 enum class DockStyle { PILL, FULL_WIDTH }
 enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC }
 enum class AlbumLayoutMode { GRID, LIST }
+enum class MemoriesCarouselStyle(val id: String) {
+    STORIES("stories"),
+    SPOTLIGHT("spotlight");
+
+    companion object {
+        fun fromId(id: String?): MemoriesCarouselStyle = when (id) {
+            "stories", "compact" -> STORIES
+            "spotlight", "peek" -> SPOTLIGHT
+            else -> SPOTLIGHT
+        }
+    }
+}
 
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
@@ -83,6 +95,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val STORY_MUSIC_MUTED = booleanPreferencesKey("story_music_muted")
         val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
         val MEMORIES_DISMISSED = booleanPreferencesKey("memories_dismissed")
+        val MEMORIES_CAROUSEL_STYLE = stringPreferencesKey("memories_carousel_style")
         val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
         val PEOPLE_GRID_CELLS_COUNT = intPreferencesKey("people_grid_cells_count")
         val PERSON_DETAIL_GRID_CELLS_COUNT = intPreferencesKey("person_detail_grid_cells_count")
@@ -357,6 +370,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateMemoriesDismissed(dismissed: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[MEMORIES_DISMISSED] = dismissed
+        }
+    }
+
+    val memoriesCarouselStyleFlow: Flow<MemoriesCarouselStyle> = context.dataStore.data
+        .map { preferences ->
+            MemoriesCarouselStyle.fromId(preferences[MEMORIES_CAROUSEL_STYLE])
+        }
+
+    suspend fun updateMemoriesCarouselStyle(style: MemoriesCarouselStyle) {
+        context.dataStore.edit { preferences ->
+            preferences[MEMORIES_CAROUSEL_STYLE] = style.id
         }
     }
 

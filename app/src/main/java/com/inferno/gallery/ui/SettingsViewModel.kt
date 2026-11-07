@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
+import com.inferno.gallery.data.MemoriesCarouselStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -350,6 +351,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun restoreMemoriesBanner() {
         viewModelScope.launch {
             repository.updateMemoriesDismissed(false)
+        }
+    }
+
+    val memoriesCarouselStyle: StateFlow<MemoriesCarouselStyle> = repository.memoriesCarouselStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = MemoriesCarouselStyle.SPOTLIGHT
+    )
+
+    fun setMemoriesCarouselStyle(style: MemoriesCarouselStyle) {
+        viewModelScope.launch {
+            repository.updateMemoriesCarouselStyle(style)
         }
     }
 
