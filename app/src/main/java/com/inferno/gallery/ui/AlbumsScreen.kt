@@ -150,18 +150,7 @@ fun AlbumsScreen(
     val userPinnedNames by viewModel.userPinnedFolderNames.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by viewModel.albumLayoutMode.collectAsState()
-    val favoriteItems by viewModel.favoriteMedia.collectAsState()
-    val trashCount by viewModel.trashCount.collectAsState()
-    val vaultItemCount by viewModel.vaultItemCount.collectAsState()
-    val videoCount by viewModel.videoCount.collectAsState()
-    val screenshotsCount = remember(albums) {
-        albums.firstOrNull { it.bucketName.equals("Screenshots", ignoreCase = true) }?.itemCount
-            ?: albums.filter { it.bucketName.contains("Screenshot", ignoreCase = true) }.sumOf { it.itemCount }
-    }
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
-    val placesClusters by viewModel.placesClusters.collectAsState()
-    val documentBuckets by viewModel.documentBuckets.collectAsState()
-    val mediaTypeBuckets by viewModel.mediaTypeBuckets.collectAsState()
     val customCovers by viewModel.albumCustomCovers.collectAsState()
     val customShapes by viewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
@@ -175,76 +164,6 @@ fun AlbumsScreen(
         }
     }
 
-    val totalDisplayCount = remember(unpinnedAlbums.size, userPinnedAlbums.size) {
-        unpinnedAlbums.size + (if (userPinnedAlbums.isNotEmpty()) 1 else 0)
-    }
-
-    val visibleUnpinnedLimit = if (albumLayoutMode == AlbumLayoutMode.LIST) {
-        if (userPinnedAlbums.isNotEmpty()) 7 else 8
-    } else {
-        if (userPinnedAlbums.isNotEmpty()) 23 else 24
-    }
-
-    val visibleAlbums = remember(unpinnedAlbums, visibleUnpinnedLimit) {
-        unpinnedAlbums.take(visibleUnpinnedLimit)
-    }
-    val hasMoreAlbums = unpinnedAlbums.size > visibleUnpinnedLimit
-
-    // Persistent expand states for sections
-    val albumsExpanded by viewModel.albumsExpandedMore.collectAsState()
-    val peopleExpanded by viewModel.albumsExpandedPeople.collectAsState()
-    val peopleViewModel: com.inferno.gallery.ui.people.PeopleViewModel = run {
-        var cur = context
-        while (cur is android.content.ContextWrapper) {
-            if (cur is androidx.lifecycle.ViewModelStoreOwner) break
-            cur = cur.baseContext
-        }
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = cur as androidx.lifecycle.ViewModelStoreOwner
-        )
-    }
-    val promotedPeople by peopleViewModel.promotedPersons.collectAsState()
-    val allPeople by peopleViewModel.allPersons.collectAsState()
-    val faceIndexWorkInfo by peopleViewModel.faceIndexWorkInfo.collectAsState()
-    val isFaceIndexing = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
-            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-    val people = allPeople
-    val faceProcessed = faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0
-    val faceTotal = faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0
-    val placesExpanded by viewModel.albumsExpandedPlaces.collectAsState()
-    val documentsExpanded by viewModel.albumsExpandedDocuments.collectAsState()
-    val mediaTypesExpanded by viewModel.albumsExpandedMediaTypes.collectAsState()
-    val utilitiesExpanded by viewModel.albumsExpandedUtilities.collectAsState()
-
-    val selectAtLeastTwoToast = stringResource(R.string.toast_select_at_least_two_photos)
-    val pickCollageLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 8)
-    ) { uris ->
-        if (uris.size >= 2) {
-            onCreateCollage(uris.map { it.toString() })
-        } else if (uris.size == 1) {
-            Toast.makeText(context, selectAtLeastTwoToast, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val pickStitchLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
-    ) { uris ->
-        if (uris.size >= 2) {
-            onCreateStitch(uris.map { it.toString() })
-        } else if (uris.size == 1) {
-            Toast.makeText(context, selectAtLeastTwoToast, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val pickEditorLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            onOpenEditor(uri.toString())
-        }
-    }
-
     LaunchedEffect(Unit) {
         viewModel.setTopBarCollapsed(false)
     }
@@ -255,8 +174,8 @@ fun AlbumsScreen(
 
             // Ensure clean top alignment when albums populate or if previously pushed up
             var initialTopResetDone by rememberSaveable { mutableStateOf(false) }
-            LaunchedEffect(visibleAlbums.isNotEmpty()) {
-                if (visibleAlbums.isNotEmpty() && !initialTopResetDone) {
+            LaunchedEffect(unpinnedAlbums.isNotEmpty()) {
+                if (unpinnedAlbums.isNotEmpty() && !initialTopResetDone) {
                     initialTopResetDone = true
                     if (!lazyGridState.isScrollInProgress && lazyGridState.firstVisibleItemIndex > 0) {
                         lazyGridState.scrollToItem(0, 0)
@@ -316,20 +235,6 @@ fun AlbumsScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
 
-        // ── Albums Section ──
-        item(key = "header_albums", span = { GridItemSpan(maxLineSpan) }) {
-            SectionHeader(
-                title = stringResource(R.string.section_albums),
-                count = if (totalDisplayCount > 0) totalDisplayCount else null,
-                isExpanded = albumsExpanded,
-                onToggle = { viewModel.toggleAlbumsExpandedMore() },
-                seeAllText = stringResource(R.string.action_show_all),
-                onSeeAll = if (hasMoreAlbums) onNavigateToAllAlbums else null
-            )
-        }
-
-        if (albumsExpanded) {
-            if (visibleAlbums.isNotEmpty() || userPinnedAlbums.isNotEmpty()) {
                 if (albumLayoutMode == AlbumLayoutMode.LIST) {
                     if (userPinnedAlbums.isNotEmpty()) {
                         item(key = "row_pinned_hub") {
@@ -341,7 +246,7 @@ fun AlbumsScreen(
                     }
 
                     items(
-                        items = visibleAlbums,
+                        items = unpinnedAlbums,
                         key = { "album_${it.bucketName}" }
                     ) { bucket ->
                         val displayBucketName = when (bucket.bucketName) {
@@ -391,627 +296,82 @@ fun AlbumsScreen(
                         }
                     }
                 } else {
-                    item(key = "content_albums_carousel", span = { GridItemSpan(maxLineSpan) }) {
-                        val totalCarouselItems = visibleAlbums.size + (if (userPinnedAlbums.isNotEmpty()) 1 else 0)
-                        val albumsRowCount = if (totalCarouselItems > 3) 2 else 1
-                        val albumsCarouselHeight = if (albumsRowCount == 2) 324.dp else 160.dp
-
-                        LazyHorizontalGrid(
-                            rows = GridCells.Fixed(albumsRowCount),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(albumsCarouselHeight),
-                            contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
-                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            if (userPinnedAlbums.isNotEmpty()) {
-                                item(key = "card_pinned_hub") {
-                                    Box(modifier = Modifier.width(118.dp)) {
-                                        PinnedHubCard(
-                                            pinnedAlbums = userPinnedAlbums,
-                                            isCompact = true,
-                                            onClick = onNavigateToPinnedAlbums
-                                        )
-                                    }
-                                }
-                            }
-
-                            items(
-                                items = visibleAlbums,
-                                key = { "album_${it.bucketName}" }
-                            ) { bucket ->
-                                val displayBucketName = when (bucket.bucketName) {
-                                    "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
-                                    else -> bucket.bucketName
-                                }
-                                val isPinned = bucket.bucketName in userPinnedNames
-                                var showCardMenu by remember { mutableStateOf(false) }
-
-                                val albumShape = remember(customShapes, bucket.bucketName) {
-                                    AlbumShapes.getShape(customShapes[bucket.bucketName])
-                                }
-
-                                Box(modifier = Modifier.width(118.dp)) {
-                                    AlbumCard(
-                                        sharedTransitionScope = sharedTransitionScope,
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        bucket = bucket.copy(bucketName = displayBucketName),
-                                        showAlbumSize = showAlbumSize,
-                                        customShape = albumShape,
-                                        isCompact = true,
-                                        isPinned = isPinned,
-                                        onClick = { onAlbumClick(bucket.bucketName) },
-                                        onLongPress = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            showCardMenu = true
-                                        }
-                                    )
-
-                                    AlbumDropdownMenu(
-                                        expanded = showCardMenu,
-                                        onDismissRequest = { showCardMenu = false },
-                                        bucketName = bucket.bucketName,
-                                        isUserPinned = isPinned,
-                                        hasCustomCover = customCovers.containsKey(bucket.bucketName),
-                                        hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                                        onTogglePin = {
-                                            viewModel.togglePinAlbum(bucket.bucketName) { success ->
-                                                if (!success) {
-                                                    Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        },
-                                        onChangeCover = { onChangeCover(bucket.bucketName) },
-                                        onDeleteCover = { onDeleteCover(bucket.bucketName) },
-                                        onChangeShape = { shapePickerBucket = bucket },
-                                        onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-
-        // ── People Carousel ──
-        item(key = "section_people", span = { GridItemSpan(maxLineSpan) }) {
-            com.inferno.gallery.ui.people.PeopleCarousel(
-                people = people,
-                isExpanded = peopleExpanded,
-                onToggle = { viewModel.toggleAlbumsExpandedPeople() },
-                onSeeAll = onNavigateToPeople,
-                onPersonClick = { personId -> onPersonClick(personId.toString()) }
-            )
-        }
-
-        // ── 3. Places Carousel ──
-        item(key = "header_places", span = { GridItemSpan(maxLineSpan) }) {
-            SectionHeader(
-                title = stringResource(R.string.section_places),
-                count = if (placesClusters.isNotEmpty()) placesClusters.size else null,
-                isExpanded = placesExpanded,
-                onToggle = { viewModel.toggleAlbumsExpandedPlaces() },
-                seeAllText = stringResource(R.string.action_show_all),
-                onSeeAll = onNavigateToPlacesList
-            )
-        }
-
-        item(key = "content_places", span = { GridItemSpan(maxLineSpan) }) {
-            AnimatedVisibility(
-                visible = placesExpanded,
-                enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-            ) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
-                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-                ) {
-                    item {
-                        // "Explore Map" Hero Card
-                        Surface(
-                            onClick = onNavigateToPhotoMap,
-                            shape = ShapeLargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shadowElevation = 0.dp,
-                            modifier = Modifier
-                                .width(120.dp)
-                                .pressScale(pressedScale = 0.96f)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(1f)
-                                        .clip(ShapeMedium),
-                                    shape = ShapeMedium,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    shadowElevation = 0.dp
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        androidx.compose.foundation.Image(
-                                            painter = androidx.compose.ui.res.painterResource(R.drawable.map_bg_placeholder),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                        Surface(
-                                            shape = ShapeFull,
-                                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
-                                            modifier = Modifier
-                                                .align(Alignment.Center)
-                                                .size(36.dp),
-                                            shadowElevation = 0.dp
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(IconSizeTokens.M),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(SpacingTokens.XS))
-                                Text(
-                                    text = stringResource(R.string.explore_map),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 2.dp)
+                    if (userPinnedAlbums.isNotEmpty()) {
+                        item(key = "card_pinned_hub") {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                PinnedHubCard(
+                                    pinnedAlbums = userPinnedAlbums,
+                                    isCompact = true,
+                                    onClick = onNavigateToPinnedAlbums
                                 )
                             }
                         }
                     }
 
-                    items(placesClusters, key = { "place_${it.bucketName}" }) { cluster ->
-                        Surface(
-                            onClick = { onAlbumClick("place:${cluster.bucketName}") },
-                            shape = ShapeLargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shadowElevation = 0.dp,
-                            modifier = Modifier
-                                .width(120.dp)
-                                .pressScale(pressedScale = 0.96f)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(1f)
-                                        .clip(ShapeMedium),
-                                    shape = ShapeMedium,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    shadowElevation = 0.dp
-                                ) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(Uri.parse(cluster.representativeUri))
-                                            .size(300)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(SpacingTokens.XS))
-                                Text(
-                                    text = cluster.bucketName,
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 2.dp)
-                                )
-                            }
+                    items(
+                        items = unpinnedAlbums,
+                        key = { "album_${it.bucketName}" }
+                    ) { bucket ->
+                        val displayBucketName = when (bucket.bucketName) {
+                            "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                            else -> bucket.bucketName
                         }
-                    }
-                }
-            }
-        }
+                        val isPinned = bucket.bucketName in userPinnedNames
+                        var showCardMenu by remember { mutableStateOf(false) }
 
-        // ── 3.4 Documents (Books & Magazines, Events, IDs, Notes, Payments, Receipts, Social) ──
-        if (documentBuckets.isNotEmpty()) {
-            item(key = "header_documents", span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = stringResource(R.string.section_documents),
-                    count = documentBuckets.size,
-                    isExpanded = documentsExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedDocuments() }
-                )
-            }
+                        val albumShape = remember(customShapes, bucket.bucketName) {
+                            AlbumShapes.getShape(customShapes[bucket.bucketName])
+                        }
 
-            item(key = "content_documents", span = { GridItemSpan(maxLineSpan) }) {
-                AnimatedVisibility(
-                    visible = documentsExpanded,
-                    enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                    exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-                ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
-                        contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
-                    ) {
-                        items(documentBuckets, key = { "document_${it.bucketName}" }) { docBucket ->
-                            val title = when (docBucket.bucketName) {
-                                BucketNames.DOC_BOOKS_MAGAZINES -> stringResource(R.string.doc_books_magazines)
-                                BucketNames.DOC_EVENTS -> stringResource(R.string.doc_events)
-                                BucketNames.DOC_IDS -> stringResource(R.string.doc_ids)
-                                BucketNames.DOC_NOTES -> stringResource(R.string.doc_notes)
-                                BucketNames.DOC_PAYMENTS -> stringResource(R.string.doc_payments)
-                                BucketNames.DOC_RECEIPTS -> stringResource(R.string.doc_receipts)
-                                BucketNames.DOC_SOCIAL -> stringResource(R.string.doc_social)
-                                else -> stringResource(R.string.doc_documents)
-                            }
-                            val iconRes = when (docBucket.bucketName) {
-                                BucketNames.DOC_BOOKS_MAGAZINES -> R.drawable.ic_ms_menu_book
-                                BucketNames.DOC_EVENTS -> R.drawable.ic_ms_confirmation_number
-                                BucketNames.DOC_IDS -> R.drawable.ic_ms_badge
-                                BucketNames.DOC_NOTES -> R.drawable.ic_ms_edit_note
-                                BucketNames.DOC_PAYMENTS -> R.drawable.ic_ms_payments
-                                BucketNames.DOC_RECEIPTS -> R.drawable.ic_ms_receipt_long
-                                BucketNames.DOC_SOCIAL -> R.drawable.ic_ms_share
-                                else -> R.drawable.ic_ms_description
-                            }
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            AlbumCard(
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                bucket = bucket.copy(bucketName = displayBucketName),
+                                showAlbumSize = showAlbumSize,
+                                customShape = albumShape,
+                                isCompact = true,
+                                isPinned = isPinned,
+                                onClick = { onAlbumClick(bucket.bucketName) },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showCardMenu = true
+                                }
+                            )
 
-                            Surface(
-                                onClick = { onAlbumClick(docBucket.bucketName) },
-                                shape = ShapeLargeIncreased,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                shadowElevation = 0.dp,
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .pressScale(pressedScale = 0.96f)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                            .clip(ShapeMedium),
-                                        shape = ShapeMedium,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shadowElevation = 0.dp
-                                    ) {
-                                        if (docBucket.coverUri != Uri.EMPTY) {
-                                            AsyncImage(
-                                                model = ImageRequest.Builder(context)
-                                                    .data(docBucket.coverUri)
-                                                    .size(280)
-                                                    .crossfade(true)
-                                                    .build(),
-                                                contentDescription = null,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        } else {
-                                            Box(
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Surface(
-                                                    shape = ShapeFull,
-                                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    modifier = Modifier.size(36.dp),
-                                                    shadowElevation = 0.dp
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Icon(
-                                                            imageVector = ImageVector.vectorResource(iconRes),
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.size(IconSizeTokens.M)
-                                                        )
-                                                    }
-                                                }
-                                            }
+                            AlbumDropdownMenu(
+                                expanded = showCardMenu,
+                                onDismissRequest = { showCardMenu = false },
+                                bucketName = bucket.bucketName,
+                                isUserPinned = isPinned,
+                                hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                onTogglePin = {
+                                    viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                        if (!success) {
+                                            Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(SpacingTokens.XS))
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 2.dp)
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.media_count_multiple, docBucket.itemCount),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 2.dp)
-                                    )
-                                }
-                            }
+                                },
+                                onChangeCover = { onChangeCover(bucket.bucketName) },
+                                onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                onChangeShape = { shapePickerBucket = bucket },
+                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                            )
                         }
                     }
                 }
-            }
-        }
 
-        // ── 3.5 Capture Modes (RAW, Panoramas, Night, Portraits, Macro, etc.) ──
-        if (mediaTypeBuckets.isNotEmpty()) {
-            item(key = "header_media_types", span = { GridItemSpan(maxLineSpan) }) {
-                SectionHeader(
-                    title = stringResource(R.string.section_capture_modes),
-                    count = mediaTypeBuckets.size,
-                    isExpanded = mediaTypesExpanded,
-                    onToggle = { viewModel.toggleAlbumsExpandedMediaTypes() }
-                )
-            }
 
-            item(key = "content_media_types", span = { GridItemSpan(maxLineSpan) }) {
-                AnimatedVisibility(
-                    visible = mediaTypesExpanded,
-                    enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                    exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-                ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
-                        contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
-                    ) {
-                        items(mediaTypeBuckets, key = { "media_type_${it.bucketName}" }) { mediaType ->
-                            val title = when (mediaType.bucketName) {
-                                BucketNames.MEDIA_TYPE_RAW -> stringResource(R.string.mode_raw)
-                                BucketNames.MEDIA_TYPE_PANORAMAS -> stringResource(R.string.mode_panoramas)
-                                BucketNames.MEDIA_TYPE_SLOW_MO -> stringResource(R.string.mode_slow_mo)
-                                BucketNames.MEDIA_TYPE_ANIMATIONS -> stringResource(R.string.mode_animations)
-                                BucketNames.MEDIA_TYPE_NIGHT -> stringResource(R.string.mode_night)
-                                BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> stringResource(R.string.mode_photo_sphere)
-                                BucketNames.MEDIA_TYPE_PORTRAIT -> stringResource(R.string.mode_portrait)
-                                BucketNames.MEDIA_TYPE_MACRO -> stringResource(R.string.mode_macro)
-                                BucketNames.MEDIA_TYPE_TIMELAPSE -> stringResource(R.string.mode_timelapse)
-                                else -> stringResource(R.string.nav_photos)
-                            }
-                            val iconRes = when (mediaType.bucketName) {
-                                BucketNames.MEDIA_TYPE_RAW -> R.drawable.ic_ms_photo_camera
-                                BucketNames.MEDIA_TYPE_PANORAMAS -> R.drawable.ic_ms_aspect_ratio
-                                BucketNames.MEDIA_TYPE_SLOW_MO -> R.drawable.ic_ms_schedule
-                                BucketNames.MEDIA_TYPE_ANIMATIONS -> R.drawable.ic_ms_auto_fix_high
-                                BucketNames.MEDIA_TYPE_NIGHT -> R.drawable.ic_ms_wb_twilight
-                                BucketNames.MEDIA_TYPE_PHOTO_SPHERE -> R.drawable.ic_ms_vrpano
-                                BucketNames.MEDIA_TYPE_PORTRAIT -> R.drawable.ic_ms_person
-                                BucketNames.MEDIA_TYPE_MACRO -> R.drawable.ic_ms_filter_vintage
-                                BucketNames.MEDIA_TYPE_TIMELAPSE -> R.drawable.ic_ms_timelapse
-                                else -> R.drawable.ic_ms_image
-                            }
 
-                            Surface(
-                                onClick = { onAlbumClick(mediaType.bucketName) },
-                                shape = ShapeLargeIncreased,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                shadowElevation = 0.dp,
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .pressScale(pressedScale = 0.96f)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                            .clip(ShapeMedium),
-                                        shape = ShapeMedium,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shadowElevation = 0.dp
-                                    ) {
-                                        if (mediaType.coverUri != Uri.EMPTY) {
-                                            AsyncImage(
-                                                model = ImageRequest.Builder(context)
-                                                    .data(mediaType.coverUri)
-                                                    .size(280)
-                                                    .crossfade(true)
-                                                    .build(),
-                                                contentDescription = null,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        } else {
-                                            Box(
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Surface(
-                                                    shape = ShapeFull,
-                                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    modifier = Modifier.size(36.dp),
-                                                    shadowElevation = 0.dp
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Icon(
-                                                            imageVector = ImageVector.vectorResource(iconRes),
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.size(IconSizeTokens.M)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(SpacingTokens.XS))
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 2.dp)
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.media_count_multiple, mediaType.itemCount),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
-        // ── 4. Utilities & Tools ──
-        item(key = "header_more_tools", span = { GridItemSpan(maxLineSpan) }) {
-            SectionHeader(
-                title = stringResource(R.string.section_utilities),
-                isExpanded = utilitiesExpanded,
-                onToggle = { viewModel.toggleAlbumsExpandedUtilities() },
-                isCollapsible = true
-            )
-        }
 
-        item(key = "content_utilities_and_tools", span = { GridItemSpan(maxLineSpan) }) {
-            val favTitle = stringResource(R.string.album_favorites)
-            val screenTitle = stringResource(R.string.album_screenshots)
-            val vidTitle = stringResource(R.string.album_videos)
-            val vaultTitle = stringResource(R.string.album_vault)
 
-            val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount, favTitle, screenTitle, vidTitle, vaultTitle) {
-                listOf(
-                    UtilityItem(
-                        title = favTitle,
-                        iconRes = R.drawable.ic_ms_star,
-                        count = favoriteItems.size,
-                        onClick = { onAlbumClick("Favorites") }
-                    ),
-                    UtilityItem(
-                        title = screenTitle,
-                        iconRes = R.drawable.ic_ms_aspect_ratio,
-                        count = screenshotsCount,
-                        onClick = { onAlbumClick("Screenshots") }
-                    ),
-                    UtilityItem(
-                        title = vidTitle,
-                        iconRes = R.drawable.ic_ms_play_arrow,
-                        count = videoCount,
-                        onClick = { onAlbumClick("Videos") }
-                    ),
-                    UtilityItem(
-                        title = vaultTitle,
-                        iconRes = R.drawable.ic_ms_lock,
-                        count = vaultItemCount,
-                        onClick = {
-                            val activity = context as? androidx.fragment.app.FragmentActivity
-                            if (activity != null) {
-                                if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
-                                    if (viewModel.vaultAuthManager.canAuthenticateWithBiometrics(activity)) {
-                                        viewModel.vaultAuthManager.authenticate(
-                                            activity = activity,
-                                            negativeButtonText = "Use PIN",
-                                            onSuccess = onNavigateToVault,
-                                            onNegativeButton = onNavigateToVault,
-                                            onFailure = { onNavigateToVault() }
-                                        )
-                                    } else {
-                                        onNavigateToVault()
-                                    }
-                                } else {
-                                    onNavigateToVault()
-                                }
-                            } else {
-                                onNavigateToVault()
-                            }
-                        }
-                    )
-                )
-            }
 
-            val collageTitle = stringResource(R.string.action_collage)
-            val stitchTitle = stringResource(R.string.action_stitch)
-            val editorTitle = stringResource(R.string.action_edit)
-            val cleanUpTitle = stringResource(R.string.utility_clean_up)
 
-            val tools = remember(collageTitle, stitchTitle, editorTitle, cleanUpTitle) {
-                listOf(
-                    UtilityItem(
-                        title = collageTitle,
-                        iconRes = R.drawable.ic_ms_dashboard,
-                        onClick = {
-                            pickCollageLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    ),
-                    UtilityItem(
-                        title = stitchTitle,
-                        iconRes = R.drawable.ic_ms_merge,
-                        onClick = {
-                            pickStitchLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    ),
-                    UtilityItem(
-                        title = editorTitle,
-                        iconRes = R.drawable.ic_ms_tune,
-                        onClick = {
-                            pickEditorLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    ),
-                    UtilityItem(
-                        title = cleanUpTitle,
-                        iconRes = R.drawable.ic_ms_cleaning_services,
-                        onClick = onNavigateToDuplicateCleaner
-                    )
-                )
-            }
 
-            AnimatedVisibility(
-                visible = utilitiesExpanded,
-                enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
-                exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    UtilityCardRow(items = utilities)
-                    UtilityCardRow(items = tools)
-                    TrashRow(trashCount = trashCount, onAlbumClick = onAlbumClick)
-                }
-            }
-        }
+
+
     }
     }
 }
@@ -1064,7 +424,7 @@ data class UtilityItem(
 )
 
 @Composable
-private fun UtilityCardRow(
+fun UtilityCardRow(
     items: List<UtilityItem>,
     modifier: Modifier = Modifier
 ) {
@@ -1170,7 +530,7 @@ private fun UtilityCardRow(
 }
 
 @Composable
-private fun TrashRow(
+fun TrashRow(
     trashCount: Int,
     onAlbumClick: (String) -> Unit,
     modifier: Modifier = Modifier

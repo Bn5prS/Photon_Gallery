@@ -3226,6 +3226,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         _albumsScrollToTopTrigger.tryEmit(Unit)
     }
 
+    private val _collectionsScrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val collectionsScrollToTopTrigger: SharedFlow<Unit> = _collectionsScrollToTopTrigger.asSharedFlow()
+
+    fun triggerCollectionsScrollToTop() {
+        _collectionsScrollToTopTrigger.tryEmit(Unit)
+    }
+
     private val _photosScrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val photosScrollToTopTrigger: SharedFlow<Unit> = _photosScrollToTopTrigger.asSharedFlow()
 
