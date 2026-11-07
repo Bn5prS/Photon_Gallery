@@ -3,6 +3,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.ButtonDefaults
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import com.inferno.gallery.ui.theme.ShapeMedium
+import com.inferno.gallery.ui.components.DisplayAndSortBottomSheet
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.utils.popBackStackSafely
@@ -208,6 +209,7 @@ fun MainAppLayout(
 
     var showMenu by remember { mutableStateOf(false) }
     var showCreateAlbumDialog by remember { mutableStateOf(false) }
+    var showDisplaySortSheet by remember { mutableStateOf(false) }
     var newAlbumName by remember { mutableStateOf("") }
     var settingsActiveSection by remember { mutableStateOf<String?>(null) }
     val navBackStackEntry by nestedNavController.currentBackStackEntryAsState()
@@ -660,70 +662,34 @@ fun MainAppLayout(
                                         .padding(start = 16.dp)
                                         .weight(1f)
                                 )
-                                var showAlbumOverflowMenu by remember { mutableStateOf(false) }
-                                var albumOverflowState by remember { mutableStateOf("main") }
-                                Box {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.padding(end = 6.dp)
+                                ) {
                                     PhotonHeaderIconButton(
-                                        onClick = {
-                                            albumOverflowState = "main"
-                                            showAlbumOverflowMenu = true
-                                        }
+                                        onClick = { showDisplaySortSheet = true }
                                     ) {
                                         Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                            contentDescription = "More options",
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                            contentDescription = stringResource(R.string.menu_view_mode) + " & " + stringResource(R.string.menu_sort_order),
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                    DropdownMenu(
-                                        expanded = showAlbumOverflowMenu,
-                                        onDismissRequest = {
-                                            showAlbumOverflowMenu = false
-                                            albumOverflowState = "main"
-                                        },
-                                        shape = com.inferno.gallery.ui.theme.ShapeMedium,
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        tonalElevation = 6.dp,
-                                        modifier = Modifier.widthIn(min = 180.dp)
-                                    ) {
-                                        if (albumOverflowState == "main") {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.menu_view_mode)) },
-                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                onClick = { albumOverflowState = "view" }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.menu_sort_order)) },
-                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                                trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                onClick = { albumOverflowState = "sort" }
-                                            )
-                                        } else if (albumOverflowState == "view") {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.action_back)) },
-                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                onClick = { albumOverflowState = "main" }
-                                            )
-                                            androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_immersive)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_grouped)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                        } else if (albumOverflowState == "sort") {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.action_back)) },
-                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                onClick = { albumOverflowState = "main" }
-                                            )
-                                            androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedNewToOld); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedOldToNew); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_big_to_small)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_small_to_big)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_a_to_z)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showAlbumOverflowMenu = false; albumOverflowState = "main" })
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_z_to_a)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameDesc); showAlbumOverflowMenu = false; albumOverflowState = "main" })
+                                    PhotonHeaderIconButton(
+                                        onClick = {
+                                            nestedNavController.navigate("settings") {
+                                                popUpTo("photos") { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         }
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_settings),
+                                            contentDescription = stringResource(R.string.settings_title),
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
                             }
@@ -797,17 +763,6 @@ fun MainAppLayout(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     modifier = Modifier.padding(end = 6.dp)
                                 ) {
-                                    if (currentRoute != "photos" && currentRoute != "videos" && currentRoute != "search") {
-                                        PhotonHeaderIconButton(
-                                            onClick = { nestedNavController.navigate("search") }
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                                contentDescription = "Search",
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
                                     if (currentRoute == "albums") {
                                         PhotonHeaderIconButton(
                                             onClick = { showCreateAlbumDialog = true }
@@ -819,147 +774,31 @@ fun MainAppLayout(
                                             )
                                         }
                                     }
-                                    
-                                    var showOverflowMenu by remember { mutableStateOf(false) }
-                                    var overflowState by remember { mutableStateOf("main") }
-                                    Box {
+                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == null) {
                                         PhotonHeaderIconButton(
-                                            onClick = {
-                                                overflowState = "main"
-                                                showOverflowMenu = true
-                                            }
+                                            onClick = { showDisplaySortSheet = true }
                                         ) {
                                             Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                                                contentDescription = "More options",
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                                contentDescription = stringResource(R.string.menu_view_mode) + " & " + stringResource(R.string.menu_sort_order),
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
-                                        DropdownMenu(
-                                            expanded = showOverflowMenu,
-                                            onDismissRequest = { 
-                                                showOverflowMenu = false
-                                                overflowState = "main"
-                                            },
-                                            shape = com.inferno.gallery.ui.theme.ShapeMedium,
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            tonalElevation = 6.dp,
-                                            modifier = Modifier.widthIn(min = 180.dp)
-                                        ) {
-                                            if (overflowState == "main") {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.settings_title)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
-                                                    onClick = {
-                                                        showOverflowMenu = false
-                                                        overflowState = "main"
-                                                        nestedNavController.navigate("settings") {
-                                                            popUpTo("photos") { saveState = true }
-                                                            launchSingleTop = true
-                                                            restoreState = true
-                                                        }
-                                                    }
-                                                )
-                                                if (currentRoute == "photos" || currentRoute == "videos") {
-                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.menu_view_mode)) },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                        onClick = { overflowState = "view" }
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.menu_sort_order)) },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                        onClick = { overflowState = "sort" }
-                                                    )
-                                                }
-                                                if (currentRoute == "albums") {
-                                                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.menu_view_mode)) },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                        onClick = { overflowState = "album_view" }
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.menu_sort_order)) },
-                                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                                        trailingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_chevron_right), contentDescription = null) },
-                                                        onClick = { overflowState = "album_sort" }
-                                                    )
-                                                }
-                                            } else if (overflowState == "view") {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.action_back)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                    onClick = { overflowState = "main" }
-                                                )
-                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_immersive)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Immersive, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Immersive); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.view_mode_grouped)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = viewMode == ViewMode.Grouped, onClick = null) }, onClick = { viewModel.setViewMode(ViewMode.Grouped); showOverflowMenu = false; overflowState = "main" })
-                                            } else if (overflowState == "sort") {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.action_back)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                    onClick = { overflowState = "main" }
-                                                )
-                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedNewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.DateModifiedOldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_big_to_small)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_small_to_big)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_a_to_z)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_z_to_a)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = sortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setSortOrder(SortOrder.NameDesc); showOverflowMenu = false; overflowState = "main" })
-                                            } else if (overflowState == "album_view") {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.action_back)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                    onClick = { overflowState = "main" }
-                                                )
-                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.layout_grid_view)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                    trailingIcon = { androidx.compose.material3.RadioButton(selected = albumLayoutMode == AlbumLayoutMode.GRID, onClick = null) },
-                                                    onClick = {
-                                                        viewModel.setAlbumLayoutMode(AlbumLayoutMode.GRID)
-                                                        showOverflowMenu = false
-                                                        overflowState = "main"
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.layout_list_view)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_list), contentDescription = null) },
-                                                    trailingIcon = { androidx.compose.material3.RadioButton(selected = albumLayoutMode == AlbumLayoutMode.LIST, onClick = null) },
-                                                    onClick = {
-                                                        viewModel.setAlbumLayoutMode(AlbumLayoutMode.LIST)
-                                                        showOverflowMenu = false
-                                                        overflowState = "main"
-                                                    }
-                                                )
-                                            } else if (overflowState == "album_sort") {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.action_back)) },
-                                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = null) },
-                                                    onClick = { overflowState = "main" }
-                                                )
-                                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_a_to_z)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.NameAsc, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.NameAsc); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_name_z_to_a)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.NameDesc, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.NameDesc); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.DateModifiedNewToOld, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.DateModifiedNewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_added_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.DateModifiedOldToNew, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.DateModifiedOldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_newest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.NewToOld, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.NewToOld); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_date_taken_oldest)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.OldToNew, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.OldToNew); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_count_most)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.CountDesc, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.CountDesc); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_count_least)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.CountAsc, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.CountAsc); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_big_to_small)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.BigToSmall, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.BigToSmall); showOverflowMenu = false; overflowState = "main" })
-                                                DropdownMenuItem(text = { Text(stringResource(R.string.sort_size_small_to_big)) }, trailingIcon = { androidx.compose.material3.RadioButton(selected = albumSortOrder == SortOrder.SmallToBig, onClick = null) }, onClick = { viewModel.setAlbumSortOrder(SortOrder.SmallToBig); showOverflowMenu = false; overflowState = "main" })
+                                    }
+                                    PhotonHeaderIconButton(
+                                        onClick = {
+                                            nestedNavController.navigate("settings") {
+                                                popUpTo("photos") { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
                                         }
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_settings),
+                                            contentDescription = stringResource(R.string.settings_title),
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
                             }
@@ -2714,6 +2553,21 @@ fun MainAppLayout(
                 }
             }
         }
+    }
+
+    if (showDisplaySortSheet) {
+        DisplayAndSortBottomSheet(
+            isAlbumsScreen = (currentRoute == "albums"),
+            viewMode = viewMode,
+            onViewModeChange = { viewModel.setViewMode(it) },
+            albumLayoutMode = albumLayoutMode,
+            onAlbumLayoutModeChange = { viewModel.setAlbumLayoutMode(it) },
+            sortOrder = sortOrder,
+            onSortOrderChange = { viewModel.setSortOrder(it) },
+            albumSortOrder = albumSortOrder,
+            onAlbumSortOrderChange = { viewModel.setAlbumSortOrder(it) },
+            onDismissRequest = { showDisplaySortSheet = false }
+        )
     }
 
 }
