@@ -1138,6 +1138,8 @@ fun MainAppLayout(
                 popExitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) }
             ) {
                 CollectionsScreen(
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = this,
                     viewModel = viewModel,
                     contentPadding = effectivePadding,
                     onAlbumClick = { bucketName ->

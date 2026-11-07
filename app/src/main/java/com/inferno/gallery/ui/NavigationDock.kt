@@ -2,7 +2,9 @@ package com.inferno.gallery.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
@@ -31,6 +33,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -55,6 +58,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.NavDockLabelStyle
 import com.inferno.gallery.ui.utils.tick
@@ -63,7 +67,8 @@ import androidx.compose.ui.res.stringResource
 import com.inferno.gallery.R
 
 /**
- * Floating navigation bar with sliding active indicator pill and satellite circular search pill.
+ * Google Photos style floating navigation dock with dynamic intrinsic content-sized tabs,
+ * smooth pushing transitions, and satellite circular search pill.
  */
 @Composable
 fun FloatingNavigationPill(
@@ -83,114 +88,71 @@ fun FloatingNavigationPill(
         else -> -1
     }
 
-    var lastActiveIndex by rememberSaveable { mutableIntStateOf(0) }
-    if (selectedIndex >= 0) {
-        lastActiveIndex = selectedIndex
-    }
-
     val isSearchSelected = currentRoute == "search"
 
     Row(
         modifier = modifier
-            .fillMaxWidth(0.95f)
-            .widthIn(min = 320.dp, max = 420.dp)
+            .wrapContentWidth()
             .pointerInput(Unit) {},
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ── Main 3-Tab Pill Capsule (Photos, Albums, Collections) ──
+        // ── Main Capsule (Photos, Albums, Collections) ──
         Surface(
-            modifier = Modifier
-                .weight(1f)
-                .height(56.dp),
+            modifier = Modifier.height(56.dp),
             shape = ShapeFull,
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
             shadowElevation = 2.dp
         ) {
-            BoxWithConstraints(
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 4.dp, vertical = 7.dp),
-                contentAlignment = Alignment.CenterStart
+                    .fillMaxHeight()
+                    .padding(8.dp)
+                    .animateContentSize(
+                        animationSpec = MotionTokens.snappySpring()
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val tabCount = 3
-                val totalWidth = maxWidth
-                val tabWidth = totalWidth / tabCount
-                val pillHorizontalInset = 1.5.dp
-                val pillWidth = tabWidth - (pillHorizontalInset * 2)
-
-                // Smooth M3 Expressive sliding animation via MotionTokens.snappySpring (defaultSpatialSpec)
-                val animatedFraction by animateFloatAsState(
-                    targetValue = lastActiveIndex.toFloat(),
-                    animationSpec = MotionTokens.snappySpring(),
-                    label = "slidingPillFraction"
-                )
-                val indicatorAlpha by animateFloatAsState(
-                    targetValue = if (selectedIndex >= 0) 1f else 0f,
-                    animationSpec = MotionTokens.fastEffectsSpec(),
-                    label = "indicatorAlpha"
+                DynamicPillTabItem(
+                    icon = {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                            contentDescription = stringResource(R.string.nav_photos),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    label = stringResource(R.string.nav_photos),
+                    isSelected = selectedIndex == 0,
+                    onClick = onNavigateToPhotos
                 )
 
-                val density = LocalDensity.current
-                val pillInsetPx = with(density) { pillHorizontalInset.toPx() }
-                val tabWidthPx = with(density) { tabWidth.toPx() }
-
-                // ── Single Accented Sliding Pill (GPU Translated via graphicsLayer) ──
-                Box(
-                    modifier = Modifier
-                        .width(pillWidth)
-                        .fillMaxHeight()
-                        .graphicsLayer {
-                            translationX = pillInsetPx + (animatedFraction * tabWidthPx)
-                            alpha = indicatorAlpha
-                        }
-                        .clip(ShapeFull)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
+                DynamicPillTabItem(
+                    icon = {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                            contentDescription = stringResource(R.string.nav_albums),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    label = stringResource(R.string.nav_albums),
+                    isSelected = selectedIndex == 1,
+                    onClick = onNavigateToAlbums
                 )
 
-                // ── Interactive Tabs ──
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SlidingPillTabItem(
-                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(20.dp)) },
-                        label = stringResource(R.string.nav_photos),
-                        isSelected = selectedIndex == 0,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToPhotos
-                    )
-
-                    SlidingPillTabItem(
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                                contentDescription = stringResource(R.string.nav_albums),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        label = stringResource(R.string.nav_albums),
-                        isSelected = selectedIndex == 1,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToAlbums
-                    )
-
-                    SlidingPillTabItem(
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                                contentDescription = stringResource(R.string.nav_collections),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        label = stringResource(R.string.nav_collections),
-                        isSelected = selectedIndex == 2,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToCollections
-                    )
-                }
+                DynamicPillTabItem(
+                    icon = {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                            contentDescription = stringResource(R.string.nav_collections),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    label = stringResource(R.string.nav_collections),
+                    isSelected = selectedIndex == 2,
+                    onClick = onNavigateToCollections
+                )
             }
         }
 
@@ -255,7 +217,7 @@ fun FloatingNavigationPill(
 }
 
 @Composable
-fun SlidingPillTabItem(
+fun DynamicPillTabItem(
     icon: @Composable () -> Unit,
     label: String,
     isSelected: Boolean,
@@ -267,9 +229,19 @@ fun SlidingPillTabItem(
     val view = LocalView.current
 
     val touchScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1f,
+        targetValue = if (isPressed) 0.94f else 1f,
         animationSpec = MotionTokens.bouncySpring(),
         label = "tabItemTouchScale"
+    )
+
+    val pillColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            Color.Transparent
+        },
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "tabItemPillColor"
     )
 
     val contentColor by animateColorAsState(
@@ -280,6 +252,12 @@ fun SlidingPillTabItem(
         },
         animationSpec = MotionTokens.fastEffectsSpec(),
         label = "tabItemContentColor"
+    )
+
+    val horizontalPadding by animateDpAsState(
+        targetValue = if (isSelected) 16.dp else 13.dp,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "tabItemHorizontalPadding"
     )
 
     val rippleColor = if (isSelected) {
@@ -296,6 +274,7 @@ fun SlidingPillTabItem(
                 scaleY = touchScale
             }
             .clip(ShapeFull)
+            .background(pillColor)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(
@@ -306,13 +285,13 @@ fun SlidingPillTabItem(
                     view.tick()
                     onClick()
                 }
-            ),
+            )
+            .padding(horizontal = horizontalPadding),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 2.dp)
+            horizontalArrangement = Arrangement.Center
         ) {
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 AnimatedVisibility(
@@ -320,23 +299,26 @@ fun SlidingPillTabItem(
                     enter = fadeIn(
                         animationSpec = MotionTokens.fastEffectsSpec()
                     ) + expandHorizontally(
-                        animationSpec = MotionTokens.bouncySpring()
+                        animationSpec = MotionTokens.snappySpring()
                     ),
                     exit = fadeOut(
                         animationSpec = MotionTokens.fastEffectsSpec()
                     ) + shrinkHorizontally(
-                        animationSpec = MotionTokens.bouncySpring()
+                        animationSpec = MotionTokens.snappySpring()
                     )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         icon()
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                     }
                 }
 
                 Text(
                     text = label,
-                    style = NavDockLabelStyle,
+                    style = NavDockLabelStyle.copy(
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        fontSize = 13.sp
+                    ),
                     maxLines = 1
                 )
             }
