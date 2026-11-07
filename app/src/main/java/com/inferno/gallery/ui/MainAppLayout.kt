@@ -537,7 +537,7 @@ fun MainAppLayout(
         }
     }
 
-    val isMainScreen = currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "search" || currentRoute == null
+    val isMainScreen = currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == "search" || currentRoute == null
     val isAlbumScreen = currentRoute == "album/{bucketName}"
     val isSettingsScreen = currentRoute == "settings"
 
@@ -750,6 +750,7 @@ fun MainAppLayout(
                                     "photos" -> stringResource(R.string.nav_photos)
                                     "videos" -> stringResource(R.string.album_videos)
                                     "albums" -> stringResource(R.string.nav_albums)
+                                    "collections" -> stringResource(R.string.nav_collections)
                                     "search" -> stringResource(R.string.nav_search)
                                     else -> stringResource(R.string.app_name)
                                 }
@@ -774,7 +775,7 @@ fun MainAppLayout(
                                             )
                                         }
                                     }
-                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == null) {
+                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == null) {
                                         PhotonHeaderIconButton(
                                             onClick = { showDisplaySortSheet = true }
                                         ) {
@@ -858,6 +859,17 @@ fun MainAppLayout(
                                     }
                                 }
                             },
+                            onNavigateToCollections = {
+                                if (nestedNavController.currentDestination?.route == "collections") {
+                                    viewModel.triggerCollectionsScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("collections") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
                             onNavigateToSearch = {
                                 nestedNavController.navigate("search") {
                                     popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
@@ -927,6 +939,22 @@ fun MainAppLayout(
                                         viewModel.triggerAlbumsScrollToTop()
                                     } else {
                                         nestedNavController.navigate("albums") {
+                                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                }
+                            )
+                            DockItem(
+                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_dashboard), contentDescription = stringResource(R.string.nav_collections), modifier = Modifier.size(24.dp)) },
+                                label = stringResource(R.string.nav_collections),
+                                isSelected = currentRoute == "collections",
+                                onClick = { 
+                                    if (nestedNavController.currentDestination?.route == "collections") {
+                                        viewModel.triggerCollectionsScrollToTop()
+                                    } else {
+                                        nestedNavController.navigate("collections") {
                                             popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                             launchSingleTop = true
                                             restoreState = true
@@ -1099,6 +1127,34 @@ fun MainAppLayout(
                     onDeleteCover = { albumName ->
                         viewModel.removeAlbumCustomCover(albumName)
                     }
+                )
+            }
+
+            composable(
+                route = "collections",
+                enterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
+                exitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) },
+                popEnterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
+                popExitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) }
+            ) {
+                CollectionsScreen(
+                    viewModel = viewModel,
+                    contentPadding = effectivePadding,
+                    onAlbumClick = { bucketName ->
+                        viewModel.resetGridScrollPosition(bucketName)
+                        viewModel.setBucket(bucketName)
+                        val encoded = android.net.Uri.encode(bucketName)
+                        nestedNavController.navigate("album/$encoded")
+                    },
+                    onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
+                    onNavigateToVault = onNavigateToVault,
+                    onNavigateToDuplicateCleaner = { nestedNavController.navigate("duplicate_cleaner") },
+                    onNavigateToPhotoMap = { nestedNavController.navigate("photo_map") },
+                    onNavigateToPlacesList = { nestedNavController.navigate("places_list") },
+                    onNavigateToPeople = { nestedNavController.navigate("people_list") },
+                    onCreateCollage = onCreateCollage,
+                    onCreateStitch = onCreateStitch,
+                    onOpenEditor = onOpenEditor
                 )
             }
             

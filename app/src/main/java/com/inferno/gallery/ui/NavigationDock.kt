@@ -40,7 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,125 +63,191 @@ import androidx.compose.ui.res.stringResource
 import com.inferno.gallery.R
 
 /**
- * Floating navigation bar with sliding active indicator pill animated via MotionScheme spatial spring.
+ * Floating navigation bar with sliding active indicator pill and satellite circular search pill.
  */
 @Composable
 fun FloatingNavigationPill(
     currentRoute: String?,
     onNavigateToPhotos: () -> Unit,
     onNavigateToAlbums: () -> Unit,
+    onNavigateToCollections: () -> Unit,
     onNavigateToSearch: () -> Unit,
     showVideosTab: Boolean = false,
     onNavigateToVideos: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val tabCount = if (showVideosTab) 4 else 3
-    val selectedIndex = if (showVideosTab) {
-        when {
-            currentRoute == "photos" -> 0
-            currentRoute == "videos" -> 1
-            currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 2
-            currentRoute == "search" -> 3
-            else -> 0
-        }
-    } else {
-        when {
-            currentRoute == "photos" -> 0
-            currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 1
-            currentRoute == "search" -> 2
-            else -> 0
-        }
+    val selectedIndex = when {
+        currentRoute == "photos" -> 0
+        currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 1
+        currentRoute == "collections" -> 2
+        else -> -1
     }
 
-    Surface(
+    var lastActiveIndex by rememberSaveable { mutableIntStateOf(0) }
+    if (selectedIndex >= 0) {
+        lastActiveIndex = selectedIndex
+    }
+
+    val isSearchSelected = currentRoute == "search"
+
+    Row(
         modifier = modifier
-            .fillMaxWidth(if (showVideosTab) 0.92f else 0.78f)
-            .widthIn(min = if (showVideosTab) 320.dp else 280.dp, max = if (showVideosTab) 364.dp else 320.dp)
-            .height(56.dp)
+            .fillMaxWidth(0.92f)
+            .widthIn(min = 320.dp, max = 390.dp)
             .pointerInput(Unit) {},
-        shape = ShapeFull,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 0.dp,
-        shadowElevation = 2.dp
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        BoxWithConstraints(
+        // ── Main 3-Tab Pill Capsule (Photos, Albums, Collections) ──
+        Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 7.dp),
-            contentAlignment = Alignment.CenterStart
+                .weight(1f)
+                .height(56.dp),
+            shape = ShapeFull,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 0.dp,
+            shadowElevation = 2.dp
         ) {
-            val totalWidth = maxWidth
-            val tabWidth = totalWidth / tabCount
-            val pillHorizontalInset = 2.dp
-            val pillWidth = tabWidth - (pillHorizontalInset * 2)
-
-            // Smooth M3 Expressive sliding animation via MotionTokens.snappySpring (defaultSpatialSpec)
-            val animatedFraction by animateFloatAsState(
-                targetValue = selectedIndex.toFloat(),
-                animationSpec = MotionTokens.snappySpring(),
-                label = "slidingPillFraction"
-            )
-
-            val density = LocalDensity.current
-            val pillInsetPx = with(density) { pillHorizontalInset.toPx() }
-            val tabWidthPx = with(density) { tabWidth.toPx() }
-
-            // ── Single Accented Sliding Pill (GPU Translated via graphicsLayer) ──
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .width(pillWidth)
-                    .fillMaxHeight()
-                    .graphicsLayer {
-                        translationX = pillInsetPx + (animatedFraction * tabWidthPx)
-                    }
-                    .clip(ShapeFull)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-            )
-
-            // ── Interactive Tabs ──
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp, vertical = 7.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                SlidingPillTabItem(
-                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(22.dp)) },
-                    label = stringResource(R.string.nav_photos),
-                    isSelected = selectedIndex == 0,
-                    modifier = Modifier.weight(1f),
-                    onClick = onNavigateToPhotos
+                val tabCount = 3
+                val totalWidth = maxWidth
+                val tabWidth = totalWidth / tabCount
+                val pillHorizontalInset = 2.dp
+                val pillWidth = tabWidth - (pillHorizontalInset * 2)
+
+                // Smooth M3 Expressive sliding animation via MotionTokens.snappySpring (defaultSpatialSpec)
+                val animatedFraction by animateFloatAsState(
+                    targetValue = lastActiveIndex.toFloat(),
+                    animationSpec = MotionTokens.snappySpring(),
+                    label = "slidingPillFraction"
+                )
+                val indicatorAlpha by animateFloatAsState(
+                    targetValue = if (selectedIndex >= 0) 1f else 0f,
+                    animationSpec = MotionTokens.fastEffectsSpec(),
+                    label = "indicatorAlpha"
                 )
 
-                if (showVideosTab) {
+                val density = LocalDensity.current
+                val pillInsetPx = with(density) { pillHorizontalInset.toPx() }
+                val tabWidthPx = with(density) { tabWidth.toPx() }
+
+                // ── Single Accented Sliding Pill (GPU Translated via graphicsLayer) ──
+                Box(
+                    modifier = Modifier
+                        .width(pillWidth)
+                        .fillMaxHeight()
+                        .graphicsLayer {
+                            translationX = pillInsetPx + (animatedFraction * tabWidthPx)
+                            alpha = indicatorAlpha
+                        }
+                        .clip(ShapeFull)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                )
+
+                // ── Interactive Tabs ──
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     SlidingPillTabItem(
-                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = stringResource(R.string.album_videos), modifier = Modifier.size(22.dp)) },
-                        label = stringResource(R.string.album_videos),
+                        icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(22.dp)) },
+                        label = stringResource(R.string.nav_photos),
+                        isSelected = selectedIndex == 0,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToPhotos
+                    )
+
+                    SlidingPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                contentDescription = stringResource(R.string.nav_albums),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        },
+                        label = stringResource(R.string.nav_albums),
                         isSelected = selectedIndex == 1,
                         modifier = Modifier.weight(1f),
-                        onClick = onNavigateToVideos
+                        onClick = onNavigateToAlbums
+                    )
+
+                    SlidingPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                                contentDescription = stringResource(R.string.nav_collections),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        },
+                        label = stringResource(R.string.nav_collections),
+                        isSelected = selectedIndex == 2,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToCollections
                     )
                 }
+            }
+        }
 
-                SlidingPillTabItem(
-                    icon = {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                            contentDescription = stringResource(R.string.nav_albums),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    },
-                    label = stringResource(R.string.nav_albums),
-                    isSelected = if (showVideosTab) selectedIndex == 2 else selectedIndex == 1,
-                    modifier = Modifier.weight(1f),
-                    onClick = onNavigateToAlbums
-                )
+        // ── Satellite Circular Search Pill ──
+        val searchContainerColor by animateColorAsState(
+            targetValue = if (isSearchSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+            animationSpec = MotionTokens.fastEffectsSpec(),
+            label = "searchContainerColor"
+        )
+        val searchContentColor by animateColorAsState(
+            targetValue = if (isSearchSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            animationSpec = MotionTokens.fastEffectsSpec(),
+            label = "searchContentColor"
+        )
 
-                SlidingPillTabItem(
-                    icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = stringResource(R.string.nav_search), modifier = Modifier.size(22.dp)) },
-                    label = stringResource(R.string.nav_search),
-                    isSelected = if (showVideosTab) selectedIndex == 3 else selectedIndex == 2,
-                    modifier = Modifier.weight(1f),
-                    onClick = onNavigateToSearch
+        Surface(
+            modifier = Modifier.size(56.dp),
+            shape = ShapeFull,
+            color = searchContainerColor,
+            tonalElevation = 0.dp,
+            shadowElevation = 2.dp
+        ) {
+            val searchInteractionSource = remember { MutableInteractionSource() }
+            val isSearchPressed by searchInteractionSource.collectIsPressedAsState()
+            val searchTouchScale by animateFloatAsState(
+                targetValue = if (isSearchPressed) 0.93f else 1f,
+                animationSpec = MotionTokens.bouncySpring(),
+                label = "searchTouchScale"
+            )
+            val view = LocalView.current
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = searchTouchScale
+                        scaleY = searchTouchScale
+                    }
+                    .clip(ShapeFull)
+                    .clickable(
+                        interactionSource = searchInteractionSource,
+                        indication = ripple(
+                            bounded = true,
+                            color = searchContentColor
+                        ),
+                        onClick = {
+                            view.tick()
+                            onNavigateToSearch()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                    contentDescription = stringResource(R.string.nav_search),
+                    tint = searchContentColor,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -417,8 +486,9 @@ fun getTabRouteIndex(route: String?): Int {
     return when (route) {
         "photos" -> 0
         "albums", "album/{bucketName}" -> 1
-        "search" -> 2
-        "settings" -> 3
+        "collections" -> 2
+        "search" -> 3
+        "settings" -> 4
         else -> 0
     }
 }
