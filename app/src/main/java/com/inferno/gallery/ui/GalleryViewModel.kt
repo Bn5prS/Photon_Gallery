@@ -668,6 +668,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    val albumsGridCellsCount: StateFlow<Int> = settingsRepository.albumsGridCellsCountFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 3
+        )
+
+    fun updateAlbumsGridCellsCount(count: Int) {
+        viewModelScope.launch {
+            settingsRepository.updateAlbumsGridCellsCount(count)
+        }
+    }
+
     val viewMode: StateFlow<ViewMode> = settingsRepository.viewModeFlow.map {
         try {
             ViewMode.valueOf(it)

@@ -86,6 +86,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
         val PEOPLE_GRID_CELLS_COUNT = intPreferencesKey("people_grid_cells_count")
         val PERSON_DETAIL_GRID_CELLS_COUNT = intPreferencesKey("person_detail_grid_cells_count")
+        val ALBUMS_GRID_CELLS_COUNT = intPreferencesKey("albums_grid_cells_count")
         val PINNED_PEOPLE_ORDER = stringPreferencesKey("pinned_people_order")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
@@ -581,6 +582,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updatePersonDetailGridCellsCount(count: Int) {
         context.dataStore.edit { preferences ->
             preferences[PERSON_DETAIL_GRID_CELLS_COUNT] = count
+        }
+    }
+
+    val albumsGridCellsCountFlow: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[ALBUMS_GRID_CELLS_COUNT] ?: 3
+        }
+
+    suspend fun updateAlbumsGridCellsCount(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[ALBUMS_GRID_CELLS_COUNT] = count.coerceIn(2, 4)
         }
     }
 

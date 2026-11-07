@@ -17,11 +17,24 @@ import com.inferno.gallery.data.BucketNames
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -157,6 +170,10 @@ fun AlbumsScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
+    val albumsGridCellsCount by viewModel.albumsGridCellsCount.collectAsState()
+    var isPinching by remember { mutableStateOf(false) }
+    val livePinchScaleAnim = remember { Animatable(1f) }
+    val pinchScaleScope = rememberCoroutineScope()
 
     val unpinnedAlbums = remember(albums, userPinnedNames, showEmptyAlbums) {
         albums.filter {
@@ -217,23 +234,60 @@ fun AlbumsScreen(
                     )
                 }
             ) {
-            LazyVerticalGrid(
-                columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
-                state = lazyGridState,
-                contentPadding = PaddingValues(
-                    start = SpacingTokens.L,
-                    end = SpacingTokens.L,
-                    top = contentPadding.calculateTopPadding() + SpacingTokens.M,
-                    bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
-                ),
-                verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
-                    Arrangement.spacedBy(SpacingTokens.S)
-                } else {
-                    Arrangement.spacedBy(SpacingTokens.L)
-                },
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
-                modifier = Modifier.fillMaxSize()
-            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .albumsGridPinchZoom(
+                            gridCellsCount = albumsGridCellsCount,
+                            onGridCountChange = { newCols ->
+                                viewModel.updateAlbumsGridCellsCount(newCols.coerceIn(2, 4))
+                            },
+                            enabled = albumLayoutMode == AlbumLayoutMode.GRID,
+                            haptic = haptic,
+                            onPinchScaleChange = { scale ->
+                                isPinching = true
+                                pinchScaleScope.launch {
+                                    livePinchScaleAnim.snapTo(scale.coerceIn(0.75f, 1.30f))
+                                }
+                            },
+                            onPinchEnd = {
+                                pinchScaleScope.launch {
+                                    livePinchScaleAnim.animateTo(
+                                        targetValue = 1f,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.80f,
+                                            stiffness = Spring.StiffnessMediumLow
+                                        )
+                                    )
+                                    isPinching = false
+                                }
+                            }
+                        )
+                ) {
+                    LazyVerticalGrid(
+                        columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(albumsGridCellsCount),
+                        state = lazyGridState,
+                        contentPadding = PaddingValues(
+                            start = SpacingTokens.L,
+                            end = SpacingTokens.L,
+                            top = contentPadding.calculateTopPadding() + SpacingTokens.M,
+                            bottom = contentPadding.calculateBottomPadding() + SpacingTokens.XXL
+                        ),
+                        verticalArrangement = if (albumLayoutMode == AlbumLayoutMode.LIST) {
+                            Arrangement.spacedBy(SpacingTokens.S)
+                        } else {
+                            Arrangement.spacedBy(SpacingTokens.L)
+                        },
+                        horizontalArrangement = Arrangement.spacedBy(if (albumsGridCellsCount >= 4) SpacingTokens.S else SpacingTokens.M),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                if (albumLayoutMode == AlbumLayoutMode.GRID) {
+                                    scaleX = livePinchScaleAnim.value
+                                    scaleY = livePinchScaleAnim.value
+                                }
+                            }
+                    ) {
 
                 if (albumLayoutMode == AlbumLayoutMode.LIST) {
                     if (userPinnedAlbums.isNotEmpty()) {
@@ -301,7 +355,7 @@ fun AlbumsScreen(
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 PinnedHubCard(
                                     pinnedAlbums = userPinnedAlbums,
-                                    isCompact = true,
+                                    isCompact = albumsGridCellsCount >= 3,
                                     onClick = onNavigateToPinnedAlbums
                                 )
                             }
@@ -330,7 +384,7 @@ fun AlbumsScreen(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
-                                isCompact = true,
+                                isCompact = albumsGridCellsCount >= 3,
                                 isPinned = isPinned,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
@@ -361,18 +415,31 @@ fun AlbumsScreen(
                         }
                     }
                 }
+            }
 
-
-
-
-
-
-
-
-
-
-
-    }
+            AnimatedVisibility(
+                visible = isPinching && albumLayoutMode == AlbumLayoutMode.GRID,
+                enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
+                exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec()),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(bottom = 64.dp)
+            ) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+                    tonalElevation = 6.dp,
+                    shadowElevation = 8.dp
+                ) {
+                    Text(
+                        text = "$albumsGridCellsCount columns",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1638,6 +1705,119 @@ fun SectionHeader(
                     text = seeAllText,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Smooth two-finger pinch-to-zoom gesture detector for Albums grid (min 2, max 4 columns).
+ * Spreading fingers decreases columns (zooms in: 4 -> 3 -> 2),
+ * pinching fingers increases columns (zooms out: 2 -> 3 -> 4).
+ */
+internal fun Modifier.albumsGridPinchZoom(
+    gridCellsCount: Int,
+    onGridCountChange: (Int) -> Unit,
+    enabled: Boolean,
+    haptic: HapticFeedback,
+    onPinchScaleChange: (scale: Float) -> Unit,
+    onPinchEnd: () -> Unit
+): Modifier = composed {
+    val currentGridCount by rememberUpdatedState(gridCellsCount)
+    val currentOnGridCountChange by rememberUpdatedState(onGridCountChange)
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentOnPinchScaleChange by rememberUpdatedState(onPinchScaleChange)
+    val currentOnPinchEnd by rememberUpdatedState(onPinchEnd)
+
+    Modifier.pointerInput(Unit) {
+        val touchSlop = viewConfiguration.touchSlop
+
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+
+            if (!currentEnabled) return@awaitEachGesture
+
+            var initialDistance = -1f
+            var pinchActive = false
+            var pinchEverActivated = false
+            var accumulatedScale = 1.0f
+            var lastChangeTime = 0L
+
+            try {
+                do {
+                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                    val changes = event.changes
+
+                    if (changes.size < 2 && !pinchEverActivated) {
+                        continue
+                    }
+
+                    val pressedChanges = changes.filter { it.pressed }
+
+                    if (pressedChanges.size >= 2) {
+                        val p1 = pressedChanges[0]
+                        val p2 = pressedChanges[1]
+
+                        val currDist = kotlin.math.hypot(p1.position.x - p2.position.x, p1.position.y - p2.position.y)
+
+                        if (initialDistance <= 0f) {
+                            initialDistance = currDist
+                        } else {
+                            val distDiff = kotlin.math.abs(currDist - initialDistance)
+                            val rawScale = currDist / initialDistance
+
+                            if (!pinchActive && distDiff > touchSlop * 1.25f && (rawScale > 1.05f || rawScale < 0.95f)) {
+                                pinchActive = true
+                                pinchEverActivated = true
+                            }
+
+                            if (pinchActive) {
+                                event.changes.forEach { it.consume() }
+
+                                if (p1.previousPressed && p2.previousPressed) {
+                                    val prevDist = kotlin.math.hypot(p1.previousPosition.x - p2.previousPosition.x, p1.previousPosition.y - p2.previousPosition.y)
+                                    if (prevDist > 1f && currDist > 1f) {
+                                        val zoomDelta = currDist / prevDist
+                                        if (zoomDelta in 0.6f..1.6f) {
+                                            accumulatedScale *= zoomDelta
+                                            currentOnPinchScaleChange(accumulatedScale)
+
+                                            val now = System.currentTimeMillis()
+                                            // Spreading fingers apart -> fewer columns (zooms in: 4 -> 3 -> 2, min 2)
+                                            if (accumulatedScale >= 1.15f && now - lastChangeTime > 240L) {
+                                                val currentCols = currentGridCount
+                                                if (currentCols > 2) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    currentOnGridCountChange(currentCols - 1)
+                                                    lastChangeTime = now
+                                                    accumulatedScale = 1.0f
+                                                    currentOnPinchScaleChange(1.0f)
+                                                }
+                                            }
+                                            // Pinching fingers together -> more columns (zooms out: 2 -> 3 -> 4, max 4)
+                                            else if (accumulatedScale <= 0.85f && now - lastChangeTime > 240L) {
+                                                val currentCols = currentGridCount
+                                                if (currentCols < 4) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    currentOnGridCountChange(currentCols + 1)
+                                                    lastChangeTime = now
+                                                    accumulatedScale = 1.0f
+                                                    currentOnPinchScaleChange(1.0f)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if (pinchActive) {
+                        event.changes.forEach { it.consume() }
+                    }
+                } while (event.changes.any { it.pressed })
+            } finally {
+                if (pinchActive) {
+                    currentOnPinchEnd()
+                }
             }
         }
     }

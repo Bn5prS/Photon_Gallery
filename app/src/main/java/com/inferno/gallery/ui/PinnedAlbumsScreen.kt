@@ -75,6 +75,7 @@ fun PinnedAlbumsScreen(
     val userPinnedAlbums by galleryViewModel.userPinnedAlbums.collectAsState()
     val albumSortOrder by galleryViewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by galleryViewModel.albumLayoutMode.collectAsState()
+    val albumsGridCellsCount by galleryViewModel.albumsGridCellsCount.collectAsState()
     val showAlbumSize by galleryViewModel.showAlbumSize.collectAsState()
     val customCovers by galleryViewModel.albumCustomCovers.collectAsState()
     val customShapes by galleryViewModel.albumCustomShapes.collectAsState()
@@ -192,7 +193,7 @@ fun PinnedAlbumsScreen(
             val lazyGridState = rememberLazyGridState()
 
             LazyVerticalGrid(
-                columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
+                columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(albumsGridCellsCount),
                 state = lazyGridState,
                 contentPadding = PaddingValues(
                     start = SpacingTokens.L,
@@ -258,7 +259,7 @@ fun PinnedAlbumsScreen(
                                 bucket = bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
-                                isCompact = false,
+                                isCompact = albumsGridCellsCount >= 3,
                                 isPinned = true,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
