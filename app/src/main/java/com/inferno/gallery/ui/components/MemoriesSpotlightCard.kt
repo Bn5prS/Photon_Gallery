@@ -67,7 +67,7 @@ import com.inferno.gallery.ui.utils.pressScale
 /**
  * Material 3 Memories Spotlight supporting two clean layout styles:
  * 1. STORIES: Space-saving vertical story cards (~116.dp x 160.dp) in a LazyRow.
- * 2. SPOTLIGHT: Wide hero card (~80% width) with adjacent memories peeking in (Google Photos style).
+ * 2. SPOTLIGHT: Wide hero card (~80% width) with adjacent memories peeking in.
  *
  * Design Refinements:
  * - No heavy solid blocks covering the photos.
@@ -383,7 +383,7 @@ private fun CompactMemoryReelCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. STYLE: Multi-Browse Peek Deck (Google Photos Style with soft bottom scrim)
+// 2. STYLE: Multi-Browse Peek Deck (Spotlight with soft bottom scrim)
 // ─────────────────────────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

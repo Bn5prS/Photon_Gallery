@@ -2279,7 +2279,7 @@ private fun ViewerActionButtonsRow(
     onInfo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Outer Pill container matching Pixel Music player bottom controls pill:
+    // Outer Pill container for bottom controls pill:
     // Stadium capsule (CircleShape), height 64.dp, 6.dp padding on all sides,
     // pure solid tonal layering with zero outlines, shadows, or elevations.
     Surface(
@@ -2384,7 +2384,7 @@ private fun ViewerActionButtonsRow(
 }
 
 /**
- * Calculates connected segmented button shapes matching Pixel player pill design:
+ * Calculates connected segmented button shapes for concentric capsule design:
  * - Start tile: Outer corner follows concentric capsule curve (26.dp), inner corner has subtle radius (6.dp).
  * - Middle tiles: All corners subtle radius (6.dp).
  * - End tile: Inner corner subtle radius (6.dp), outer corner follows concentric capsule curve (26.dp).

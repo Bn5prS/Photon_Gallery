@@ -27,7 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
-import com.inferno.gallery.ui.editor.GooglePhotosEditorScreen
+import com.inferno.gallery.ui.editor.PhotonEditorScreen
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.utils.popBackStackSafely
 
@@ -335,7 +335,7 @@ fun NavigationGraph(
             ) { backStackEntry ->
                 val uriString = backStackEntry.arguments?.getString("uri") ?: ""
                 val uri = android.net.Uri.parse(android.net.Uri.decode(uriString))
-                GooglePhotosEditorScreen(
+                PhotonEditorScreen(
                     imageUri = uri,
                     onBack = { navController.popBackStackSafely(backStackEntry) },
                     onSaved = { }

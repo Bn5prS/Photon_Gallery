@@ -151,7 +151,7 @@ data class EditorSnapshot(
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun GooglePhotosEditorScreen(
+fun PhotonEditorScreen(
     imageUri: Uri,
     onBack: () -> Unit,
     onSaved: (Uri) -> Unit = {},
@@ -221,7 +221,7 @@ fun GooglePhotosEditorScreen(
 
                 applyExifOrientation(rawBmp, exifOrientation)
             } catch (e: Exception) {
-                android.util.Log.e("GooglePhotosEditor", "Failed to load bitmap from $imageUri", e)
+                android.util.Log.e("PhotonEditor", "Failed to load bitmap from $imageUri", e)
                 null
             }
         }

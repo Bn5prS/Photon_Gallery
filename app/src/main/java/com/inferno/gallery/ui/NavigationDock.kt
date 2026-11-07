@@ -67,7 +67,7 @@ import androidx.compose.ui.res.stringResource
 import com.inferno.gallery.R
 
 /**
- * Google Photos style floating navigation dock with dynamic intrinsic content-sized tabs,
+ * Expressive floating navigation dock with dynamic intrinsic content-sized tabs,
  * smooth pushing transitions, and satellite circular search pill.
  */
 @Composable

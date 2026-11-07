@@ -554,7 +554,7 @@ fun VideoPlayerItemWithResolvedUri(
             )
         }
 
-        // Floating Video Scrubber Capsule: Single unified floating pill matching Pixel player styling
+        // Floating Video Scrubber Capsule: Single unified floating pill styling
         AnimatedVisibility(
             visible = showControls && isCurrentPage,
             enter = slideInVertically(
