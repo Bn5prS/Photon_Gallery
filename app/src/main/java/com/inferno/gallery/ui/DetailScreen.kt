@@ -67,6 +67,10 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.ripple
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilledIconButton
 import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
@@ -2273,137 +2277,154 @@ private fun ViewerActionButtonsRow(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        Surface(
-            shape = ShapeFull,
-            color = Color.Black.copy(alpha = 0.78f),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            modifier = Modifier.height(52.dp)
-        ) {
-            if (isTrash) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onRestore,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                            contentDescription = "Restore",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+        if (isTrash) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 240.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                    contentDescription = "Restore",
+                    onClick = onRestore,
+                    modifier = Modifier.weight(1f)
+                )
 
-                    IconButton(
-                        onClick = onPermanentDelete,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                            contentDescription = "Permanently Delete",
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Share
-                    IconButton(
-                        onClick = onShare,
-                        enabled = currentItem?.localExists == true,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
-                            contentDescription = stringResource(R.string.detail_share),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Favorite with spring bounce animation
-                    val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
-                    var heartBounce by remember { mutableStateOf(false) }
-                    val heartScale by animateFloatAsState(
-                        targetValue = if (heartBounce) 1.45f else 1f,
-                        animationSpec = MotionTokens.bouncySpring(),
-                        label = "heartScale",
-                        finishedListener = { if (heartBounce) heartBounce = false }
-                    )
-                    IconButton(
-                        onClick = {
-                            heartBounce = true
-                            onFavorite()
-                        },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                            contentDescription = stringResource(R.string.detail_favorite),
-                            tint = if (isFavorite) favoriteHarmonized else Color.White,
-                            modifier = Modifier
-                                .size(22.dp)
-                                .graphicsLayer {
-                                    scaleX = heartScale
-                                    scaleY = heartScale
-                                }
-                        )
-                    }
-
-                    // Info / Details
-                    IconButton(
-                        onClick = onInfo,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                            contentDescription = stringResource(R.string.detail_details),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Edit / Tune
-                    IconButton(
-                        enabled = currentItem?.localExists == true,
-                        onClick = onEdit,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_tune),
-                            contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Delete
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                            contentDescription = stringResource(R.string.detail_delete),
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    contentDescription = "Permanently Delete",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    onClick = onPermanentDelete,
+                    modifier = Modifier.weight(1f)
+                )
             }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 360.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Share
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                    contentDescription = stringResource(R.string.detail_share),
+                    enabled = currentItem?.localExists == true,
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 2. Favorite with spring bounce animation
+                val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
+                var heartBounce by remember { mutableStateOf(false) }
+                val heartScale by animateFloatAsState(
+                    targetValue = if (heartBounce) 1.45f else 1f,
+                    animationSpec = MotionTokens.bouncySpring(),
+                    label = "heartScale",
+                    finishedListener = { if (heartBounce) heartBounce = false }
+                )
+                ViewerToolTile(
+                    icon = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                    contentDescription = stringResource(R.string.detail_favorite),
+                    tint = if (isFavorite) favoriteHarmonized else Color.White,
+                    iconModifier = Modifier.graphicsLayer {
+                        scaleX = heartScale
+                        scaleY = heartScale
+                    },
+                    onClick = {
+                        heartBounce = true
+                        onFavorite()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 3. Edit / Tune
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_tune),
+                    contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
+                    enabled = currentItem?.localExists == true,
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 4. Info / Details
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                    contentDescription = stringResource(R.string.detail_details),
+                    onClick = onInfo,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 5. Delete
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    contentDescription = stringResource(R.string.detail_delete),
+                    tint = Color.White.copy(alpha = 0.90f),
+                    onClick = onDelete,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Individual squircle tool tile inspired by modern player controls.
+ * Features independent spring touch scale, translucent tonal surface, and subtle border.
+ */
+@Composable
+private fun ViewerToolTile(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = Color.White,
+    iconModifier: Modifier = Modifier,
+    tileShape: Shape = RoundedCornerShape(18.dp),
+    containerColor: Color = Color.Black.copy(alpha = 0.68f)
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.92f else 1f,
+        animationSpec = MotionTokens.bouncySpring(),
+        label = "toolTileScale"
+    )
+
+    Surface(
+        modifier = modifier
+            .height(52.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(tileShape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = Color.White.copy(alpha = 0.25f)),
+                onClick = onClick
+            ),
+        shape = tileShape,
+        color = if (enabled) containerColor else containerColor.copy(alpha = 0.40f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 2.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (enabled) tint else tint.copy(alpha = 0.38f),
+                modifier = iconModifier.size(22.dp)
+            )
         }
     }
 }
