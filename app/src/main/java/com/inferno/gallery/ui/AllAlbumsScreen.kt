@@ -229,7 +229,7 @@ fun AllAlbumsScreen(
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             bucket = bucket.copy(bucketName = displayBucketName),
-                            showAlbumSize = showAlbumSize,
+                            showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                             customShape = albumShape,
                             isCompact = albumsGridCellsCount >= 3,
                             isPinned = isPinned,

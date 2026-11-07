@@ -382,7 +382,7 @@ fun AlbumsScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 bucket = bucket.copy(bucketName = displayBucketName),
-                                showAlbumSize = showAlbumSize,
+                                showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                                 customShape = albumShape,
                                 isCompact = albumsGridCellsCount >= 3,
                                 isPinned = isPinned,
@@ -414,29 +414,6 @@ fun AlbumsScreen(
                             )
                         }
                     }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = isPinching && albumLayoutMode == AlbumLayoutMode.GRID,
-                enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.bouncySpring()),
-                exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec()),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(bottom = 64.dp)
-            ) {
-                Surface(
-                    shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
-                    tonalElevation = 6.dp,
-                    shadowElevation = 8.dp
-                ) {
-                    Text(
-                        text = "$albumsGridCellsCount columns",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
                 }
             }
         }
