@@ -6,6 +6,7 @@
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Fotos</string>
     <string name="nav_albums">Alben</string>
+    <string name="nav_collections">Sammlungen</string>
     <string name="nav_search">Suche</string>
     <string name="nav_settings">Einstellungen</string>
 
