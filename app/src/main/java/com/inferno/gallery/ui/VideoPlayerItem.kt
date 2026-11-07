@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -245,7 +247,7 @@ fun VideoPlayerItemWithResolvedUri(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
+            .background(MaterialTheme.colorScheme.surface)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
@@ -552,21 +554,7 @@ fun VideoPlayerItemWithResolvedUri(
             )
         }
 
-        // Dim Scrim overlay
-        AnimatedVisibility(
-            visible = showControls && isCurrentPage,
-            enter = fadeIn(MotionTokens.snappySpring()),
-            exit = fadeOut(MotionTokens.gentleSpring()),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.material3.MaterialTheme.colorScheme.scrim.copy(alpha = 0.4f))
-            )
-        }
-
-        // Floating Video Scrubber Capsule: Single unified floating pill
+        // Floating Video Scrubber Capsule: Single unified floating pill matching Pixel player styling
         AnimatedVisibility(
             visible = showControls && isCurrentPage,
             enter = slideInVertically(
@@ -580,28 +568,29 @@ fun VideoPlayerItemWithResolvedUri(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 76.dp, start = 16.dp, end = 16.dp)
+                .padding(bottom = 88.dp, start = 20.dp, end = 20.dp)
         ) {
             Surface(
-                shape = ShapeFull,
-                color = Color.Black.copy(alpha = 0.78f),
-                contentColor = Color.White,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                border = null,
                 tonalElevation = 0.dp,
-                shadowElevation = 4.dp,
+                shadowElevation = 0.dp,
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .widthIn(max = 360.dp)
-                    .height(46.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = 380.dp)
+                    .height(52.dp)
                     .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 6.dp),
+                        .padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Play / Pause button on left
-                    IconButton(
+                    // Play / Pause button on left: Circular tonal button
+                    FilledTonalIconButton(
                         onClick = {
                             if (isPlaying) {
                                 exoPlayer.pause()
@@ -612,20 +601,27 @@ fun VideoPlayerItemWithResolvedUri(
                                 exoPlayer.play()
                             }
                         },
-                        modifier = Modifier.size(36.dp)
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(if (isPlaying) R.drawable.ic_ms_pause else R.drawable.ic_ms_play_arrow),
                             contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Text(
                         text = formatTime(dragPosition ?: currentPosition),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                        color = Color.White.copy(alpha = 0.90f)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Slider(
@@ -644,32 +640,39 @@ fun VideoPlayerItemWithResolvedUri(
                         },
                         valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
                         colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color(0xFF2979FF),
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f),
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                             activeTickColor = Color.Transparent,
                             inactiveTickColor = Color.Transparent
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 6.dp)
+                            .padding(horizontal = 8.dp)
                     )
 
                     Text(
                         text = formatTime(videoDuration),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                        color = Color.White.copy(alpha = 0.65f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Audio mute / unmute button on right
-                    IconButton(
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Audio mute / unmute button on right: Circular tonal button
+                    FilledTonalIconButton(
                         onClick = { isMuted = !isMuted },
-                        modifier = Modifier.size(36.dp)
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
                             contentDescription = if (isMuted) "Unmute" else "Mute",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }

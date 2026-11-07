@@ -92,6 +92,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.clip
@@ -108,6 +109,7 @@ import androidx.compose.ui.platform.LocalContext
 import coil3.imageLoader
 import coil3.asImage
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -332,9 +334,12 @@ fun DetailScreen(
         }
     }
 
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val baseCanvasColor = MaterialTheme.colorScheme.surface
+
     // Ensure we don't crash if items is empty
     if (galleryItems.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+        Box(modifier = Modifier.fillMaxSize().background(baseCanvasColor))
         return
     }
 
@@ -618,13 +623,13 @@ fun DetailScreen(
     val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
     val targetRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
 
-    androidx.compose.runtime.DisposableEffect(useFullScreenGlobal) {
+    androidx.compose.runtime.DisposableEffect(useFullScreenGlobal, isDarkTheme) {
         val prevLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: false
         val prevLightNavBars = insetsController?.isAppearanceLightNavigationBars ?: false
         if (window != null && insetsController != null) {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-            insetsController.isAppearanceLightStatusBars = false
-            insetsController.isAppearanceLightNavigationBars = false
+            insetsController.isAppearanceLightStatusBars = !isDarkTheme
+            insetsController.isAppearanceLightNavigationBars = !isDarkTheme
             
             if (useFullScreenGlobal) {
                 // Global full screen mode is enabled -> hide system bars
@@ -653,9 +658,11 @@ fun DetailScreen(
 
     // Single-tap immersive mode: system bars follow the viewer chrome toggle.
     // Skipped when the global full-screen setting already keeps system bars hidden.
-    LaunchedEffect(showUi, useFullScreenGlobal) {
+    LaunchedEffect(showUi, useFullScreenGlobal, isDarkTheme) {
         if (insetsController != null && !useFullScreenGlobal) {
             if (showUi) {
+                insetsController.isAppearanceLightStatusBars = !isDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !isDarkTheme
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             } else {
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -852,8 +859,6 @@ fun DetailScreen(
     val bgAlpha = 1f - dismissProgress          // scrim fades out
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
 
-    val baseCanvasColor = Color.Black
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -883,7 +888,7 @@ fun DetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.82f * bgAlpha))
+                        .background(baseCanvasColor.copy(alpha = 0.82f * bgAlpha))
                 )
             }
         }
@@ -1661,8 +1666,8 @@ fun DetailScreen(
                         onClick = safeOnBack,
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.78f),
-                            contentColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         modifier = Modifier.size(40.dp)
                     ) {
@@ -1686,10 +1691,11 @@ fun DetailScreen(
 
                         Surface(
                             shape = ShapeFull,
-                            color = Color.Black.copy(alpha = 0.78f),
-                            contentColor = Color.White,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
                             tonalElevation = 0.dp,
                             shadowElevation = 0.dp,
+                            border = null,
                             modifier = Modifier
                                 .weight(1f, fill = false)
                                 .padding(horizontal = 8.dp)
@@ -1705,7 +1711,7 @@ fun DetailScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 13.sp
                                     ),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1715,7 +1721,7 @@ fun DetailScreen(
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 11.sp
                                     ),
-                                    color = Color.White.copy(alpha = 0.75f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1735,8 +1741,8 @@ fun DetailScreen(
                                     isMotionPlaying = isMotionLooping
                                 },
                                 shape = ShapeFull,
-                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.78f),
-                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.height(36.dp)
                             ) {
                                 Row(
@@ -1767,15 +1773,15 @@ fun DetailScreen(
                                 onClick = { showMoreMenu = true },
                                 shape = CircleShape,
                                 colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color.Black.copy(alpha = 0.78f),
-                                    contentColor = Color.White
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
                                 ),
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_horiz),
                                     contentDescription = stringResource(R.string.cd_more_options),
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -2273,47 +2279,50 @@ private fun ViewerActionButtonsRow(
     onInfo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+    // Outer Pill container matching Pixel Music player bottom controls pill:
+    // Stadium capsule (CircleShape), height 64.dp, 6.dp padding on all sides,
+    // pure solid tonal layering with zero outlines, shadows, or elevations.
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = null,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier.height(64.dp)
     ) {
-        if (isTrash) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 240.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isTrash) {
+                // 1. Restore
                 ViewerToolTile(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
                     contentDescription = "Restore",
                     onClick = onRestore,
+                    tileShape = getViewerSegmentShape(index = 0, total = 2),
                     modifier = Modifier.weight(1f)
                 )
 
+                // 2. Permanently Delete
                 ViewerToolTile(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = "Permanently Delete",
-                    tint = Color.White.copy(alpha = 0.85f),
                     onClick = onPermanentDelete,
+                    tileShape = getViewerSegmentShape(index = 1, total = 2),
                     modifier = Modifier.weight(1f)
                 )
-            }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 360.dp),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            } else {
                 // 1. Share
                 ViewerToolTile(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
                     contentDescription = stringResource(R.string.detail_share),
                     enabled = currentItem?.localExists == true,
                     onClick = onShare,
+                    tileShape = getViewerSegmentShape(index = 0, total = 5),
                     modifier = Modifier.weight(1f)
                 )
 
@@ -2329,7 +2338,7 @@ private fun ViewerActionButtonsRow(
                 ViewerToolTile(
                     icon = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
                     contentDescription = stringResource(R.string.detail_favorite),
-                    tint = if (isFavorite) favoriteHarmonized else Color.White,
+                    tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
                     iconModifier = Modifier.graphicsLayer {
                         scaleX = heartScale
                         scaleY = heartScale
@@ -2338,6 +2347,7 @@ private fun ViewerActionButtonsRow(
                         heartBounce = true
                         onFavorite()
                     },
+                    tileShape = getViewerSegmentShape(index = 1, total = 5),
                     modifier = Modifier.weight(1f)
                 )
 
@@ -2347,6 +2357,7 @@ private fun ViewerActionButtonsRow(
                     contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
                     enabled = currentItem?.localExists == true,
                     onClick = onEdit,
+                    tileShape = getViewerSegmentShape(index = 2, total = 5),
                     modifier = Modifier.weight(1f)
                 )
 
@@ -2355,6 +2366,7 @@ private fun ViewerActionButtonsRow(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
                     contentDescription = stringResource(R.string.detail_details),
                     onClick = onInfo,
+                    tileShape = getViewerSegmentShape(index = 3, total = 5),
                     modifier = Modifier.weight(1f)
                 )
 
@@ -2362,8 +2374,8 @@ private fun ViewerActionButtonsRow(
                 ViewerToolTile(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                     contentDescription = stringResource(R.string.detail_delete),
-                    tint = Color.White.copy(alpha = 0.90f),
                     onClick = onDelete,
+                    tileShape = getViewerSegmentShape(index = 4, total = 5),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -2372,8 +2384,17 @@ private fun ViewerActionButtonsRow(
 }
 
 /**
- * Individual squircle tool tile inspired by modern player controls.
- * Features independent spring touch scale, translucent tonal surface, and subtle border.
+ * Calculates connected segmented button shapes matching Pixel player pill design:
+ * - Start tile: Outer corner follows concentric capsule curve (26.dp), inner corner has subtle radius (6.dp).
+ * - Middle tiles: All corners subtle radius (6.dp).
+ * - End tile: Inner corner subtle radius (6.dp), outer corner follows concentric capsule curve (26.dp).
+ */
+private fun getViewerSegmentShape(index: Int, total: Int, outerCorner: Dp = 26.dp, innerCorner: Dp = 6.dp): Shape =
+    com.inferno.gallery.ui.theme.getSegmentShape(index, total, outerCorner, innerCorner)
+
+/**
+ * Individual tool tile inside the Pixel-style controls pill.
+ * Features independent spring touch scale, tonal surface, and subtle border.
  */
 @Composable
 private fun ViewerToolTile(
@@ -2382,10 +2403,10 @@ private fun ViewerToolTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    tint: Color = Color.White,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
     iconModifier: Modifier = Modifier,
-    tileShape: Shape = RoundedCornerShape(18.dp),
-    containerColor: Color = Color.Black.copy(alpha = 0.68f)
+    tileShape: Shape = RoundedCornerShape(6.dp),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -2397,7 +2418,7 @@ private fun ViewerToolTile(
 
     Surface(
         modifier = modifier
-            .height(52.dp)
+            .fillMaxHeight()
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -2406,14 +2427,14 @@ private fun ViewerToolTile(
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true, color = Color.White.copy(alpha = 0.25f)),
+                indication = ripple(bounded = true, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
                 onClick = onClick
             ),
         shape = tileShape,
-        color = if (enabled) containerColor else containerColor.copy(alpha = 0.40f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        color = if (enabled) containerColor else containerColor.copy(alpha = 0.38f),
+        border = null,
         tonalElevation = 0.dp,
-        shadowElevation = 2.dp
+        shadowElevation = 0.dp
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
