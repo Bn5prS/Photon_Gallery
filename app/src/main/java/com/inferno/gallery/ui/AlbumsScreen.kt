@@ -186,7 +186,7 @@ fun AlbumsScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        key(albumLayoutMode) {
+        key(albumLayoutMode, albumSortOrder) {
             val lazyGridState = rememberLazyGridState()
 
             // Ensure clean top alignment when albums populate or if previously pushed up

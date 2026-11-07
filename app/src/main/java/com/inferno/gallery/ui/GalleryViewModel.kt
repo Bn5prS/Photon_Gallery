@@ -637,42 +637,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         _isScrollDockVisible.value = visible
     }
 
-    val sortOrder: StateFlow<SortOrder> = settingsRepository.sortOrderFlow.map {
-        try {
-            SortOrder.valueOf(it)
-        } catch (e: Exception) {
-            SortOrder.NewToOld
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = SortOrder.NewToOld
-    )
+    private val _sortOrder = MutableStateFlow(SortOrder.NewToOld)
+    val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
-    val albumSortOrder: StateFlow<SortOrder> = settingsRepository.albumSortOrderFlow.map {
-        try {
-            SortOrder.valueOf(it)
-        } catch (e: Exception) {
-            SortOrder.NameAsc
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = SortOrder.NameAsc
-    )
+    private val _albumSortOrder = MutableStateFlow(SortOrder.NameAsc)
+    val albumSortOrder: StateFlow<SortOrder> = _albumSortOrder.asStateFlow()
 
-    val albumLayoutMode: StateFlow<AlbumLayoutMode> = settingsRepository.albumLayoutModeFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = AlbumLayoutMode.GRID
-        )
-
-    fun setAlbumLayoutMode(mode: AlbumLayoutMode) {
-        viewModelScope.launch {
-            settingsRepository.updateAlbumLayoutMode(mode)
-        }
-    }
+    private val _albumLayoutMode = MutableStateFlow(AlbumLayoutMode.GRID)
+    val albumLayoutMode: StateFlow<AlbumLayoutMode> = _albumLayoutMode.asStateFlow()
 
     val albumsGridCellsCount: StateFlow<Int> = settingsRepository.albumsGridCellsCountFlow
         .stateIn(
@@ -687,17 +659,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val viewMode: StateFlow<ViewMode> = settingsRepository.viewModeFlow.map {
-        try {
-            ViewMode.valueOf(it)
-        } catch (e: Exception) {
-            ViewMode.Grouped
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = ViewMode.Grouped
-    )
+    private val _viewMode = MutableStateFlow(ViewMode.Grouped)
+    val viewMode: StateFlow<ViewMode> = _viewMode.asStateFlow()
 
     val dockStyle: StateFlow<DockStyle> = settingsRepository.dockStyleFlow.map {
         try {
@@ -781,6 +744,37 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         nativeTimelineRepository.isInitialLoaded
 
     init {
+        viewModelScope.launch {
+            settingsRepository.sortOrderFlow.collect { raw ->
+                val parsed = try { SortOrder.valueOf(raw) } catch (e: Exception) { SortOrder.NewToOld }
+                if (_sortOrder.value != parsed) {
+                    _sortOrder.value = parsed
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.albumSortOrderFlow.collect { raw ->
+                val parsed = try { SortOrder.valueOf(raw) } catch (e: Exception) { SortOrder.NameAsc }
+                if (_albumSortOrder.value != parsed) {
+                    _albumSortOrder.value = parsed
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.albumLayoutModeFlow.collect { mode ->
+                if (_albumLayoutMode.value != mode) {
+                    _albumLayoutMode.value = mode
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.viewModeFlow.collect { raw ->
+                val parsed = try { ViewMode.valueOf(raw) } catch (e: Exception) { ViewMode.Grouped }
+                if (_viewMode.value != parsed) {
+                    _viewMode.value = parsed
+                }
+            }
+        }
         viewModelScope.launch {
             combine(
                 combine(_currentBucket, selectedFilterIndex, sortOrder) { b, f, o -> Triple(b, f, o) },
@@ -2460,20 +2454,42 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
 
 
+    private var saveSortOrderJob: kotlinx.coroutines.Job? = null
     fun setSortOrder(order: SortOrder) {
-        viewModelScope.launch {
+        if (_sortOrder.value == order) return
+        _sortOrder.value = order
+        saveSortOrderJob?.cancel()
+        saveSortOrderJob = viewModelScope.launch {
             settingsRepository.updateSortOrder(order.name)
         }
     }
 
+    private var saveAlbumSortOrderJob: kotlinx.coroutines.Job? = null
     fun setAlbumSortOrder(order: SortOrder) {
-        viewModelScope.launch {
+        if (_albumSortOrder.value == order) return
+        _albumSortOrder.value = order
+        saveAlbumSortOrderJob?.cancel()
+        saveAlbumSortOrderJob = viewModelScope.launch {
             settingsRepository.updateAlbumSortOrder(order.name)
         }
     }
 
+    private var saveAlbumLayoutJob: kotlinx.coroutines.Job? = null
+    fun setAlbumLayoutMode(mode: AlbumLayoutMode) {
+        if (_albumLayoutMode.value == mode) return
+        _albumLayoutMode.value = mode
+        saveAlbumLayoutJob?.cancel()
+        saveAlbumLayoutJob = viewModelScope.launch {
+            settingsRepository.updateAlbumLayoutMode(mode)
+        }
+    }
+
+    private var saveViewModeJob: kotlinx.coroutines.Job? = null
     fun setViewMode(mode: ViewMode) {
-        viewModelScope.launch {
+        if (_viewMode.value == mode) return
+        _viewMode.value = mode
+        saveViewModeJob?.cancel()
+        saveViewModeJob = viewModelScope.launch {
             settingsRepository.updateViewMode(mode.name)
         }
     }

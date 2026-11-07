@@ -258,6 +258,7 @@ fun NativePhotonGrid(
     var targetRecyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var hasRestoredScroll by remember(scrollToTopKey) { mutableStateOf(initialFirstVisibleItemIndex <= 0) }
     var lastScrollToTopKey by remember { mutableStateOf(scrollToTopKey) }
+    var lastSubmittedKey by remember { mutableStateOf(scrollToTopKey) }
 
     android.util.Log.d("NativePhotonGrid", "NativePhotonGrid recomposed: initialIndex=$initialFirstVisibleItemIndex offset=$initialFirstVisibleItemScrollOffset hasRestoredScroll=$hasRestoredScroll")
 
@@ -516,9 +517,14 @@ fun NativePhotonGrid(
                 adapter.updateSelection(selectedUris)
                 adapter.updateFavorites(favoriteIds)
 
+                val isKeyChanged = (lastSubmittedKey != scrollToTopKey)
+                if (isKeyChanged) {
+                    lastSubmittedKey = scrollToTopKey
+                }
+
                 // Update items
                 if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
-                    adapter.submitList(items) {
+                    adapter.submitList(items, isFullReset = isKeyChanged) {
                         layoutManager.spanSizeLookup.invalidateSpanIndexCache()
                         recyclerView.invalidateItemDecorations()
                         val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
@@ -535,7 +541,7 @@ fun NativePhotonGrid(
                         }
                     }
                 } else {
-                    adapter.submitList(items) {
+                    adapter.submitList(items, isFullReset = isKeyChanged) {
                         layoutManager.spanSizeLookup.invalidateSpanIndexCache()
                         recyclerView.invalidateItemDecorations()
                     }
@@ -692,6 +698,8 @@ private class NativePhotonAdapter(
         }
     }
 
+    private var currentDataset: List<NativeTimelineItem> = emptyList()
+
     private val differ = AsyncListDiffer(this, object : DiffUtil.ItemCallback<NativeTimelineItem>() {
         override fun areItemsTheSame(oldItem: NativeTimelineItem, newItem: NativeTimelineItem): Boolean {
             return oldItem.key == newItem.key
@@ -702,18 +710,29 @@ private class NativePhotonAdapter(
         }
     })
 
-    fun submitList(list: List<NativeTimelineItem>, commitCallback: (() -> Unit)? = null) {
-        differ.submitList(list, commitCallback)
+    fun submitList(list: List<NativeTimelineItem>, isFullReset: Boolean = false, commitCallback: (() -> Unit)? = null) {
+        currentDataset = list
+        if (isFullReset) {
+            differ.submitList(null)
+            notifyDataSetChanged()
+            commitCallback?.invoke()
+        } else {
+            differ.submitList(list, commitCallback)
+        }
     }
+
+    private val activeItems: List<NativeTimelineItem>
+        get() = if (currentDataset.isNotEmpty()) currentDataset else differ.currentList
 
     fun getItem(position: Int): NativeTimelineItem? {
         val actualPos = if (hasHeader) position - 1 else position
-        return if (actualPos in 0 until differ.currentList.size) {
-            differ.currentList[actualPos]
+        val list = activeItems
+        return if (actualPos in 0 until list.size) {
+            list[actualPos]
         } else null
     }
 
-    override fun getItemCount(): Int = differ.currentList.size + (if (hasHeader) 1 else 0)
+    override fun getItemCount(): Int = activeItems.size + (if (hasHeader) 1 else 0)
 
     override fun getItemViewType(position: Int): Int {
         if (hasHeader && position == 0) return VIEW_TYPE_COMPOSE_HEADER
@@ -728,10 +747,11 @@ private class NativePhotonAdapter(
         if (selectedUris == newSelection) return
         val oldSelection = selectedUris
         selectedUris = newSelection
+        val list = activeItems
         val diff = (oldSelection - newSelection) + (newSelection - oldSelection)
         if (diff.size <= 24) {
-            for (i in 0 until differ.currentList.size) {
-                val item = differ.currentList[i]
+            for (i in 0 until list.size) {
+                val item = list[i]
                 if (item is NativeTimelineItem.Media && item.uriString in diff) {
                     val pos = if (hasHeader) i + 1 else i
                     notifyItemChanged(pos, PAYLOAD_SELECTION_ONLY)
@@ -739,7 +759,7 @@ private class NativePhotonAdapter(
             }
         } else {
             val start = if (hasHeader) 1 else 0
-            notifyItemRangeChanged(start, differ.currentList.size, PAYLOAD_SELECTION_ONLY)
+            notifyItemRangeChanged(start, list.size, PAYLOAD_SELECTION_ONLY)
         }
     }
 
@@ -747,10 +767,11 @@ private class NativePhotonAdapter(
         if (favoriteIds == newFavorites) return
         val oldFavorites = favoriteIds
         favoriteIds = newFavorites
+        val list = activeItems
         val diff = (oldFavorites - newFavorites) + (newFavorites - oldFavorites)
         if (diff.size <= 24) {
-            for (i in 0 until differ.currentList.size) {
-                val item = differ.currentList[i]
+            for (i in 0 until list.size) {
+                val item = list[i]
                 if (item is NativeTimelineItem.Media && item.id in diff) {
                     val pos = if (hasHeader) i + 1 else i
                     notifyItemChanged(pos, PAYLOAD_FAVORITE_ONLY)
@@ -758,7 +779,7 @@ private class NativePhotonAdapter(
             }
         } else {
             val start = if (hasHeader) 1 else 0
-            notifyItemRangeChanged(start, differ.currentList.size, PAYLOAD_FAVORITE_ONLY)
+            notifyItemRangeChanged(start, list.size, PAYLOAD_FAVORITE_ONLY)
         }
     }
 

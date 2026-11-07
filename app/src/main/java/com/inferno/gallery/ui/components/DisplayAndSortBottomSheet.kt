@@ -30,6 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,6 +115,25 @@ fun DisplayAndSortBottomSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
+            val currentSort = if (isAlbumsScreen) albumSortOrder else sortOrder
+            var activeSort by remember(currentSort) { mutableStateOf(currentSort) }
+            val onSelectSort: (SortOrder) -> Unit = { order ->
+                activeSort = order
+                if (isAlbumsScreen) onAlbumSortOrderChange(order) else onSortOrderChange(order)
+            }
+
+            var activeViewMode by remember(viewMode) { mutableStateOf(viewMode) }
+            val onSelectViewMode: (ViewMode) -> Unit = { mode ->
+                activeViewMode = mode
+                onViewModeChange(mode)
+            }
+
+            var activeAlbumLayout by remember(albumLayoutMode) { mutableStateOf(albumLayoutMode) }
+            val onSelectAlbumLayout: (AlbumLayoutMode) -> Unit = { layout ->
+                activeAlbumLayout = layout
+                onAlbumLayoutModeChange(layout)
+            }
+
             // Balanced Full-Width View Mode Segmented Control
             Box(
                 modifier = Modifier
@@ -129,16 +151,16 @@ fun DisplayAndSortBottomSheet(
                             title = stringResource(R.string.layout_grid_view),
                             subtitle = null,
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
-                            isSelected = albumLayoutMode == AlbumLayoutMode.GRID,
-                            onClick = { onAlbumLayoutModeChange(AlbumLayoutMode.GRID) },
+                            isSelected = activeAlbumLayout == AlbumLayoutMode.GRID,
+                            onClick = { onSelectAlbumLayout(AlbumLayoutMode.GRID) },
                             modifier = Modifier.weight(1f)
                         )
                         ViewModePill(
                             title = stringResource(R.string.layout_list_view),
                             subtitle = null,
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
-                            isSelected = albumLayoutMode == AlbumLayoutMode.LIST,
-                            onClick = { onAlbumLayoutModeChange(AlbumLayoutMode.LIST) },
+                            isSelected = activeAlbumLayout == AlbumLayoutMode.LIST,
+                            onClick = { onSelectAlbumLayout(AlbumLayoutMode.LIST) },
                             modifier = Modifier.weight(1f)
                         )
                     } else {
@@ -146,16 +168,16 @@ fun DisplayAndSortBottomSheet(
                             title = stringResource(R.string.view_mode_grouped),
                             subtitle = stringResource(R.string.view_mode_with_dates),
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                            isSelected = viewMode == ViewMode.Grouped,
-                            onClick = { onViewModeChange(ViewMode.Grouped) },
+                            isSelected = activeViewMode == ViewMode.Grouped,
+                            onClick = { onSelectViewMode(ViewMode.Grouped) },
                             modifier = Modifier.weight(1f)
                         )
                         ViewModePill(
                             title = stringResource(R.string.view_mode_immersive),
                             subtitle = stringResource(R.string.view_mode_clean_grid),
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
-                            isSelected = viewMode == ViewMode.Immersive,
-                            onClick = { onViewModeChange(ViewMode.Immersive) },
+                            isSelected = activeViewMode == ViewMode.Immersive,
+                            onClick = { onSelectViewMode(ViewMode.Immersive) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -177,9 +199,6 @@ fun DisplayAndSortBottomSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            val currentSort = if (isAlbumsScreen) albumSortOrder else sortOrder
-            val onSelectSort: (SortOrder) -> Unit = if (isAlbumsScreen) onAlbumSortOrderChange else onSortOrderChange
-
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -191,7 +210,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.NameAsc,
                         option2Label = stringResource(R.string.sort_opt_z_to_a),
                         option2 = SortOrder.NameDesc,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -200,7 +219,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.DateModifiedNewToOld,
                         option2Label = stringResource(R.string.sort_opt_oldest),
                         option2 = SortOrder.DateModifiedOldToNew,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -209,7 +228,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.NewToOld,
                         option2Label = stringResource(R.string.sort_opt_oldest),
                         option2 = SortOrder.OldToNew,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -218,7 +237,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.CountDesc,
                         option2Label = stringResource(R.string.sort_opt_least),
                         option2 = SortOrder.CountAsc,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -227,7 +246,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.BigToSmall,
                         option2Label = stringResource(R.string.sort_opt_small_to_large),
                         option2 = SortOrder.SmallToBig,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                 } else {
@@ -237,7 +256,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.NewToOld,
                         option2Label = stringResource(R.string.sort_opt_oldest),
                         option2 = SortOrder.OldToNew,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -246,7 +265,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.DateModifiedNewToOld,
                         option2Label = stringResource(R.string.sort_opt_oldest),
                         option2 = SortOrder.DateModifiedOldToNew,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -255,7 +274,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.BigToSmall,
                         option2Label = stringResource(R.string.sort_opt_small_to_large),
                         option2 = SortOrder.SmallToBig,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                     InlineSortRow(
@@ -264,7 +283,7 @@ fun DisplayAndSortBottomSheet(
                         option1 = SortOrder.NameAsc,
                         option2Label = stringResource(R.string.sort_opt_z_to_a),
                         option2 = SortOrder.NameDesc,
-                        selectedSort = currentSort,
+                        selectedSort = activeSort,
                         onSortChange = onSelectSort
                     )
                 }
@@ -282,7 +301,6 @@ private fun ViewModePill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         animationSpec = spring(),
@@ -300,10 +318,7 @@ private fun ViewModePill(
     )
 
     Surface(
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
+        onClick = onClick,
         shape = ShapeMedium,
         color = backgroundColor,
         tonalElevation = 0.dp,
@@ -395,7 +410,6 @@ private fun SortPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         animationSpec = spring(),
@@ -408,10 +422,7 @@ private fun SortPill(
     )
 
     Surface(
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
+        onClick = onClick,
         shape = ShapeMedium,
         color = backgroundColor,
         tonalElevation = 0.dp,
