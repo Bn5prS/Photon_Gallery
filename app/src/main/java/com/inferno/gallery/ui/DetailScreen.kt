@@ -1803,7 +1803,7 @@ fun DetailScreen(
                     // Center Island: Floating metadata pill
                     if (currentItem != null) {
                         val timestamp = remember(currentItem) {
-                            val raw = if (currentItem.dateModified > 0) currentItem.dateModified else currentItem.dateAdded
+                            val raw = if (currentItem.dateAdded > 0) currentItem.dateAdded else currentItem.dateModified
                             if (raw > 1_000_000_000_000L) raw else raw * 1000L
                         }
                         val formattedDate = remember(timestamp) {

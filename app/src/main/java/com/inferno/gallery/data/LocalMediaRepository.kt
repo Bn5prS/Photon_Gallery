@@ -140,15 +140,23 @@ class LocalMediaRepository(
                     val dateTakenMs = if (dateTakenColumn >= 0) cursor.getLong(dateTakenColumn) else 0L
                     val dateTakenSec = if (dateTakenMs > 0) dateTakenMs / 1000L else 0L
                     val rawDateModified = if (dateModifiedColumn >= 0) cursor.getLong(dateModifiedColumn) else 0L
-                    val dateModified = maxOf(rawDateModified, rawDateAdded)
-                    val dateAdded = when {
-                        dateTakenSec > 0 -> dateTakenSec
-                        rawDateModified > 0 -> rawDateModified
-                        else -> rawDateAdded
-                    }
                     val size = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
                     val name = (if (nameColumn >= 0) cursor.getString(nameColumn) else null) ?: "Unknown"
                     val path = (if (pathColumn >= 0) cursor.getString(pathColumn) else null) ?: ""
+
+                    val dateModified = if (rawDateModified > 0) rawDateModified else rawDateAdded
+                    val parsedFilenameDate = if (dateTakenSec <= 0) FilenameDateParser.parseDateFromFilename(name) else null
+                    val exifDate = if (dateTakenSec <= 0 && parsedFilenameDate == null && path.isNotBlank()) {
+                        FilenameDateParser.extractExifDate(path)
+                    } else null
+
+                    val dateAdded = when {
+                        dateTakenSec > 0 -> dateTakenSec
+                        parsedFilenameDate != null && parsedFilenameDate > 0 -> parsedFilenameDate
+                        exifDate != null && exifDate > 0 -> exifDate
+                        rawDateModified > 0 -> rawDateModified
+                        else -> rawDateAdded
+                    }
                     val mediaType = if (mediaTypeColumn >= 0) cursor.getInt(mediaTypeColumn) else 0
                     val isVideo = mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
                     

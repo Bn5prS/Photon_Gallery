@@ -78,7 +78,7 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
             try {
                 Log.d(TAG, "Starting sync (forceFullSync=$forceFullSync)...")
                 val prefs = appContext.getSharedPreferences("photon_sync", Context.MODE_PRIVATE)
-                val isDateFallbackMigrated = prefs.getBoolean("date_fallback_migrated_v1", false)
+                val isDateFallbackMigrated = prefs.getBoolean("date_fallback_migrated_v2", false)
                 val lastGeneration = if (!isDateFallbackMigrated || forceFullSync) 0L else prefs.getLong("last_generation", 0L)
 
                 database.mediaDao().normalizeExternalPrimaryUris()
@@ -174,6 +174,7 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     val dbItem = dbMap[media.id]
                     if (dbItem != null &&
                         dbItem.dateModified == media.dateModified &&
+                        dbItem.dateAdded == media.dateAdded &&
                         dbItem.size == media.size &&
                         dbItem.filePath == media.path &&
                         dbItem.bucketName == media.bucketName &&
@@ -380,7 +381,7 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     prefs.edit().putLong("last_generation", currentGen).apply()
                 }
                 if (!isDateFallbackMigrated) {
-                    prefs.edit().putBoolean("date_fallback_migrated_v1", true).apply()
+                    prefs.edit().putBoolean("date_fallback_migrated_v2", true).apply()
                 }
 
                 Log.d(TAG, "Sync complete: +${toInsert.size}, -${uniqueToDelete.size}. Gen=$currentGen.")
