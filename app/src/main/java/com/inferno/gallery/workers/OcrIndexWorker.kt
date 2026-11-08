@@ -269,6 +269,7 @@ class OcrIndexWorker(
                     try {
                         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
                     } catch (_: Throwable) {}
+                    val pacer = com.inferno.gallery.workers.utils.ScanThermalPacer(applicationContext, "OCR")
                     val textRecognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
                         com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
                     )
@@ -303,7 +304,7 @@ class OcrIndexWorker(
                         } finally {
                             loaded.bitmap.recycle()
                         }
-                        delay(20L)
+                        pacer.recordItemAndThrottle { isStopped }
                     }
                     embedChannel.close()
                 }
