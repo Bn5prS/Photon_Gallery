@@ -1617,15 +1617,6 @@ fun SectionHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
         ) {
-            // M3 Expressive Pill Accent
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(18.dp)
-                    .clip(ShapeFull)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
