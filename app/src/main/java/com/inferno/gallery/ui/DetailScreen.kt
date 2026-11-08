@@ -726,30 +726,50 @@ fun DetailScreen(
 
     if (showDeleteConfirmDialog && pendingDeleteItem != null) {
         val item = pendingDeleteItem!!
+        var dialogSkipConfirm by remember { mutableStateOf(viewModel.sessionSkipDeleteConfirmation) }
+        var dialogSkipRecycleBin by remember { mutableStateOf(viewModel.sessionSkipRecycleBin) }
+        val isPermanent = dialogSkipRecycleBin
+
         com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = stringResource(R.string.dialog_move_to_trash_title),
+            title = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_title),
             subtitle = item.name,
             icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
-            confirmText = stringResource(R.string.dialog_move_to_trash_confirm),
+            confirmText = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_confirm),
+            isDanger = isPermanent,
             onConfirm = {
                 showDeleteConfirmDialog = false
+                viewModel.setTrashSessionOptions(dialogSkipConfirm, dialogSkipRecycleBin)
+                if (dialogSkipConfirm) {
+                    android.widget.Toast.makeText(
+                        context,
+                        if (dialogSkipRecycleBin) "Direct permanent deletion active for this session" else "Quick trash active for this session",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
-                        val trashIntent = MediaStore.createTrashRequest(
-                            context.contentResolver, 
-                            listOf(item.uri), 
-                            true
-                        )
-                        val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                        val intentSender = if (isPermanent) {
+                            MediaStore.createDeleteRequest(
+                                context.contentResolver,
+                                listOf(item.uri)
+                            ).intentSender
+                        } else {
+                            MediaStore.createTrashRequest(
+                                context.contentResolver,
+                                listOf(item.uri),
+                                true
+                            ).intentSender
+                        }
+                        val request = IntentSenderRequest.Builder(intentSender).build()
                         withContext(Dispatchers.Main) {
                             launcher.launch(request)
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
                             android.widget.Toast.makeText(
-                                context, 
-                                "Unable to trash this item: ${e.message}", 
+                                context,
+                                "Unable to delete: ${e.message}",
                                 android.widget.Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -759,11 +779,27 @@ fun DetailScreen(
             dismissText = stringResource(R.string.action_cancel),
             onDismiss = { showDeleteConfirmDialog = false },
             content = {
-                androidx.compose.material3.Text(
-                    text = stringResource(R.string.dialog_move_to_trash_msg),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    androidx.compose.material3.Text(
+                        text = if (isPermanent) {
+                            "This item will be permanently removed from your device. This cannot be undone."
+                        } else {
+                            stringResource(R.string.dialog_move_to_trash_msg)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    com.inferno.gallery.ui.components.TrashSessionOptions(
+                        skipConfirm = dialogSkipConfirm,
+                        onSkipConfirmChange = { dialogSkipConfirm = it },
+                        skipRecycleBin = dialogSkipRecycleBin,
+                        onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
+                    )
+                }
             }
         )
     }
@@ -2185,30 +2221,37 @@ fun DetailScreen(
                 } else {
                     pendingDeleteItem = currentItem
                     pendingDeletePage = pagerState.currentPage
-                    if (confirmDeleteEnabled) {
-                        showDeleteConfirmDialog = true
-                    } else {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            try {
-                                val trashIntent = MediaStore.createTrashRequest(
-                                    context.contentResolver,
-                                    listOf(currentItem.uri),
-                                    true
-                                )
-                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                withContext(Dispatchers.Main) {
-                                    launcher.launch(request)
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "Unable to trash this item: ${e.message}",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                    val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
+                    val isSessionPermanent = viewModel.sessionSkipRecycleBin
+
+                    if (isSessionSkipConfirm || !confirmDeleteEnabled) {
+                        if (isSessionPermanent) {
+                            onPermanentDeleteAction()
+                        } else {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val trashIntent = MediaStore.createTrashRequest(
+                                        context.contentResolver,
+                                        listOf(currentItem.uri),
+                                        true
+                                    )
+                                    val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                    withContext(Dispatchers.Main) {
+                                        launcher.launch(request)
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Unable to trash this item: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        showDeleteConfirmDialog = true
                     }
                 }
             }
