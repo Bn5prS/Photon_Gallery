@@ -1777,44 +1777,43 @@ fun MainAppLayout(
                             }
 
                             if (showCreateFolderDialog) {
-                                androidx.compose.material3.AlertDialog(
-                                    onDismissRequest = { showCreateFolderDialog = false },
-                                    title = { Text(stringResource(R.string.dialog_create_folder_title)) },
-                                    text = {
+                                com.inferno.gallery.ui.components.PhotonDialog(
+                                    onDismissRequest = {
+                                        showCreateFolderDialog = false
+                                        newFolderName = ""
+                                    },
+                                    title = stringResource(R.string.dialog_create_folder_title),
+                                    subtitle = currentBrowsingDirectory.name,
+                                    icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
+                                    confirmText = stringResource(R.string.action_create),
+                                    isConfirmEnabled = newFolderName.isNotBlank(),
+                                    onConfirm = {
+                                        if (newFolderName.isNotBlank()) {
+                                            val newDir = java.io.File(currentBrowsingDirectory, newFolderName.trim())
+                                            if (!newDir.exists()) {
+                                                newDir.mkdirs()
+                                                refreshTrigger++
+                                            }
+                                            showCreateFolderDialog = false
+                                            newFolderName = ""
+                                        }
+                                    },
+                                    dismissText = stringResource(R.string.action_cancel),
+                                    content = {
                                         androidx.compose.material3.OutlinedTextField(
                                             value = newFolderName,
                                             onValueChange = { newFolderName = it },
                                             label = { Text(stringResource(R.string.dialog_folder_name_label)) },
                                             singleLine = true,
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                            ),
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                    },
-                                    confirmButton = {
-                                        androidx.compose.material3.TextButton(
-                                            onClick = {
-                                                if (newFolderName.isNotBlank()) {
-                                                    val newDir = java.io.File(currentBrowsingDirectory, newFolderName.trim())
-                                                    if (!newDir.exists()) {
-                                                        newDir.mkdirs()
-                                                        refreshTrigger++
-                                                    }
-                                                    showCreateFolderDialog = false
-                                                    newFolderName = ""
-                                                }
-                                            }
-                                        ) {
-                                            Text(stringResource(R.string.action_create))
-                                        }
-                                    },
-                                    dismissButton = {
-                                        androidx.compose.material3.TextButton(
-                                            onClick = {
-                                                showCreateFolderDialog = false
-                                                newFolderName = ""
-                                            }
-                                        ) {
-                                            Text(stringResource(R.string.action_cancel))
-                                        }
                                     }
                                 )
                             }
@@ -2074,44 +2073,43 @@ fun MainAppLayout(
                             }
 
                             if (showCreateFolderDialog) {
-                                androidx.compose.material3.AlertDialog(
-                                    onDismissRequest = { showCreateFolderDialog = false },
-                                    title = { Text(stringResource(R.string.dialog_create_folder_title)) },
-                                    text = {
+                                com.inferno.gallery.ui.components.PhotonDialog(
+                                    onDismissRequest = {
+                                        showCreateFolderDialog = false
+                                        newFolderName = ""
+                                    },
+                                    title = stringResource(R.string.dialog_create_folder_title),
+                                    subtitle = currentBrowsingDirectory.name,
+                                    icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
+                                    confirmText = stringResource(R.string.action_create),
+                                    isConfirmEnabled = newFolderName.isNotBlank(),
+                                    onConfirm = {
+                                        if (newFolderName.isNotBlank()) {
+                                            val newDir = java.io.File(currentBrowsingDirectory, newFolderName.trim())
+                                            if (!newDir.exists()) {
+                                                newDir.mkdirs()
+                                                refreshTrigger++
+                                            }
+                                            showCreateFolderDialog = false
+                                            newFolderName = ""
+                                        }
+                                    },
+                                    dismissText = stringResource(R.string.action_cancel),
+                                    content = {
                                         androidx.compose.material3.OutlinedTextField(
                                             value = newFolderName,
                                             onValueChange = { newFolderName = it },
                                             label = { Text(stringResource(R.string.dialog_folder_name_label)) },
                                             singleLine = true,
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                            ),
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                    },
-                                    confirmButton = {
-                                        androidx.compose.material3.TextButton(
-                                            onClick = {
-                                                if (newFolderName.isNotBlank()) {
-                                                    val newDir = java.io.File(currentBrowsingDirectory, newFolderName.trim())
-                                                    if (!newDir.exists()) {
-                                                        newDir.mkdirs()
-                                                        refreshTrigger++
-                                                    }
-                                                    showCreateFolderDialog = false
-                                                    newFolderName = ""
-                                                }
-                                            }
-                                        ) {
-                                            Text(stringResource(R.string.action_create))
-                                        }
-                                    },
-                                    dismissButton = {
-                                        androidx.compose.material3.TextButton(
-                                            onClick = {
-                                                showCreateFolderDialog = false
-                                                newFolderName = ""
-                                            }
-                                        ) {
-                                            Text(stringResource(R.string.action_cancel))
-                                        }
                                     }
                                 )
                             }
@@ -2246,47 +2244,44 @@ fun MainAppLayout(
             }
 
             if (showMultiDeleteConfirmDialog) {
-                androidx.compose.material3.AlertDialog(
+                com.inferno.gallery.ui.components.PhotonDialog(
                     onDismissRequest = { showMultiDeleteConfirmDialog = false },
-                    title = { Text(stringResource(R.string.dialog_move_to_trash_title)) },
-                    text = { Text(stringResource(R.string.dialog_multi_trash_msg, selectedUris.size)) },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                showMultiDeleteConfirmDialog = false
-                                val rawSelected = selectedUris.toList()
-                                pendingTrashUris = rawSelected
-                                val uris = rawSelected.map { Uri.parse(it) }
-                                if (uris.isNotEmpty()) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val trashIntent = android.provider.MediaStore.createTrashRequest(
-                                                context.contentResolver,
-                                                uris,
-                                                true
-                                            )
-                                            val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                            withContext(Dispatchers.Main) {
-                                                trashLauncher.launch(request)
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
+                    title = stringResource(R.string.dialog_move_to_trash_title),
+                    subtitle = stringResource(R.string.dialog_multi_trash_msg, selectedUris.size),
+                    icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    confirmText = stringResource(R.string.dialog_move_to_trash_confirm),
+                    onConfirm = {
+                        showMultiDeleteConfirmDialog = false
+                        val rawSelected = selectedUris.toList()
+                        pendingTrashUris = rawSelected
+                        val uris = rawSelected.map { Uri.parse(it) }
+                        if (uris.isNotEmpty()) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val trashIntent = android.provider.MediaStore.createTrashRequest(
+                                        context.contentResolver,
+                                        uris,
+                                        true
+                                    )
+                                    val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                    withContext(Dispatchers.Main) {
+                                        trashLauncher.launch(request)
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
-                        ) {
-                            Text(stringResource(R.string.dialog_move_to_trash_confirm), color = MaterialTheme.colorScheme.error)
                         }
                     },
-                    dismissButton = {
-                        androidx.compose.material3.TextButton(
-                            onClick = { showMultiDeleteConfirmDialog = false }
-                        ) {
-                            Text(stringResource(R.string.action_cancel))
-                        }
+                    dismissText = stringResource(R.string.action_cancel),
+                    content = {
+                        Text(
+                            text = stringResource(R.string.dialog_move_to_trash_msg),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 )
             }
@@ -2294,93 +2289,73 @@ fun MainAppLayout(
             val isTrashPage = currentRoute == "album/{bucketName}" && albumNameArg == "Trash"
             if (isTrashPage) {
                 if (showTrashRestoreConfirmDialog) {
-                    androidx.compose.material3.AlertDialog(
+                    com.inferno.gallery.ui.components.PhotonDialog(
                         onDismissRequest = { showTrashRestoreConfirmDialog = false },
-                        title = { Text(stringResource(R.string.dialog_restore_items_title)) },
-                        text = { Text(stringResource(R.string.dialog_restore_items_msg, selectedUris.size)) },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = {
-                                    showTrashRestoreConfirmDialog = false
-                                    val rawSelected = selectedUris.toList()
-                                    pendingTrashUris = rawSelected
-                                    val uris = rawSelected.map { Uri.parse(it) }
-                                    if (uris.isNotEmpty()) {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            try {
-                                                val restoreIntent = android.provider.MediaStore.createTrashRequest(
-                                                    context.contentResolver,
-                                                    uris,
-                                                    false
-                                                )
-                                                val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
-                                                withContext(Dispatchers.Main) {
-                                                    restoreLauncher.launch(request)
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) {
-                                                    android.widget.Toast.makeText(context, "Error restoring: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
+                        title = stringResource(R.string.dialog_restore_items_title),
+                        subtitle = stringResource(R.string.dialog_restore_items_msg, selectedUris.size),
+                        icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                        confirmText = stringResource(R.string.action_restore),
+                        onConfirm = {
+                            showTrashRestoreConfirmDialog = false
+                            val rawSelected = selectedUris.toList()
+                            pendingTrashUris = rawSelected
+                            val uris = rawSelected.map { Uri.parse(it) }
+                            if (uris.isNotEmpty()) {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    try {
+                                        val restoreIntent = android.provider.MediaStore.createTrashRequest(
+                                            context.contentResolver,
+                                            uris,
+                                            false
+                                        )
+                                        val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
+                                        withContext(Dispatchers.Main) {
+                                            restoreLauncher.launch(request)
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            android.widget.Toast.makeText(context, "Error restoring: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
-                            ) {
-                                Text(stringResource(R.string.action_restore))
                             }
                         },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = { showTrashRestoreConfirmDialog = false }
-                            ) {
-                                Text(stringResource(R.string.action_cancel))
-                            }
-                        }
+                        dismissText = stringResource(R.string.action_cancel)
                     )
                 }
 
                 if (showTrashDeleteConfirmDialog) {
-                    androidx.compose.material3.AlertDialog(
+                    com.inferno.gallery.ui.components.PhotonDialog(
                         onDismissRequest = { showTrashDeleteConfirmDialog = false },
-                        title = { Text(stringResource(R.string.dialog_delete_perm_title)) },
-                        text = { Text(stringResource(R.string.dialog_delete_perm_msg, selectedUris.size)) },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = {
-                                    showTrashDeleteConfirmDialog = false
-                                    val rawSelected = selectedUris.toList()
-                                    pendingTrashUris = rawSelected
-                                    val uris = rawSelected.map { Uri.parse(it) }
-                                    if (uris.isNotEmpty()) {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            try {
-                                                val deleteIntent = android.provider.MediaStore.createDeleteRequest(
-                                                    context.contentResolver,
-                                                    uris
-                                                )
-                                                val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
-                                                withContext(Dispatchers.Main) {
-                                                    permanentDeleteLauncher.launch(request)
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) {
-                                                    android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
+                        title = stringResource(R.string.dialog_delete_perm_title),
+                        subtitle = stringResource(R.string.dialog_delete_perm_msg, selectedUris.size),
+                        icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        confirmText = stringResource(R.string.action_delete),
+                        onConfirm = {
+                            showTrashDeleteConfirmDialog = false
+                            val rawSelected = selectedUris.toList()
+                            pendingTrashUris = rawSelected
+                            val uris = rawSelected.map { Uri.parse(it) }
+                            if (uris.isNotEmpty()) {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    try {
+                                        val deleteIntent = android.provider.MediaStore.createDeleteRequest(
+                                            context.contentResolver,
+                                            uris
+                                        )
+                                        val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
+                                        withContext(Dispatchers.Main) {
+                                            permanentDeleteLauncher.launch(request)
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
-                            ) {
-                                Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                             }
                         },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(
-                                onClick = { showTrashDeleteConfirmDialog = false }
-                            ) {
-                                Text(stringResource(R.string.action_cancel))
-                            }
-                        }
+                        dismissText = stringResource(R.string.action_cancel)
                     )
                 }
 
@@ -2571,78 +2546,51 @@ fun MainAppLayout(
     }
 
     if (showCreateAlbumDialog) {
-        androidx.compose.ui.window.Dialog(
+        com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = {
                 showCreateAlbumDialog = false
                 newAlbumName = ""
-            }
-        ) {
-            Surface(
-                shape = ShapeExtraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = stringResource(R.string.new_album),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                    )
-                    
-                    androidx.compose.material3.OutlinedTextField(
-                        value = newAlbumName,
-                        onValueChange = { newAlbumName = it },
-                        label = { Text(stringResource(R.string.album_name_label)) },
-                        placeholder = { Text(stringResource(R.string.album_name_hint)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = {
-                                showCreateAlbumDialog = false
-                                newAlbumName = ""
-                            }
-                        ) {
-                            Text(stringResource(R.string.action_cancel))
+            },
+            title = stringResource(R.string.new_album),
+            icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
+            confirmText = stringResource(R.string.action_create),
+            isConfirmEnabled = newAlbumName.isNotBlank(),
+            onConfirm = {
+                if (newAlbumName.isNotBlank()) {
+                    val albumToCreate = newAlbumName.trim()
+                    viewModel.createAlbum(
+                        albumName = albumToCreate,
+                        onSuccess = {
+                            showCreateAlbumDialog = false
+                            newAlbumName = ""
+                            android.widget.Toast.makeText(context, "Album '$albumToCreate' created successfully", android.widget.Toast.LENGTH_SHORT).show()
+                            triggerSync()
+                        },
+                        onError = { errorMsg ->
+                            android.widget.Toast.makeText(context, "Error: $errorMsg", android.widget.Toast.LENGTH_LONG).show()
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        ExpressiveButton(
-                            onClick = {
-                                if (newAlbumName.isNotBlank()) {
-                                    val albumToCreate = newAlbumName.trim()
-                                    viewModel.createAlbum(
-                                        albumName = albumToCreate,
-                                        onSuccess = {
-                                            showCreateAlbumDialog = false
-                                            newAlbumName = ""
-                                            android.widget.Toast.makeText(context, "Album '$albumToCreate' created successfully", android.widget.Toast.LENGTH_SHORT).show()
-                                            triggerSync()
-                                        },
-                                        onError = { errorMsg ->
-                                            android.widget.Toast.makeText(context, "Error: $errorMsg", android.widget.Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-                                }
-                            },
-                            enabled = newAlbumName.isNotBlank()
-                        ) {
-                            Text(stringResource(R.string.action_save))
-                        }
-                    }
+                    )
                 }
+            },
+            dismissText = stringResource(R.string.action_cancel),
+            content = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = newAlbumName,
+                    onValueChange = { newAlbumName = it },
+                    label = { Text(stringResource(R.string.album_name_label)) },
+                    placeholder = { Text(stringResource(R.string.album_name_hint)) },
+                    singleLine = true,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-        }
+        )
     }
 
     if (showDisplaySortSheet) {

@@ -237,44 +237,43 @@ fun AlbumPickerSheet(
                 }
 
                 if (showCreateFolderDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showCreateFolderDialog = false },
-                        title = { Text(stringResource(R.string.dialog_create_folder_title)) },
-                        text = {
+                    PhotonDialog(
+                        onDismissRequest = {
+                            showCreateFolderDialog = false
+                            newFolderName = ""
+                        },
+                        title = stringResource(R.string.dialog_create_folder_title),
+                        subtitle = currentBrowsingDirectory.name,
+                        icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder),
+                        confirmText = stringResource(R.string.action_create),
+                        isConfirmEnabled = newFolderName.isNotBlank(),
+                        onConfirm = {
+                            if (newFolderName.isNotBlank()) {
+                                val newDir = File(currentBrowsingDirectory, newFolderName.trim())
+                                if (!newDir.exists()) {
+                                    newDir.mkdirs()
+                                    refreshTrigger++
+                                }
+                                showCreateFolderDialog = false
+                                newFolderName = ""
+                            }
+                        },
+                        dismissText = stringResource(R.string.action_cancel),
+                        content = {
                             OutlinedTextField(
                                 value = newFolderName,
                                 onValueChange = { newFolderName = it },
                                 label = { Text(stringResource(R.string.dialog_folder_name_label)) },
                                 singleLine = true,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    if (newFolderName.isNotBlank()) {
-                                        val newDir = File(currentBrowsingDirectory, newFolderName.trim())
-                                        if (!newDir.exists()) {
-                                            newDir.mkdirs()
-                                            refreshTrigger++
-                                        }
-                                        showCreateFolderDialog = false
-                                        newFolderName = ""
-                                    }
-                                }
-                            ) {
-                                Text(stringResource(R.string.action_create))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(
-                                onClick = {
-                                    showCreateFolderDialog = false
-                                    newFolderName = ""
-                                }
-                            ) {
-                                Text(stringResource(R.string.action_cancel))
-                            }
                         }
                     )
                 }
