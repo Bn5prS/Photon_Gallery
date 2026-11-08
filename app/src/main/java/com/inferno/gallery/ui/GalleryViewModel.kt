@@ -1468,14 +1468,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun clearSelection() {
+        _isDragSelecting.value = false
         _selectedUris.value = emptySet()
+        _draggedUris.value = emptySet()
+        baseSelectedUris = emptySet()
     }
 
     private var baseSelectedUris = emptySet<String>()
     private val _draggedUris = MutableStateFlow<Set<String>>(emptySet())
     private var dragSelecting = true
+    private val _isDragSelecting = MutableStateFlow(false)
+    val isDragSelecting: StateFlow<Boolean> = _isDragSelecting.asStateFlow()
 
     fun startDragSelection(initialUri: String, isSelecting: Boolean) {
+        _isDragSelecting.value = true
         baseSelectedUris = _selectedUris.value
         dragSelecting = isSelecting
         _draggedUris.value = setOf(initialUri)
@@ -1488,6 +1494,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun endDragSelection() {
+        _isDragSelecting.value = false
         _selectedUris.value = getMergedSelection()
         _draggedUris.value = emptySet()
         baseSelectedUris = emptySet()

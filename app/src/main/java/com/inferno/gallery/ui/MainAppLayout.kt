@@ -10,8 +10,12 @@ import com.inferno.gallery.ui.utils.popBackStackSafely
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -74,6 +78,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -199,6 +204,7 @@ fun MainAppLayout(
     }
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
+    val isDragSelecting by viewModel.isDragSelecting.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
@@ -589,23 +595,49 @@ fun MainAppLayout(
                                     onClick = { viewModel.clearSelection() },
                                     contentDescription = "Clear selection"
                                 )
-                                AnimatedContent(
-                                    targetState = selectedUris.size,
-                                    transitionSpec = {
-                                        if (targetState > initialState) {
-                                            (slideInVertically { -it } + fadeIn()) togetherWith
-                                                    (slideOutVertically { it } + fadeOut())
-                                        } else {
-                                            (slideInVertically { it } + fadeIn()) togetherWith
-                                                    (slideOutVertically { -it } + fadeOut())
-                                        }
-                                    },
-                                    label = "selectionCount",
-                                    modifier = Modifier.padding(start = 16.dp).weight(1f)
-                                ) { count ->
+                                val selectionCount = selectedUris.size
+                                var lastCountChangeTime by remember { mutableLongStateOf(0L) }
+                                var isRapidUpdate by remember { mutableStateOf(false) }
+
+                                LaunchedEffect(selectionCount) {
+                                    val now = android.os.SystemClock.uptimeMillis()
+                                    isRapidUpdate = (now - lastCountChangeTime) < 180L
+                                    lastCountChangeTime = now
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .padding(start = 16.dp)
+                                        .weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    AnimatedContent(
+                                        targetState = selectionCount,
+                                        transitionSpec = {
+                                            if (isDragSelecting || isRapidUpdate) {
+                                                EnterTransition.None togetherWith ExitTransition.None
+                                            } else {
+                                                val direction = if (targetState > initialState) 1 else -1
+                                                (slideInVertically(animationSpec = tween(120, easing = FastOutSlowInEasing)) { (it * 0.35f).toInt() * -direction } +
+                                                        fadeIn(animationSpec = tween(100))) togetherWith
+                                                        (slideOutVertically(animationSpec = tween(90, easing = FastOutSlowInEasing)) { (it * 0.35f).toInt() * direction } +
+                                                                fadeOut(animationSpec = tween(70)))
+                                            }
+                                        },
+                                        label = "selectionCountNumber"
+                                    ) { count ->
+                                        Text(
+                                            text = count.toString(),
+                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
                                     Text(
-                                        "$count Selected",
-                                        style = MaterialTheme.typography.titleMedium
+                                        text = "Selected",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                                 PhotonHeaderIconButton(
