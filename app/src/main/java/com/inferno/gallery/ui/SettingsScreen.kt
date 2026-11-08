@@ -16,6 +16,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -61,6 +63,7 @@ import androidx.core.graphics.ColorUtils
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.ShapeMedium
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.IconSizeTokens
 import com.inferno.gallery.ui.theme.SpacingTokens
 import androidx.compose.material3.AlertDialog
@@ -107,6 +110,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -120,6 +125,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.inferno.gallery.ui.components.LanguageSelectionDialog
 import com.inferno.gallery.ui.components.getCurrentAppLanguageTag
 import com.inferno.gallery.ui.components.getActiveLanguage
@@ -227,6 +234,7 @@ fun SettingsScreen(
     var currentLanguageTag by remember { mutableStateOf(getCurrentAppLanguageTag(context)) }
     var showCustomColorSheet by remember { mutableStateOf(false) }
     var showPaletteStyleSheet by remember { mutableStateOf(false) }
+    var showCuratedPalettesCard by remember { mutableStateOf(false) }
 
     if (showLanguageDialog) {
         LanguageSelectionDialog(
@@ -361,6 +369,107 @@ fun SettingsScreen(
                         viewModel.setThemePaletteStyle(selectedStyle)
                     }
                 )
+            }
+        }
+    }
+
+    if (showCuratedPalettesCard) {
+        Dialog(
+            onDismissRequest = { showCuratedPalettesCard = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .wrapContentHeight(),
+                shape = ShapeExtraLarge,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                text = stringResource(R.string.setting_color_palette),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.setting_color_palette_sub),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showCuratedPalettesCard = false }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                contentDescription = stringResource(R.string.action_close),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    val allPalettes = remember { ThemePalettes.allPalettes }
+                    val chunkedPalettes = remember(allPalettes) { allPalettes.chunked(4) }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        chunkedPalettes.forEach { rowPalettes ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                rowPalettes.forEach { palette ->
+                                    val isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id)
+                                    FourQuadrantColorSwatch(
+                                        palette = palette,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            viewModel.setUseMaterialYou(false)
+                                            viewModel.setColorPresetName(palette.id)
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (rowPalettes.size < 4) {
+                                    repeat(4 - rowPalettes.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    FilledTonalButton(
+                        onClick = { showCuratedPalettesCard = false },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_close),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
             }
         }
     }
@@ -732,48 +841,90 @@ fun SettingsScreen(
                                         )
                                     },
                                     {
-                                        Column(
+                                        val isPresetActive = !useMaterialYou && colorPresetName != "dynamic" && colorPresetName != "custom"
+                                        val activePalette = if (isPresetActive) ThemePalettes.getById(colorPresetName) else null
+                                        val paletteSubtitle = when {
+                                            isPresetActive && activePalette != null -> activePalette.name
+                                            useMaterialYou || colorPresetName == "dynamic" -> "System Wallpaper (Material You)"
+                                            colorPresetName == "custom" -> "Custom Color Active"
+                                            else -> stringResource(R.string.setting_color_palette_sub)
+                                        }
+
+                                        Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .clickable { showCuratedPalettesCard = true }
                                                 .padding(horizontal = 16.dp, vertical = 12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                                             ) {
-                                                Column(modifier = Modifier.weight(1f)) {
+                                                if (activePalette != null) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .border(
+                                                                width = 2.dp,
+                                                                color = MaterialTheme.colorScheme.primary,
+                                                                shape = CircleShape
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Canvas(modifier = Modifier.size(36.dp)) {
+                                                            val hw = size.width / 2f
+                                                            val hh = size.height / 2f
+                                                            val qSize = Size(hw, hh)
+                                                            drawRect(activePalette.quadrantColors[0], Offset.Zero, qSize)
+                                                            drawRect(activePalette.quadrantColors[1], Offset(hw, 0f), qSize)
+                                                            drawRect(activePalette.quadrantColors[2], Offset(0f, hh), qSize)
+                                                            drawRect(activePalette.quadrantColors[3], Offset(hw, hh), qSize)
+                                                        }
+                                                    }
+                                                } else {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                Column {
                                                     Text(
                                                         text = stringResource(R.string.setting_color_palette),
                                                         style = MaterialTheme.typography.titleMedium,
                                                         color = MaterialTheme.colorScheme.onSurface
                                                     )
                                                     Text(
-                                                        text = if (useMaterialYou || colorPresetName == "dynamic") "Select any preset to switch from system wallpaper" else "Curated 4-color Material 3 combinations",
+                                                        text = paletteSubtitle,
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
                                             }
 
-                                            LazyRow(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(top = 4.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                                            FilledTonalButton(
+                                                onClick = { showCuratedPalettesCard = true },
+                                                shape = CircleShape,
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                             ) {
-                                                items(ThemePalettes.allPalettes) { palette ->
-                                                    FourQuadrantColorSwatch(
-                                                        palette = palette,
-                                                        isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id),
-                                                        onClick = {
-                                                            viewModel.setUseMaterialYou(false)
-                                                            viewModel.setColorPresetName(palette.id)
-                                                        }
-                                                    )
-                                                }
+                                                Text(
+                                                    text = stringResource(R.string.action_choose),
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
                                             }
                                         }
                                     },

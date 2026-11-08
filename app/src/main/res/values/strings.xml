@@ -341,6 +341,7 @@
     <string name="setting_palette_style_sub">Color science profiles via MaterialKolor</string>
     <string name="action_customize">Customize</string>
     <string name="action_change">Change</string>
+    <string name="action_choose">Choose</string>
     <string name="setting_dynamic_ambient_title">Dynamic Ambient Color</string>
     <string name="setting_dynamic_ambient_sub">Tint the viewer background with colors extracted from the current photo</string>
     <string name="setting_blur_viewer_bg_title">Blur Viewer Background</string>

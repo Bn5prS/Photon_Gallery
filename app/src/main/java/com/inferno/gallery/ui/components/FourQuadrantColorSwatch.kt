@@ -64,7 +64,7 @@ fun FourQuadrantColorSwatch(
     palette: PresetThemePalette,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.width(72.dp),
 ) {
     val haptic = LocalHapticFeedback.current
     val quadrantColors = palette.quadrantColors
@@ -77,7 +77,6 @@ fun FourQuadrantColorSwatch(
 
     Column(
         modifier = modifier
-            .width(72.dp)
             .semantics {
                 this.role = Role.RadioButton
                 this.selected = isSelected
