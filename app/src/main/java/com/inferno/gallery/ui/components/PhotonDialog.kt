@@ -51,6 +51,7 @@ fun PhotonDialog(
     dismissText: String = stringResource(R.string.action_cancel),
     onDismiss: () -> Unit = onDismissRequest,
     isConfirmEnabled: Boolean = true,
+    isDanger: Boolean = false,
     content: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     BasicAlertDialog(
@@ -162,7 +163,7 @@ fun PhotonDialog(
                         Text(
                             text = confirmText,
                             style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = if (isDanger) FontWeight.ExtraBold else FontWeight.Bold
                         )
                     }
                 }
