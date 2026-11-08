@@ -70,11 +70,7 @@ class OcrIndexWorker(
     }
 
     private suspend fun safeSetForeground(progress: String) {
-        try {
-            setForeground(createForegroundInfo(progress))
-        } catch (e: Exception) {
-            Log.w(TAG, "Unable to set/update foreground service: ${e.message}")
-        }
+        // Disabled: do not show image processing progress in notifications per user request
     }
 
     private data class LoadedImage(
@@ -170,6 +166,7 @@ class OcrIndexWorker(
         try {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
         } catch (_: Throwable) {}
+        (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
             isIndexing = true,
             progress = 0,

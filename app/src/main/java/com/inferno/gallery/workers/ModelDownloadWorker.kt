@@ -110,9 +110,8 @@ class ModelDownloadWorker(
     }
 
     override suspend fun doWork(): Result {
+        (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         try {
-            setForeground(createForegroundInfo("Connecting…"))
-
             val modelDir = File(applicationContext.filesDir, MODEL_DIR)
             if (!modelDir.exists()) {
                 modelDir.mkdirs()
@@ -212,11 +211,6 @@ class ModelDownloadWorker(
                                             "speedBytesPerSec" to currentSpeedBytesPerSec
                                         )
                                     )
-                                    try {
-                                        setForeground(createForegroundInfo("Downloaded $overallPercent% ($fileName)"))
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to set foreground info: ${e.message}")
-                                    }
                                 }
                             }
                             output.flush()

@@ -87,6 +87,7 @@ class FaceIndexWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val context = applicationContext
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         val database = DatabaseProvider.getDatabase(context)
         val faceDao = database.faceDao()
         val engine = FaceRecognitionEngine.getInstance(context)
@@ -128,10 +129,6 @@ class FaceIndexWorker(
             total = totalPhotos
         )
         setProgress(workDataOf("processed" to alreadyIndexed, "total" to totalPhotos))
-
-        try {
-            setForeground(createForegroundInfo("Scanning faces: $alreadyIndexed / $totalPhotos", alreadyIndexed, totalPhotos))
-        } catch (_: Exception) {}
 
         // 3. Initialize detector using FaceScanHelper options (0.02f minFaceSize)
         val detector = FaceDetection.getClient(FaceScanHelper.createDetectorOptions())
@@ -181,9 +178,6 @@ class FaceIndexWorker(
 
                 val currentBatchProgress = alreadyIndexed + processedCount
                 setProgress(workDataOf("processed" to currentBatchProgress, "total" to totalPhotos))
-                try {
-                    setForeground(createForegroundInfo("Scanning faces: $currentBatchProgress / $totalPhotos", currentBatchProgress, totalPhotos))
-                } catch (_: Exception) {}
 
                 // Periodically consolidate clusters every 100 photos to keep identities grouped
                 if (processedCount > 0 && processedCount % 100 == 0) {

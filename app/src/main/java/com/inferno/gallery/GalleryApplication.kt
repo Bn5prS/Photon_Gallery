@@ -44,6 +44,23 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
 
         // Install global crash handler — must be first to catch startup crashes
         com.inferno.gallery.crash.CrashHandler.install(this)
+
+        // Dismiss & purge old indexing/download notification channels per user request
+        try {
+            val nm = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            if (nm != null) {
+                nm.cancel(1001)
+                nm.cancel(1002)
+                nm.cancel(2001)
+                nm.cancel(2002)
+                nm.cancel(2003)
+                nm.deleteNotificationChannel("smart_search_indexing_channel")
+                nm.deleteNotificationChannel("ocr_indexing_channel")
+                nm.deleteNotificationChannel("face_indexing_channel")
+                nm.deleteNotificationChannel("model_download_channel")
+                nm.deleteNotificationChannel("face_model_download_channel")
+            }
+        } catch (_: Throwable) {}
         // Chain: MediaStore sync → OCR indexing (OCR must wait for sync to populate the DB)
         val syncWorkRequest = OneTimeWorkRequestBuilder<MediaSyncWorker>()
             .setBackoffCriteria(
