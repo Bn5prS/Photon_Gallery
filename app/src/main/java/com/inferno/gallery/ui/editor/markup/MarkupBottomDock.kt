@@ -395,7 +395,7 @@ fun MarkupBottomDock(
 
                 MarkupToolItem(
                     label = "Eraser",
-                    iconRes = R.drawable.ic_ms_cleaning_services,
+                    iconRes = R.drawable.ic_ms_ink_eraser,
                     isSelected = activeTool == MarkupTool.ERASER,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)

@@ -965,7 +965,8 @@ fun SearchSnippetOverlay(
  * cell stays permanently soft at the larger size. Qualifying also stops screens that do not
  * pass a column count (e.g. SearchScreen) from poisoning the main grid's entries.
  */
-fun thumbnailMemoryKey(id: String, sizePx: Int): String = "t_${id}@$sizePx"
+fun thumbnailMemoryKey(id: String, sizePx: Int, dateModified: Long = 0L): String =
+    if (dateModified > 0L) "t_${id}_${dateModified}@$sizePx" else "t_${id}@$sizePx"
 
 /**
  * Shared thumbnail resolution buckets, derived from column count. Used by the grid cells, the

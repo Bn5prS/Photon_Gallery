@@ -1,0 +1,1099 @@
+<!-- Interactive Web Prototype: Photon Gallery Collections Design Lab -->
+<!-- Open this file directly in any modern browser (Chrome, Edge, Safari, Firefox) to test the 3 designs interactively! -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photon Gallery — Modern Album & Collection Concepts</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Custom scrollbar styling for device screen */
+    .device-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .device-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .device-scroll::-webkit-scrollbar-thumb {
+      background: rgba(150, 150, 150, 0.3);
+      border-radius: 9999px;
+    }
+    .device-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(150, 150, 150, 0.5);
+    }
+    
+    /* Smooth card hover micro-animations */
+    .album-card-hover {
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .album-card-hover:hover {
+      transform: translateY(-3px) scale(1.015);
+    }
+    .album-card-hover:active {
+      transform: scale(0.98);
+    }
+
+    /* Stacked card effect for Concept 3 */
+    .stack-layer-1 {
+      transform: rotate(2.5deg) translate(4px, 2px);
+    }
+    .stack-layer-2 {
+      transform: rotate(-2deg) translate(-4px, 4px);
+    }
+    
+    /* Heatmap overlay styling */
+    .reach-zone-easy {
+      background: radial-gradient(circle at 50% 90%, rgba(34, 197, 94, 0.28) 0%, rgba(34, 197, 94, 0.12) 55%, transparent 75%);
+    }
+    .reach-zone-stretch {
+      background: radial-gradient(circle at 50% 15%, rgba(239, 68, 68, 0.25) 0%, rgba(245, 158, 11, 0.15) 50%, transparent 80%);
+    }
+
+    /* Glassmorphism */
+    .glass-frosted {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP LAB NAV BAR -->
+  <header class="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50 px-5 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-rose-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            Photon Gallery 
+            <span class="text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Collections Lab</span>
+          </h1>
+          <p class="text-xs text-slate-400">Interactive Web Prototypes in Native Mobile Device Frames</p>
+        </div>
+      </div>
+
+      <!-- Concept Switcher Segmented Control -->
+      <div class="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700/60 shadow-inner">
+        <button onclick="switchConcept('curator')" id="tab-curator" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 bg-indigo-600 text-white shadow-sm flex items-center gap-1.5">
+          <span>✨</span>
+          <span class="hidden sm:inline">Concept 1:</span> Editorial Curator
+        </button>
+        <button onclick="switchConcept('velocity')" id="tab-velocity" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-300 hover:text-white flex items-center gap-1.5">
+          <span>⚡</span>
+          <span class="hidden sm:inline">Concept 2:</span> Velocity Flow
+        </button>
+        <button onclick="switchConcept('tactile')" id="tab-tactile" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-300 hover:text-white flex items-center gap-1.5">
+          <span>🎴</span>
+          <span class="hidden sm:inline">Concept 3:</span> Tactile Deck
+        </button>
+        <button onclick="switchConcept('comparison')" id="tab-comparison" class="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-300 hover:text-white flex items-center gap-1.5 border-l border-slate-700/80 ml-1">
+          <span>📊</span>
+          <span>Side-by-Side</span>
+        </button>
+      </div>
+
+      <!-- Device & Test Settings -->
+      <div class="flex items-center gap-2">
+        <!-- Ergonomics Heatmap Toggle -->
+        <button onclick="toggleHeatmap()" id="btn-heatmap" title="Toggle One-Hand Reachability Overlay" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 bg-slate-800/70 hover:bg-slate-700/80 text-slate-300 flex items-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <span class="hidden md:inline">Thumb Reach</span>
+        </button>
+
+        <!-- Device Theme Toggle (Dark/Light) -->
+        <button onclick="toggleDeviceTheme()" id="btn-theme" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 bg-slate-800/70 hover:bg-slate-700/80 text-slate-300 flex items-center gap-1.5 transition">
+          <span id="theme-icon">🌙</span>
+          <span id="theme-text" class="hidden md:inline">Dark OS</span>
+        </button>
+
+        <!-- Device Model Label -->
+        <div class="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 bg-slate-800/40 border border-slate-800">
+          <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+          <span>Pixel 9 Pro / 6.3"</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONCEPT DESCRIPTION BAR (Contextual explanation of active design) -->
+  <section id="concept-summary-bar" class="bg-slate-900/60 border-b border-slate-800/60 px-5 py-2.5 text-xs text-slate-300">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div id="concept-meta-info" class="flex items-center gap-2">
+        <span class="font-semibold text-indigo-400">Concept 1: Editorial Curator</span>
+        <span class="text-slate-600">•</span>
+        <span class="text-slate-300">Magazine-grade visual storytelling with heroic spotlight cards, fluid horizontal quick-shelves, and bottom-anchored thumb controls.</span>
+      </div>
+      <div class="flex items-center gap-3 text-slate-400">
+        <span class="flex items-center gap-1 text-[11px]"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> WCAG AAA Contrast</span>
+        <span class="flex items-center gap-1 text-[11px]"><span class="w-2 h-2 rounded-full bg-indigo-400"></span> 48dp Min Touch Targets</span>
+        <span class="flex items-center gap-1 text-[11px]"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Zero Thumb Strain</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN STAGE / DEVICE SHOWROOM -->
+  <main class="flex-1 py-8 px-4 flex justify-center items-start overflow-x-auto">
+    <div id="device-stage" class="flex flex-wrap items-center justify-center gap-8 max-w-7xl w-full">
+
+      <!-- ========================================================================= -->
+      <!-- DEVICE 1: THE EDITORIAL CURATOR                                           -->
+      <!-- ========================================================================= -->
+      <div id="device-wrapper-curator" class="flex flex-col items-center">
+        <div class="mb-3 text-center">
+          <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Concept 01</span>
+          <h2 class="text-sm font-bold text-white">Editorial Curator</h2>
+          <p class="text-[11px] text-slate-400">Spatial depth & narrative spotlight</p>
+        </div>
+
+        <!-- Phone Chassis Frame -->
+        <div class="relative w-[380px] h-[780px] rounded-[52px] p-3 shadow-2xl bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 border-[4px] border-slate-600/70 ring-1 ring-white/10 select-none">
+          <!-- Side buttons simulation -->
+          <div class="absolute -left-[7px] top-28 w-[3px] h-12 bg-slate-600 rounded-l-sm"></div>
+          <div class="absolute -left-[7px] top-44 w-[3px] h-12 bg-slate-600 rounded-l-sm"></div>
+          <div class="absolute -right-[7px] top-32 w-[3px] h-16 bg-slate-600 rounded-r-sm"></div>
+
+          <!-- Screen Inner Container -->
+          <div id="screen-curator" class="relative w-full h-full rounded-[44px] overflow-hidden flex flex-col bg-slate-950 text-slate-100 transition-colors duration-300">
+            
+            <!-- Heatmap overlay (hidden by default) -->
+            <div id="heatmap-curator" class="absolute inset-0 pointer-events-none z-40 hidden flex-col justify-between">
+              <div class="h-1/3 reach-zone-stretch flex items-start justify-center pt-10">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600/80 text-white backdrop-blur">⚠️ Hard Reach Zone (Rare Actions Only)</span>
+              </div>
+              <div class="h-1/2 reach-zone-easy flex items-end justify-center pb-12">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600/80 text-white backdrop-blur">✨ Natural Thumb Arc (Primary Controls)</span>
+              </div>
+            </div>
+
+            <!-- Hardware Punchhole / Dynamic Island -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-50 flex items-center justify-between px-2.5">
+              <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-emerald-500/80"></div>
+            </div>
+
+            <!-- Native Status Bar -->
+            <div class="pt-2 px-6 h-10 flex items-center justify-between text-xs font-semibold z-30 shrink-0 select-none opacity-90">
+              <span id="live-time-1">09:41</span>
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z"/></svg>
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+                <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+                  <div class="h-full w-4/5 bg-current rounded-2xs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCROLLABLE APP CONTENT -->
+            <div class="flex-1 overflow-y-auto device-scroll px-4 pb-24 pt-2">
+              
+              <!-- Clean App Header (Large Title + Quick Actions) -->
+              <div class="flex items-end justify-between mb-4 mt-1">
+                <div>
+                  <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-400">Library</span>
+                  <h3 class="text-2xl font-black tracking-tight text-current">Collections</h3>
+                </div>
+                <div class="flex items-center gap-1">
+                  <!-- Accessible View Mode Switcher -->
+                  <button onclick="filterCurator('all')" id="curator-btn-all" class="p-2 rounded-full hover:bg-slate-800 text-slate-300 transition" title="Sort & Order">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                  </button>
+                  <button onclick="openNewAlbumDialog()" class="p-2 rounded-full bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 transition" title="Create Collection">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- HERO SPOTLIGHT / PINNED ADVENTURE (Stacked Card Depth) -->
+              <div class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Featured Journey
+                  </span>
+                  <span class="text-[11px] font-medium text-indigo-400 cursor-pointer hover:underline">Change</span>
+                </div>
+
+                <div onclick="openAlbumDetail('Kyoto Autumn Journey', 284, 'Japan • Oct 2024', 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e')" class="album-card-hover relative h-48 rounded-2xl overflow-hidden cursor-pointer shadow-lg group">
+                  <!-- Background Image with Ambient Gradient Scrim -->
+                  <img src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=700&q=80" alt="Kyoto Journey" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+                  
+                  <!-- Top Badge -->
+                  <div class="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium">
+                    <span>🍁</span>
+                    <span>Autumn 2024</span>
+                  </div>
+
+                  <!-- Stacked Card Depth Accents (Corner hint) -->
+                  <div class="absolute top-3 right-3 flex -space-x-1">
+                    <div class="w-6 h-6 rounded-md bg-white/20 backdrop-blur border border-white/20"></div>
+                    <div class="w-6 h-6 rounded-md bg-white/40 backdrop-blur border border-white/30"></div>
+                  </div>
+
+                  <!-- Bottom Title & Metadata -->
+                  <div class="absolute bottom-3 left-3 right-3">
+                    <h4 class="text-lg font-black text-white leading-tight drop-shadow-md">Kyoto & Tokyo Expedition</h4>
+                    <div class="flex items-center justify-between mt-1 text-slate-200 text-xs">
+                      <span>284 photographs • 12 videos</span>
+                      <span class="text-[11px] px-2 py-0.5 rounded-md bg-indigo-600/80 font-bold text-white">Open</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- QUICK TRAYS (Semantic Category Filter Pills) -->
+              <div class="mb-5">
+                <div class="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 no-scrollbar">
+                  <button onclick="filterCuratorPill('all')" id="pill-all" class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-sm flex items-center gap-1.5">
+                    <span>All</span>
+                    <span class="opacity-75 text-[10px]">16</span>
+                  </button>
+                  <button onclick="filterCuratorPill('fav')" id="pill-fav" class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5">
+                    <span class="text-rose-400">❤️</span>
+                    <span>Favorites</span>
+                    <span class="opacity-60 text-[10px]">94</span>
+                  </button>
+                  <button onclick="filterCuratorPill('video')" id="pill-video" class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5">
+                    <span class="text-amber-400">▶</span>
+                    <span>Videos</span>
+                    <span class="opacity-60 text-[10px]">42</span>
+                  </button>
+                  <button onclick="filterCuratorPill('people')" id="pill-people" class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5">
+                    <span class="text-sky-400">👥</span>
+                    <span>People</span>
+                    <span class="opacity-60 text-[10px]">18</span>
+                  </button>
+                  <button onclick="filterCuratorPill('places')" id="pill-places" class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5">
+                    <span class="text-emerald-400">📍</span>
+                    <span>Places</span>
+                    <span class="opacity-60 text-[10px]">7</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- EDITORIAL BENTO GRID (Albums with dynamic rhythm) -->
+              <div id="curator-album-grid" class="grid grid-cols-2 gap-3">
+                
+                <!-- Album Card: Architecture / Design -->
+                <div onclick="openAlbumDetail('Minimal Architecture', 112, 'Urban Lines & Concrete', 'https://images.unsplash.com/photo-1513694203232-719a280e022f')" class="album-card-hover group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800/80 aspect-[4/5] flex flex-col justify-end p-3">
+                  <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=400&q=80" alt="Architecture" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+                  <div class="relative z-10">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-indigo-300">Curated</span>
+                    <h5 class="text-sm font-bold text-white leading-tight">Minimal Architecture</h5>
+                    <p class="text-[11px] text-slate-300">112 items</p>
+                  </div>
+                </div>
+
+                <!-- Album Card: Portrait Studio -->
+                <div onclick="openAlbumDetail('Studio Portraits 2024', 68, 'Portraits & Lighting', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb')" class="album-card-hover group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800/80 aspect-[4/5] flex flex-col justify-end p-3">
+                  <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80" alt="Portraits" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+                  <div class="relative z-10">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-rose-300">People</span>
+                    <h5 class="text-sm font-bold text-white leading-tight">Studio Portraits</h5>
+                    <p class="text-[11px] text-slate-300">68 items</p>
+                  </div>
+                </div>
+
+                <!-- Album Card: Street Photography -->
+                <div onclick="openAlbumDetail('Nocturne Street Life', 340, 'Night lights and shadows', 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5')" class="album-card-hover group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800/80 aspect-[4/5] flex flex-col justify-end p-3">
+                  <img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=400&q=80" alt="Street" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+                  <div class="relative z-10">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-amber-300">Street</span>
+                    <h5 class="text-sm font-bold text-white leading-tight">Nocturne City</h5>
+                    <p class="text-[11px] text-slate-300">340 items</p>
+                  </div>
+                </div>
+
+                <!-- Album Card: Nature & Wilderness -->
+                <div onclick="openAlbumDetail('Alpine Escapes', 154, 'Mountains & Glaciers', 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b')" class="album-card-hover group relative rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border border-slate-800/80 aspect-[4/5] flex flex-col justify-end p-3">
+                  <img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=400&q=80" alt="Nature" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+                  <div class="relative z-10">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-emerald-300">Landscape</span>
+                    <h5 class="text-sm font-bold text-white leading-tight">Alpine Escapes</h5>
+                    <p class="text-[11px] text-slate-300">154 items</p>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- SYSTEM & UTILITIES TRAY (Separated to reduce visual pollution) -->
+              <div class="mt-6 pt-4 border-t border-slate-800/80">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 block">Device Folders</span>
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-900/80 cursor-pointer transition">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center font-bold">📱</div>
+                      <div>
+                        <div class="text-xs font-semibold text-current">Screenshots</div>
+                        <div class="text-[10px] text-slate-400">512 items • Updated today</div>
+                      </div>
+                    </div>
+                    <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                  </div>
+                  <div class="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-900/80 cursor-pointer transition">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">📥</div>
+                      <div>
+                        <div class="text-xs font-semibold text-current">Downloads</div>
+                        <div class="text-[10px] text-slate-400">89 items • 1.2 GB</div>
+                      </div>
+                    </div>
+                    <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- FLOATING ERGONOMIC THUMB BAR (Comfort zone at bottom) -->
+            <div class="absolute bottom-5 left-4 right-4 z-30">
+              <div class="glass-frosted bg-slate-900/85 border border-slate-700/60 rounded-full px-4 py-2.5 shadow-2xl flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input type="text" placeholder="Filter 16 collections..." oninput="handleSearch(this.value, 'curator')" class="bg-transparent text-xs text-white placeholder-slate-400 outline-none w-36" />
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md hover:bg-indigo-500 transition" title="New Album">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Home Gesture Pill -->
+            <div class="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-500/40 rounded-full z-40 pointer-events-none"></div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ========================================================================= -->
+      <!-- DEVICE 2: THE VELOCITY FLOW                                               -->
+      <!-- ========================================================================= -->
+      <div id="device-wrapper-velocity" class="flex flex-col items-center">
+        <div class="mb-3 text-center">
+          <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Concept 02</span>
+          <h2 class="text-sm font-bold text-white">Velocity Flow</h2>
+          <p class="text-[11px] text-slate-400">High-density, multi-preview & zero friction</p>
+        </div>
+
+        <!-- Phone Chassis Frame -->
+        <div class="relative w-[380px] h-[780px] rounded-[52px] p-3 shadow-2xl bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 border-[4px] border-slate-600/70 ring-1 ring-white/10 select-none">
+          <!-- Side buttons simulation -->
+          <div class="absolute -left-[7px] top-28 w-[3px] h-12 bg-slate-600 rounded-l-sm"></div>
+          <div class="absolute -left-[7px] top-44 w-[3px] h-12 bg-slate-600 rounded-l-sm"></div>
+          <div class="absolute -right-[7px] top-32 w-[3px] h-16 bg-slate-600 rounded-r-sm"></div>
+
+          <!-- Screen Inner Container -->
+          <div id="screen-velocity" class="relative w-full h-full rounded-[44px] overflow-hidden flex flex-col bg-slate-950 text-slate-100 transition-colors duration-300">
+            
+            <!-- Heatmap overlay -->
+            <div id="heatmap-velocity" class="absolute inset-0 pointer-events-none z-40 hidden flex-col justify-between">
+              <div class="h-1/3 reach-zone-stretch flex items-start justify-center pt-10">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600/80 text-white backdrop-blur">⚠️ Stretch Zone</span>
+              </div>
+              <div class="h-1/2 reach-zone-easy flex items-end justify-center pb-12">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600/80 text-white backdrop-blur">✨ Thumb Action Zone</span>
+              </div>
+            </div>
+
+            <!-- Hardware Punchhole -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-50 flex items-center justify-between px-2.5">
+              <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-emerald-500/80"></div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="pt-2 px-6 h-10 flex items-center justify-between text-xs font-semibold z-30 shrink-0 select-none opacity-90">
+              <span id="live-time-2">09:41</span>
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z"/></svg>
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+                <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+                  <div class="h-full w-4/5 bg-current rounded-2xs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCROLLABLE CONTENT -->
+            <div class="flex-1 overflow-y-auto device-scroll px-4 pb-20 pt-2">
+              
+              <!-- Sticky Header with Density Toggle -->
+              <div class="flex items-center justify-between mb-3 mt-1">
+                <div>
+                  <h3 class="text-xl font-bold tracking-tight text-current">Albums</h3>
+                  <p class="text-[11px] text-slate-400">1,842 items across 14 collections</p>
+                </div>
+                
+                <!-- Density Segmented Switcher (2-col vs 3-col vs List) -->
+                <div class="flex items-center bg-slate-900 border border-slate-800 p-0.5 rounded-lg">
+                  <button onclick="setGridDensity('cozy')" id="density-cozy" class="p-1.5 rounded-md bg-emerald-500/20 text-emerald-400 transition" title="Comfortable (2-Col)">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                  </button>
+                  <button onclick="setGridDensity('compact')" id="density-compact" class="p-1.5 rounded-md text-slate-400 hover:text-white transition" title="Compact (3-Col)">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM10 5a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1V5zM16 5a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1V5zM4 11a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2zM10 11a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2zM16 11a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2z"/></svg>
+                  </button>
+                  <button onclick="setGridDensity('list')" id="density-list" class="p-1.5 rounded-md text-slate-400 hover:text-white transition" title="Data List View">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- SMART AUTO-ORGANIZER STRIP (System vs User separator) -->
+              <div class="mb-4 bg-slate-900/90 border border-slate-800/80 rounded-2xl p-2.5">
+                <div class="flex items-center justify-between text-xs mb-2 px-1">
+                  <span class="font-bold text-slate-300 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Smart Buckets
+                  </span>
+                  <span class="text-[10px] text-emerald-400 font-medium">Clean 18 Duplicates</span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <div class="bg-slate-950/70 hover:bg-slate-800/80 rounded-xl p-2 text-center cursor-pointer transition border border-slate-800/50">
+                    <div class="text-xs">📸</div>
+                    <div class="text-[11px] font-bold text-white mt-0.5">Camera</div>
+                    <div class="text-[9px] text-slate-400">1,210 photos</div>
+                  </div>
+                  <div class="bg-slate-950/70 hover:bg-slate-800/80 rounded-xl p-2 text-center cursor-pointer transition border border-slate-800/50">
+                    <div class="text-xs">✂️</div>
+                    <div class="text-[11px] font-bold text-white mt-0.5">Screenshots</div>
+                    <div class="text-[9px] text-slate-400">420 items</div>
+                  </div>
+                  <div class="bg-slate-950/70 hover:bg-slate-800/80 rounded-xl p-2 text-center cursor-pointer transition border border-slate-800/50">
+                    <div class="text-xs">💬</div>
+                    <div class="text-[11px] font-bold text-white mt-0.5">Social/Apps</div>
+                    <div class="text-[9px] text-slate-400">212 items</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- USER ALBUMS CONTAINER (Responsive to Density) -->
+              <div class="mb-2 flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">User Created (8)</span>
+                <span class="text-[11px] text-slate-500">Sorted by Activity</span>
+              </div>
+
+              <div id="velocity-grid" class="grid grid-cols-2 gap-3">
+                
+                <!-- Card 1: With Multi-Thumbnail Peek Scrub -->
+                <div class="album-card-hover bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden group cursor-pointer">
+                  <div class="relative aspect-square overflow-hidden" onclick="openAlbumDetail('Tokyo Neon Drift', 188, 'Night street & cyberpunk hues', 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26')">
+                    <img id="peek-img-1" src="https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=400&q=80" alt="Album" class="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                    <!-- Photo Scrubbing Indicator Dots -->
+                    <div class="absolute bottom-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded-full z-10" onclick="event.stopPropagation()">
+                      <button onclick="scrubPreview('peek-img-1', 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=400&q=80', this)" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></button>
+                      <button onclick="scrubPreview('peek-img-1', 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?auto=format&fit=crop&w=400&q=80', this)" class="w-1.5 h-1.5 rounded-full bg-white/50 hover:bg-white"></button>
+                      <button onclick="scrubPreview('peek-img-1', 'https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?auto=format&fit=crop&w=400&q=80', this)" class="w-1.5 h-1.5 rounded-full bg-white/50 hover:bg-white"></button>
+                    </div>
+                    <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur text-[10px] font-bold text-white">🔒 Offline</span>
+                  </div>
+                  <div class="p-2.5">
+                    <h5 class="text-xs font-bold text-white truncate">Tokyo Neon Drift</h5>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                      <span>188 items</span>
+                      <span class="text-emerald-400 font-medium">Synced</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 2: Minimalist Architecture -->
+                <div class="album-card-hover bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden group cursor-pointer">
+                  <div class="relative aspect-square overflow-hidden" onclick="openAlbumDetail('Brutalist Geometry', 94, 'Concrete textures', 'https://images.unsplash.com/photo-1513694203232-719a280e022f')">
+                    <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=400&q=80" alt="Album" class="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                    <span class="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-emerald-600/80 backdrop-blur text-[9px] font-bold text-white">★ Pin</span>
+                  </div>
+                  <div class="p-2.5">
+                    <h5 class="text-xs font-bold text-white truncate">Brutalist Geometry</h5>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                      <span>94 items</span>
+                      <span class="text-slate-500">2.1 GB</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 3: Coffee Roastery -->
+                <div class="album-card-hover bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden group cursor-pointer">
+                  <div class="relative aspect-square overflow-hidden" onclick="openAlbumDetail('Artisan Coffee & Cafes', 45, 'Cafes worldwide', 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085')">
+                    <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=400&q=80" alt="Album" class="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                  </div>
+                  <div class="p-2.5">
+                    <h5 class="text-xs font-bold text-white truncate">Artisan Coffee</h5>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                      <span>45 items</span>
+                      <span class="text-slate-500">Yesterday</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 4: Coastal Waves -->
+                <div class="album-card-hover bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden group cursor-pointer">
+                  <div class="relative aspect-square overflow-hidden" onclick="openAlbumDetail('Pacific Surf & Mist', 132, 'Big Sur & Oregon coast', 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e')">
+                    <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80" alt="Album" class="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                  </div>
+                  <div class="p-2.5">
+                    <h5 class="text-xs font-bold text-white truncate">Pacific Surf</h5>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                      <span>132 items</span>
+                      <span class="text-slate-500">Sep 28</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            <!-- TACTILE BOTTOM QUICK-STRIP (Native bottom nav + Search trigger) -->
+            <div class="absolute bottom-3 left-4 right-4 z-30">
+              <div class="glass-frosted bg-slate-900/90 border border-slate-800 rounded-2xl px-3 py-2 flex items-center justify-between shadow-2xl">
+                <button class="flex flex-col items-center text-emerald-400 font-bold">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                  <span class="text-[9px]">Collections</span>
+                </button>
+                <button class="flex flex-col items-center text-slate-400 hover:text-white transition">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span class="text-[9px]">Timeline</span>
+                </button>
+                <button class="flex flex-col items-center text-slate-400 hover:text-white transition">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  <span class="text-[9px]">Search</span>
+                </button>
+                <button class="flex flex-col items-center text-slate-400 hover:text-white transition">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  <span class="text-[9px]">Settings</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-500/40 rounded-full z-40 pointer-events-none"></div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ========================================================================= -->
+      <!-- DEVICE 3: THE TACTILE DECK                                                -->
+      <!-- ========================================================================= -->
+      <div id="device-wrapper-tactile" class="flex flex-col items-center">
+        <div class="mb-3 text-center">
+          <span class="text-xs font-semibold uppercase tracking-wider text-rose-400">Concept 03</span>
+          <h2 class="text-sm font-bold text-white">Tactile Deck</h2>
+          <p class="text-[11px] text-slate-400">Physical photo stacks & one-hand ergonomics</p>
+        </div>
+
+        <!-- Phone Chassis Frame -->
+        <div class="relative w-[380px] h-[780px] rounded-[52px] p-3 shadow-2xl bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 border-[4px] border-slate-600/70 ring-1 ring-white/10 select-none">
+          <!-- Side buttons simulation -->
+          <div class="absolute -left-[7px] top-28 w-[3px] h-12 bg-slate-600 rounded-l-sm"></div>
+          <div class="absolute -left-[7px] top-44 w-[3px] h-12 bg-slate-600 rounded-l-sm"></div>
+          <div class="absolute -right-[7px] top-32 w-[3px] h-16 bg-slate-600 rounded-r-sm"></div>
+
+          <!-- Screen Inner Container -->
+          <div id="screen-tactile" class="relative w-full h-full rounded-[44px] overflow-hidden flex flex-col bg-slate-950 text-slate-100 transition-colors duration-300">
+            
+            <!-- Heatmap overlay -->
+            <div id="heatmap-tactile" class="absolute inset-0 pointer-events-none z-40 hidden flex-col justify-between">
+              <div class="h-1/3 reach-zone-stretch flex items-start justify-center pt-10">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600/80 text-white backdrop-blur">⚠️ Upper Stretch Zone</span>
+              </div>
+              <div class="h-1/2 reach-zone-easy flex items-end justify-center pb-12">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600/80 text-white backdrop-blur">✨ Direct Thumb Grip Area</span>
+              </div>
+            </div>
+
+            <!-- Hardware Punchhole -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-50 flex items-center justify-between px-2.5">
+              <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-emerald-500/80"></div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="pt-2 px-6 h-10 flex items-center justify-between text-xs font-semibold z-30 shrink-0 select-none opacity-90">
+              <span id="live-time-3">09:41</span>
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z"/></svg>
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+                <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+                  <div class="h-full w-4/5 bg-current rounded-2xs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCROLLABLE CONTENT WITH ONE-HAND ACCORDION TOP -->
+            <div class="flex-1 overflow-y-auto device-scroll px-4 pb-20 pt-2">
+              
+              <!-- Ergonomic Generous Top Header (collapses into sticky minimal bar on scroll) -->
+              <div class="pt-4 pb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-rose-400">Physical Keepsakes</span>
+                <h3 class="text-2xl font-black tracking-tight text-white mt-0.5">Photo Decks</h3>
+                <p class="text-xs text-slate-400 mt-1">Tap any stack to fan open images</p>
+              </div>
+
+              <!-- PHYSICAL STACK 1: Roadtrip West -->
+              <div class="mb-7" onclick="openAlbumDetail('Pacific Highway Roadtrip', 215, 'California Coast • 2024', 'https://images.unsplash.com/photo-1506744038136-46273834b3fb')">
+                <div class="relative w-full h-44 cursor-pointer group">
+                  <!-- Underneath Layer 2 (Rotated Left) -->
+                  <div class="absolute inset-x-2 inset-y-0 rounded-2xl bg-slate-800 border border-slate-700 shadow-md stack-layer-2 opacity-60"></div>
+                  <!-- Underneath Layer 1 (Rotated Right) -->
+                  <div class="absolute inset-x-1 inset-y-0 rounded-2xl bg-slate-800 border border-slate-700 shadow-md stack-layer-1 opacity-80"></div>
+                  <!-- Main Top Photo Card -->
+                  <div class="album-card-hover absolute inset-0 rounded-2xl overflow-hidden shadow-xl bg-slate-900 border border-white/10">
+                    <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=700&q=80" alt="Pacific Coast" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+                    
+                    <div class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur border border-white/20 text-[10px] font-bold text-white flex items-center gap-1">
+                      <span>🎴</span> 3-Layer Stack
+                    </div>
+
+                    <div class="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                      <div>
+                        <h4 class="text-base font-black text-white leading-tight">Pacific Highway Coast</h4>
+                        <p class="text-xs text-slate-300 mt-0.5">215 prints • 8mm film</p>
+                      </div>
+                      <div class="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center font-bold text-xs shadow-md">
+                        →
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PHYSICAL STACK 2: Nordic Winter -->
+              <div class="mb-7" onclick="openAlbumDetail('Nordic Winter Cabin', 89, 'Lofoten Islands • Dec 2024', 'https://images.unsplash.com/photo-1517411032315-54ef2cb783bb')">
+                <div class="relative w-full h-44 cursor-pointer group">
+                  <div class="absolute inset-x-2 inset-y-0 rounded-2xl bg-slate-800 border border-slate-700 shadow-md stack-layer-2 opacity-60"></div>
+                  <div class="absolute inset-x-1 inset-y-0 rounded-2xl bg-slate-800 border border-slate-700 shadow-md stack-layer-1 opacity-80"></div>
+                  <div class="album-card-hover absolute inset-0 rounded-2xl overflow-hidden shadow-xl bg-slate-900 border border-white/10">
+                    <img src="https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=700&q=80" alt="Nordic Winter" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+                    
+                    <div class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur border border-white/20 text-[10px] font-bold text-white flex items-center gap-1">
+                      <span>❄️</span> Winter
+                    </div>
+
+                    <div class="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                      <div>
+                        <h4 class="text-base font-black text-white leading-tight">Nordic Winter Cabin</h4>
+                        <p class="text-xs text-slate-300 mt-0.5">89 prints • Tromsø</p>
+                      </div>
+                      <div class="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow-md">
+                        →
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PHYSICAL STACK 3: Botanical Greenhouse -->
+              <div class="mb-7" onclick="openAlbumDetail('Botanical Conservatory', 64, 'Exotic Flora & Foliage', 'https://images.unsplash.com/photo-1448375240586-882707db888b')">
+                <div class="relative w-full h-44 cursor-pointer group">
+                  <div class="absolute inset-x-2 inset-y-0 rounded-2xl bg-slate-800 border border-slate-700 shadow-md stack-layer-2 opacity-60"></div>
+                  <div class="absolute inset-x-1 inset-y-0 rounded-2xl bg-slate-800 border border-slate-700 shadow-md stack-layer-1 opacity-80"></div>
+                  <div class="album-card-hover absolute inset-0 rounded-2xl overflow-hidden shadow-xl bg-slate-900 border border-white/10">
+                    <img src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=700&q=80" alt="Botanical" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+                    
+                    <div class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur border border-white/20 text-[10px] font-bold text-white flex items-center gap-1">
+                      <span>🌿</span> Flora
+                    </div>
+
+                    <div class="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                      <div>
+                        <h4 class="text-base font-black text-white leading-tight">Botanical Flora</h4>
+                        <p class="text-xs text-slate-300 mt-0.5">64 prints • Macro lenses</p>
+                      </div>
+                      <div class="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow-md">
+                        →
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- TACTILE DOCK (Thumb Reach Navigation) -->
+            <div class="absolute bottom-3 left-4 right-4 z-30">
+              <div class="glass-frosted bg-slate-900/90 border border-rose-500/20 rounded-2xl px-4 py-2.5 flex items-center justify-around shadow-2xl">
+                <button class="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                  <span class="text-base">🎴</span>
+                  <span>Decks</span>
+                </button>
+                <div class="h-4 w-px bg-slate-700"></div>
+                <button class="flex items-center gap-2 text-slate-400 hover:text-white text-xs">
+                  <span class="text-base">🔒</span>
+                  <span>Vault</span>
+                </button>
+                <div class="h-4 w-px bg-slate-700"></div>
+                <button class="flex items-center gap-2 text-slate-400 hover:text-white text-xs">
+                  <span class="text-base">🗑️</span>
+                  <span>Bin</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-500/40 rounded-full z-40 pointer-events-none"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- INTERACTIVE ALBUM DETAIL SHEET (Modal inside device frame or overlay) -->
+  <div id="album-sheet" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+      
+      <!-- Sheet Header with Backdrop -->
+      <div class="relative h-48 shrink-0">
+        <img id="sheet-cover-img" src="" alt="Album Cover" class="w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+        <button onclick="closeAlbumDetail()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition">
+          ✕
+        </button>
+        <div class="absolute bottom-3 left-4 right-4">
+          <span id="sheet-album-subtitle" class="text-xs font-semibold text-indigo-400 uppercase tracking-wider"></span>
+          <h3 id="sheet-album-title" class="text-xl font-bold text-white"></h3>
+          <p id="sheet-album-count" class="text-xs text-slate-300"></p>
+        </div>
+      </div>
+
+      <!-- Action Buttons Row -->
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-950/50">
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+            <span>▶</span> Slideshow
+          </button>
+          <button class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition">
+            <span>↗</span> Share Album
+          </button>
+        </div>
+        <button class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+        </button>
+      </div>
+
+      <!-- Simulated Photo Grid Inside Album -->
+      <div class="p-4 overflow-y-auto flex-1 device-scroll">
+        <div class="grid grid-cols-3 gap-2">
+          <div class="aspect-square rounded-xl overflow-hidden bg-slate-800"><img src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover hover:scale-105 transition" /></div>
+          <div class="aspect-square rounded-xl overflow-hidden bg-slate-800"><img src="https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover hover:scale-105 transition" /></div>
+          <div class="aspect-square rounded-xl overflow-hidden bg-slate-800"><img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover hover:scale-105 transition" /></div>
+          <div class="aspect-square rounded-xl overflow-hidden bg-slate-800"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover hover:scale-105 transition" /></div>
+          <div class="aspect-square rounded-xl overflow-hidden bg-slate-800"><img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover hover:scale-105 transition" /></div>
+          <div class="aspect-square rounded-xl overflow-hidden bg-slate-800"><img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover hover:scale-105 transition" /></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DESIGN PRINCIPLES & COMPARISON MATRIX (Collapsible Drawer at Bottom) -->
+  <footer class="border-t border-slate-800/80 bg-slate-900/90 backdrop-blur px-6 py-6 mt-auto">
+    <div class="max-w-7xl mx-auto">
+      
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div>
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <span>📐</span> Design Specifications & Accessibility Architecture
+          </h3>
+          <p class="text-xs text-slate-400">Engineered for Photon Gallery • Android Jetpack Compose & Material 3 Alignment</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700">WCAG 2.2 AA/AAA</span>
+          <span class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700">48dp Target Size</span>
+          <span class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700">OLED Dark Pure Black</span>
+        </div>
+      </div>
+
+      <!-- Feature Comparison Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        
+        <!-- Concept 1 Card -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-indigo-500/30">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-bold text-indigo-400">Concept 1: Editorial Curator</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">Spatial</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>• <strong>Hero Spotlight:</strong> Features trip/memory journeys with stacked card depth cues.</li>
+            <li>• <strong>Semantic Trays:</strong> Favorites, Videos & Places separated as quick-pills.</li>
+            <li>• <strong>Thumb Comfort:</strong> Floating search and action capsule sits exactly in the 1-handed arc.</li>
+            <li>• <strong>Ideal For:</strong> Casual users, memory lovers, and aesthetic-first galleries.</li>
+          </ul>
+        </div>
+
+        <!-- Concept 2 Card -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-emerald-500/30">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-bold text-emerald-400">Concept 2: Velocity Flow</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Glanceable</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>• <strong>Instant Density Switcher:</strong> Switch between 2-col, 3-col, or dense list on the fly.</li>
+            <li>• <strong>Photo Scrubbing Dots:</strong> Peek cover photos without opening the collection.</li>
+            <li>• <strong>Smart System Triage:</strong> Camera vs Screenshots vs WhatsApp separated cleanly.</li>
+            <li>• <strong>Ideal For:</strong> Power photographers, large libraries (10k+ files), quick triaging.</li>
+          </ul>
+        </div>
+
+        <!-- Concept 3 Card -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-rose-500/30">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-bold text-rose-400">Concept 3: Tactile Deck</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">Physicality</span>
+          </div>
+          <ul class="space-y-1.5 text-slate-300">
+            <li>• <strong>Physical Photo Stacks:</strong> 3D angled paper card layers with realistic shadows.</li>
+            <li>• <strong>One-Hand Ergonomics:</strong> Title area collapses smoothly on scroll to save thumb reach.</li>
+            <li>• <strong>Quick Dock:</strong> Decks, Locked Vault & Trash within reach at screen bottom.</li>
+            <li>• <strong>Ideal For:</strong> Nostalgic tactile feel, tangible prints, frictionless comfort.</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- JAVASCRIPT CONTROLLERS -->
+  <script>
+    // State management
+    let activeConcept = 'curator';
+    let isDarkTheme = true;
+    let isHeatmapActive = false;
+
+    // Switch between Concepts
+    function switchConcept(concept) {
+      activeConcept = concept;
+      const wCurator = document.getElementById('device-wrapper-curator');
+      const wVelocity = document.getElementById('device-wrapper-velocity');
+      const wTactile = document.getElementById('device-wrapper-tactile');
+      
+      const tabCurator = document.getElementById('tab-curator');
+      const tabVelocity = document.getElementById('tab-velocity');
+      const tabTactile = document.getElementById('tab-tactile');
+      const tabComparison = document.getElementById('tab-comparison');
+      
+      const metaInfo = document.getElementById('concept-meta-info');
+
+      // Reset tab button styles
+      [tabCurator, tabVelocity, tabTactile, tabComparison].forEach(btn => {
+        btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-300 hover:text-white flex items-center gap-1.5";
+      });
+
+      if (concept === 'curator') {
+        wCurator.style.display = 'flex';
+        wVelocity.style.display = 'none';
+        wTactile.style.display = 'none';
+        tabCurator.className = "px-3.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white shadow-sm flex items-center gap-1.5";
+        metaInfo.innerHTML = `
+          <span class="font-semibold text-indigo-400">Concept 1: Editorial Curator</span>
+          <span class="text-slate-600">•</span>
+          <span class="text-slate-300">Magazine-grade visual storytelling with heroic spotlight cards, fluid horizontal quick-shelves, and bottom-anchored thumb controls.</span>
+        `;
+      } else if (concept === 'velocity') {
+        wCurator.style.display = 'none';
+        wVelocity.style.display = 'flex';
+        wTactile.style.display = 'none';
+        tabVelocity.className = "px-3.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white shadow-sm flex items-center gap-1.5";
+        metaInfo.innerHTML = `
+          <span class="font-semibold text-emerald-400">Concept 2: Velocity Flow</span>
+          <span class="text-slate-600">•</span>
+          <span class="text-slate-300">Ultra-fast density-adaptive grid (2-col/3-col/list), interactive photo scrubbers, and dedicated smart system trays.</span>
+        `;
+      } else if (concept === 'tactile') {
+        wCurator.style.display = 'none';
+        wVelocity.style.display = 'none';
+        wTactile.style.display = 'flex';
+        tabTactile.className = "px-3.5 py-1.5 rounded-lg text-xs font-medium bg-rose-600 text-white shadow-sm flex items-center gap-1.5";
+        metaInfo.innerHTML = `
+          <span class="font-semibold text-rose-400">Concept 3: Tactile Deck</span>
+          <span class="text-slate-600">•</span>
+          <span class="text-slate-300">Tangible 3D fanned card stacks, physical print aesthetics, and dedicated bottom reachability dock.</span>
+        `;
+      } else if (concept === 'comparison') {
+        wCurator.style.display = 'flex';
+        wVelocity.style.display = 'flex';
+        wTactile.style.display = 'flex';
+        tabComparison.className = "px-3.5 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-white shadow-sm flex items-center gap-1.5";
+        metaInfo.innerHTML = `
+          <span class="font-semibold text-amber-400">Side-by-Side Comparative Mode</span>
+          <span class="text-slate-600">•</span>
+          <span class="text-slate-300">Evaluating all 3 philosophies simultaneously across ergonomics, glanceability, and visual pacing.</span>
+        `;
+      }
+    }
+
+    // Toggle Ergonomic Heatmap overlay
+    function toggleHeatmap() {
+      isHeatmapActive = !isHeatmapActive;
+      const h1 = document.getElementById('heatmap-curator');
+      const h2 = document.getElementById('heatmap-velocity');
+      const h3 = document.getElementById('heatmap-tactile');
+      const btn = document.getElementById('btn-heatmap');
+
+      [h1, h2, h3].forEach(h => {
+        if (isHeatmapActive) {
+          h.classList.remove('hidden');
+          h.classList.add('flex');
+        } else {
+          h.classList.add('hidden');
+          h.classList.remove('flex');
+        }
+      });
+
+      if (isHeatmapActive) {
+        btn.classList.add('bg-emerald-600/30', 'text-emerald-300', 'border-emerald-500/50');
+      } else {
+        btn.classList.remove('bg-emerald-600/30', 'text-emerald-300', 'border-emerald-500/50');
+      }
+    }
+
+    // Toggle Device Dark / Light Theme
+    function toggleDeviceTheme() {
+      isDarkTheme = !isDarkTheme;
+      const screens = ['screen-curator', 'screen-velocity', 'screen-tactile'];
+      const icon = document.getElementById('theme-icon');
+      const text = document.getElementById('theme-text');
+
+      screens.forEach(id => {
+        const el = document.getElementById(id);
+        if (!isDarkTheme) {
+          el.classList.remove('bg-slate-950', 'text-slate-100');
+          el.classList.add('bg-slate-100', 'text-slate-900');
+        } else {
+          el.classList.add('bg-slate-950', 'text-slate-100');
+          el.classList.remove('bg-slate-100', 'text-slate-900');
+        }
+      });
+
+      if (!isDarkTheme) {
+        icon.textContent = '☀️';
+        text.textContent = 'Light OS';
+      } else {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark OS';
+      }
+    }
+
+    // Velocity Flow: Grid Density Switcher
+    function setGridDensity(density) {
+      const grid = document.getElementById('velocity-grid');
+      const btnCozy = document.getElementById('density-cozy');
+      const btnCompact = document.getElementById('density-compact');
+      const btnList = document.getElementById('density-list');
+
+      [btnCozy, btnCompact, btnList].forEach(b => {
+        b.className = "p-1.5 rounded-md text-slate-400 hover:text-white transition";
+      });
+
+      if (density === 'cozy') {
+        grid.className = "grid grid-cols-2 gap-3";
+        btnCozy.className = "p-1.5 rounded-md bg-emerald-500/20 text-emerald-400 transition";
+      } else if (density === 'compact') {
+        grid.className = "grid grid-cols-3 gap-2";
+        btnCompact.className = "p-1.5 rounded-md bg-emerald-500/20 text-emerald-400 transition";
+      } else if (density === 'list') {
+        grid.className = "flex flex-col gap-2";
+        btnList.className = "p-1.5 rounded-md bg-emerald-500/20 text-emerald-400 transition";
+      }
+    }
+
+    // Velocity Flow: Multi-Thumbnail Cover Photo Scrubbing
+    function scrubPreview(imgId, newSrc, dotEl) {
+      const img = document.getElementById(imgId);
+      if (img) {
+        img.src = newSrc;
+      }
+      const parent = dotEl.parentElement;
+      Array.from(parent.children).forEach(c => {
+        c.className = "w-1.5 h-1.5 rounded-full bg-white/50 hover:bg-white";
+      });
+      dotEl.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+    }
+
+    // Modal Sheet Detail
+    function openAlbumDetail(title, count, subtitle, coverUrl) {
+      document.getElementById('sheet-album-title').textContent = title;
+      document.getElementById('sheet-album-count').textContent = count + ' items • High Definition';
+      document.getElementById('sheet-album-subtitle').textContent = subtitle;
+      document.getElementById('sheet-cover-img').src = coverUrl;
+      const sheet = document.getElementById('album-sheet');
+      sheet.classList.remove('hidden');
+      sheet.classList.add('flex');
+    }
+
+    function closeAlbumDetail() {
+      const sheet = document.getElementById('album-sheet');
+      sheet.classList.add('hidden');
+      sheet.classList.remove('flex');
+    }
+
+    // Search filter simulation
+    function handleSearch(query, concept) {
+      const q = query.toLowerCase();
+      if (concept === 'curator') {
+        const cards = document.querySelectorAll('#curator-album-grid > div');
+        cards.forEach(c => {
+          const text = c.textContent.toLowerCase();
+          c.style.display = text.includes(q) ? 'flex' : 'none';
+        });
+      }
+    }
+
+    // Quick Tray pill filtering in Curator
+    function filterCuratorPill(type) {
+      const pills = ['pill-all', 'pill-fav', 'pill-video', 'pill-people', 'pill-places'];
+      pills.forEach(p => {
+        const el = document.getElementById(p);
+        el.className = "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5";
+      });
+      const active = document.getElementById('pill-' + type);
+      if (active) {
+        active.className = "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-sm flex items-center gap-1.5";
+      }
+    }
+
+    function openNewAlbumDialog() {
+      alert("New Collection Creator: Opens native bottom sheet to select photos, assign album name, and pick cover art.");
+    }
+
+    // Update real-time clock
+    function updateClock() {
+      const now = new Date();
+      let hours = now.getHours();
+      let minutes = now.getMinutes();
+      const timeStr = String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+      const t1 = document.getElementById('live-time-1');
+      const t2 = document.getElementById('live-time-2');
+      const t3 = document.getElementById('live-time-3');
+      if (t1) t1.textContent = timeStr;
+      if (t2) t2.textContent = timeStr;
+      if (t3) t3.textContent = timeStr;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Default view: Curator
+    switchConcept('curator');
+  </script>
+</body>
+</html>
+

@@ -338,7 +338,9 @@ fun NavigationGraph(
                 PhotonEditorScreen(
                     imageUri = uri,
                     onBack = { navController.popBackStackSafely(backStackEntry) },
-                    onSaved = { }
+                    onSaved = { savedUri ->
+                        galleryViewModel.notifyMediaItemEdited(savedUri, isOverwrite = (savedUri == uri))
+                    }
                 )
             }
 

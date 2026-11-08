@@ -75,8 +75,8 @@ fun BoxScope.PhotonGridThumbnail(
         item.uri
     }
 
-    val imageRequest = remember(modelUri, targetDimensionPx) {
-        val cacheKey = thumbnailMemoryKey(item.id, targetDimensionPx)
+    val imageRequest = remember(modelUri, item.dateModified, targetDimensionPx) {
+        val cacheKey = thumbnailMemoryKey(item.id, targetDimensionPx, item.dateModified)
         ImageRequest.Builder(context)
             .data(modelUri)
             .size(targetDimensionPx, targetDimensionPx)

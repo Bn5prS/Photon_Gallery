@@ -387,6 +387,22 @@ object ToolSearchCatalog {
             keywords = listOf("highlighter", "highlight", "marker", "semi-transparent", "accent")
         ),
         EditorToolItem(
+            id = "markup_arrow",
+            name = "Arrow",
+            description = "Draw directional arrows to point out details",
+            iconRes = R.drawable.ic_ms_north_west,
+            tab = EditorTab.MARKUP,
+            keywords = listOf("arrow", "pointer", "point", "direction", "callout", "annotate")
+        ),
+        EditorToolItem(
+            id = "markup_eraser",
+            name = "Eraser",
+            description = "Erase drawn markup strokes or clear all annotations",
+            iconRes = R.drawable.ic_ms_ink_eraser,
+            tab = EditorTab.MARKUP,
+            keywords = listOf("eraser", "erase", "rub", "delete", "clear", "remove", "stroke", "draw", "brush", "cleanup")
+        ),
+        EditorToolItem(
             id = "markup_redact",
             name = "Redact",
             description = "Privacy mosaic pixelation or blackout redaction",

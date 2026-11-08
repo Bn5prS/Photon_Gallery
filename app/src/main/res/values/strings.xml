@@ -253,6 +253,8 @@
     <string name="editor_adjust_sharpen">Sharpen</string>
     <string name="editor_markup_pen">Pen</string>
     <string name="editor_markup_highlighter">Highlighter</string>
+    <string name="editor_markup_arrow">Arrow</string>
+    <string name="editor_markup_eraser">Eraser</string>
     <string name="editor_markup_redact">Redact</string>
     <string name="editor_markup_text">Text</string>
     <string name="editor_redact_blur">Blur</string>

@@ -1,0 +1,864 @@
+<!-- Material 3 Tonal Layering Collections Lab for Photon Gallery -->
+<!-- Open in any modern browser to interact with the device prototypes! -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photon Gallery — Material 3 Tonal Layering Collections</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Material 3 Dynamic Tonal Tokens (Default: M3 Baseline Blue) */
+    :root {
+      --m3-surface: #111318;
+      --m3-surface-dim: #0e1015;
+      --m3-surface-container-lowest: #0b0e13;
+      --m3-surface-container-low: #191c20;
+      --m3-surface-container: #1d2024;
+      --m3-surface-container-high: #282a2f;
+      --m3-surface-container-highest: #33353a;
+      
+      --m3-on-surface: #e2e2e9;
+      --m3-on-surface-variant: #c4c6d0;
+      --m3-outline: #8e9099;
+      --m3-outline-variant: #44474f;
+      
+      --m3-primary: #a8c7fa;
+      --m3-on-primary: #083063;
+      --m3-primary-container: #234275;
+      --m3-on-primary-container: #d3e3fd;
+
+      --m3-secondary: #bec6dc;
+      --m3-on-secondary: #283141;
+      --m3-secondary-container: #3e4758;
+      --m3-on-secondary-container: #dae2f9;
+
+      --m3-tertiary: #ddb7ff;
+      --m3-on-tertiary: #44007a;
+      --m3-tertiary-container: #63229b;
+      --m3-on-tertiary-container: #eedcff;
+    }
+
+    /* Light Theme Tokens */
+    .light-theme {
+      --m3-surface: #f8f9ff;
+      --m3-surface-dim: #d9dae0;
+      --m3-surface-container-lowest: #ffffff;
+      --m3-surface-container-low: #f2f3fa;
+      --m3-surface-container: #eceef5;
+      --m3-surface-container-high: #e6e8ef;
+      --m3-surface-container-highest: #e0e2e9;
+      
+      --m3-on-surface: #191c20;
+      --m3-on-surface-variant: #44474f;
+      --m3-outline: #74777f;
+      --m3-outline-variant: #c4c6d0;
+      
+      --m3-primary: #0b57d0;
+      --m3-on-primary: #ffffff;
+      --m3-primary-container: #d3e3fd;
+      --m3-on-primary-container: #041e49;
+
+      --m3-secondary: #565e71;
+      --m3-on-secondary: #ffffff;
+      --m3-secondary-container: #dae2f9;
+      --m3-on-secondary-container: #131c2b;
+
+      --m3-tertiary: #7d3ca8;
+      --m3-on-tertiary: #ffffff;
+      --m3-tertiary-container: #eedcff;
+      --m3-on-tertiary-container: #2e004e;
+    }
+
+    /* Sage Green Palette */
+    .palette-sage {
+      --m3-surface: #101412;
+      --m3-surface-container-lowest: #0b0f0d;
+      --m3-surface-container-low: #181d1a;
+      --m3-surface-container: #1c211e;
+      --m3-surface-container-high: #272b28;
+      --m3-surface-container-highest: #323633;
+      --m3-on-surface: #e1e3df;
+      --m3-on-surface-variant: #c1c9c2;
+      --m3-outline-variant: #414943;
+      --m3-primary: #9cd4a9;
+      --m3-on-primary: #04391b;
+      --m3-primary-container: #1f5030;
+      --m3-on-primary-container: #b8f0c4;
+      --m3-secondary-container: #394a3e;
+      --m3-on-secondary-container: #d3e8d9;
+    }
+    .light-theme.palette-sage {
+      --m3-surface: #f6fbf4;
+      --m3-surface-container-lowest: #ffffff;
+      --m3-surface-container-low: #f0f5ee;
+      --m3-surface-container: #ebf0e8;
+      --m3-surface-container-high: #e5eae3;
+      --m3-surface-container-highest: #dfe4dd;
+      --m3-on-surface: #181d1a;
+      --m3-on-surface-variant: #414943;
+      --m3-outline-variant: #c1c9c2;
+      --m3-primary: #346845;
+      --m3-on-primary: #ffffff;
+      --m3-primary-container: #b8f0c4;
+      --m3-on-primary-container: #00210c;
+      --m3-secondary-container: #d3e8d9;
+      --m3-on-secondary-container: #0f1f14;
+    }
+
+    /* M3 Clean Scrollbar */
+    .m3-scroll::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .m3-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .m3-scroll::-webkit-scrollbar-thumb {
+      background: var(--m3-outline-variant);
+      border-radius: 9999px;
+    }
+
+    /* Tonal elevation visualization */
+    .inspect-tonal [data-m3="surface"] { outline: 1px dashed #60a5fa !important; }
+    .inspect-tonal [data-m3="surface-low"] { outline: 1px dashed #34d399 !important; }
+    .inspect-tonal [data-m3="surface-container"] { outline: 1px dashed #fbbf24 !important; }
+    .inspect-tonal [data-m3="surface-high"] { outline: 1px dashed #f472b6 !important; }
+    .inspect-tonal [data-m3="surface-highest"] { outline: 1px dashed #a78bfa !important; }
+
+    /* Transitions */
+    .theme-transition {
+      transition: background-color 0.25s cubic-bezier(0.2, 0, 0, 1), color 0.25s cubic-bezier(0.2, 0, 0, 1), border-color 0.25s cubic-bezier(0.2, 0, 0, 1);
+    }
+  </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP LAB WORKBENCH HEADER -->
+  <header class="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-md sticky top-0 z-50 px-6 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+          M3
+        </div>
+        <div>
+          <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+            Photon Gallery
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">Material 3 Tonal System</span>
+          </h1>
+          <p class="text-xs text-neutral-400">Pure Clutter-Free Surfaces • Dynamic Color & Elevation Architecture</p>
+        </div>
+      </div>
+
+      <!-- Concept Switcher Tabs -->
+      <div class="flex items-center bg-neutral-800/90 p-1 rounded-2xl border border-neutral-700/60">
+        <button onclick="setConcept('clean')" id="tab-clean" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-neutral-100 text-neutral-900 shadow-sm transition">
+          1. Tonal Minimal
+        </button>
+        <button onclick="setConcept('bento')" id="tab-bento" class="px-3.5 py-1.5 rounded-xl text-xs font-medium text-neutral-300 hover:text-white transition">
+          2. Grouped Surfaces
+        </button>
+        <button onclick="setConcept('sheet')" id="tab-sheet" class="px-3.5 py-1.5 rounded-xl text-xs font-medium text-neutral-300 hover:text-white transition">
+          3. Fluid Canvas
+        </button>
+        <button onclick="setConcept('compare')" id="tab-compare" class="px-3.5 py-1.5 rounded-xl text-xs font-medium text-neutral-300 hover:text-white transition border-l border-neutral-700 ml-1">
+          Side-by-Side
+        </button>
+      </div>
+
+      <!-- Controls: Light/Dark & Dynamic Color Palettes -->
+      <div class="flex items-center gap-2">
+        
+        <!-- Palette Switcher -->
+        <div class="flex items-center bg-neutral-800 p-1 rounded-xl border border-neutral-700 text-xs">
+          <button onclick="setPalette('blue')" id="pal-blue" title="Material Blue (Default)" class="w-5 h-5 rounded-full bg-blue-500 ring-2 ring-white/50 transition"></button>
+          <button onclick="setPalette('sage')" id="pal-sage" title="Sage Green" class="w-5 h-5 rounded-full bg-emerald-600 ml-1.5 opacity-70 hover:opacity-100 transition"></button>
+        </div>
+
+        <!-- Tonal Inspector Toggle -->
+        <button onclick="toggleTonalInspector()" id="btn-inspector" class="px-3 py-1.5 rounded-xl text-xs font-medium border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700 text-neutral-300 flex items-center gap-1.5 transition">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span class="hidden md:inline">Tonal Layers</span>
+        </button>
+
+        <!-- OS Dark / Light Toggle -->
+        <button onclick="toggleTheme()" id="btn-theme" class="px-3 py-1.5 rounded-xl text-xs font-medium border border-neutral-700 bg-neutral-800/70 hover:bg-neutral-700 text-neutral-300 flex items-center gap-1.5 transition">
+          <span id="theme-icon">🌙</span>
+          <span id="theme-text" class="hidden md:inline">Dark</span>
+        </button>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- M3 TONAL ELEVATION LEGEND BAR -->
+  <div class="bg-neutral-900 border-b border-neutral-800/60 px-6 py-2 text-xs text-neutral-300">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-neutral-400 font-medium">Elevation Hierarchy:</span>
+        <div class="flex items-center gap-1.5 text-[11px]">
+          <span class="px-2 py-0.5 rounded bg-[var(--m3-surface)] border border-neutral-700">Surface (Base)</span>
+          <span>→</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--m3-surface-container-low)] text-neutral-300">Container Low</span>
+          <span>→</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--m3-surface-container)] text-neutral-300">Container (Cards)</span>
+          <span>→</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--m3-surface-container-high)] text-neutral-300">High (Search)</span>
+          <span>→</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--m3-surface-container-highest)] text-neutral-300">Highest (Pills)</span>
+        </div>
+      </div>
+      <div class="text-[11px] text-neutral-400">
+        No drop-shadow clutter • 100% Surface-contrast elevation
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN STAGE / DEVICE MOCKUPS -->
+  <main class="flex-1 py-8 px-4 flex justify-center items-start overflow-x-auto">
+    <div id="device-container" class="flex flex-wrap items-center justify-center gap-8 max-w-7xl w-full">
+
+      <!-- ========================================================================= -->
+      <!-- CONCEPT 1: TONAL MINIMAL (Clean, Airy, Content First)                     -->
+      <!-- ========================================================================= -->
+      <div id="device-clean" class="flex flex-col items-center">
+        <div class="mb-3 text-center">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-blue-400">Material 3 Option 1</span>
+          <h2 class="text-sm font-bold text-white">Tonal Minimal</h2>
+          <p class="text-[11px] text-neutral-400">Titles below photos • Tonal search pill • Zero clutter</p>
+        </div>
+
+        <!-- Phone Bezel Frame -->
+        <div class="relative w-[385px] h-[785px] rounded-[52px] p-3 shadow-2xl bg-neutral-900 border-[4px] border-neutral-700/80 ring-1 ring-white/10 select-none">
+          
+          <!-- Screen Viewport -->
+          <div id="screen-1" data-m3="surface" class="screen-view relative w-full h-full rounded-[44px] overflow-hidden flex flex-col theme-transition bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
+            
+            <!-- Camera Cutout -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-full z-50 flex items-center justify-center">
+              <div class="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-800"></div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="pt-2 px-6 h-10 flex items-center justify-between text-xs font-medium z-30 shrink-0 opacity-80">
+              <span class="clock-display font-semibold">09:41</span>
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+                <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+                  <div class="h-full w-3/4 bg-current rounded-2xs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCROLLABLE APP BODY -->
+            <div class="flex-1 overflow-y-auto m3-scroll px-4 pb-20 pt-1">
+              
+              <!-- M3 Search Bar (Surface Container High) -->
+              <div data-m3="surface-high" class="theme-transition bg-[var(--m3-surface-container-high)] rounded-full px-4 py-2.5 flex items-center justify-between mb-4 shadow-none border border-[var(--m3-outline-variant)]/20">
+                <div class="flex items-center gap-3 flex-1">
+                  <svg class="w-4 h-4 text-[var(--m3-on-surface-variant)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                  </svg>
+                  <input type="text" placeholder="Search collections..." class="bg-transparent text-xs text-[var(--m3-on-surface)] placeholder-[var(--m3-on-surface-variant)] outline-none w-full" />
+                </div>
+                <div class="w-6 h-6 rounded-full bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] text-[10px] font-bold flex items-center justify-center">
+                  P
+                </div>
+              </div>
+
+              <!-- Filter Chips (Surface Container Low with active Primary Container) -->
+              <div class="flex items-center gap-2 overflow-x-auto pb-3 -mx-4 px-4 m3-scroll">
+                <button class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] flex items-center gap-1.5 shrink-0">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                  All (16)
+                </button>
+                <button class="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[var(--m3-surface-container-low)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline-variant)]/40 hover:bg-[var(--m3-surface-container)] transition shrink-0">
+                  User Albums
+                </button>
+                <button class="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[var(--m3-surface-container-low)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline-variant)]/40 hover:bg-[var(--m3-surface-container)] transition shrink-0">
+                  Device Folders
+                </button>
+                <button class="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-[var(--m3-surface-container-low)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline-variant)]/40 hover:bg-[var(--m3-surface-container)] transition shrink-0">
+                  Media Types
+                </button>
+              </div>
+
+              <!-- Pinned Carousel: Clean M3 Rounded-3xl Cards -->
+              <div class="mb-5">
+                <div class="flex items-center justify-between mb-2.5">
+                  <span class="text-xs font-bold text-[var(--m3-on-surface)] tracking-tight">Favorites & Trips</span>
+                  <span class="text-xs font-medium text-[var(--m3-primary)] cursor-pointer">View all</span>
+                </div>
+
+                <div class="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 m3-scroll">
+                  
+                  <!-- Pinned Card 1 -->
+                  <div onclick="openM3Sheet('Kyoto Journey 2024', 284, 'Japan • Oct 2024')" class="w-48 shrink-0 cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-[4/3] rounded-3xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/30 mb-2">
+                      <img src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=400&q=80" alt="Kyoto" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                    </div>
+                    <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Kyoto Journey</h4>
+                    <p class="text-[11px] text-[var(--m3-on-surface-variant)]">284 photos</p>
+                  </div>
+
+                  <!-- Pinned Card 2 -->
+                  <div onclick="openM3Sheet('Pacific Coast Highway', 142, 'Roadtrip • 2024')" class="w-48 shrink-0 cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-[4/3] rounded-3xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/30 mb-2">
+                      <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80" alt="Coast" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                    </div>
+                    <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Pacific Coast</h4>
+                    <p class="text-[11px] text-[var(--m3-on-surface-variant)]">142 photos</p>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- All Collections: Clutter-Free 2-Column Grid -->
+              <div>
+                <div class="flex items-center justify-between mb-2.5">
+                  <span class="text-xs font-bold text-[var(--m3-on-surface)] tracking-tight">All Collections</span>
+                  <button class="p-1 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M3 8h12m-12 4h18M3 16h8"/></svg>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3.5">
+                  
+                  <!-- Album 1: Architecture -->
+                  <div onclick="openM3Sheet('Architecture', 98, 'Urban Geometry')" class="cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-1.5">
+                      <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=350&q=80" alt="Architecture" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                    </div>
+                    <div class="px-0.5">
+                      <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Architecture</h4>
+                      <p class="text-[11px] text-[var(--m3-on-surface-variant)]">98 photos</p>
+                    </div>
+                  </div>
+
+                  <!-- Album 2: Portraits -->
+                  <div onclick="openM3Sheet('Portraits & Studio', 64, 'Lighting study')" class="cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-1.5">
+                      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=350&q=80" alt="Portraits" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                    </div>
+                    <div class="px-0.5">
+                      <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Portraits</h4>
+                      <p class="text-[11px] text-[var(--m3-on-surface-variant)]">64 photos</p>
+                    </div>
+                  </div>
+
+                  <!-- Album 3: City Night -->
+                  <div onclick="openM3Sheet('City Nightscapes', 182, 'Nocturne streets')" class="cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-1.5">
+                      <img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=350&q=80" alt="City" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                    </div>
+                    <div class="px-0.5">
+                      <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">City Nightscapes</h4>
+                      <p class="text-[11px] text-[var(--m3-on-surface-variant)]">182 photos</p>
+                    </div>
+                  </div>
+
+                  <!-- Album 4: Landscapes -->
+                  <div onclick="openM3Sheet('Alpine Escapes', 120, 'Mountains & Glaciers')" class="cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-1.5">
+                      <img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=350&q=80" alt="Alpine" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                    </div>
+                    <div class="px-0.5">
+                      <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Alpine Escapes</h4>
+                      <p class="text-[11px] text-[var(--m3-on-surface-variant)]">120 photos</p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            <!-- M3 Navigation Bar (Surface Container Low with Pill Indicator) -->
+            <div data-m3="surface-low" class="theme-transition absolute bottom-0 left-0 right-0 h-16 bg-[var(--m3-surface-container-low)] border-t border-[var(--m3-outline-variant)]/20 flex items-center justify-around px-4 z-30">
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-[10px] font-medium">Photos</span>
+              </button>
+              
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface)]">
+                <div class="px-4 py-1 rounded-full bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                </div>
+                <span class="text-[10px] font-bold">Collections</span>
+              </button>
+
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <span class="text-[10px] font-medium">Search</span>
+              </button>
+            </div>
+
+            <!-- Gesture Pill -->
+            <div class="absolute bottom-1 left-1/2 -translate-x-1/2 w-28 h-1 bg-[var(--m3-on-surface-variant)]/40 rounded-full z-40 pointer-events-none"></div>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ========================================================================= -->
+      <!-- CONCEPT 2: GROUPED SURFACES (Tonal Bento Partitioning)                    -->
+      <!-- ========================================================================= -->
+      <div id="device-bento" class="flex flex-col items-center">
+        <div class="mb-3 text-center">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Material 3 Option 2</span>
+          <h2 class="text-sm font-bold text-white">Grouped Surfaces</h2>
+          <p class="text-[11px] text-neutral-400">Tonal card grouping • Calm visual islands</p>
+        </div>
+
+        <div class="relative w-[385px] h-[785px] rounded-[52px] p-3 shadow-2xl bg-neutral-900 border-[4px] border-neutral-700/80 ring-1 ring-white/10 select-none">
+          <div id="screen-2" data-m3="surface" class="screen-view relative w-full h-full rounded-[44px] overflow-hidden flex flex-col theme-transition bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
+            
+            <!-- Camera Cutout -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-full z-50 flex items-center justify-center">
+              <div class="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-800"></div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="pt-2 px-6 h-10 flex items-center justify-between text-xs font-medium z-30 shrink-0 opacity-80">
+              <span class="clock-display font-semibold">09:41</span>
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+                <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+                  <div class="h-full w-3/4 bg-current rounded-2xs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCROLLABLE APP BODY -->
+            <div class="flex-1 overflow-y-auto m3-scroll px-4 pb-20 pt-1">
+              
+              <!-- Clean M3 Top App Bar -->
+              <div class="flex items-center justify-between mb-4 mt-1">
+                <h3 class="text-2xl font-bold tracking-tight text-[var(--m3-on-surface)]">Collections</h3>
+                <button class="p-2 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)]">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                </button>
+              </div>
+
+              <!-- Surface Island 1: Device Folders (Surface Container Low) -->
+              <div data-m3="surface-low" class="theme-transition bg-[var(--m3-surface-container-low)] rounded-3xl p-3.5 mb-4 border border-[var(--m3-outline-variant)]/20">
+                <div class="flex items-center justify-between mb-3 px-1">
+                  <span class="text-xs font-bold text-[var(--m3-on-surface)]">Device Storage</span>
+                  <span class="text-[11px] text-[var(--m3-on-surface-variant)]">3 sources</span>
+                </div>
+                
+                <div class="space-y-1">
+                  <div onclick="openM3Sheet('Camera Roll', 1420, 'DCIM / Local')" class="flex items-center justify-between p-2 rounded-2xl hover:bg-[var(--m3-surface-container)] cursor-pointer transition">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl bg-[var(--m3-surface-container-high)] flex items-center justify-center text-sm">📷</div>
+                      <div>
+                        <div class="text-xs font-bold text-[var(--m3-on-surface)]">Camera</div>
+                        <div class="text-[10px] text-[var(--m3-on-surface-variant)]">1,420 items</div>
+                      </div>
+                    </div>
+                    <span class="text-[11px] text-[var(--m3-on-surface-variant)]">Today</span>
+                  </div>
+
+                  <div onclick="openM3Sheet('Screenshots', 312, 'Pictures / Screenshots')" class="flex items-center justify-between p-2 rounded-2xl hover:bg-[var(--m3-surface-container)] cursor-pointer transition">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl bg-[var(--m3-surface-container-high)] flex items-center justify-center text-sm">📱</div>
+                      <div>
+                        <div class="text-xs font-bold text-[var(--m3-on-surface)]">Screenshots</div>
+                        <div class="text-[10px] text-[var(--m3-on-surface-variant)]">312 items</div>
+                      </div>
+                    </div>
+                    <span class="text-[11px] text-[var(--m3-on-surface-variant)]">Yesterday</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Surface Island 2: User Albums (Surface Container Low) -->
+              <div data-m3="surface-low" class="theme-transition bg-[var(--m3-surface-container-low)] rounded-3xl p-3.5 mb-4 border border-[var(--m3-outline-variant)]/20">
+                <div class="flex items-center justify-between mb-3 px-1">
+                  <span class="text-xs font-bold text-[var(--m3-on-surface)]">My Albums</span>
+                  <button class="text-xs font-semibold text-[var(--m3-primary)]">+ Create</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div onclick="openM3Sheet('Travel Log', 142, 'Vacation memories')" class="cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] mb-1.5 border border-[var(--m3-outline-variant)]/20">
+                      <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=350&q=80" alt="Travel" class="w-full h-full object-cover group-hover:scale-102 transition" />
+                    </div>
+                    <div class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Travel Log</div>
+                    <div class="text-[10px] text-[var(--m3-on-surface-variant)]">142 photos</div>
+                  </div>
+
+                  <div onclick="openM3Sheet('Portraits', 78, 'Family & Friends')" class="cursor-pointer group">
+                    <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] mb-1.5 border border-[var(--m3-outline-variant)]/20">
+                      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=350&q=80" alt="Portraits" class="w-full h-full object-cover group-hover:scale-102 transition" />
+                    </div>
+                    <div class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Portraits</div>
+                    <div class="text-[10px] text-[var(--m3-on-surface-variant)]">78 photos</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Surface Island 3: Utilities Horizontal Pills (Surface Container Low) -->
+              <div class="grid grid-cols-3 gap-2">
+                <div class="bg-[var(--m3-surface-container-low)] rounded-2xl p-2.5 text-center cursor-pointer hover:bg-[var(--m3-surface-container)] transition border border-[var(--m3-outline-variant)]/20">
+                  <div class="text-sm">★</div>
+                  <div class="text-[11px] font-bold text-[var(--m3-on-surface)] mt-0.5">Favorites</div>
+                  <div class="text-[9px] text-[var(--m3-on-surface-variant)]">84</div>
+                </div>
+                <div class="bg-[var(--m3-surface-container-low)] rounded-2xl p-2.5 text-center cursor-pointer hover:bg-[var(--m3-surface-container)] transition border border-[var(--m3-outline-variant)]/20">
+                  <div class="text-sm">🔒</div>
+                  <div class="text-[11px] font-bold text-[var(--m3-on-surface)] mt-0.5">Locked</div>
+                  <div class="text-[9px] text-[var(--m3-on-surface-variant)]">Private</div>
+                </div>
+                <div class="bg-[var(--m3-surface-container-low)] rounded-2xl p-2.5 text-center cursor-pointer hover:bg-[var(--m3-surface-container)] transition border border-[var(--m3-outline-variant)]/20">
+                  <div class="text-sm">🗑️</div>
+                  <div class="text-[11px] font-bold text-[var(--m3-on-surface)] mt-0.5">Trash</div>
+                  <div class="text-[9px] text-[var(--m3-on-surface-variant)]">19 items</div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Bottom Navigation Bar -->
+            <div data-m3="surface-low" class="theme-transition absolute bottom-0 left-0 right-0 h-16 bg-[var(--m3-surface-container-low)] border-t border-[var(--m3-outline-variant)]/20 flex items-center justify-around px-4 z-30">
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-[10px] font-medium">Photos</span>
+              </button>
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface)]">
+                <div class="px-4 py-1 rounded-full bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                </div>
+                <span class="text-[10px] font-bold">Collections</span>
+              </button>
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <span class="text-[10px] font-medium">Search</span>
+              </button>
+            </div>
+
+            <div class="absolute bottom-1 left-1/2 -translate-x-1/2 w-28 h-1 bg-[var(--m3-on-surface-variant)]/40 rounded-full z-40 pointer-events-none"></div>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ========================================================================= -->
+      <!-- CONCEPT 3: FLUID CANVAS (M3 Monograph with FAB)                          -->
+      <!-- ========================================================================= -->
+      <div id="device-sheet" class="flex flex-col items-center">
+        <div class="mb-3 text-center">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Material 3 Option 3</span>
+          <h2 class="text-sm font-bold text-white">Fluid Canvas</h2>
+          <p class="text-[11px] text-neutral-400">Pure visual breathability • M3 Floating Action Button</p>
+        </div>
+
+        <div class="relative w-[385px] h-[785px] rounded-[52px] p-3 shadow-2xl bg-neutral-900 border-[4px] border-neutral-700/80 ring-1 ring-white/10 select-none">
+          <div id="screen-3" data-m3="surface" class="screen-view relative w-full h-full rounded-[44px] overflow-hidden flex flex-col theme-transition bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
+            
+            <!-- Camera Cutout -->
+            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-full z-50 flex items-center justify-center">
+              <div class="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-800"></div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="pt-2 px-6 h-10 flex items-center justify-between text-xs font-medium z-30 shrink-0 opacity-80">
+              <span class="clock-display font-semibold">09:41</span>
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+                <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+                  <div class="h-full w-3/4 bg-current rounded-2xs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCROLLABLE APP BODY -->
+            <div class="flex-1 overflow-y-auto m3-scroll px-4 pb-20 pt-1">
+              
+              <!-- Clean Minimal Header -->
+              <div class="pt-2 pb-3">
+                <h3 class="text-3xl font-normal tracking-tight text-[var(--m3-on-surface)]">Albums</h3>
+                <p class="text-xs text-[var(--m3-on-surface-variant)] mt-0.5">8 collections on device</p>
+              </div>
+
+              <!-- Large Aspect Hero Album -->
+              <div onclick="openM3Sheet('Nordic Winter Cabin', 89, 'Lofoten Islands')" class="cursor-pointer group mb-4">
+                <div data-m3="surface-container" class="aspect-[16/10] rounded-3xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-2">
+                  <img src="https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=500&q=80" alt="Nordic" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                </div>
+                <div class="flex items-center justify-between px-1">
+                  <div>
+                    <h4 class="text-sm font-bold text-[var(--m3-on-surface)]">Nordic Winter Cabin</h4>
+                    <p class="text-xs text-[var(--m3-on-surface-variant)]">89 photos • Updated last week</p>
+                  </div>
+                  <span class="text-xs text-[var(--m3-primary)] font-semibold">Open</span>
+                </div>
+              </div>
+
+              <!-- 2-Col Grid Below -->
+              <div class="grid grid-cols-2 gap-3.5 mb-6">
+                
+                <div onclick="openM3Sheet('Botanical Conservatory', 64, 'Exotic flora')" class="cursor-pointer group">
+                  <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-1.5">
+                    <img src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=350&q=80" alt="Botanical" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                  </div>
+                  <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Botanical Flora</h4>
+                  <p class="text-[11px] text-[var(--m3-on-surface-variant)]">64 photos</p>
+                </div>
+
+                <div onclick="openM3Sheet('Artisan Coffee & Cafes', 45, 'Worldwide roasters')" class="cursor-pointer group">
+                  <div data-m3="surface-container" class="aspect-square rounded-2xl overflow-hidden bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/20 mb-1.5">
+                    <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=350&q=80" alt="Coffee" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                  </div>
+                  <h4 class="text-xs font-bold text-[var(--m3-on-surface)] truncate">Artisan Coffee</h4>
+                  <p class="text-[11px] text-[var(--m3-on-surface-variant)]">45 photos</p>
+                </div>
+
+              </div>
+
+            </div>
+
+            <!-- Standard M3 Floating Action Button (FAB) -->
+            <button onclick="alert('M3 New Album Creator: Opens native bottom sheet modal')" class="absolute bottom-20 right-4 z-40 w-14 h-14 rounded-2xl bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition" title="Create Collection">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+              </svg>
+            </button>
+
+            <!-- Bottom Navigation Bar -->
+            <div data-m3="surface-low" class="theme-transition absolute bottom-0 left-0 right-0 h-16 bg-[var(--m3-surface-container-low)] border-t border-[var(--m3-outline-variant)]/20 flex items-center justify-around px-4 z-30">
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-[10px] font-medium">Photos</span>
+              </button>
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface)]">
+                <div class="px-4 py-1 rounded-full bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] flex items-center justify-center">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                </div>
+                <span class="text-[10px] font-bold">Collections</span>
+              </button>
+              <button class="flex flex-col items-center gap-0.5 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)]">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <span class="text-[10px] font-medium">Search</span>
+              </button>
+            </div>
+
+            <div class="absolute bottom-1 left-1/2 -translate-x-1/2 w-28 h-1 bg-[var(--m3-on-surface-variant)]/40 rounded-full z-40 pointer-events-none"></div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- M3 MODAL BOTTOM SHEET (Inspection on Click) -->
+  <div id="m3-modal-sheet" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 hidden items-end justify-center">
+    <div class="w-full max-w-md bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface)] rounded-t-[32px] p-5 border-t border-[var(--m3-outline-variant)]/30 shadow-2xl flex flex-col max-h-[85vh]">
+      
+      <!-- Drag handle -->
+      <div class="w-10 h-1 bg-[var(--m3-on-surface-variant)]/40 rounded-full mx-auto mb-4"></div>
+
+      <!-- Sheet Title & Metadata -->
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span id="m3-sheet-sub" class="text-xs text-[var(--m3-primary)] font-medium"></span>
+          <h3 id="m3-sheet-title" class="text-xl font-bold text-[var(--m3-on-surface)]"></h3>
+          <p id="m3-sheet-count" class="text-xs text-[var(--m3-on-surface-variant)]"></p>
+        </div>
+        <button onclick="closeM3Sheet()" class="p-2 rounded-full hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)]">
+          ✕
+        </button>
+      </div>
+
+      <!-- M3 Action Buttons (Tonal & Outlined) -->
+      <div class="flex items-center gap-2 mb-4">
+        <button class="flex-1 py-2 rounded-full bg-[var(--m3-primary)] text-[var(--m3-on-primary)] text-xs font-semibold hover:opacity-90 transition">
+          View Album
+        </button>
+        <button class="flex-1 py-2 rounded-full bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface)] text-xs font-semibold hover:opacity-90 transition">
+          Share
+        </button>
+      </div>
+
+      <!-- Mini Grid Preview -->
+      <div class="grid grid-cols-3 gap-2 overflow-y-auto m3-scroll flex-1 pr-1">
+        <div class="aspect-square rounded-xl overflow-hidden bg-[var(--m3-surface-container)]"><img src="https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" /></div>
+        <div class="aspect-square rounded-xl overflow-hidden bg-[var(--m3-surface-container)]"><img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" /></div>
+        <div class="aspect-square rounded-xl overflow-hidden bg-[var(--m3-surface-container)]"><img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" /></div>
+        <div class="aspect-square rounded-xl overflow-hidden bg-[var(--m3-surface-container)]"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" /></div>
+        <div class="aspect-square rounded-xl overflow-hidden bg-[var(--m3-surface-container)]"><img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" /></div>
+        <div class="aspect-square rounded-xl overflow-hidden bg-[var(--m3-surface-container)]"><img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" /></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- COMPOSE ARCHITECTURE FOOTER (Jetpack Compose M3 Code Mapping) -->
+  <footer class="border-t border-neutral-800 bg-neutral-900/90 px-6 py-6 text-xs text-neutral-300">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-start justify-between gap-6">
+      
+      <div>
+        <h4 class="font-bold text-white text-sm mb-1">Android Jetpack Compose Material 3 Token Mapping</h4>
+        <p class="text-neutral-400">Directly translates into your Photon Gallery Compose codebase without extra styling libraries:</p>
+        <div class="mt-2 flex flex-wrap gap-2 text-[11px] font-mono">
+          <span class="px-2 py-1 rounded bg-neutral-800 border border-neutral-700">MaterialTheme.colorScheme.surface</span>
+          <span class="px-2 py-1 rounded bg-neutral-800 border border-neutral-700">MaterialTheme.colorScheme.surfaceContainerLow</span>
+          <span class="px-2 py-1 rounded bg-neutral-800 border border-neutral-700">MaterialTheme.colorScheme.surfaceContainer</span>
+          <span class="px-2 py-1 rounded bg-neutral-800 border border-neutral-700">MaterialTheme.colorScheme.surfaceContainerHigh</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 shrink-0">
+        <button onclick="toggleTonalInspector()" class="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition">
+          Highlight Tonal Surfaces
+        </button>
+        <button onclick="toggleTheme()" class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition">
+          Toggle Light / Dark
+        </button>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- SCRIPT ENGINE -->
+  <script>
+    let activePalette = 'blue';
+    let isDark = true;
+    let isInspectorActive = false;
+
+    function setConcept(mode) {
+      const c1 = document.getElementById('device-clean');
+      const c2 = document.getElementById('device-bento');
+      const c3 = document.getElementById('device-sheet');
+
+      const t1 = document.getElementById('tab-clean');
+      const t2 = document.getElementById('tab-bento');
+      const t3 = document.getElementById('tab-sheet');
+      const tc = document.getElementById('tab-compare');
+
+      [t1, t2, t3, tc].forEach(t => {
+        t.className = "px-3.5 py-1.5 rounded-xl text-xs font-medium text-neutral-300 hover:text-white transition";
+      });
+
+      if (mode === 'clean') {
+        c1.style.display = 'flex';
+        c2.style.display = 'none';
+        c3.style.display = 'none';
+        t1.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-neutral-100 text-neutral-900 shadow-sm transition";
+      } else if (mode === 'bento') {
+        c1.style.display = 'none';
+        c2.style.display = 'flex';
+        c3.style.display = 'none';
+        t2.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-neutral-100 text-neutral-900 shadow-sm transition";
+      } else if (mode === 'sheet') {
+        c1.style.display = 'none';
+        c2.style.display = 'none';
+        c3.style.display = 'flex';
+        t3.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-neutral-100 text-neutral-900 shadow-sm transition";
+      } else if (mode === 'compare') {
+        c1.style.display = 'flex';
+        c2.style.display = 'flex';
+        c3.style.display = 'flex';
+        tc.className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-neutral-100 text-neutral-900 shadow-sm transition";
+      }
+    }
+
+    function toggleTheme() {
+      isDark = !isDark;
+      const screens = document.querySelectorAll('.screen-view');
+      const icon = document.getElementById('theme-icon');
+      const text = document.getElementById('theme-text');
+
+      screens.forEach(s => {
+        if (!isDark) {
+          s.classList.add('light-theme');
+        } else {
+          s.classList.remove('light-theme');
+        }
+      });
+
+      if (!isDark) {
+        icon.textContent = '☀️';
+        text.textContent = 'Light';
+      } else {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark';
+      }
+    }
+
+    function setPalette(pal) {
+      activePalette = pal;
+      const screens = document.querySelectorAll('.screen-view');
+      const pBlue = document.getElementById('pal-blue');
+      const pSage = document.getElementById('pal-sage');
+
+      screens.forEach(s => {
+        s.classList.remove('palette-sage');
+        if (pal === 'sage') s.classList.add('palette-sage');
+      });
+
+      if (pal === 'blue') {
+        pBlue.classList.add('ring-2', 'ring-white/50');
+        pSage.classList.remove('ring-2', 'ring-white/50');
+      } else {
+        pSage.classList.add('ring-2', 'ring-white/50');
+        pBlue.classList.remove('ring-2', 'ring-white/50');
+      }
+    }
+
+    function toggleTonalInspector() {
+      isInspectorActive = !isInspectorActive;
+      const screens = document.querySelectorAll('.screen-view');
+      const btn = document.getElementById('btn-inspector');
+
+      screens.forEach(s => {
+        if (isInspectorActive) {
+          s.classList.add('inspect-tonal');
+        } else {
+          s.classList.remove('inspect-tonal');
+        }
+      });
+
+      if (isInspectorActive) {
+        btn.classList.add('bg-amber-500/20', 'text-amber-300', 'border-amber-500/40');
+      } else {
+        btn.classList.remove('bg-amber-500/20', 'text-amber-300', 'border-amber-500/40');
+      }
+    }
+
+    function openM3Sheet(title, count, sub) {
+      document.getElementById('m3-sheet-title').textContent = title;
+      document.getElementById('m3-sheet-count').textContent = count + ' items • Local storage';
+      document.getElementById('m3-sheet-sub').textContent = sub;
+      const modal = document.getElementById('m3-modal-sheet');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeM3Sheet() {
+      const modal = document.getElementById('m3-modal-sheet');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // Live clock
+    function updateClock() {
+      const now = new Date();
+      const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+      document.querySelectorAll('.clock-display').forEach(el => el.textContent = timeStr);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Init
+    setConcept('clean');
+  </script>
+</body>
+</html>
+

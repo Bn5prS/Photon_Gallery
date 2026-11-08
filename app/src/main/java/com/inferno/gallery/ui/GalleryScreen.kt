@@ -430,7 +430,7 @@ fun GalleryScreen(
                 for (i in start..end) {
                     val listItem = pagedMedia.peek(i) as? GalleryListItem.Item ?: continue
                     val galleryItem = listItem.galleryItem
-                    val cacheKey = thumbnailMemoryKey(galleryItem.id, thumbSizePx)
+                    val cacheKey = thumbnailMemoryKey(galleryItem.id, thumbSizePx, galleryItem.dateModified)
                     if (imageLoader.memoryCache?.get(coil3.memory.MemoryCache.Key(cacheKey)) != null) continue
 
                     val modelUri = if (galleryItem.uri != android.net.Uri.EMPTY && galleryItem.uri.scheme == "content") {

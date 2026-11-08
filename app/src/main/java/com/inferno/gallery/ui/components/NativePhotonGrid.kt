@@ -1100,7 +1100,7 @@ private class MediaViewHolder(
 
     fun bindThumbnail(item: NativeTimelineItem.Media, spanCount: Int) {
         val targetPx = thumbnailTargetPx(spanCount)
-        val cacheKey = thumbnailMemoryKey(item.id, targetPx)
+        val cacheKey = thumbnailMemoryKey(item.id, targetPx, item.dateModified)
 
         if (loadedUri == item.uri && components.thumbnailView.drawable != null) {
             return

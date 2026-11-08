@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Photon Dialog Design Concepts</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --m3-surface: #121316;
+      --m3-surface-container: #1b1c21;
+      --m3-surface-container-high: #26272e;
+      --m3-surface-container-highest: #31333b;
+      --m3-on-surface: #e2e2e8;
+      --m3-on-surface-variant: #a0a3af;
+      --m3-outline-variant: rgba(255, 255, 255, 0.08);
+      --m3-primary: #a8c7fa;
+      --m3-on-primary: #062e6f;
+      --m3-primary-container: #1d3b6f;
+      --m3-on-primary-container: #d3e3fd;
+      --m3-error: #ffb4ab;
+      --m3-on-error: #690005;
+      --m3-error-container: #4e181c;
+      --m3-on-error-container: #ffdad6;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .squircle {
+      border-radius: 20px;
+    }
+
+    .pill-btn {
+      border-radius: 9999px;
+      transition: all 0.15s cubic-bezier(0.2, 0, 1, 1);
+    }
+    .pill-btn:active {
+      transform: scale(0.96);
+    }
+
+    .tab-pill {
+      border-radius: 9999px;
+      transition: all 0.2s ease;
+    }
+    .tab-pill.active {
+      background: #a8c7fa;
+      color: #062e6f;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(168, 199, 250, 0.2);
+    }
+
+    .dialog-card {
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+  </style>
+</head>
+<body class="bg-[#0f1013] text-[#e2e2e8] p-4 sm:p-6 antialiased">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-[#a8c7fa]"></span>
+          <span class="text-xs uppercase tracking-widest text-[#a8c7fa] font-bold">Photon Gallery • M3 Expressive</span>
+        </div>
+        <h1 class="text-2xl font-bold text-white">Sleek Minimal Tonal Dialogs</h1>
+        <p class="text-sm text-[#a0a3af] mt-1">Comparing 3 polished tonal architectures for Move to Trash, Create Album & Rename</p>
+      </div>
+
+      <!-- Style Switcher Tabs -->
+      <div class="inline-flex bg-[#1e1f25] p-1.5 rounded-full border border-white/10 self-start sm:self-center">
+        <button onclick="setTab('style1')" id="btn-style1" class="tab-pill active px-4 py-2 text-xs font-semibold text-[#a0a3af]">
+          1. Centered Squircle
+        </button>
+        <button onclick="setTab('style2')" id="btn-style2" class="tab-pill px-4 py-2 text-xs font-semibold text-[#a0a3af]">
+          2. Asymmetric Studio
+        </button>
+        <button onclick="setTab('style3')" id="btn-style3" class="tab-pill px-4 py-2 text-xs font-semibold text-[#a0a3af]">
+          3. Stacked Touch Pill
+        </button>
+      </div>
+    </div>
+
+    <!-- Feedback Notification Banner -->
+    <div id="toast" class="hidden mb-5 py-2.5 px-4 bg-[#1e2738] border border-[#a8c7fa]/30 text-[#a8c7fa] rounded-xl text-xs font-medium text-center transition-all">
+      Action recorded!
+    </div>
+
+    <!-- ==================== STYLE 1: Centered Expressive Squircle ==================== -->
+    <div id="view-style1" class="space-y-6">
+      <div class="text-xs font-semibold text-[#a0a3af] uppercase tracking-wider mb-2">Style 1 • Centered Expressive Squircle (Recommended — Native Photon aesthetic)</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <!-- 1. Move to Trash -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[28px] p-6 flex flex-col items-center text-center shadow-xl">
+          <div class="w-14 h-14 rounded-[18px] bg-[#4e181c] text-[#ffb4ab] flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+          </div>
+          <h2 class="text-lg font-bold text-white mb-1.5">Move to Recycle Bin?</h2>
+          <p class="text-xs text-[#a0a3af] leading-relaxed mb-4">Items can be restored from the Recycle Bin within 30 days before permanent removal.</p>
+
+          <!-- Item Context Pill -->
+          <div class="w-full bg-[#26272e] border border-white/5 rounded-2xl p-2.5 flex items-center gap-3 mb-5 text-left">
+            <div class="w-10 h-10 rounded-xl bg-cover bg-center shrink-0 border border-white/10" style="background-image: url('https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=100&auto=format&fit=crop&q=60');"></div>
+            <div class="min-w-0 flex-1">
+              <div class="text-xs font-semibold text-white truncate">SGCAM_20261108_1942.jpg</div>
+              <div class="text-[11px] text-[#a0a3af]">4.8 MB • DCIM/Camera</div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="grid grid-cols-2 gap-2.5 w-full mt-auto">
+            <button onclick="showToast('Cancelled Move to Trash')" class="pill-btn py-3 px-4 bg-[#26272e] hover:bg-[#31333b] text-white text-xs font-semibold">
+              Cancel
+            </button>
+            <button onclick="showToast('Moved item to Recycle Bin!')" class="pill-btn py-3 px-4 bg-[#ffb4ab] hover:bg-[#ffdad6] text-[#690005] text-xs font-bold">
+              Move to Bin
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Create Album -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[28px] p-6 flex flex-col items-center text-center shadow-xl">
+          <div class="w-14 h-14 rounded-[18px] bg-[#1d3b6f] text-[#a8c7fa] flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3v-3h2v3h3v2z"/>
+            </svg>
+          </div>
+          <h2 class="text-lg font-bold text-white mb-1.5">New Album</h2>
+          <p class="text-xs text-[#a0a3af] leading-relaxed mb-4">Creates a dedicated folder in device storage to organize your media.</p>
+
+          <!-- Input Field -->
+          <div class="w-full text-left mb-5">
+            <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#a0a3af] mb-1.5 pl-1">Album Name</label>
+            <input type="text" value="Summer Vacation" class="w-full bg-[#26272e] border border-white/10 focus:border-[#a8c7fa] rounded-2xl px-3.5 py-3 text-sm text-white outline-none transition-colors" />
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="grid grid-cols-2 gap-2.5 w-full mt-auto">
+            <button onclick="showToast('Cancelled Album Creation')" class="pill-btn py-3 px-4 bg-[#26272e] hover:bg-[#31333b] text-white text-xs font-semibold">
+              Cancel
+            </button>
+            <button onclick="showToast('Created Album: Summer Vacation')" class="pill-btn py-3 px-4 bg-[#a8c7fa] hover:bg-[#d3e3fd] text-[#062e6f] text-xs font-bold">
+              Create
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Rename File -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[28px] p-6 flex flex-col items-center text-center shadow-xl">
+          <div class="w-14 h-14 rounded-[18px] bg-[#233544] text-[#78d1f7] flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          </div>
+          <h2 class="text-lg font-bold text-white mb-1.5">Rename File</h2>
+          <p class="text-xs text-[#a0a3af] leading-relaxed mb-4">Original file extension (.jpg) is preserved automatically across storage.</p>
+
+          <!-- Input Field with Extension Badge -->
+          <div class="w-full text-left mb-5">
+            <label class="block text-[11px] font-semibold uppercase tracking-wider text-[#a0a3af] mb-1.5 pl-1">File Name</label>
+            <div class="relative flex items-center">
+              <input type="text" value="Family_Picnic_Sunset" class="w-full bg-[#26272e] border border-white/10 focus:border-[#78d1f7] rounded-2xl pl-3.5 pr-14 py-3 text-sm text-white outline-none transition-colors" />
+              <span class="absolute right-3 text-xs font-bold text-[#a0a3af] bg-[#1b1c21] px-2 py-1 rounded-lg border border-white/10">.jpg</span>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="grid grid-cols-2 gap-2.5 w-full mt-auto">
+            <button onclick="showToast('Cancelled Rename')" class="pill-btn py-3 px-4 bg-[#26272e] hover:bg-[#31333b] text-white text-xs font-semibold">
+              Cancel
+            </button>
+            <button onclick="showToast('Renamed file successfully')" class="pill-btn py-3 px-4 bg-[#a8c7fa] hover:bg-[#d3e3fd] text-[#062e6f] text-xs font-bold">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STYLE 2: Asymmetric Clean Studio ==================== -->
+    <div id="view-style2" class="space-y-6 hidden">
+      <div class="text-xs font-semibold text-[#a8c7fa] uppercase tracking-wider mb-2">Style 2 • Asymmetric Clean Studio (Wallpaper Accent Palette — Zero Red/Green/Blue)</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <!-- 1. Move to Trash -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[24px] p-5 flex flex-col shadow-lg">
+          <div class="flex items-center gap-3.5 mb-3">
+            <div class="w-11 h-11 rounded-2xl bg-[#1d3b6f] text-[#a8c7fa] flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Move to Bin</h2>
+              <div class="text-xs text-[#a0a3af]">1 photo selected</div>
+            </div>
+          </div>
+          <p class="text-xs text-[#a0a3af] leading-relaxed mb-4">Item will remain in the Recycle Bin for 30 days before permanent removal.</p>
+
+          <div class="flex items-center justify-end gap-2.5 mt-auto pt-2 border-t border-white/5">
+            <button onclick="showToast('Cancelled Move to Trash')" class="pill-btn py-2 px-3.5 bg-transparent hover:bg-white/5 text-[#a0a3af] text-xs font-semibold">Cancel</button>
+            <button onclick="showToast('Moved item to Recycle Bin!')" class="pill-btn py-2 px-4 bg-[#a8c7fa] text-[#062e6f] text-xs font-bold">Move to Bin</button>
+          </div>
+        </div>
+
+        <!-- 2. Create Album -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[24px] p-5 flex flex-col shadow-lg">
+          <div class="flex items-center gap-3.5 mb-3">
+            <div class="w-11 h-11 rounded-2xl bg-[#1d3b6f] text-[#a8c7fa] flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3v-3h2v3h3v2z"/></svg>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Create Album</h2>
+              <div class="text-xs text-[#a0a3af]">Storage folder</div>
+            </div>
+          </div>
+          
+          <input type="text" value="Summer Vacation" class="w-full bg-[#26272e] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white mb-4 outline-none focus:border-[#a8c7fa]" placeholder="Album name" />
+
+          <div class="flex items-center justify-end gap-2.5 mt-auto pt-2 border-t border-white/5">
+            <button onclick="showToast('Cancelled Album Creation')" class="pill-btn py-2 px-3.5 bg-transparent hover:bg-white/5 text-[#a0a3af] text-xs font-semibold">Cancel</button>
+            <button onclick="showToast('Created Album: Summer Vacation')" class="pill-btn py-2 px-4 bg-[#a8c7fa] text-[#062e6f] text-xs font-bold">Create</button>
+          </div>
+        </div>
+
+        <!-- 3. Rename File -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[24px] p-5 flex flex-col shadow-lg">
+          <div class="flex items-center gap-3.5 mb-3">
+            <div class="w-11 h-11 rounded-2xl bg-[#1d3b6f] text-[#a8c7fa] flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white">Rename File</h2>
+              <div class="text-xs text-[#a0a3af]">Preserves .jpg</div>
+            </div>
+          </div>
+          
+          <input type="text" value="Family_Picnic_Sunset" class="w-full bg-[#26272e] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white mb-4 outline-none focus:border-[#a8c7fa]" />
+
+          <div class="flex items-center justify-end gap-2.5 mt-auto pt-2 border-t border-white/5">
+            <button onclick="showToast('Cancelled Rename')" class="pill-btn py-2 px-3.5 bg-transparent hover:bg-white/5 text-[#a0a3af] text-xs font-semibold">Cancel</button>
+            <button onclick="showToast('Renamed file successfully')" class="pill-btn py-2 px-4 bg-[#a8c7fa] text-[#062e6f] text-xs font-bold">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STYLE 3: Stacked Touch Pill ==================== -->
+    <div id="view-style3" class="space-y-6 hidden">
+      <div class="text-xs font-semibold text-[#a0a3af] uppercase tracking-wider mb-2">Style 3 • Stacked Touch Pill (One-handed thumb reach, full-width actions)</div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <!-- 1. Move to Trash -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[30px] p-6 flex flex-col items-center text-center shadow-2xl">
+          <div class="w-12 h-12 rounded-2xl bg-[#4e181c] text-[#ffb4ab] flex items-center justify-center mb-3.5">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </div>
+          <h2 class="text-lg font-bold text-white mb-1">Move to Recycle Bin?</h2>
+          <p class="text-xs text-[#a0a3af] mb-5">Items stay in Recycle Bin for 30 days.</p>
+
+          <div class="flex flex-col gap-2 w-full mt-auto">
+            <button onclick="showToast('Moved item to Recycle Bin!')" class="pill-btn py-3 px-4 bg-[#ffb4ab] text-[#690005] text-xs font-bold w-full">Move to Bin</button>
+            <button onclick="showToast('Cancelled Move to Trash')" class="pill-btn py-3 px-4 bg-[#26272e] text-white text-xs font-semibold w-full">Cancel</button>
+          </div>
+        </div>
+
+        <!-- 2. Create Album -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[30px] p-6 flex flex-col items-center text-center shadow-2xl">
+          <div class="w-12 h-12 rounded-2xl bg-[#1d3b6f] text-[#a8c7fa] flex items-center justify-center mb-3.5">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3v-3h2v3h3v2z"/></svg>
+          </div>
+          <h2 class="text-lg font-bold text-white mb-1">New Album</h2>
+          <p class="text-xs text-[#a0a3af] mb-4">Organize photos & videos in storage.</p>
+
+          <input type="text" value="Summer Vacation" class="w-full bg-[#26272e] border border-white/10 rounded-2xl px-3.5 py-3 text-sm text-white mb-5 outline-none focus:border-[#a8c7fa]" />
+
+          <div class="flex flex-col gap-2 w-full mt-auto">
+            <button onclick="showToast('Created Album: Summer Vacation')" class="pill-btn py-3 px-4 bg-[#a8c7fa] text-[#062e6f] text-xs font-bold w-full">Create Album</button>
+            <button onclick="showToast('Cancelled Album Creation')" class="pill-btn py-3 px-4 bg-[#26272e] text-white text-xs font-semibold w-full">Cancel</button>
+          </div>
+        </div>
+
+        <!-- 3. Rename File -->
+        <div class="dialog-card bg-[#1b1c21] border border-white/10 rounded-[30px] p-6 flex flex-col items-center text-center shadow-2xl">
+          <div class="w-12 h-12 rounded-2xl bg-[#233544] text-[#78d1f7] flex items-center justify-center mb-3.5">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          </div>
+          <h2 class="text-lg font-bold text-white mb-1">Rename File</h2>
+          <p class="text-xs text-[#a0a3af] mb-4">Original extension is preserved.</p>
+
+          <input type="text" value="Family_Picnic_Sunset" class="w-full bg-[#26272e] border border-white/10 rounded-2xl px-3.5 py-3 text-sm text-white mb-5 outline-none focus:border-[#78d1f7]" />
+
+          <div class="flex flex-col gap-2 w-full mt-auto">
+            <button onclick="showToast('Renamed file successfully')" class="pill-btn py-3 px-4 bg-[#a8c7fa] text-[#062e6f] text-xs font-bold w-full">Save Changes</button>
+            <button onclick="showToast('Cancelled Rename')" class="pill-btn py-3 px-4 bg-[#26272e] text-white text-xs font-semibold w-full">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Architecture Comparison Table -->
+    <div class="mt-8 p-5 bg-[#17181d] border border-white/10 rounded-2xl text-xs">
+      <div class="font-bold text-white mb-3 text-sm">Design Architectural Comparison:</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-[#a0a3af]">
+        <div class="p-3 bg-white/[0.03] rounded-xl border border-white/5">
+          <div class="font-bold text-white mb-1">1. Centered Squircle (Best)</div>
+          <div>56dp squircle icon, centered title, media thumbnail preview, balanced dual pill buttons. Matches Photon's M3 Expressive style.</div>
+        </div>
+        <div class="p-3 bg-white/[0.03] rounded-xl border border-white/5">
+          <div class="font-bold text-white mb-1">2. Asymmetric Studio</div>
+          <div>44dp icon next to title, right-aligned buttons, minimal vertical space. Good for desktop or power-user compactness.</div>
+        </div>
+        <div class="p-3 bg-white/[0.03] rounded-xl border border-white/5">
+          <div class="font-bold text-white mb-1">3. Stacked Touch Pill</div>
+          <div>Centered icon, full-width action buttons stacked vertically. Great for fast one-handed thumb tapping on tall phones.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function setTab(tabId) {
+      ['style1', 'style2', 'style3'].forEach(id => {
+        document.getElementById('view-' + id).classList.add('hidden');
+        document.getElementById('btn-' + id).classList.remove('active');
+      });
+      document.getElementById('view-' + tabId).classList.remove('hidden');
+      document.getElementById('btn-' + tabId).classList.add('active');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.remove('hidden');
+      setTimeout(() => {
+        t.classList.add('hidden');
+      }, 2500);
+    }
+  </script>
+</body>
+</html>
+
