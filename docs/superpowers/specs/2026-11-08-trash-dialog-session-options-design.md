@@ -121,3 +121,4 @@ Created in `app/src/main/java/com/inferno/gallery/ui/components/TrashSessionOpti
 5. Test Case 3: Select both options.
    - Verify subsequent deletes immediately trigger permanent deletion without dialog interruption.
 6. Verify app restarts reset both flags to safe defaults.
+
