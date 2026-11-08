@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -379,9 +378,7 @@ fun SettingsScreen(
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.94f)
-                    .wrapContentHeight(),
+                modifier = Modifier.fillMaxWidth(0.94f),
                 shape = ShapeExtraLarge,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh

@@ -86,194 +86,234 @@ private fun createPresetPalette(
 
 object ThemePalettes {
 
-    // 1. Ocean Periwinkle (Blue / Slate / Lilac / Deep Navy)
-    val OceanPeriwinkle = createPresetPalette(
-        id = "ocean_periwinkle",
-        name = "Ocean Periwinkle",
-        seedColor = Color(0xFF005EB4),
+    // ── Row 1 ──
+    val DefaultPhotonBlue = createPresetPalette(
+        id = "default_blue",
+        name = "Photon Blue",
+        seedColor = Color(0xFF0066FF),
         quadrantColors = listOf(
-            Color(0xFFA4C8FF), // Top-Left: Soft Periwinkle Blue
-            Color(0xFFBCC7DD), // Top-Right: Slate Blue Mist
-            Color(0xFFE5BEED), // Bottom-Left: Lilac Rose
-            Color(0xFF25477B), // Bottom-Right: Deep Navy
+            Color(0xFF82B1FF), // Bright Royal Blue
+            Color(0xFFADC6FF), // Ice Periwinkle
+            Color(0xFF2979FF), // Vivid Cobalt
+            Color(0xFF003D99), // Deep Royal Navy
         ),
     )
 
-    // 2. Desert Peach (Warm Coral / Blush / Sand / Terracotta)
+    val SkyBlue = createPresetPalette(
+        id = "sky_blue",
+        name = "Sky Blue",
+        seedColor = Color(0xFF0288D1),
+        quadrantColors = listOf(
+            Color(0xFF81D4FA), // Clear Summer Sky
+            Color(0xFFB3E5FC), // Pale Cloud Blue
+            Color(0xFF00B0FF), // Vibrant Cerulean
+            Color(0xFF01579B), // Deep Ocean Navy
+        ),
+    )
+
+    val SunnyYellow = createPresetPalette(
+        id = "sunny_yellow",
+        name = "Sunny Yellow",
+        seedColor = Color(0xFFFFB300),
+        quadrantColors = listOf(
+            Color(0xFFFFEE58), // Bright Sunny Lemon
+            Color(0xFFFFF9C4), // Morning Sunlight
+            Color(0xFFFFCA28), // Sunburst Gold
+            Color(0xFFE65100), // Deep Honey Amber
+        ),
+    )
+
+    val PurplePink = createPresetPalette(
+        id = "purple_pink",
+        name = "Purple Pink",
+        seedColor = Color(0xFFE91E63),
+        quadrantColors = listOf(
+            Color(0xFFFF80AB), // Neon Pink
+            Color(0xFFF8BBD0), // Pale Magenta Mist
+            Color(0xFFEA80FC), // Electric Orchid
+            Color(0xFF880E4F), // Deep Mulberry Wine
+        ),
+    )
+
+    // ── Row 2 ──
+    val RichGold = createPresetPalette(
+        id = "rich_gold",
+        name = "Rich Gold",
+        seedColor = Color(0xFFD4AF37),
+        quadrantColors = listOf(
+            Color(0xFFFFE082), // Shimmering Gold
+            Color(0xFFFFF8E1), // Pale Gold Mist
+            Color(0xFFFFD54F), // Imperial Pure Gold
+            Color(0xFF7F6000), // Deep Burnished Bronze
+        ),
+    )
+
+    val EmeraldMint = createPresetPalette(
+        id = "emerald_mint",
+        name = "Emerald Mint",
+        seedColor = Color(0xFF00C853),
+        quadrantColors = listOf(
+            Color(0xFF69F0AE), // Crisp Mint
+            Color(0xFFB9F6CA), // Frost Mint
+            Color(0xFF00E676), // Radiant Jade Green
+            Color(0xFF00600F), // Deep Pine Forest
+        ),
+    )
+
+    val CrimsonRuby = createPresetPalette(
+        id = "crimson_ruby",
+        name = "Crimson Ruby",
+        seedColor = Color(0xFFD32F2F),
+        quadrantColors = listOf(
+            Color(0xFFFF5252), // Bright Ruby Coral
+            Color(0xFFFFCDD2), // Pale Rose Mist
+            Color(0xFFFF1744), // Vivid Scarlet
+            Color(0xFF7F0000), // Deep Cabernet Wine
+        ),
+    )
+
+    val SunsetOrange = createPresetPalette(
+        id = "sunset_orange",
+        name = "Sunset Orange",
+        seedColor = Color(0xFFFF6D00),
+        quadrantColors = listOf(
+            Color(0xFFFFAB40), // Juicy Tangerine
+            Color(0xFFFFE0B2), // Apricot Cream
+            Color(0xFFFF6D00), // Vibrant Sunset
+            Color(0xFFBF360C), // Deep Burnt Sienna
+        ),
+    )
+
+    // ── Row 3 ──
+    val RoyalAmethyst = createPresetPalette(
+        id = "royal_amethyst",
+        name = "Royal Amethyst",
+        seedColor = Color(0xFF7C4DFF),
+        quadrantColors = listOf(
+            Color(0xFFB388FF), // Electric Lavender
+            Color(0xFFEDE7F6), // Soft Lilac Mist
+            Color(0xFF7C4DFF), // Regal Purple
+            Color(0xFF311B92), // Midnight Velvet
+        ),
+    )
+
+    val AquaTurquoise = createPresetPalette(
+        id = "aqua_turquoise",
+        name = "Aqua Turquoise",
+        seedColor = Color(0xFF00B4D8),
+        quadrantColors = listOf(
+            Color(0xFF84FFFF), // Seafoam Aqua
+            Color(0xFFE0F7FA), // Glacier Mist
+            Color(0xFF00E5FF), // Tropical Turquoise
+            Color(0xFF006064), // Deep Teal Lagoon
+        ),
+    )
+
+    val ElectricLime = createPresetPalette(
+        id = "electric_lime",
+        name = "Electric Lime",
+        seedColor = Color(0xFFAEEA00),
+        quadrantColors = listOf(
+            Color(0xFFEEFF41), // Luminous Citron
+            Color(0xFFF4FF81), // Chartreuse Tint
+            Color(0xFF76FF03), // Acid Lime
+            Color(0xFF436000), // Deep Olive Moss
+        ),
+    )
+
+    val BubblegumPink = createPresetPalette(
+        id = "bubblegum_pink",
+        name = "Bubblegum Pink",
+        seedColor = Color(0xFFF06292),
+        quadrantColors = listOf(
+            Color(0xFFFF80AB), // Cotton Candy
+            Color(0xFFFCE4EC), // Sakura Blossom
+            Color(0xFFF06292), // Sweet Rose Pink
+            Color(0xFF880E4F), // Deep Plum
+        ),
+    )
+
+    // ── Row 4 ──
     val DesertPeach = createPresetPalette(
         id = "desert_peach",
         name = "Desert Peach",
-        seedColor = Color(0xFF904A41),
+        seedColor = Color(0xFFE07A5F),
         quadrantColors = listOf(
-            Color(0xFFFFB4A8), // Top-Left: Warm Coral Peach
-            Color(0xFFE7BDB6), // Top-Right: Blush Muted Peach
-            Color(0xFFDFC38C), // Bottom-Left: Golden Sand
-            Color(0xFF642823), // Bottom-Right: Deep Terracotta
+            Color(0xFFFFB4A8), // Warm Coral Peach
+            Color(0xFFFBE9E7), // Blush Sand
+            Color(0xFFE07A5F), // Terracotta Clay
+            Color(0xFF642823), // Deep Rust
         ),
     )
 
-    // 3. Sage Forest (Mint / Sage Mist / Sky Aqua / Evergreen)
     val SageForest = createPresetPalette(
         id = "sage_forest",
         name = "Sage Forest",
         seedColor = Color(0xFF3B693E),
         quadrantColors = listOf(
-            Color(0xFFA2D59E), // Top-Left: Fresh Sage Green
-            Color(0xFFC1C9BF), // Top-Right: Muted Sage
-            Color(0xFFA1D3DF), // Bottom-Left: Sky Aqua
-            Color(0xFF245136), // Bottom-Right: Deep Evergreen
+            Color(0xFFA2D59E), // Fresh Sage Green
+            Color(0xFFE8F5E9), // Earthy Mist
+            Color(0xFF4CAF50), // Spring Green
+            Color(0xFF1B5E20), // Evergreen Pine
         ),
     )
 
-    // 4. Lavender Plum (Orchid / Lilac / Rose Blush / Regal Plum)
-    val LavenderPlant = createPresetPalette(
-        id = "lavender_plum",
-        name = "Lavender Plum",
-        seedColor = Color(0xFF7A4B96),
+    val MidnightIndigo = createPresetPalette(
+        id = "midnight_indigo",
+        name = "Midnight Indigo",
+        seedColor = Color(0xFF3949AB),
         quadrantColors = listOf(
-            Color(0xFFE2B6FF), // Top-Left: Soft Orchid Purple
-            Color(0xFFD5C0E2), // Top-Right: Pale Lilac
-            Color(0xFFF8B2B4), // Bottom-Left: Rose Blush
-            Color(0xFF4B265C), // Bottom-Right: Regal Plum
+            Color(0xFF9FA8DA), // Twilight Blue
+            Color(0xFFE8EAF6), // Star Ice
+            Color(0xFF5C6BC0), // Cosmic Indigo
+            Color(0xFF1A237E), // Deep Space Navy
         ),
     )
 
-    // 5. Warm Amber (Honey / Almond / Tan Ochre / Saddle Umber)
-    val WarmAmber = createPresetPalette(
-        id = "warm_amber",
-        name = "Warm Amber",
-        seedColor = Color(0xFF8B501A),
+    val SilverSlate = createPresetPalette(
+        id = "silver_slate",
+        name = "Silver Slate",
+        seedColor = Color(0xFF78909C),
         quadrantColors = listOf(
-            Color(0xFFFFB87A), // Top-Left: Warm Honey Amber
-            Color(0xFFE6C3B1), // Top-Right: Warm Almond
-            Color(0xFFCEC389), // Bottom-Left: Tan Ochre
-            Color(0xFF653617), // Bottom-Right: Deep Saddle Umber
-        ),
-    )
-
-    // 6. Aqua Marine (Seafoam / Aqua Mist / Ice Blue / Deep Ocean)
-    val AquaMarine = createPresetPalette(
-        id = "aqua_marine",
-        name = "Aqua Marine",
-        seedColor = Color(0xFF006B60),
-        quadrantColors = listOf(
-            Color(0xFF76DCBF), // Top-Left: Bright Seafoam Turquoise
-            Color(0xFFBCD4CB), // Top-Right: Aqua Mist
-            Color(0xFFAECFE7), // Bottom-Left: Ice Blue
-            Color(0xFF004F4D), // Bottom-Right: Deep Teal Ocean
-        ),
-    )
-
-    // 7. Dusty Rose (Dusty Pink / Mauve Ash / Thistle / Deep Wine)
-    val DustyRose = createPresetPalette(
-        id = "dusty_rose",
-        name = "Dusty Rose",
-        seedColor = Color(0xFF8B4A58),
-        quadrantColors = listOf(
-            Color(0xFFF5B4BE), // Top-Left: Dusty Rose Pink
-            Color(0xFFDEC1C5), // Top-Right: Mauve Ash
-            Color(0xFFE2BDE8), // Bottom-Left: Pale Thistle
-            Color(0xFF5E2335), // Bottom-Right: Deep Cabernet Wine
-        ),
-    )
-
-    // 8. Twilight Iris (Periwinkle / Periwinkle Mist / Orchid / Midnight Indigo)
-    val TwilightIris = createPresetPalette(
-        id = "twilight_iris",
-        name = "Twilight Iris",
-        seedColor = Color(0xFF3E5B99),
-        quadrantColors = listOf(
-            Color(0xFFB4C5FF), // Top-Left: Twilight Periwinkle
-            Color(0xFFC4CBE7), // Top-Right: Soft Periwinkle Mist
-            Color(0xFFE9BCE4), // Bottom-Left: Gentle Orchid
-            Color(0xFF323E70), // Bottom-Right: Midnight Indigo
-        ),
-    )
-
-    // 9. Sunlit Ochre (Marigold / Sand Mist / Olive Mint / Roasted Mocha)
-    val SunlitOchre = createPresetPalette(
-        id = "sunlit_ochre",
-        name = "Sunlit Ochre",
-        seedColor = Color(0xFF855318),
-        quadrantColors = listOf(
-            Color(0xFFFFB960), // Top-Left: Sunlit Marigold
-            Color(0xFFE0C5AC), // Top-Right: Warm Sand Mist
-            Color(0xFFC1CEB1), // Bottom-Left: Olive Mint
-            Color(0xFF5F3A19), // Bottom-Right: Roasted Mocha
-        ),
-    )
-
-    // 10. Electric Cyan (Cyan / Glacier Mist / Bluebell / Deep Petrol)
-    val ElectricCyan = createPresetPalette(
-        id = "electric_cyan",
-        name = "Electric Cyan",
-        seedColor = Color(0xFF006782),
-        quadrantColors = listOf(
-            Color(0xFF6FD6FF), // Top-Left: Vibrant Sky Cyan
-            Color(0xFFB6C8D3), // Top-Right: Glacier Mist
-            Color(0xFFBDC2EF), // Bottom-Left: Soft Bluebell
-            Color(0xFF004A5C), // Bottom-Right: Deep Petrol Blue
-        ),
-    )
-
-    // 11. Flamingo Terracotta (Coral / Blush Tan / Khaki Sand / Sienna Rust)
-    val FlamingoTerracotta = createPresetPalette(
-        id = "flamingo_terracotta",
-        name = "Flamingo Terracotta",
-        seedColor = Color(0xFF964534),
-        quadrantColors = listOf(
-            Color(0xFFFFAF99), // Top-Left: Flamingo Coral
-            Color(0xFFE5C2B8), // Top-Right: Blush Tan
-            Color(0xFFD4C490), // Bottom-Left: Khaki Sand
-            Color(0xFF6F2B1B), // Bottom-Right: Sienna Rust
-        ),
-    )
-
-    // 12. Citrus Olive (Chartreuse / Celadon / Spring Green / Deep Olive)
-    val CitrusOlive = createPresetPalette(
-        id = "citrus_olive",
-        name = "Citrus Olive",
-        seedColor = Color(0xFF5B6415),
-        quadrantColors = listOf(
-            Color(0xFFD2E26C), // Top-Left: Chartreuse Lime
-            Color(0xFFCED4C0), // Top-Right: Celadon Mist
-            Color(0xFFA8D4B7), // Bottom-Left: Spring Green
-            Color(0xFF414C14), // Bottom-Right: Deep Forest Olive
-        ),
-    )
-
-    // 13. Default Photon Blue
-    val DefaultPhotonBlue = createPresetPalette(
-        id = "default_blue",
-        name = "Photon Blue",
-        seedColor = Color(0xFF0A6EFF),
-        quadrantColors = listOf(
-            Color(0xFFA5C8FF), // Top-Left: Light Blue
-            Color(0xFFC1CBDD), // Top-Right: Slate Gray Blue
-            Color(0xFF94CCFF), // Bottom-Left: Ice Cyan
-            Color(0xFF004786), // Bottom-Right: Dark Blue
+            Color(0xFFECEFF1), // Silver Frost
+            Color(0xFFCFD8DC), // Cool Platinum
+            Color(0xFF78909C), // Titanium Slate
+            Color(0xFF263238), // Deep Carbon Noir
         ),
     )
 
     val allPalettes: List<PresetThemePalette> = listOf(
         DefaultPhotonBlue,
-        OceanPeriwinkle,
+        SkyBlue,
+        SunnyYellow,
+        PurplePink,
+        RichGold,
+        EmeraldMint,
+        CrimsonRuby,
+        SunsetOrange,
+        RoyalAmethyst,
+        AquaTurquoise,
+        ElectricLime,
+        BubblegumPink,
         DesertPeach,
         SageForest,
-        LavenderPlant,
-        WarmAmber,
-        AquaMarine,
-        DustyRose,
-        TwilightIris,
-        SunlitOchre,
-        ElectricCyan,
-        FlamingoTerracotta,
-        CitrusOlive,
+        MidnightIndigo,
+        SilverSlate,
     )
 
     private val paletteMap: Map<String, PresetThemePalette> = allPalettes.associateBy { it.id }
 
     fun getById(id: String): PresetThemePalette {
-        return paletteMap[id] ?: DefaultPhotonBlue
+        return paletteMap[id] ?: when (id) {
+            "ocean_periwinkle", "electric_cyan" -> SkyBlue
+            "sunlit_ochre", "warm_amber" -> SunnyYellow
+            "lavender_plum" -> PurplePink
+            "flamingo_terracotta" -> DesertPeach
+            "dusty_rose" -> BubblegumPink
+            "twilight_iris" -> RoyalAmethyst
+            "citrus_olive" -> ElectricLime
+            "aqua_marine" -> AquaTurquoise
+            else -> DefaultPhotonBlue
+        }
     }
 }
