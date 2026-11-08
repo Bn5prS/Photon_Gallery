@@ -93,10 +93,11 @@ fun PhotonDialog(
 3. **Body Area (Optional)**:
    - For confirm dialogs: Descriptive retention text (e.g., "Items stay in the Recycle Bin for 30 days before being permanently deleted").
    - For input dialogs: Modern styled `OutlinedTextField` or `BasicTextField` inside a tonal pill container with character limits, clear button, and extension badge for filenames.
-4. **Action Buttons**:
-   - Row: `horizontalArrangement = Arrangement.End`, spacing `10.dp`, top padding `16.dp`
-   - Dismiss Button: Tonal button (`MaterialTheme.colorScheme.surfaceContainerHighest`, text `onSurface`)
-   - Confirm Button: Tactile filled pill button (`confirmButtonColor`, text `confirmTextColor`, spring-pressed scale haptics).
+4. **Action Buttons (Clustered Together)**:
+   - Row: `horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)`, top padding `16.dp`.
+   - **Crucial Layout Rule**: Cancel and Confirm (Delete/Create/Save) buttons are placed immediately next to each other as a tight pair (8dp gap), aligned to the end. They are NEVER separated with space-between across opposite far-left and far-right edges.
+   - Dismiss Button: Compact tonal pill button (`MaterialTheme.colorScheme.surfaceContainerHighest`, text `onSurface`).
+   - Confirm Button: Compact filled pill button in wallpaper accent (`confirmButtonColor`, text `confirmTextColor`, spring-pressed scale haptics).
 
 ---
 
