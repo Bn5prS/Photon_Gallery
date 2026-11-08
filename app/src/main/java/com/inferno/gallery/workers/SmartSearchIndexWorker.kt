@@ -357,6 +357,7 @@ class SmartSearchIndexWorker(
 
                 // 2. Inference Stage (Isolated CPU/GPU thread)
                 launch(aiDispatcher) {
+                    val pacer = com.inferno.gallery.workers.utils.ScanThermalPacer(applicationContext, "SmartSearch")
                     for (loaded in loadChannel) {
                         if (isStopped) {
                             loaded.bitmap.recycle()
@@ -380,6 +381,7 @@ class SmartSearchIndexWorker(
                         } finally {
                             loaded.bitmap.recycle()
                         }
+                        pacer.recordItemAndThrottle { isStopped }
                     }
                     embedChannel.close()
                 }
