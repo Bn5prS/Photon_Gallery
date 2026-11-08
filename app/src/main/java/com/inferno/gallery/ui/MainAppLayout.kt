@@ -807,7 +807,7 @@ fun MainAppLayout(
                                             )
                                         }
                                     }
-                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == null) {
+                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == null) {
                                         PhotonHeaderIconButton(
                                             onClick = { showDisplaySortSheet = true }
                                         ) {
