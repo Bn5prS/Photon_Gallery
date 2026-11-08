@@ -62,6 +62,9 @@ import java.util.Locale
 import kotlin.math.sqrt
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 @Immutable
 data class GalleryItem(
@@ -206,6 +209,23 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (_isTopBarCollapsed.value != collapsed) {
             _isTopBarCollapsed.value = collapsed
         }
+    }
+
+    // ── Trash & Delete In-Session State ──
+    var sessionSkipDeleteConfirmation by mutableStateOf(false)
+        private set
+
+    var sessionSkipRecycleBin by mutableStateOf(false)
+        private set
+
+    fun setTrashSessionOptions(skipConfirm: Boolean, skipRecycleBin: Boolean) {
+        sessionSkipDeleteConfirmation = skipConfirm
+        sessionSkipRecycleBin = skipRecycleBin
+    }
+
+    fun resetTrashSessionOptions() {
+        sessionSkipDeleteConfirmation = false
+        sessionSkipRecycleBin = false
     }
 
     // ── On This Day Memories State ──
@@ -1231,7 +1251,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     private fun calculateRotatedOrientation(currentOrient: Int, degrees: Int): Int {
-        return when (degrees) {
+        val normDegrees = ((degrees % 360) + 360) % 360
+        return when (normDegrees) {
             90 -> when (currentOrient) {
                 androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
                 androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
@@ -1246,7 +1267,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
                 else -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
             }
-            270, -90 -> when (currentOrient) {
+            270 -> when (currentOrient) {
                 androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270
                 androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180
                 androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90
@@ -1264,6 +1285,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         onSecurityException: (android.app.PendingIntent) -> Unit,
         onSuccess: () -> Unit = {}
     ) {
+        val normDegrees = ((degrees % 360) + 360) % 360
+        if (normDegrees == 0) {
+            onSuccess()
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             var success = false
             val uri = item.uri
@@ -1302,7 +1328,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
                                 androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
                             )
-                            val newOrient = calculateRotatedOrientation(currentOrient, degrees)
+                            val newOrient = calculateRotatedOrientation(currentOrient, normDegrees)
                             exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, newOrient.toString())
                             exif.saveAttributes()
                             success = true
@@ -1319,7 +1345,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                         androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
                                         androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
                                     )
-                                    val newOrient = calculateRotatedOrientation(currentOrient, degrees)
+                                    val newOrient = calculateRotatedOrientation(currentOrient, normDegrees)
                                     exif.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, newOrient.toString())
                                     exif.saveAttributes()
                                     success = true
@@ -1337,7 +1363,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val exportResult = com.inferno.gallery.ui.editor.engine.ImageExportWorker.exportImage(
                         context = context,
                         sourceUri = uri,
-                        cropState = com.inferno.gallery.ui.editor.model.CropState(rotation = degrees),
+                        cropState = com.inferno.gallery.ui.editor.model.CropState(rotation = normDegrees),
                         tuneValues = com.inferno.gallery.ui.editor.model.TuneValues(),
                         overwrite = true
                     )
@@ -1345,29 +1371,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 if (success) {
-                    val now = System.currentTimeMillis()
+                    val now = System.currentTimeMillis() / 1000
                     val cv = android.content.ContentValues().apply {
-                        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, now / 1000)
+                        put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, now)
                     }
                     try {
                         context.contentResolver.update(uri, cv, null, null)
                     } catch (_: Exception) {}
 
-                    if (item.path.isNotBlank()) {
-                        android.media.MediaScannerConnection.scanFile(context, arrayOf(item.path), null, null)
+                    // Update Room DB dateModified so timeline & paging detect modification
+                    database.mediaDao().updateDateModifiedByUri(uri.toString(), now)
+                    item.id.toLongOrNull()?.let { idLong ->
+                        database.mediaDao().updateDateModifiedById(idLong, now)
                     }
 
-                    // Invalidate grid thumbnail cache entries for this item so grid displays the new rotation
-                    try {
-                        val imageLoader = coil3.SingletonImageLoader.get(context)
-                        for (cols in 1..8) {
-                            val key = com.inferno.gallery.ui.components.thumbnailMemoryKey(
-                                item.id,
-                                com.inferno.gallery.ui.components.thumbnailTargetPx(cols)
-                            )
-                            imageLoader.memoryCache?.remove(coil3.memory.MemoryCache.Key(key))
-                        }
-                    } catch (_: Exception) {}
+                    // Invalidate grid thumbnail cache entries across Coil and notify MediaScanner
+                    com.inferno.gallery.ui.utils.ImageCacheEvictor.evictMedia(context, uri, explicitId = item.id)
 
                     withContext(Dispatchers.Main) {
                         onSuccess()
@@ -2567,6 +2586,42 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 androidx.work.ExistingWorkPolicy.REPLACE,
                 syncRequest
             )
+        }
+    }
+
+    fun notifyMediaItemEdited(savedUri: Uri, isOverwrite: Boolean) {
+        val now = System.currentTimeMillis() / 1000
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. Evict all caches (Coil memory, Coil disk, MediaStore OS thumbnail)
+            com.inferno.gallery.ui.utils.ImageCacheEvictor.evictMedia(getApplication(), savedUri)
+
+            if (isOverwrite) {
+                // 2. Update Room DB dateModified so timeline & paging detect modification
+                database.mediaDao().updateDateModifiedByUri(savedUri.toString(), now)
+
+                // 3. Update current detail view item so DetailScreen re-evaluates its image request
+                withContext(Dispatchers.Main) {
+                    val uriStr = savedUri.toString()
+                    val currentList = _detailMedia.value
+                    if (currentList.isNotEmpty()) {
+                        _detailMedia.value = currentList.map { item ->
+                            if (item.uriString == uriStr || item.uri == savedUri) {
+                                item.copy(dateModified = now)
+                            } else {
+                                item
+                            }
+                        }
+                    }
+                    _initialDetailItem.value?.let { initItem ->
+                        if (initItem.uriString == uriStr || initItem.uri == savedUri) {
+                            _initialDetailItem.value = initItem.copy(dateModified = now)
+                        }
+                    }
+                }
+            }
+
+            // 4. Invalidate and refresh media in background
+            refreshMedia()
         }
     }
 
