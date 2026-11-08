@@ -164,7 +164,7 @@ fun PersonDetailScreen(
     }
 
     val performTrash: () -> Unit = {
-        val uris = selectedMedia.map { Uri.parse(it.uriString) }
+        val uris = selectedMedia.map { com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(Uri.parse(it.uriString)) }
         if (uris.isNotEmpty()) {
             coroutineScope.launch(Dispatchers.IO) {
                 try {

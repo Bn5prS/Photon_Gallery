@@ -160,9 +160,13 @@ class LocalMediaRepository(
                     
                     val volumeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.VOLUME_NAME)
                     val volumeName = if (volumeColumn >= 0) cursor.getString(volumeColumn) else null
+                    val isSecondaryVolume = volumeName != null &&
+                        !volumeName.equals("external_primary", ignoreCase = true) &&
+                        !volumeName.equals("external", ignoreCase = true) &&
+                        !volumeName.equals(MediaStore.VOLUME_INTERNAL, ignoreCase = true)
                     val baseUri = when {
-                        volumeName != null && isVideo -> MediaStore.Video.Media.getContentUri(volumeName)
-                        volumeName != null -> MediaStore.Images.Media.getContentUri(volumeName)
+                        isSecondaryVolume && isVideo -> MediaStore.Video.Media.getContentUri(volumeName!!)
+                        isSecondaryVolume -> MediaStore.Images.Media.getContentUri(volumeName!!)
                         isVideo -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                         else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                     }

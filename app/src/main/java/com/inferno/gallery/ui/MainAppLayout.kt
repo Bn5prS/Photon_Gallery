@@ -1,4 +1,5 @@
 package com.inferno.gallery.ui
+import com.inferno.gallery.data.MediaUriUtils
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.ButtonDefaults
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
@@ -2242,30 +2243,56 @@ fun MainAppLayout(
                             ).show()
                         }
                         val rawSelected = selectedUris.toList()
-                        pendingTrashUris = rawSelected
-                        val uris = rawSelected.map { Uri.parse(it) }
-                        if (uris.isNotEmpty()) {
+                        val parsedUris = rawSelected.map { Uri.parse(it) }
+                        if (parsedUris.isNotEmpty()) {
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
+                                    val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
+                                    if (ghostUris.isNotEmpty()) {
+                                        val ghostStrings = ghostUris.flatMap {
+                                            listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
+                                        }.distinct()
+                                        viewModel.deleteSelectedMediaFromDb(ghostStrings)
+                                    }
+
+                                    if (validUris.isEmpty()) {
+                                        withContext(Dispatchers.Main) {
+                                            viewModel.clearSelection()
+                                            android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                        return@launch
+                                    }
+
+                                    pendingTrashUris = validUris.map { it.toString() }
                                     val intentSender = if (isPermanent) {
                                         android.provider.MediaStore.createDeleteRequest(
                                             context.contentResolver,
-                                            uris
+                                            validUris
                                         ).intentSender
                                     } else {
                                         android.provider.MediaStore.createTrashRequest(
                                             context.contentResolver,
-                                            uris,
+                                            validUris,
                                             true
                                         ).intentSender
                                     }
                                     val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
                                     withContext(Dispatchers.Main) {
-                                        trashLauncher.launch(request)
+                                        if (isPermanent) {
+                                            permanentDeleteLauncher.launch(request)
+                                        } else {
+                                            trashLauncher.launch(request)
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                            viewModel.deleteSelectedMediaFromDb(rawSelected)
+                                            viewModel.clearSelection()
+                                            android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 }
                             }
@@ -2310,14 +2337,30 @@ fun MainAppLayout(
                         onConfirm = {
                             showTrashRestoreConfirmDialog = false
                             val rawSelected = selectedUris.toList()
-                            pendingTrashUris = rawSelected
-                            val uris = rawSelected.map { Uri.parse(it) }
-                            if (uris.isNotEmpty()) {
+                            val parsedUris = rawSelected.map { Uri.parse(it) }
+                            if (parsedUris.isNotEmpty()) {
                                 coroutineScope.launch(Dispatchers.IO) {
                                     try {
+                                        val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
+                                        if (ghostUris.isNotEmpty()) {
+                                            val ghostStrings = ghostUris.flatMap {
+                                                listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
+                                            }.distinct()
+                                            viewModel.deleteSelectedMediaFromDb(ghostStrings)
+                                        }
+
+                                        if (validUris.isEmpty()) {
+                                            withContext(Dispatchers.Main) {
+                                                viewModel.clearSelection()
+                                                android.widget.Toast.makeText(context, "Selected items no longer exist in Trash", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                            return@launch
+                                        }
+
+                                        pendingTrashUris = validUris.map { it.toString() }
                                         val restoreIntent = android.provider.MediaStore.createTrashRequest(
                                             context.contentResolver,
-                                            uris,
+                                            validUris,
                                             false
                                         )
                                         val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
@@ -2343,17 +2386,34 @@ fun MainAppLayout(
                         subtitle = stringResource(R.string.dialog_delete_perm_msg, selectedUris.size),
                         icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
                         confirmText = stringResource(R.string.action_delete),
+                        isDanger = true,
                         onConfirm = {
                             showTrashDeleteConfirmDialog = false
                             val rawSelected = selectedUris.toList()
-                            pendingTrashUris = rawSelected
-                            val uris = rawSelected.map { Uri.parse(it) }
-                            if (uris.isNotEmpty()) {
+                            val parsedUris = rawSelected.map { Uri.parse(it) }
+                            if (parsedUris.isNotEmpty()) {
                                 coroutineScope.launch(Dispatchers.IO) {
                                     try {
+                                        val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
+                                        if (ghostUris.isNotEmpty()) {
+                                            val ghostStrings = ghostUris.flatMap {
+                                                listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
+                                            }.distinct()
+                                            viewModel.deleteSelectedMediaFromDb(ghostStrings)
+                                        }
+
+                                        if (validUris.isEmpty()) {
+                                            withContext(Dispatchers.Main) {
+                                                viewModel.clearSelection()
+                                                android.widget.Toast.makeText(context, "Cleaned up ${ghostUris.size} expired items", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                            return@launch
+                                        }
+
+                                        pendingTrashUris = validUris.map { it.toString() }
                                         val deleteIntent = android.provider.MediaStore.createDeleteRequest(
                                             context.contentResolver,
-                                            uris
+                                            validUris
                                         )
                                         val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
                                         withContext(Dispatchers.Main) {
@@ -2361,7 +2421,13 @@ fun MainAppLayout(
                                         }
                                     } catch (e: Exception) {
                                         withContext(Dispatchers.Main) {
-                                            android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                            if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                                viewModel.deleteSelectedMediaFromDb(rawSelected)
+                                                viewModel.clearSelection()
+                                                android.widget.Toast.makeText(context, "Cleaned up invalid/expired items", android.widget.Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Error deleting: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     }
                                 }
@@ -2496,23 +2562,49 @@ fun MainAppLayout(
 
                             if (isSessionSkipConfirm || !confirmDeleteEnabled) {
                                 val rawSelected = selectedUris.toList()
-                                pendingTrashUris = rawSelected
-                                val uris = rawSelected.map { Uri.parse(it) }
-                                if (uris.isNotEmpty()) {
+                                val parsedUris = rawSelected.map { Uri.parse(it) }
+                                if (parsedUris.isNotEmpty()) {
                                     coroutineScope.launch(Dispatchers.IO) {
                                         try {
+                                            val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
+                                            if (ghostUris.isNotEmpty()) {
+                                                val ghostStrings = ghostUris.flatMap {
+                                                    listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
+                                                }.distinct()
+                                                viewModel.deleteSelectedMediaFromDb(ghostStrings)
+                                            }
+
+                                            if (validUris.isEmpty()) {
+                                                withContext(Dispatchers.Main) {
+                                                    viewModel.clearSelection()
+                                                    android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                                return@launch
+                                            }
+
+                                            pendingTrashUris = validUris.map { it.toString() }
                                             val intentSender = if (isSessionPermanent) {
-                                                android.provider.MediaStore.createDeleteRequest(context.contentResolver, uris).intentSender
+                                                android.provider.MediaStore.createDeleteRequest(context.contentResolver, validUris).intentSender
                                             } else {
-                                                android.provider.MediaStore.createTrashRequest(context.contentResolver, uris, true).intentSender
+                                                android.provider.MediaStore.createTrashRequest(context.contentResolver, validUris, true).intentSender
                                             }
                                             val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
                                             withContext(Dispatchers.Main) {
-                                                trashLauncher.launch(request)
+                                                if (isSessionPermanent) {
+                                                    permanentDeleteLauncher.launch(request)
+                                                } else {
+                                                    trashLauncher.launch(request)
+                                                }
                                             }
                                         } catch (e: Exception) {
                                             withContext(Dispatchers.Main) {
-                                                android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                                    viewModel.deleteSelectedMediaFromDb(rawSelected)
+                                                    viewModel.clearSelection()
+                                                    android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         }
                                     }

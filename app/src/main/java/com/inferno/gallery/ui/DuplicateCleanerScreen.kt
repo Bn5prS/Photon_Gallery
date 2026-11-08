@@ -240,7 +240,7 @@ fun DuplicateCleanerScreen(
 
                             Button(
                                 onClick = {
-                                    val urisToDelete = selectedItemsList.map { it.uri }
+                                    val urisToDelete = selectedItemsList.map { com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(it.uri) }
                                     pendingCleanerTrashUris = urisToDelete.map { it.toString() }
                                     if (urisToDelete.isNotEmpty()) {
                                         coroutineScope.launch(Dispatchers.IO) {

@@ -749,15 +749,16 @@ fun DetailScreen(
                 }
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
+                        val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(item.uri)
                         val intentSender = if (isPermanent) {
                             MediaStore.createDeleteRequest(
                                 context.contentResolver,
-                                listOf(item.uri)
+                                listOf(normUri)
                             ).intentSender
                         } else {
                             MediaStore.createTrashRequest(
                                 context.contentResolver,
-                                listOf(item.uri),
+                                listOf(normUri),
                                 true
                             ).intentSender
                         }
@@ -767,11 +768,16 @@ fun DetailScreen(
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Unable to delete: ${e.message}",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                viewModel.deleteMediaPermanentlyOptimistically(item.uri.toString())
+                                android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Unable to delete: ${e.message}",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
                     }
                 }
@@ -2138,7 +2144,8 @@ fun DetailScreen(
                     pendingDeletePage = pagerState.currentPage
                     coroutineScope.launch(Dispatchers.IO) {
                         try {
-                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
+                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(normUri), false)
                             val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
                             withContext(Dispatchers.Main) {
                                 restoreLauncher.launch(request)
@@ -2161,14 +2168,20 @@ fun DetailScreen(
                     pendingDeletePage = pagerState.currentPage
                     coroutineScope.launch(Dispatchers.IO) {
                         try {
-                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
+                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(normUri))
                             val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
                             withContext(Dispatchers.Main) {
                                 launcher.launch(request)
                             }
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                    viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
+                                    android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     }
@@ -2230,9 +2243,10 @@ fun DetailScreen(
                         } else {
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
+                                    val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
                                     val trashIntent = MediaStore.createTrashRequest(
                                         context.contentResolver,
-                                        listOf(currentItem.uri),
+                                        listOf(normUri),
                                         true
                                     )
                                     val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
@@ -2241,11 +2255,16 @@ fun DetailScreen(
                                     }
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Unable to trash this item: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
+                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                            viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
+                                            android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Unable to trash this item: ${e.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
                                     }
                                 }
                             }

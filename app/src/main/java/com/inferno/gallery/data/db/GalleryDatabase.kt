@@ -98,6 +98,9 @@ interface MediaDao {
     @Query("DELETE FROM core_media WHERE uriString IN (:uris)")
     suspend fun deleteByUris(uris: List<String>)
 
+    @Query("UPDATE core_media SET uriString = REPLACE(uriString, 'content://media/external_primary/', 'content://media/external/') WHERE uriString LIKE 'content://media/external_primary/%'")
+    suspend fun normalizeExternalPrimaryUris(): Int
+
     @Query("SELECT * FROM core_media WHERE uriString IN (:uris)")
     suspend fun getMediaByUrisList(uris: List<String>): List<CoreMediaEntity>
 
@@ -200,6 +203,12 @@ interface MediaDao {
 
     @Query("UPDATE core_media SET fileHash = :hash WHERE id = :id")
     suspend fun updateFileHash(id: Long, hash: String)
+
+    @Query("UPDATE core_media SET dateModified = :dateModified WHERE uriString = :uriString")
+    suspend fun updateDateModifiedByUri(uriString: String, dateModified: Long)
+
+    @Query("UPDATE core_media SET dateModified = :dateModified WHERE id = :id")
+    suspend fun updateDateModifiedById(id: Long, dateModified: Long)
 
     @Query("""
         SELECT COUNT(*) as itemCount, COALESCE(SUM(size), 0) as totalSizeBytes, COALESCE(MAX(dateAdded), 0) as maxDate, 

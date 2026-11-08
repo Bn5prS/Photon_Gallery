@@ -81,6 +81,8 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val isDateFallbackMigrated = prefs.getBoolean("date_fallback_migrated_v1", false)
                 val lastGeneration = if (!isDateFallbackMigrated || forceFullSync) 0L else prefs.getLong("last_generation", 0L)
 
+                database.mediaDao().normalizeExternalPrimaryUris()
+
                 val dbList = database.mediaDao().getAllMedia()
                 val dbMap = dbList.associateBy { it.id }
                 val dbPathToItem = dbList.filter { it.filePath.isNotBlank() }.associateBy { it.filePath }

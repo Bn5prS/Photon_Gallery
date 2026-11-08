@@ -168,9 +168,9 @@ class VaultRepository(
 
                 // Insert back into MediaStore
                 val collection = if (item.isVideo) {
-                    MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                 } else {
-                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                 }
 
                 // Use original relative path if stored, otherwise fall back to bucket
