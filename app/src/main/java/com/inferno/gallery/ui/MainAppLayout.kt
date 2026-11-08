@@ -691,39 +691,9 @@ fun MainAppLayout(
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier
-                                        .padding(start = 16.dp)
+                                        .padding(start = 16.dp, end = 16.dp)
                                         .weight(1f)
                                 )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(end = 6.dp)
-                                ) {
-                                    PhotonHeaderIconButton(
-                                        onClick = { showDisplaySortSheet = true }
-                                    ) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
-                                            contentDescription = stringResource(R.string.menu_view_mode) + " & " + stringResource(R.string.menu_sort_order),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    PhotonHeaderIconButton(
-                                        onClick = {
-                                            nestedNavController.navigate("settings") {
-                                                popUpTo("photos") { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_settings),
-                                            contentDescription = stringResource(R.string.settings_title),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
                             }
                         }
                     } else if (currentRoute == "settings") {
@@ -818,20 +788,22 @@ fun MainAppLayout(
                                             )
                                         }
                                     }
-                                    PhotonHeaderIconButton(
-                                        onClick = {
-                                            nestedNavController.navigate("settings") {
-                                                popUpTo("photos") { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
+                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == null) {
+                                        PhotonHeaderIconButton(
+                                            onClick = {
+                                                nestedNavController.navigate("settings") {
+                                                    popUpTo("photos") { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
                                             }
+                                        ) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_settings),
+                                                contentDescription = stringResource(R.string.settings_title),
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_settings),
-                                            contentDescription = stringResource(R.string.settings_title),
-                                            modifier = Modifier.size(20.dp)
-                                        )
                                     }
                                 }
                             }
@@ -2244,26 +2216,50 @@ fun MainAppLayout(
             }
 
             if (showMultiDeleteConfirmDialog) {
+                var dialogSkipConfirm by remember { mutableStateOf(viewModel.sessionSkipDeleteConfirmation) }
+                var dialogSkipRecycleBin by remember { mutableStateOf(viewModel.sessionSkipRecycleBin) }
+                val isPermanent = dialogSkipRecycleBin
+
                 com.inferno.gallery.ui.components.PhotonDialog(
                     onDismissRequest = { showMultiDeleteConfirmDialog = false },
-                    title = stringResource(R.string.dialog_move_to_trash_title),
-                    subtitle = stringResource(R.string.dialog_multi_trash_msg, selectedUris.size),
+                    title = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_title),
+                    subtitle = if (isPermanent) {
+                        stringResource(R.string.dialog_delete_perm_msg, selectedUris.size)
+                    } else {
+                        stringResource(R.string.dialog_multi_trash_msg, selectedUris.size)
+                    },
                     icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                    confirmText = stringResource(R.string.dialog_move_to_trash_confirm),
+                    confirmText = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_confirm),
+                    isDanger = isPermanent,
                     onConfirm = {
                         showMultiDeleteConfirmDialog = false
+                        viewModel.setTrashSessionOptions(dialogSkipConfirm, dialogSkipRecycleBin)
+                        if (dialogSkipConfirm) {
+                            android.widget.Toast.makeText(
+                                context,
+                                if (dialogSkipRecycleBin) "Direct permanent deletion active for this session" else "Quick trash active for this session",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                         val rawSelected = selectedUris.toList()
                         pendingTrashUris = rawSelected
                         val uris = rawSelected.map { Uri.parse(it) }
                         if (uris.isNotEmpty()) {
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
-                                    val trashIntent = android.provider.MediaStore.createTrashRequest(
-                                        context.contentResolver,
-                                        uris,
-                                        true
-                                    )
-                                    val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                    val intentSender = if (isPermanent) {
+                                        android.provider.MediaStore.createDeleteRequest(
+                                            context.contentResolver,
+                                            uris
+                                        ).intentSender
+                                    } else {
+                                        android.provider.MediaStore.createTrashRequest(
+                                            context.contentResolver,
+                                            uris,
+                                            true
+                                        ).intentSender
+                                    }
+                                    val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
                                     withContext(Dispatchers.Main) {
                                         trashLauncher.launch(request)
                                     }
@@ -2277,11 +2273,27 @@ fun MainAppLayout(
                     },
                     dismissText = stringResource(R.string.action_cancel),
                     content = {
-                        Text(
-                            text = stringResource(R.string.dialog_move_to_trash_msg),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = if (isPermanent) {
+                                    "Selected items will be permanently removed from your device. This cannot be undone."
+                                } else {
+                                    stringResource(R.string.dialog_move_to_trash_msg)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            com.inferno.gallery.ui.components.TrashSessionOptions(
+                                skipConfirm = dialogSkipConfirm,
+                                onSkipConfirmChange = { dialogSkipConfirm = it },
+                                skipRecycleBin = dialogSkipRecycleBin,
+                                onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
+                            )
+                        }
                     }
                 )
             }
@@ -2479,17 +2491,22 @@ fun MainAppLayout(
 
                         // Delete
                         IconButton(onClick = {
-                            if (confirmDeleteEnabled) {
-                                showMultiDeleteConfirmDialog = true
-                            } else {
+                            val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
+                            val isSessionPermanent = viewModel.sessionSkipRecycleBin
+
+                            if (isSessionSkipConfirm || !confirmDeleteEnabled) {
                                 val rawSelected = selectedUris.toList()
                                 pendingTrashUris = rawSelected
                                 val uris = rawSelected.map { Uri.parse(it) }
                                 if (uris.isNotEmpty()) {
                                     coroutineScope.launch(Dispatchers.IO) {
                                         try {
-                                            val trashIntent = android.provider.MediaStore.createTrashRequest(context.contentResolver, uris, true)
-                                            val request = androidx.activity.result.IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                            val intentSender = if (isSessionPermanent) {
+                                                android.provider.MediaStore.createDeleteRequest(context.contentResolver, uris).intentSender
+                                            } else {
+                                                android.provider.MediaStore.createTrashRequest(context.contentResolver, uris, true).intentSender
+                                            }
+                                            val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
                                             withContext(Dispatchers.Main) {
                                                 trashLauncher.launch(request)
                                             }
@@ -2500,6 +2517,8 @@ fun MainAppLayout(
                                         }
                                     }
                                 }
+                            } else {
+                                showMultiDeleteConfirmDialog = true
                             }
                         }) {
                             Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error, modifier = Modifier.size(IconSizeTokens.L))
