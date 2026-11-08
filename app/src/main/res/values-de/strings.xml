@@ -527,6 +527,8 @@ Neue Gesichter können erst nach erneutem Download erkannt werden. Vorhandene Pe
     <string name="preset_high_pop">Hoher Pop</string>
     <string name="setting_auto_index_images">Neue Bilder automatisch indexieren</string>
     <string name="setting_auto_index_images_sub">Neue Fotos automatisch mit KI im Hintergrund indexieren</string>
+    <string name="setting_auto_index_ocr">OCR-Text automatisch indexieren</string>
+    <string name="setting_auto_index_ocr_sub">Text aus neuen Fotos automatisch im Hintergrund extrahieren und indexieren</string>
     <string name="setting_auto_index_faces">Neue Gesichter automatisch erkennen</string>
     <string name="setting_auto_index_faces_sub">Gesichter beim Eingang neuer Fotos automatisch erkennen und gruppieren</string>
     <string name="people_filter_all">Alle (%1$d)</string>

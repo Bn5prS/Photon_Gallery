@@ -3120,7 +3120,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun startOcrIndexing() {
         viewModelScope.launch {
-            settingsRepository.updateOcrIndexingEnabled(true)
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
@@ -3130,14 +3129,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun stopOcrIndexing() {
         viewModelScope.launch {
-            settingsRepository.updateOcrIndexingEnabled(false)
             WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
         }
     }
 
     fun clearOcrIndexAndReindex() {
         viewModelScope.launch(Dispatchers.IO) {
-            settingsRepository.updateOcrIndexingEnabled(true)
             WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
             database.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")
             val allIds = database.mediaDao().getAllMediaIds()

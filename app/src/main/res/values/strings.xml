@@ -550,6 +550,8 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="preset_high_pop">High pop</string>
     <string name="setting_auto_index_images">Auto Index New Images</string>
     <string name="setting_auto_index_images_sub">Automatically index new photos with AI in the background</string>
+    <string name="setting_auto_index_ocr">Auto-Index OCR Text</string>
+    <string name="setting_auto_index_ocr_sub">Extract and index text from new photos in the background</string>
     <string name="setting_auto_index_faces">Auto-Index New Faces</string>
     <string name="setting_auto_index_faces_sub">Automatically detect and cluster faces when new photos arrive</string>
     <string name="people_filter_all">All (%1$d)</string>

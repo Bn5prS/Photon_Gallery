@@ -527,6 +527,8 @@ Você não poderá detectar novos rostos até baixá-lo novamente. As pessoas e 
     <string name="preset_high_pop">Alto contraste</string>
     <string name="setting_auto_index_images">Indexar novas imagens automaticamente</string>
     <string name="setting_auto_index_images_sub">Indexar novas fotos com IA em segundo plano automaticamente</string>
+    <string name="setting_auto_index_ocr">Indexar texto OCR automaticamente</string>
+    <string name="setting_auto_index_ocr_sub">Extrair e indexar texto de novas fotos em segundo plano</string>
     <string name="setting_auto_index_faces">Detectar novos rostos automaticamente</string>
     <string name="setting_auto_index_faces_sub">Detectar e agrupar rostros automaticamente ao receber novas fotos</string>
     <string name="people_filter_all">Todos (%1$d)</string>

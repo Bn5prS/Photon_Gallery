@@ -435,10 +435,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
 
     fun setOcrIndexingEnabled(enabled: Boolean) {
-        if (enabled) {
-            startOcrIndexing()
-        } else {
-            stopOcrIndexing()
+        viewModelScope.launch {
+            repository.updateOcrIndexingEnabled(enabled)
+            if (enabled) {
+                val hasUnindexed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    db.mediaDao().getUnindexedImageCount() > 0
+                }
+                if (hasUnindexed) {
+                    startOcrIndexing()
+                }
+            }
         }
     }
 
@@ -448,7 +454,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun startOcrIndexing() {
         viewModelScope.launch {
-            repository.updateOcrIndexingEnabled(true)
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
@@ -458,14 +463,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun stopOcrIndexing() {
         viewModelScope.launch {
-            repository.updateOcrIndexingEnabled(false)
             WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
         }
     }
 
     fun rebuildOcrIndex() {
         viewModelScope.launch {
-            repository.updateOcrIndexingEnabled(true)
             db.mediaDao().resetOcrIndexStatus()
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 db.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")

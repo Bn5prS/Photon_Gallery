@@ -26,6 +26,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -184,6 +186,7 @@ fun SettingsScreen(
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
     val ocrProgressState by viewModel.ocrProgress.collectAsState()
+    val ocrIndexingEnabled by viewModel.ocrIndexingEnabled.collectAsState()
     val clipProgressState by viewModel.clipProgress.collectAsState()
     val modelDownloadWorkInfo by viewModel.modelDownloadWorkInfo.collectAsState(initial = null)
     val totalImagesCount by viewModel.totalImagesCount.collectAsState()
@@ -1610,153 +1613,205 @@ fun SettingsScreen(
                                 }
                             }
 
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_ocr_search),
-                                items = listOf(
-                                    {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            // ── Text (OCR) Indexing Group Card ──
+                            val ocrItems = mutableListOf<@Composable () -> Unit>()
+
+                            ocrItems.add {
+                                SwitchSettingItem(
+                                    title = stringResource(R.string.setting_auto_index_ocr),
+                                    subtitle = stringResource(R.string.setting_auto_index_ocr_sub),
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                    checked = ocrIndexingEnabled,
+                                    onCheckedChange = { viewModel.setOcrIndexingEnabled(it) }
+                                )
+                            }
+
+                            ocrItems.add {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(40.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
+                                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                                 Icon(
                                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
                                                     contentDescription = null,
                                                     tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(24.dp)
+                                                    modifier = Modifier.size(20.dp)
                                                 )
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Text(
-                                                    text = "Text (OCR) Indexing",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    modifier = Modifier.weight(1f)
-                                                )
-
-                                                val badgeColor = if (isOcrRunning) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                                val badgeTextColor = if (isOcrRunning) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                val badgeText = if (isOcrRunning) "Indexing" else "Idle"
-
-                                                Surface(
-                                                    color = badgeColor,
-                                                    contentColor = badgeTextColor,
-                                                    shape = MaterialTheme.shapes.extraSmall,
-                                                    modifier = Modifier.padding(start = 8.dp)
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                    ) {
-                                                        if (isOcrRunning) {
-                                                            CircularProgressIndicator(
-                                                                modifier = Modifier.size(12.dp),
-                                                                strokeWidth = 2.dp,
-                                                                color = badgeTextColor
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = badgeText,
-                                                            style = MaterialTheme.typography.labelSmall
-                                                        )
-                                                    }
-                                                }
                                             }
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = "Text (OCR) Indexing",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            modifier = Modifier.weight(1f)
+                                        )
 
-                                            Text(
-                                                text = "Index text in images entirely on-device for instant search.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                        val badgeColor = if (isOcrRunning) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        val badgeTextColor = if (isOcrRunning) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                        val badgeText = if (isOcrRunning) "Indexing" else if (ocrTotal > 0 && ocrIndexed == ocrTotal) "Indexed" else "Idle"
 
-                                            if (ocrTotal > 0) {
-                                                val progressFloat = (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f)
-                                                Column(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .height(10.dp)
-                                                            .background(
-                                                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                                                shape = CircleShape
-                                                            )
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth(progressFloat)
-                                                                .fillMaxHeight()
-                                                                .background(
-                                                                    color = MaterialTheme.colorScheme.primary,
-                                                                    shape = CircleShape
-                                                                )
-                                                        )
-                                                    }
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        val currentImageName = ocrProgressState.currentImageName
-                                                        Text(
-                                                            text = if (isOcrRunning && !currentImageName.isNullOrBlank()) "Scanning: $currentImageName"
-                                                            else if (ocrIndexed == ocrTotal) "Indexing complete"
-                                                            else "Progress",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.weight(1f),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        Text(
-                                                            text = if (ocrIndexed == ocrTotal && ocrTotal > 0) "100%" else "$ocrIndexed / $ocrTotal images (${(progressFloat * 100).toInt()}%)",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
+                                        Surface(
+                                            color = badgeColor,
+                                            contentColor = badgeTextColor,
+                                            shape = ShapeFull,
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                if (isOcrRunning) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(12.dp),
+                                                        strokeWidth = 2.dp,
+                                                        color = badgeTextColor
+                                                    )
                                                 }
+                                                Text(
+                                                    text = badgeText,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Index text inside photos, screenshots, documents, and receipts entirely on-device for instant search.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    // Chips
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        ModelSpecChip(text = "Google ML Kit", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
+                                        ModelSpecChip(text = "On-Device Latin")
+                                        ModelSpecChip(text = "100% Offline")
+                                        ModelSpecChip(text = "Zero Cloud Sync")
+                                    }
+
+                                    // Links
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        ModelLinkChip(
+                                            label = "Model Source: Google ML Kit",
+                                            url = "https://developers.google.com/ml-kit/vision/text-recognition/android",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                        )
+                                        ModelLinkChip(
+                                            label = "Runtime: Play Services",
+                                            url = "https://developers.google.com/android/guides/setup",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                        )
+                                    }
+
+                                    if (ocrTotal > 0) {
+                                        val progressFloat = (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f)
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(10.dp)
+                                                    .background(
+                                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                                        shape = CircleShape
+                                                    )
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(progressFloat)
+                                                        .fillMaxHeight()
+                                                        .background(
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            shape = CircleShape
+                                                        )
+                                                )
                                             }
 
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                if (isOcrRunning) {
-                                                    ExpressiveButton(
-                                                        onClick = { viewModel.stopOcrIndexing() },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                        ),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_stop_indexing))
-                                                    }
-                                                } else {
-                                                    FilledTonalButton(
-                                                        onClick = { viewModel.startOcrIndexing() },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_start_indexing))
-                                                    }
-                                                    OutlinedButton(
-                                                        onClick = { showRebuildOcrConfirm = true },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_rebuild_index))
-                                                    }
-                                                }
+                                                val currentImageName = ocrProgressState.currentImageName
+                                                Text(
+                                                    text = if (isOcrRunning && !currentImageName.isNullOrBlank()) "Scanning: $currentImageName"
+                                                    else if (ocrIndexed == ocrTotal) "Indexing complete"
+                                                    else "Progress",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = if (ocrIndexed == ocrTotal && ocrTotal > 0) "100%" else "$ocrIndexed / $ocrTotal images (${(progressFloat * 100).toInt()}%)",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
                                             }
                                         }
                                     }
-                                )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (isOcrRunning) {
+                                            ExpressiveButton(
+                                                onClick = { viewModel.stopOcrIndexing() },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                ),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(R.string.btn_stop_indexing))
+                                            }
+                                        } else {
+                                            FilledTonalButton(
+                                                onClick = { viewModel.startOcrIndexing() },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(R.string.btn_start_indexing))
+                                            }
+                                            OutlinedButton(
+                                                onClick = { showRebuildOcrConfirm = true },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(R.string.btn_rebuild_index))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_ocr_search),
+                                items = ocrItems
                             )
 
                             val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING || modelDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
@@ -1821,27 +1876,34 @@ fun SettingsScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
 
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(ShapeSmall)
-                                                .clickable {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    uriHandler.openUri("https://huggingface.co/Xenova/clip-vit-base-patch16")
-                                                }
-                                                .padding(vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        // Chips
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(IconSizeTokens.S)
+                                            ModelSpecChip(text = "OpenAI CLIP ViT-B/16", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
+                                            ModelSpecChip(text = "ONNX INT8 Quantized")
+                                            ModelSpecChip(text = "512-D Vectors")
+                                            ModelSpecChip(text = "~150 MB")
+                                            ModelSpecChip(text = "CPU Optimized")
+                                        }
+
+                                        // Links
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            ModelLinkChip(
+                                                label = "Model Source: Hugging Face",
+                                                url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
                                             )
-                                            Text(
-                                                text = "Model source: Hugging Face (OpenAI CLIP ViT-B/16)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = MaterialTheme.colorScheme.primary
+                                            ModelLinkChip(
+                                                label = "Model Hosted: GitHub Releases",
+                                                url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
                                             )
                                         }
 
@@ -1907,7 +1969,7 @@ fun SettingsScreen(
 
                                             val badgeColor = if (isClipIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
                                             val badgeTextColor = if (isClipIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                            val badgeText = if (isClipIndexing) "Indexing" else "Ready"
+                                            val badgeText = if (isClipIndexing) "Indexing" else if (displayClipTotal > 0 && displayClipIndexed == displayClipTotal) "Indexed" else "Ready"
 
                                             Surface(
                                                 color = badgeColor,
@@ -1932,6 +1994,37 @@ fun SettingsScreen(
                                                     )
                                                 }
                                             }
+                                        }
+
+                                        // Chips
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            ModelSpecChip(text = "OpenAI CLIP ViT-B/16", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
+                                            ModelSpecChip(text = "ONNX INT8 Quantized")
+                                            ModelSpecChip(text = "512-D Vectors")
+                                            ModelSpecChip(text = "~150 MB")
+                                            ModelSpecChip(text = "100% Offline")
+                                        }
+
+                                        // Links
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            ModelLinkChip(
+                                                label = "Model Source: Hugging Face",
+                                                url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                            )
+                                            ModelLinkChip(
+                                                label = "Model Hosted: GitHub Releases",
+                                                url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                            )
                                         }
 
                                         if (displayClipTotal > 0) {
@@ -2013,30 +2106,6 @@ fun SettingsScreen(
                                                     Text(stringResource(R.string.btn_clear_index))
                                                 }
                                             }
-                                        }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(ShapeSmall)
-                                                .clickable {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    uriHandler.openUri("https://huggingface.co/Xenova/clip-vit-base-patch16")
-                                                }
-                                                .padding(vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(IconSizeTokens.S)
-                                            )
-                                            Text(
-                                                text = "Model source: Hugging Face (OpenAI CLIP ViT-B/16)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
                                         }
 
                                         if (!isClipIndexing) {
@@ -2133,27 +2202,34 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
 
-                                            Row(
-                                                modifier = Modifier
-                                                    .clip(ShapeSmall)
-                                                    .clickable {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        uriHandler.openUri("https://huggingface.co/deepghs/insightface")
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            // Chips
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(IconSizeTokens.S)
+                                                ModelSpecChip(text = "MobileFaceNet", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
+                                                ModelSpecChip(text = "InsightFace (w600k)")
+                                                ModelSpecChip(text = "512-D Face Embeddings")
+                                                ModelSpecChip(text = "13.6 MB")
+                                                ModelSpecChip(text = "ArcFace / Cosine")
+                                            }
+
+                                            // Links
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                ModelLinkChip(
+                                                    label = "Model Source: Hugging Face",
+                                                    url = "https://huggingface.co/deepghs/insightface",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
                                                 )
-                                                Text(
-                                                    text = "Model source: Hugging Face (MobileFaceNet)",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.primary
+                                                ModelLinkChip(
+                                                    label = "Model Hosted: GitHub Releases",
+                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
                                                 )
                                             }
 
@@ -2244,6 +2320,37 @@ fun SettingsScreen(
                                                         )
                                                     }
                                                 }
+                                            }
+
+                                            // Chips
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                ModelSpecChip(text = "MobileFaceNet", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
+                                                ModelSpecChip(text = "InsightFace (w600k)")
+                                                ModelSpecChip(text = "512-D Face Embeddings")
+                                                ModelSpecChip(text = "13.6 MB")
+                                                ModelSpecChip(text = "100% Offline")
+                                            }
+
+                                            // Links
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                ModelLinkChip(
+                                                    label = "Model Source: Hugging Face",
+                                                    url = "https://huggingface.co/deepghs/insightface",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                                )
+                                                ModelLinkChip(
+                                                    label = "Model Hosted: GitHub Releases",
+                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                                )
                                             }
 
                                             if (isFaceIndexing || (faceTotal > 0 && faceProcessed < faceTotal)) {
@@ -2351,30 +2458,6 @@ fun SettingsScreen(
                                                         Text(stringResource(R.string.btn_clear_faces))
                                                     }
                                                 }
-                                            }
-
-                                            Row(
-                                                modifier = Modifier
-                                                    .clip(ShapeSmall)
-                                                    .clickable {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        uriHandler.openUri("https://huggingface.co/deepghs/insightface")
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(IconSizeTokens.S)
-                                                )
-                                                Text(
-                                                    text = "Model source: Hugging Face (MobileFaceNet)",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
                                             }
 
                                             if (!isFaceIndexing) {
@@ -2610,6 +2693,104 @@ private data class CategoryItem(
     val iconColor: Color,
     val section: String
 )
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelSpecChip(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
+    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    Surface(
+        modifier = modifier,
+        color = containerColor,
+        contentColor = contentColor,
+        shape = ShapeFull,
+        border = BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(11.dp),
+                    tint = contentColor
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelLinkChip(
+    label: String,
+    url: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new)
+) {
+    val uriHandler = LocalUriHandler.current
+    val haptic = LocalHapticFeedback.current
+    Surface(
+        modifier = modifier
+            .clip(ShapeSmall)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                uriHandler.openUri(url)
+            },
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+        contentColor = MaterialTheme.colorScheme.primary,
+        shape = ShapeSmall,
+        border = BorderStroke(
+            width = 0.75.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(13.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier.size(11.dp)
+            )
+        }
+    }
+}
 
 /**
  * Container for a group of settings items rendered in the connected segmented card style:

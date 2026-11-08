@@ -527,6 +527,8 @@ Vous ne pourrez plus détecter de nouveaux visages sans le retélécharger. Les 
     <string name="preset_high_pop">Contraste élevé</string>
     <string name="setting_auto_index_images">Indexation automatique des nouvelles images</string>
     <string name="setting_auto_index_images_sub">Indexation IA automatique des nouvelles photos en arrière-plan</string>
+    <string name="setting_auto_index_ocr">Indexation automatique du texte OCR</string>
+    <string name="setting_auto_index_ocr_sub">Extraire et indexer automatiquement le texte des nouvelles photos en arrière-plan</string>
     <string name="setting_auto_index_faces">Détection automatique des nouveaux visages</string>
     <string name="setting_auto_index_faces_sub">Détecter et regrouper automatiquement les visages lors de nouvelles photos</string>
     <string name="people_filter_all">Tous (%1$d)</string>

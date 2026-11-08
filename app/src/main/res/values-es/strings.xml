@@ -527,6 +527,8 @@ No podrás escanear nuevos rostros hasta descargarlo de nuevo. Las personas y et
     <string name="preset_high_pop">Alto contraste</string>
     <string name="setting_auto_index_images">Indexar automáticamente nuevas imágenes</string>
     <string name="setting_auto_index_images_sub">Indexar automáticamente nuevas fotos con IA en segundo plano</string>
+    <string name="setting_auto_index_ocr">Indexar texto OCR automáticamente</string>
+    <string name="setting_auto_index_ocr_sub">Extraer e indexar texto de nuevas fotos en segundo plano</string>
     <string name="setting_auto_index_faces">Detectar nuevos rostros automáticamente</string>
     <string name="setting_auto_index_faces_sub">Detectar y agrupar rostros automáticamente cuando lleguen nuevas fotos</string>
     <string name="people_filter_all">Todos (%1$d)</string>
