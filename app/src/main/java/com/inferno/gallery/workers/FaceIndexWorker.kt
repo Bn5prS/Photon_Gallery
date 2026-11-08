@@ -135,6 +135,7 @@ class FaceIndexWorker(
 
         // 3. Initialize detector using FaceScanHelper options (0.02f minFaceSize)
         val detector = FaceDetection.getClient(FaceScanHelper.createDetectorOptions())
+        val pacer = com.inferno.gallery.workers.utils.ScanThermalPacer(context, "FaceIndex")
 
         try {
             for (batch in unindexedIds.chunked(BATCH_SIZE)) {
@@ -161,6 +162,8 @@ class FaceIndexWorker(
                     if (savedFaceCount > 0) {
                         Log.i(TAG, "Indexed media ${media.id}: found $savedFaceCount faces")
                     }
+
+                    pacer.recordItemAndThrottle { isStopped }
 
                     processedCount++
                     val currentProgress = alreadyIndexed + processedCount
