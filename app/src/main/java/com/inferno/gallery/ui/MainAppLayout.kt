@@ -429,8 +429,8 @@ fun MainAppLayout(
         return
     }
 
-    val isRootTab = currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "search"
-    val isCollapsibleTopBarActive = isRootTab && !isSelectionMode
+    val isHomeScreen = currentRoute == "photos" || currentRoute == null
+    val isCollapsibleTopBarActive = isHomeScreen && !isSelectionMode
 
     var topBarOffsetY by remember { mutableFloatStateOf(0f) }
     var topBarHeightPx by remember { mutableFloatStateOf(0f) }
