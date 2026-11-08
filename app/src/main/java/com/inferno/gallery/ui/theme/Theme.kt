@@ -15,6 +15,7 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
+import kotlinx.coroutines.delay
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PhotonGalleryTheme — Flagship M3 Expressive Theme Engine for Photon Gallery
@@ -85,7 +87,7 @@ fun PhotonGalleryTheme(
         val baseScheme = dynamicColorScheme(
             seedColor = effectiveSeed,
             isDark = darkTheme,
-            isAmoled = useAmoledBlack && darkTheme,
+            isAmoled = false,
             style = resolvedStyle,
         )
 
@@ -94,12 +96,12 @@ fun PhotonGalleryTheme(
                 background = Color.Black,
                 surface = Color.Black,
                 surfaceDim = Color.Black,
-                surfaceBright = Color(0xFF2C2C2C),
+                surfaceBright = baseScheme.surfaceBright,
                 surfaceContainerLowest = Color.Black,
-                surfaceContainerLow = Color(0xFF141414),
-                surfaceContainer = Color(0xFF1E1E1E),
-                surfaceContainerHigh = Color(0xFF282828),
-                surfaceContainerHighest = Color(0xFF333333),
+                surfaceContainerLow = baseScheme.surfaceContainerLow,
+                surfaceContainer = baseScheme.surfaceContainer,
+                surfaceContainerHigh = baseScheme.surfaceContainerHigh,
+                surfaceContainerHighest = baseScheme.surfaceContainerHighest,
                 surfaceVariant = baseScheme.surfaceVariant,
             )
         } else {
@@ -109,24 +111,27 @@ fun PhotonGalleryTheme(
         }
     }
 
-    // Track darkTheme and colorPresetName to run animated scheme transitions when flipping between Light <-> Dark mode or switching palettes.
+    // Track theme mode and palette switches to run animated scheme transitions without thrashing
     var previousDarkTheme by remember { mutableStateOf(darkTheme) }
     var previousColorPreset by remember { mutableStateOf(colorPresetName) }
     var previousDynamicColor by remember { mutableStateOf(dynamicColor) }
-    var shouldAnimateTheme by remember { mutableStateOf(false) }
+    var isThemeAnimating by remember { mutableStateOf(false) }
 
-    if (darkTheme != previousDarkTheme || colorPresetName != previousColorPreset || dynamicColor != previousDynamicColor) {
-        previousDarkTheme = darkTheme
-        previousColorPreset = colorPresetName
-        previousDynamicColor = dynamicColor
-        shouldAnimateTheme = true
+    LaunchedEffect(darkTheme, colorPresetName, dynamicColor) {
+        if (darkTheme != previousDarkTheme || colorPresetName != previousColorPreset || dynamicColor != previousDynamicColor) {
+            previousDarkTheme = darkTheme
+            previousColorPreset = colorPresetName
+            previousDynamicColor = dynamicColor
+            if (animateTransitions) {
+                isThemeAnimating = true
+                delay(180)
+                isThemeAnimating = false
+            }
+        }
     }
 
-    val resolvedScheme = if (animateTransitions && shouldAnimateTheme) {
-        animateColorScheme(
-            target = targetColorScheme,
-            onFinished = { shouldAnimateTheme = false }
-        )
+    val resolvedScheme = if (animateTransitions && isThemeAnimating) {
+        animateColorScheme(target = targetColorScheme)
     } else {
         targetColorScheme
     }
@@ -185,14 +190,8 @@ fun PhotonGalleryTheme(
 private fun animateColorScheme(
     target: ColorScheme,
     animationSpec: AnimationSpec<Color> = tween(durationMillis = 150, easing = FastOutSlowInEasing),
-    onFinished: () -> Unit = {},
 ): ColorScheme {
-    val bg = animateColorAsState(
-        target.background,
-        animationSpec,
-        label = "bg",
-        finishedListener = { onFinished() }
-    ).value
+    val bg = animateColorAsState(target.background, animationSpec, label = "bg").value
     val surface = animateColorAsState(target.surface, animationSpec, label = "surface").value
     val surfaceDim = animateColorAsState(target.surfaceDim, animationSpec, label = "surfaceDim").value
     val surfaceLow = animateColorAsState(target.surfaceContainerLow, animationSpec, label = "surfaceLow").value

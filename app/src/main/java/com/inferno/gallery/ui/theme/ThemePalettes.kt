@@ -37,10 +37,9 @@ data class PresetThemePalette(
                 background = Color.Black,
                 surface = Color.Black,
                 surfaceDim = Color.Black,
-                surfaceBright = Color(0xFF2C2C2C),
+                surfaceBright = baseScheme.surfaceBright,
                 surfaceContainerLowest = Color.Black,
-                surfaceContainerLow = Color.Black,
-                // Retain distinct dark tones for card surfaces (e.g. tone 10-14) so cards remain clearly visible
+                surfaceContainerLow = baseScheme.surfaceContainerLow,
                 surfaceContainer = baseScheme.surfaceContainer,
                 surfaceContainerHigh = baseScheme.surfaceContainerHigh,
                 surfaceContainerHighest = baseScheme.surfaceContainerHighest,

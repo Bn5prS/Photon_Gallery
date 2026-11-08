@@ -174,7 +174,7 @@ fun PhotonPaletteGrid(
                 val previewScheme = rememberDynamicColorScheme(
                     seedColor = effectiveSeed,
                     isDark = isDark,
-                    isAmoled = isAmoled,
+                    isAmoled = false,
                     style = style
                 )
                 val previewColors = listOf(
@@ -213,7 +213,7 @@ fun PhotonPaletteGrid(
                         val previewScheme = rememberDynamicColorScheme(
                             seedColor = effectiveSeed,
                             isDark = isDark,
-                            isAmoled = isAmoled,
+                            isAmoled = false,
                             style = style
                         )
                         val previewColors = listOf(

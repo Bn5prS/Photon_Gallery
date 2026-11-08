@@ -49,7 +49,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val days = repository.autoCleanTrashDaysFlow.first()
             setupAutoCleanTrashWorker(autoClean, days)
             // Pre-warm theme preferences so UI doesn't experience cold-start theme flips
-            repository.useAmoledBlackFlow.first()
+            _useAmoledBlack.value = repository.useAmoledBlackFlow.first()
             repository.themeModeFlow.first()
             repository.useMaterialYouFlow.first()
             repository.colorPresetNameFlow.first()
@@ -57,6 +57,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             repository.motionStyleFlow.first()
             repository.dateHeaderAlignmentFlow.first()
             _isLoading.value = false
+        }
+
+        viewModelScope.launch {
+            repository.useAmoledBlackFlow.collect {
+                _useAmoledBlack.value = it
+            }
         }
 
         viewModelScope.launch {
@@ -199,13 +205,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val useAmoledBlack: StateFlow<Boolean> = repository.useAmoledBlackFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = false
-    )
+    private val _useAmoledBlack = MutableStateFlow(false)
+    val useAmoledBlack: StateFlow<Boolean> = _useAmoledBlack.asStateFlow()
 
     fun setUseAmoledBlack(use: Boolean) {
+        _useAmoledBlack.value = use
         viewModelScope.launch {
             repository.updateUseAmoledBlack(use)
         }

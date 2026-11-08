@@ -184,12 +184,12 @@ val DefaultAmoledColorScheme = DefaultDarkColorScheme.copy(
     background = Color.Black,
     surface = Color.Black,
     surfaceDim = Color.Black,
-    surfaceBright = Color(0xFF2C2C2C),
+    surfaceBright = md_theme_dark_surfaceContainerHigh,
     surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color.Black,
-    surfaceContainer = Color(0xFF141414),
-    surfaceContainerHigh = Color(0xFF1E1E1E),
-    surfaceContainerHighest = Color(0xFF282828),
-    surfaceVariant = Color(0xFF1F1F1F),
+    surfaceContainerLow = md_theme_dark_surfaceContainerLow,
+    surfaceContainer = md_theme_dark_surfaceContainer,
+    surfaceContainerHigh = md_theme_dark_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_dark_surfaceContainerHighest,
+    surfaceVariant = md_theme_dark_surfaceVariant,
 )
 
