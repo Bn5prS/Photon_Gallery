@@ -51,7 +51,7 @@
   )
   ```
 
-- [ ] **Step 1: Write `PhotonDialog.kt`**
+- [x] **Step 1: Write `PhotonDialog.kt`**
   - Implement `BasicAlertDialog` with `DialogProperties(usePlatformDefaultWidth = false)`.
   - Set container width `fillMaxWidth(0.92f).widthIn(max = 420.dp)`.
   - Surface with `shape = RoundedCornerShape(24.dp)` (`ShapeExtraLarge`), color `surfaceContainer`, border `1.dp` with `outlineVariant.copy(alpha = 0.15f)`.
@@ -61,11 +61,11 @@
   - Cancel button: tonal pill (`surfaceContainerHighest`, `onSurface`).
   - Confirm button: wallpaper accent filled pill (`primary`, `onPrimary`, disabled alpha 0.4f).
 
-- [ ] **Step 2: Verify `PhotonDialog.kt` compiles**
+- [x] **Step 2: Verify `PhotonDialog.kt` compiles**
   - Run: `./gradlew compileDebugKotlin`
   - Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - Run: `git add app/src/main/java/com/inferno/gallery/ui/components/PhotonDialog.kt ; git commit -m "feat(ui): add reusable sleek tonal PhotonDialog component"`
 
 ---
@@ -78,7 +78,7 @@
 **Interfaces:**
 - Consumes: `com.inferno.gallery.ui.components.PhotonDialog`
 
-- [ ] **Step 1: Replace Move to Trash dialog in `DetailScreen.kt`**
+- [x] **Step 1: Replace Move to Trash dialog in `DetailScreen.kt`**
   - Replace lines 728-771 with `PhotonDialog`.
   - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_delete)`.
   - Title: `stringResource(R.string.dialog_move_to_trash_title)`.
@@ -87,7 +87,7 @@
   - Confirm text: `stringResource(R.string.dialog_move_to_trash_confirm)`.
   - Ensure buttons are clustered at the bottom right.
 
-- [ ] **Step 2: Replace Rename File dialog in `DetailScreen.kt`**
+- [x] **Step 2: Replace Rename File dialog in `DetailScreen.kt`**
   - Replace lines 775-820 with `PhotonDialog`.
   - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_edit)`.
   - Title: `stringResource(R.string.dialog_rename_title)`.
@@ -95,11 +95,11 @@
   - Confirm text: `stringResource(R.string.action_save)`.
   - Confirm enabled only when trimmed name is non-empty and changed.
 
-- [ ] **Step 3: Verify compilation**
+- [x] **Step 3: Verify compilation**
   - Run: `./gradlew compileDebugKotlin`
   - Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - Run: `git add app/src/main/java/com/inferno/gallery/ui/DetailScreen.kt ; git commit -m "refactor(detail): migrate trash and rename dialogs to PhotonDialog"`
 
 ---
@@ -112,14 +112,14 @@
 **Interfaces:**
 - Consumes: `com.inferno.gallery.ui.components.PhotonDialog`
 
-- [ ] **Step 1: Replace Multi-item Move to Trash dialog**
+- [x] **Step 1: Replace Multi-item Move to Trash dialog**
   - Replace `showMultiDeleteConfirmDialog` (lines 2248-2292) with `PhotonDialog`.
   - Title: `stringResource(R.string.dialog_move_to_trash_title)`.
   - Subtitle: `stringResource(R.string.dialog_multi_trash_msg, selectedUris.size)`.
   - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_delete)`.
   - Confirm: `stringResource(R.string.dialog_move_to_trash_confirm)`.
 
-- [ ] **Step 2: Replace Trash Restore & Permanent Delete dialogs**
+- [x] **Step 2: Replace Trash Restore & Permanent Delete dialogs**
   - Replace `showTrashRestoreConfirmDialog` (lines 2296-2340) with `PhotonDialog`.
     - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_restore_from_trash)`.
     - Confirm: `stringResource(R.string.action_restore)`.
@@ -127,18 +127,18 @@
     - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_delete)`.
     - Confirm: `stringResource(R.string.action_delete)`.
 
-- [ ] **Step 3: Replace Create New Album and Create Folder dialogs**
+- [x] **Step 3: Replace Create New Album and Create Folder dialogs**
   - Replace `showCreateAlbumDialog` (lines 2573-2640) with `PhotonDialog`.
     - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder)`.
     - Input: styled text field with album name hint.
     - Confirm: `stringResource(R.string.action_create)`.
   - Replace `showCreateFolderDialog` (lines 1780-1810 & 2077-2107) with `PhotonDialog`.
 
-- [ ] **Step 4: Verify compilation**
+- [x] **Step 4: Verify compilation**
   - Run: `./gradlew compileDebugKotlin`
   - Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   - Run: `git add app/src/main/java/com/inferno/gallery/ui/MainAppLayout.kt ; git commit -m "refactor(main): migrate trash, restore, delete, album and folder dialogs to PhotonDialog"`
 
 ---
@@ -151,18 +151,18 @@
 **Interfaces:**
 - Consumes: `com.inferno.gallery.ui.components.PhotonDialog`
 
-- [ ] **Step 1: Replace Create Folder dialog in `AlbumPickerSheet.kt`**
+- [x] **Step 1: Replace Create Folder dialog in `AlbumPickerSheet.kt`**
   - Replace stock `AlertDialog` with `PhotonDialog`.
   - Icon: `ImageVector.vectorResource(R.drawable.ic_ms_create_new_folder)`.
   - Title: `stringResource(R.string.dialog_create_folder_title)`.
   - Input: text field with `dialog_folder_name_label`.
   - Confirm: `stringResource(R.string.action_create)`.
 
-- [ ] **Step 2: Verify compilation**
+- [x] **Step 2: Verify compilation**
   - Run: `./gradlew compileDebugKotlin`
   - Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - Run: `git add app/src/main/java/com/inferno/gallery/ui/components/AlbumPickerSheet.kt ; git commit -m "refactor(sheet): migrate album picker folder creation dialog to PhotonDialog"`
 
 ---
@@ -172,15 +172,16 @@
 **Files:**
 - None (Verification task)
 
-- [ ] **Step 1: Assemble debug APK**
+- [x] **Step 1: Assemble debug APK**
   - Run: `./gradlew assembleDebug`
   - Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 2: Install on target device**
+- [x] **Step 2: Install on target device**
   - Run: `adb -s 10BEAK2JR50012G install -r -g "app\build\outputs\apk\debug\PhotonGallery-arm64-v8a.apk"`
   - Expected: Success
 
-- [ ] **Step 3: Verification check**
+- [x] **Step 3: Verification check**
   - Confirm buttons are clustered side-by-side on the right.
   - Confirm colors use dynamic wallpaper accent (no red/green/blue).
   - Inform user device is ready for testing.
+
