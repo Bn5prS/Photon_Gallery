@@ -18,17 +18,17 @@ This design upgrades all confirmation and input dialogs to **Style 2: Asymmetric
 
 ### Goals
 - **Unified Dialog System**: Replace fragmented, stock `AlertDialog`s with a single, highly reusable `PhotonDialog` component.
-- **Contextual Tonal Coding**: Clear visual distinction by intent:
-  - **Destructive (Move to Trash, Delete permanently)**: Error tonal icon badge (`errorContainer` / `onErrorContainer`) and filled error action button.
-  - **Creation (New Album, New Folder)**: Primary tonal icon badge (`primaryContainer` / `onPrimaryContainer`) and filled primary action button.
-  - **Modification (Rename File)**: Tertiary/Cyan tonal icon badge with extension preservation.
-  - **Recovery (Restore Items)**: Secondary/Green tonal icon badge.
+- **Pure Wallpaper Accent Palette (No Red, Green, or Blue)**:
+  - Strictly adhere to the device's dynamic Material You wallpaper accent color scheme (`MaterialTheme.colorScheme.primary`, `primaryContainer`, `onPrimaryContainer`, `surfaceContainer`, and neutral surface tones).
+  - Absolutely NO hardcoded red, green, blue, or rainbow colors. All dialog types (Trash, Restore, Delete, Create Album, Rename) harmoniously draw from the user's active wallpaper theme tokens.
+  - Icon squircle badges use `MaterialTheme.colorScheme.primaryContainer` (or `surfaceContainerHighest` with subtle accent border) and `primary` icon tint.
+  - Action pills use dynamic wallpaper accent `primary` (or tonal `primaryContainer`) with `onPrimary` text.
 - **Compact & Sleek Ergonomics**: Left-aligned 44dp squircle icon beside headline and subtitle, keeping vertical dialog height low while maintaining high touch affordance.
 - **Preserve Safety & Permissions**: Seamlessly integrate with Android MediaStore's `IntentSenderRequest` (scoped storage permission dialogs for trash/delete/rename) without altering underlying coroutine logic.
 
 ### Non-Goals
 - Adding complex multi-step wizards or unnecessary prompt steps.
-- Heavy gradients, glowing borders, or drop shadow bloat (pure solid tonal layering conforming to Photon guidelines).
+- Hardcoded multi-color accents (red, green, blue) or gradient glow bloat (pure solid tonal layering conforming to Photon guidelines).
 
 ### Anti-Goals
 - Cluttering the dialog with redundant UI elements that slow down frequent actions like trashing or creating folders.
@@ -105,25 +105,26 @@ fun PhotonDialog(
 ### Target 1: `DetailScreen.kt`
 - **Move to Trash Dialog**:
   - Replace stock `AlertDialog` (lines 728-771) with `PhotonDialog`.
-  - Icon: `ic_ms_delete` in `errorContainer`, confirm button in `error` color (`R.string.dialog_move_to_trash_confirm`).
+  - Icon: `ic_ms_delete` in wallpaper accent `primaryContainer`, confirm button in wallpaper accent `primary`.
 - **Rename File Dialog**:
   - Replace stock `AlertDialog` (lines 775-820) with `PhotonDialog`.
-  - Icon: `ic_ms_edit` in `tertiaryContainer`.
+  - Icon: `ic_ms_edit` in wallpaper accent `primaryContainer`.
   - Input field with automatic extension isolation (`.jpg`, `.mp4`, `.png` badge).
 
 ### Target 2: `MainAppLayout.kt`
 - **Multi-item Move to Trash**:
   - Replace `showMultiDeleteConfirmDialog` (lines 2248-2292) with `PhotonDialog`.
   - Title: "Move to Recycle Bin", Subtitle: "$count items selected".
+  - Icon: `ic_ms_delete` in wallpaper accent `primaryContainer`.
 - **Restore Items from Trash**:
   - Replace `showTrashRestoreConfirmDialog` (lines 2296-2340) with `PhotonDialog`.
-  - Icon: `ic_ms_restore_from_trash` in `secondaryContainer`.
+  - Icon: `ic_ms_restore_from_trash` in wallpaper accent `primaryContainer`.
 - **Permanent Delete Confirmation**:
   - Replace `showTrashDeleteConfirmDialog` (lines 2342-2380) with `PhotonDialog`.
-  - Destructive warning styling with permanent deletion note.
+  - Wallpaper accent tonal styling with permanent deletion note.
 - **Create New Album**:
   - Replace custom `Dialog` (lines 2573-2640) with `PhotonDialog`.
-  - Icon: `ic_ms_create_new_folder` / `folder` in `primaryContainer`.
+  - Icon: `ic_ms_create_new_folder` / `folder` in wallpaper accent `primaryContainer`.
 - **Create Folder (File Browser)**:
   - Replace `showCreateFolderDialog` (lines 1780-1810 & 2077-2107) with `PhotonDialog`.
 
@@ -138,3 +139,4 @@ fun PhotonDialog(
 - Wiring up the migration across `DetailScreen.kt`, `MainAppLayout.kt`, and `AlbumPickerSheet.kt`.
 - Ensuring smooth keyboard autofocus on text fields when the rename and album creation dialogs open.
 - Verifying compilation via `./gradlew assembleDebug` and testing on device `10BEAK2JR50012G`.
+
