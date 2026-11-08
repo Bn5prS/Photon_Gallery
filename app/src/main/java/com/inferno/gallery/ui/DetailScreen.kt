@@ -222,11 +222,61 @@ fun DetailScreen(
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
     val coroutineScope = rememberCoroutineScope()
 
+    var pendingRotateItem by remember { mutableStateOf<GalleryItem?>(null) }
+    var pendingRotateDelta by remember { mutableIntStateOf(0) }
+    var pendingRotateJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
+    val targetRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
+
+    val rotateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val item = pendingRotateItem
+            val delta = if (pendingRotateDelta != 0) pendingRotateDelta else 90
+            if (item != null) {
+                pendingRotateDelta = 0
+                viewModel.rotateMedia(context, item, delta, onSecurityException = {}) {
+                    // Success callback
+                }
+            }
+        }
+        pendingRotateItem = null
+    }
+
+    val flushPendingRotation: () -> Unit = {
+        val delta = pendingRotateDelta
+        val item = pendingRotateItem
+        if (delta != 0 && item != null) {
+            pendingRotateDelta = 0
+            pendingRotateJob?.cancel()
+            viewModel.rotateMedia(
+                context = context,
+                item = item,
+                degrees = delta,
+                onSecurityException = { pendingIntent ->
+                    pendingRotateItem = item
+                    rotateLauncher.launch(
+                        androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+                    )
+                }
+            )
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            flushPendingRotation()
+        }
+    }
+
     var hasNavigatedBack by remember { mutableStateOf(false) }
     val safeOnBack: () -> Unit = remember(onBack) {
         {
             if (!hasNavigatedBack) {
                 hasNavigatedBack = true
+                flushPendingRotation()
                 onBack()
             }
         }
@@ -621,23 +671,9 @@ fun DetailScreen(
         }
     }
 
-    var pendingRotateItem by remember { mutableStateOf<GalleryItem?>(null) }
-    val rotateLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val item = pendingRotateItem
-            if (item != null) {
-                viewModel.rotateMedia(context, item, 90, onSecurityException = {}) {
-                    // Success callback
-                }
-            }
-        }
-        pendingRotateItem = null
+    androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
+        flushPendingRotation()
     }
-
-    val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
-    val targetRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
 
     androidx.compose.runtime.DisposableEffect(useFullScreenGlobal, isDarkTheme) {
         val prevLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: false
@@ -689,98 +725,110 @@ fun DetailScreen(
     }
 
     if (showDeleteConfirmDialog && pendingDeleteItem != null) {
-        androidx.compose.material3.AlertDialog(
+        val item = pendingDeleteItem!!
+        com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_title)) },
-            text = { androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_msg)) },
-            confirmButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        showDeleteConfirmDialog = false
-                        val item = pendingDeleteItem ?: return@TextButton
-                        coroutineScope.launch(Dispatchers.IO) {
-                            try {
-                                val trashIntent = MediaStore.createTrashRequest(
-                                    context.contentResolver, 
-                                    listOf(item.uri), 
-                                    true
-                                )
-                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                withContext(Dispatchers.Main) {
-                                    launcher.launch(request)
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    android.widget.Toast.makeText(
-                                        context, 
-                                        "Unable to trash this item: ${e.message}", 
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
+            title = stringResource(R.string.dialog_move_to_trash_title),
+            subtitle = item.name,
+            icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
+            confirmText = stringResource(R.string.dialog_move_to_trash_confirm),
+            onConfirm = {
+                showDeleteConfirmDialog = false
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        val trashIntent = MediaStore.createTrashRequest(
+                            context.contentResolver, 
+                            listOf(item.uri), 
+                            true
+                        )
+                        val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                        withContext(Dispatchers.Main) {
+                            launcher.launch(request)
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(
+                                context, 
+                                "Unable to trash this item: ${e.message}", 
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_confirm))
                 }
             },
-            dismissButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = { showDeleteConfirmDialog = false }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.action_cancel))
-                }
+            dismissText = stringResource(R.string.action_cancel),
+            onDismiss = { showDeleteConfirmDialog = false },
+            content = {
+                androidx.compose.material3.Text(
+                    text = stringResource(R.string.dialog_move_to_trash_msg),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         )
     }
 
     if (showRenameDialog && currentItem != null) {
-        var renameText by remember(currentItem) { mutableStateOf(currentItem.name) }
-        androidx.compose.material3.AlertDialog(
+        var renameText by remember(currentItem) { mutableStateOf(currentItem.name.substringBeforeLast('.')) }
+        val ext = remember(currentItem) { currentItem.name.substringAfterLast('.', "") }
+        val isChanged = renameText.isNotBlank() && (if (ext.isNotEmpty()) "$renameText.$ext" else renameText) != currentItem.name
+        com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = { showRenameDialog = false },
-            title = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_title)) },
-            text = {
-                androidx.compose.foundation.layout.Column {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = renameText,
-                        onValueChange = { renameText = it },
-                        label = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_label)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            title = stringResource(R.string.dialog_rename_title),
+            subtitle = if (ext.isNotEmpty()) ".$ext" else null,
+            icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_edit),
+            confirmText = stringResource(R.string.action_save),
+            isConfirmEnabled = isChanged,
+            onConfirm = {
+                val trimmed = renameText.trim()
+                if (trimmed.isNotEmpty()) {
+                    val finalNewName = if (ext.isNotEmpty()) "$trimmed.$ext" else trimmed
+                    if (finalNewName != currentItem.name) {
+                        viewModel.renameMedia(context, currentItem, finalNewName) { pendingIntent ->
+                            pendingRenameItem = currentItem
+                            pendingRenameNewName = finalNewName
+                            renameLauncher.launch(
+                                androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+                            )
+                        }
+                    }
                 }
+                showRenameDialog = false
             },
-            confirmButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        val trimmed = renameText.trim()
-                        if (trimmed.isNotEmpty() && trimmed != currentItem.name) {
-                            val oldExt = currentItem.name.substringAfterLast('.', "")
-                            val finalNewName = if (oldExt.isNotEmpty() && !trimmed.endsWith(".$oldExt", ignoreCase = true)) {
-                                if (trimmed.contains('.')) trimmed else "$trimmed.$oldExt"
-                            } else {
-                                trimmed
-                            }
-                            viewModel.renameMedia(context, currentItem, finalNewName) { pendingIntent ->
-                                pendingRenameItem = currentItem
-                                pendingRenameNewName = finalNewName
-                                renameLauncher.launch(
-                                    androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+            dismissText = stringResource(R.string.action_cancel),
+            onDismiss = { showRenameDialog = false },
+            content = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_label)) },
+                    trailingIcon = if (ext.isNotEmpty()) {
+                        {
+                            androidx.compose.material3.Surface(
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                androidx.compose.material3.Text(
+                                    text = ".$ext",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                         }
-                        showRenameDialog = false
-                    }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.action_save))
-                }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = { showRenameDialog = false }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.action_cancel))
-                }
+                    } else null,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         )
     }
@@ -973,15 +1021,17 @@ fun DetailScreen(
                 value = item.uri
             }
 
-            val request: coil3.request.ImageRequest = remember(resolvedUri, item.id, placeholderSizePx) {
+            val request: coil3.request.ImageRequest = remember(resolvedUri, item.id, item.dateModified, placeholderSizePx) {
                 ImageRequest.Builder(context)
                     .data(resolvedUri)
                     .size(coil3.size.Size.ORIGINAL)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
+                    .memoryCacheKey("${resolvedUri}@${item.dateModified}")
+                    .diskCacheKey("${resolvedUri}@${item.dateModified}")
                     // Reuse the exact thumbnail the grid already has cached for this column
                     // count, so the tap-to-detail hand-off shows the image immediately.
-                    .placeholderMemoryCacheKey(thumbnailMemoryKey(item.id, placeholderSizePx))
+                    .placeholderMemoryCacheKey(thumbnailMemoryKey(item.id, placeholderSizePx, item.dateModified))
                     .crossfade(false)
                     .build()
             }
@@ -1419,9 +1469,9 @@ fun DetailScreen(
                                     val composableH = parentHeight
                                     val imgW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
                                     val imgH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imgW / imageAspectRatio else composableH
-                                    val fitScale = if (imgH > composableW && imgH > 0f && composableH > 0f && composableW > 0f) {
-                                        val maxRotScale = minOf(composableW / imgH, composableH / imgW, 1f)
-                                        1f - (1f - maxRotScale) * sinSq
+                                    val fitScale = if (imgW > 0f && imgH > 0f && composableW > 0f && composableH > 0f) {
+                                        val targetRotScale = minOf(composableW / imgH, composableH / imgW)
+                                        1f + (targetRotScale - 1f) * sinSq
                                     } else {
                                         1f
                                     }
@@ -1442,10 +1492,24 @@ fun DetailScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        scaleX = scale.floatValue
-                                        scaleY = scale.floatValue
+                                        val rotZ = animRotation.value
+                                        val theta = Math.toRadians(rotZ.toDouble())
+                                        val sinSq = (kotlin.math.sin(theta) * kotlin.math.sin(theta)).toFloat()
+                                        val composableW = parentWidth
+                                        val composableH = parentHeight
+                                        val imgW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
+                                        val imgH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imgW / imageAspectRatio else composableH
+                                        val targetRotScale = if (imgW > 0f && imgH > 0f && composableW > 0f && composableH > 0f) {
+                                            minOf(composableW / imgH, composableH / imgW)
+                                        } else {
+                                            1f
+                                        }
+                                        val fitScale = 1f + (targetRotScale - 1f) * sinSq
+                                        scaleX = scale.floatValue * fitScale
+                                        scaleY = scale.floatValue * fitScale
                                         translationX = offsetX.floatValue
                                         translationY = offsetY.floatValue
+                                        rotationZ = rotZ
                                     },
                                 onPlaybackEnded = {
                                     if (!isMotionLooping) isMotionPlaying = false
@@ -1804,7 +1868,10 @@ fun DetailScreen(
 
                             androidx.compose.material3.DropdownMenu(
                                 expanded = showMoreMenu,
-                                onDismissRequest = { showMoreMenu = false },
+                                onDismissRequest = { 
+                                    showMoreMenu = false 
+                                    flushPendingRotation()
+                                },
                                 shape = MaterialTheme.shapes.large,
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
@@ -1919,27 +1986,26 @@ fun DetailScreen(
                                             val currentTarget = targetRotationMap[target.id] ?: 0f
                                             val nextTarget = currentTarget + 90f
                                             targetRotationMap[target.id] = nextTarget
+                                            pendingRotateDelta = (pendingRotateDelta + 90) % 360
                                             val anim = animRotationMap[target.id]
+
+                                            // 1. Instantly and fluidly animate UI rotation with zero frame drops
                                             coroutineScope.launch {
                                                 anim?.animateTo(
                                                     targetValue = nextTarget,
                                                     animationSpec = androidx.compose.animation.core.spring(
                                                         dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
                                                     )
                                                 )
                                             }
-                                            viewModel.rotateMedia(
-                                                context = context,
-                                                item = target,
-                                                degrees = 90,
-                                                onSecurityException = { pendingIntent ->
-                                                    pendingRotateItem = target
-                                                    rotateLauncher.launch(
-                                                        androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
-                                                    )
-                                                }
-                                            )
+
+                                            // 2. Debounce disk persistence so rapid taps never stall the UI
+                                            pendingRotateJob?.cancel()
+                                            pendingRotateJob = coroutineScope.launch {
+                                                kotlinx.coroutines.delay(650)
+                                                flushPendingRotation()
+                                            }
                                         }
                                     )
                                 }
@@ -2086,6 +2152,7 @@ fun DetailScreen(
 
         val onEditAction = {
             if (currentItem != null) {
+                flushPendingRotation()
                 val uri = resolvedCurrentUri ?: currentItem.uri
                 if (!currentItem.isVideo) {
                     onNavigateToEditor(uri)
