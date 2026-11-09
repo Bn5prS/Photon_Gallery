@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -1072,10 +1073,12 @@ private fun SetupAiPage(
                         }
                     }
 
-                    // Sample Concept Suggestion Chips
+                    // Sample Concept Suggestion Chips (Horizontally scrollable so queries never truncate)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                     ) {
                         sampleQueries.forEachIndexed { index, query ->
                             val isChipSelected = index == selectedQueryIndex
@@ -1084,7 +1087,6 @@ private fun SetupAiPage(
                                 color = if (isChipSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
                                 contentColor = if (isChipSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
-                                    .weight(1f)
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         selectedQueryIndex = index
@@ -1092,15 +1094,14 @@ private fun SetupAiPage(
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(vertical = SpacingTokens.XS)
+                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
                                 ) {
                                     Text(
                                         text = query,
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = if (isChipSelected) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isChipSelected) FontWeight.Bold else FontWeight.Medium
                                         ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -1150,10 +1151,11 @@ private fun SetupAiPage(
 
             Spacer(modifier = Modifier.height(SpacingTokens.L))
 
-            // AI Model Configuration Container with Model Size & Speed Metrics
+            // 1. Smart Search (Semantic AI) Card
             Surface(
                 shape = ShapeLargeIncreased,
                 color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -1167,7 +1169,7 @@ private fun SetupAiPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = ShapeMedium,
+                            shape = OfficialM3Shapes.Clover4Leaf,
                             color = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(46.dp)
@@ -1176,6 +1178,7 @@ private fun SetupAiPage(
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                     contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
@@ -1185,13 +1188,13 @@ private fun SetupAiPage(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "On-Device CLIP Vision",
+                                text = "Smart Search (Semantic AI)",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "OpenAI CLIP ViT-B/16 • ~150 MB • On-Device (CPU)",
+                                text = "OpenAI CLIP ViT-B/16 • ONNX INT8",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1222,69 +1225,18 @@ private fun SetupAiPage(
                         }
                     }
 
-                    // OCR Text Processing Toggle (Placed on top)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setOcrIndexingEnabled(!ocrIndexingEnabled)
-                            }
-                            .padding(vertical = SpacingTokens.XS),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = ShapeMedium,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(IconSizeTokens.M)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "OCR Text Processing",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Extract and index text inside screenshots, receipts, and photos",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                        Switch(
-                            checked = ocrIndexingEnabled,
-                            onCheckedChange = { checked ->
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setOcrIndexingEnabled(checked)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
+                    Text(
+                        text = "Search photos with natural descriptions (e.g. 'sunset at beach', 'latte coffee') entirely on-device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                        thickness = 0.75.dp
+                        thickness = 0.5.dp
                     )
 
-                    // Smart Search Auto-Index Toggle (Placed below OCR)
+                    // Smart Search Auto-Index Toggle
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1305,6 +1257,7 @@ private fun SetupAiPage(
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                     contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                             }
@@ -1314,13 +1267,13 @@ private fun SetupAiPage(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Smart Search Auto-Index",
+                                text = "Auto-Index New Photos",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Automatically generate semantic embeddings for new photos",
+                                text = "Generate semantic search vectors automatically in background",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1343,16 +1296,15 @@ private fun SetupAiPage(
 
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                        thickness = 0.75.dp
+                        thickness = 0.5.dp
                     )
 
-                    // Download Model Status / Action Area with Speed and Size Metrics
+                    // Download Model Status / Action Area
                     if (isDownloading) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                         ) {
-                            // Top Size and Percentage Row
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1370,7 +1322,6 @@ private fun SetupAiPage(
                                 )
                             }
 
-                            // Dynamic Progress Indicator
                             LinearWavyProgressIndicator(
                                 progress = { downloadProgress / 100f },
                                 modifier = Modifier
@@ -1378,7 +1329,6 @@ private fun SetupAiPage(
                                     .height(10.dp)
                             )
 
-                            // Bottom Network Speed and Cancel Row
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1430,7 +1380,7 @@ private fun SetupAiPage(
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                                 Text(
-                                    text = "AI Model downloaded and verified (147 MB). Ready for smart search.",
+                                    text = "Model ready (147 MB). Natural search enabled.",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -1444,8 +1394,8 @@ private fun SetupAiPage(
                             },
                             shape = ShapeFull,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1473,10 +1423,11 @@ private fun SetupAiPage(
 
             Spacer(modifier = Modifier.height(SpacingTokens.L))
 
-            // Face Recognition & People Grouping Container
+            // 2. Text (OCR) Indexing Card (Separated from CLIP - Built into Android, 0 MB)
             Surface(
                 shape = ShapeLargeIncreased,
                 color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -1490,7 +1441,142 @@ private fun SetupAiPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = OfficialM3Shapes.Cookie12Sided,
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(46.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(IconSizeTokens.L)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Text (OCR) Indexing",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Google ML Kit • Built into Android",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            shape = ShapeFull
+                        ) {
+                            Text(
+                                text = "Built-in",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Extract and search text inside screenshots, receipts, and documents 100% on-device without cloud sync.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        thickness = 0.5.dp
+                    )
+
+                    // OCR Toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                settingsViewModel?.setOcrIndexingEnabled(!ocrIndexingEnabled)
+                            }
+                            .padding(vertical = SpacingTokens.XS),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = ShapeMedium,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(IconSizeTokens.M)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto-Index OCR Text",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Automatically scan new screenshots and photos for text",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(SpacingTokens.S))
+
+                        Switch(
+                            checked = ocrIndexingEnabled,
+                            onCheckedChange = { checked ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                settingsViewModel?.setOcrIndexingEnabled(checked)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(SpacingTokens.L))
+
+            // 3. Face Recognition & People Grouping Card
+            Surface(
+                shape = ShapeLargeIncreased,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(SpacingTokens.L),
+                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(46.dp)
@@ -1499,6 +1585,7 @@ private fun SetupAiPage(
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                     contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
@@ -1514,7 +1601,7 @@ private fun SetupAiPage(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "On-Device MobileFaceNet • ~13 MB • On-Device (CPU)",
+                                text = "MobileFaceNet • InsightFace (w600k)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1545,6 +1632,17 @@ private fun SetupAiPage(
                         }
                     }
 
+                    Text(
+                        text = "Detect and cluster faces locally to organize photos into private People albums.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        thickness = 0.5.dp
+                    )
+
                     // Face Recognition Toggle
                     Row(
                         modifier = Modifier
@@ -1558,14 +1656,15 @@ private fun SetupAiPage(
                     ) {
                         Surface(
                             shape = ShapeMedium,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(40.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                     contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                             }
@@ -1575,13 +1674,13 @@ private fun SetupAiPage(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Face Recognition & Grouping",
+                                text = "Enable Face Grouping",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Cluster and organize individuals across your gallery automatically",
+                                text = "Cluster and organize individuals across your gallery",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1605,7 +1704,7 @@ private fun SetupAiPage(
                     if (faceRecognitionEnabled) {
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                            thickness = 0.75.dp
+                            thickness = 0.5.dp
                         )
 
                         // Auto-Index Faces Toggle
@@ -1621,14 +1720,15 @@ private fun SetupAiPage(
                         ) {
                             Surface(
                                 shape = ShapeMedium,
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                         contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(IconSizeTokens.M)
                                     )
                                 }
@@ -1667,7 +1767,7 @@ private fun SetupAiPage(
 
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                            thickness = 0.75.dp
+                            thickness = 0.5.dp
                         )
 
                         // Download Face Model Action / Progress Area
@@ -1751,7 +1851,7 @@ private fun SetupAiPage(
                                         modifier = Modifier.size(IconSizeTokens.M)
                                     )
                                     Text(
-                                        text = "Face Model downloaded and verified (13 MB). Ready for face grouping.",
+                                        text = "Model ready (13 MB). Face grouping enabled.",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
@@ -1796,7 +1896,7 @@ private fun SetupAiPage(
             Spacer(modifier = Modifier.height(SpacingTokens.XL))
         }
 
-        // Bottom Navigation Dock: Back & Start Exploring / Finish Setup Buttons
+        // Bottom Navigation Dock: Back & Finish Setup / Start Exploring
         val canExplore = isModelDownloaded || faceModelDownloaded
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -1806,24 +1906,18 @@ private fun SetupAiPage(
             OnboardingNavigationDock(
                 onBack = onBack,
                 onNext = onFinish,
-                nextText = if (canExplore) "Start Exploring" else "Finish Setup",
+                nextText = if (canExplore) "Start Exploring" else "Continue to Gallery",
                 nextIconRes = if (canExplore) R.drawable.ic_ms_check else R.drawable.ic_ms_chevron_right
             )
 
             if (!canExplore && !isDownloading && !isFaceDownloading) {
-                TextButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onFinish()
-                    },
-                    modifier = Modifier.height(44.dp)
-                ) {
-                    Text(
-                        text = "Set Up Later in Settings",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = "AI models can also be downloaded anytime in Settings",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = SpacingTokens.XS)
+                )
             }
         }
     }
