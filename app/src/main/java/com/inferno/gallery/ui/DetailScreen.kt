@@ -1917,14 +1917,6 @@ fun DetailScreen(
                                 shape = MaterialTheme.shapes.large,
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.detail_details)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
-                                    onClick = {
-                                        showMoreMenu = false
-                                        showInfoCard = true
-                                    }
-                                )
                                 if (currentItem != null && !currentItem.isVideo) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text("Google Lens") },
