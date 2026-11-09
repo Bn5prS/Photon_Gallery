@@ -1702,9 +1702,7 @@ fun SettingsScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         ModelSpecChip(text = "Google ML Kit", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
-                                        ModelSpecChip(text = "On-Device Latin")
-                                        ModelSpecChip(text = "100% Offline")
-                                        ModelSpecChip(text = "Zero Cloud Sync")
+                                        ModelSpecChip(text = "Built into Android by default")
                                     }
 
                                     // Links
@@ -1884,9 +1882,6 @@ fun SettingsScreen(
                                         ) {
                                             ModelSpecChip(text = "OpenAI CLIP ViT-B/16", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
                                             ModelSpecChip(text = "ONNX INT8 Quantized")
-                                            ModelSpecChip(text = "512-D Vectors")
-                                            ModelSpecChip(text = "~150 MB")
-                                            ModelSpecChip(text = "CPU Optimized")
                                         }
 
                                         // Links
@@ -2004,9 +1999,6 @@ fun SettingsScreen(
                                         ) {
                                             ModelSpecChip(text = "OpenAI CLIP ViT-B/16", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
                                             ModelSpecChip(text = "ONNX INT8 Quantized")
-                                            ModelSpecChip(text = "512-D Vectors")
-                                            ModelSpecChip(text = "~150 MB")
-                                            ModelSpecChip(text = "100% Offline")
                                         }
 
                                         // Links
@@ -2210,9 +2202,6 @@ fun SettingsScreen(
                                             ) {
                                                 ModelSpecChip(text = "MobileFaceNet", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
                                                 ModelSpecChip(text = "InsightFace (w600k)")
-                                                ModelSpecChip(text = "512-D Face Embeddings")
-                                                ModelSpecChip(text = "13.6 MB")
-                                                ModelSpecChip(text = "ArcFace / Cosine")
                                             }
 
                                             // Links
@@ -2330,9 +2319,6 @@ fun SettingsScreen(
                                             ) {
                                                 ModelSpecChip(text = "MobileFaceNet", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
                                                 ModelSpecChip(text = "InsightFace (w600k)")
-                                                ModelSpecChip(text = "512-D Face Embeddings")
-                                                ModelSpecChip(text = "13.6 MB")
-                                                ModelSpecChip(text = "100% Offline")
                                             }
 
                                             // Links
