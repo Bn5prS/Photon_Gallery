@@ -41,18 +41,20 @@ object MediaQueryBuilder {
 
         when {
             bucket == BucketNames.SEARCH_TEXT -> {
-                if (ftsIds.isEmpty()) {
+                val numericIds = ftsIds.mapNotNull { it.toLongOrNull() }
+                if (numericIds.isEmpty()) {
                     conditions.add("cm.id IN (0)")
                 } else {
-                    conditions.add("cm.id IN (${ftsIds.joinToString(",")})")
+                    conditions.add("cm.id IN (${numericIds.joinToString(",")})")
                     conditions.add(NOT_HIDDEN)
                 }
             }
             bucket == BucketNames.SEARCH_SMART -> {
-                if (smartIds.isEmpty()) {
+                val numericIds = smartIds.mapNotNull { it.toLongOrNull() }
+                if (numericIds.isEmpty()) {
                     conditions.add("cm.id IN (0)")
                 } else {
-                    conditions.add("cm.id IN (${smartIds.joinToString(",")})")
+                    conditions.add("cm.id IN (${numericIds.joinToString(",")})")
                     conditions.add(NOT_HIDDEN)
                 }
             }

@@ -655,12 +655,14 @@ fun GalleryScreen(
             val emptyIcon = when (bucketName) {
                 "Trash" -> ImageVector.vectorResource(R.drawable.ic_ms_delete)
                 "Favorites" -> ImageVector.vectorResource(R.drawable.ic_ms_check_circle)
+                "search_text", "search_smart" -> ImageVector.vectorResource(R.drawable.ic_ms_search)
                 null -> ImageVector.vectorResource(R.drawable.ic_ms_image)
                 else -> ImageVector.vectorResource(R.drawable.ic_ms_image)
             }
             val (title, subtitle) = when (bucketName) {
                 "Trash" -> "Trash is empty" to "Deleted photos will appear here."
                 "Favorites" -> "No favorites yet" to "Tap ❤️ on any photo to save it here."
+                "search_text", "search_smart" -> "No results found" to "No matching photos or videos found."
                 null -> "No photos yet" to "Photos and videos on your device will appear here."
                 else -> "Album is empty" to "\"$bucketName\" has no photos or videos."
             }

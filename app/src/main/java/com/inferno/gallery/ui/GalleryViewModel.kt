@@ -769,6 +769,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val isNativeTimelineLoaded: StateFlow<Boolean> =
         nativeTimelineRepository.isInitialLoaded
 
+    private val _ftsSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val ftsSearchResults: StateFlow<List<GalleryItem>> = _ftsSearchResults.asStateFlow()
+
+    private val _smartSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
+    val smartSearchResults: StateFlow<List<GalleryItem>> = _smartSearchResults.asStateFlow()
+
     init {
         viewModelScope.launch {
             settingsRepository.sortOrderFlow.collect { raw ->
@@ -804,15 +810,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             combine(
                 combine(_currentBucket, selectedFilterIndex, sortOrder) { b, f, o -> Triple(b, f, o) },
-                combine(viewMode, excludedFolders, favoritesManager.favoritesFlow) { m, e, fav -> Triple(m, e, fav) }
-            ) { (b, f, o), (m, e, fav) ->
+                combine(viewMode, excludedFolders, favoritesManager.favoritesFlow) { m, e, fav -> Triple(m, e, fav) },
+                combine(ftsSearchResults, smartSearchResults) { fts, smart -> Pair(fts, smart) }
+            ) { (b, f, o), (m, e, fav), (fts, smart) ->
                 nativeTimelineRepository.updatePipeline(
                     bucket = b,
                     filterIndex = f,
                     sortOrder = o,
                     viewMode = m,
                     excluded = e,
-                    favIds = fav
+                    favIds = fav,
+                    ftsIds = fts.map { it.id },
+                    smartIds = smart.map { it.id }
                 )
             }.collect()
         }
@@ -913,12 +922,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private val _geotaggedMedia = MutableStateFlow<List<GalleryItem>>(emptyList())
     val geotaggedMedia: StateFlow<List<GalleryItem>> = _geotaggedMedia.asStateFlow()
-
-    private val _ftsSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
-    val ftsSearchResults: StateFlow<List<GalleryItem>> = _ftsSearchResults.asStateFlow()
-
-    private val _smartSearchResults = MutableStateFlow<List<GalleryItem>>(emptyList())
-    val smartSearchResults: StateFlow<List<GalleryItem>> = _smartSearchResults.asStateFlow()
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
@@ -1098,11 +1101,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val order = sortOrder.value
 
             val smartIds = smartSearchResults.value.map { it.id }
+            val ftsIds = ftsSearchResults.value.map { it.id }
             val qc = buildMediaConditions(
                 bucket = bucketName, 
                 filterIndex = filterIndex, 
                 excluded = excludedFolders.value,
                 favIds = favoriteIds.value,
+                ftsIds = ftsIds,
                 smartIds = smartIds
             )
             val queryString = "SELECT cm.* FROM core_media cm " +
@@ -3173,15 +3178,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val currentMediaCount: StateFlow<Int> = combine(
-        _currentBucket, selectedFilterIndex, favoritesManager.favoritesFlow, excludedFolders
-    ) { bucket, filterIndex, favs, excluded ->
+        combine(_currentBucket, selectedFilterIndex, favoritesManager.favoritesFlow) { b, f, favs -> Triple(b, f, favs) },
+        combine(excludedFolders, ftsSearchResults, smartSearchResults) { excl, fts, smart -> Triple(excl, fts, smart) }
+    ) { (bucket, filterIndex, favs), (excluded, fts, smart) ->
         val qc = buildMediaConditions(
             bucket = bucket,
             filterIndex = filterIndex,
             excluded = excluded,
             favIds = favs,
-            ftsIds = ftsSearchResults.value.map { it.id },
-            smartIds = smartSearchResults.value.map { it.id }
+            ftsIds = fts.map { it.id },
+            smartIds = smart.map { it.id }
         )
         val queryString = "SELECT COUNT(*) FROM core_media cm " + buildWhereClause(qc)
         androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
@@ -3190,17 +3196,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
     private val rawPagerFlow: Flow<PagingData<com.inferno.gallery.data.db.CoreMediaProjection>> = combine(
-        _currentBucket, selectedFilterIndex, sortOrder, favoritesManager.favoritesFlow, excludedFolders
-    ) { bucket, filterIndex, order, favs, excluded ->
+        combine(_currentBucket, selectedFilterIndex, sortOrder) { b, f, o -> Triple(b, f, o) },
+        combine(favoritesManager.favoritesFlow, excludedFolders) { favs, excluded -> Pair(favs, excluded) },
+        combine(ftsSearchResults, smartSearchResults) { fts, smart -> Pair(fts, smart) }
+    ) { (bucket, filterIndex, order), (favs, excluded), (fts, smart) ->
+        val smartIds = smart.map { it.id }
+        val ftsIds = fts.map { it.id }
         val qc = buildMediaConditions(
             bucket = bucket,
             filterIndex = filterIndex,
             excluded = excluded,
             favIds = favs,
-            ftsIds = ftsSearchResults.value.map { it.id },
-            smartIds = smartSearchResults.value.map { it.id }
+            ftsIds = ftsIds,
+            smartIds = smartIds
         )
-        val smartIds = smartSearchResults.value.map { it.id }
         val isSmartSearch = bucket == com.inferno.gallery.data.BucketNames.SEARCH_SMART && smartIds.isNotEmpty()
 
         val queryString = "SELECT cm.* FROM core_media cm " +

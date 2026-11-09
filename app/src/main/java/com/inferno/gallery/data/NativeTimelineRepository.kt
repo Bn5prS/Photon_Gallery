@@ -94,6 +94,12 @@ class NativeTimelineRepository(
     private val _favIds = MutableStateFlow<Set<String>>(emptySet())
     val favIds: StateFlow<Set<String>> = _favIds.asStateFlow()
 
+    private val _ftsIds = MutableStateFlow<List<String>>(emptyList())
+    val ftsIds: StateFlow<List<String>> = _ftsIds.asStateFlow()
+
+    private val _smartIds = MutableStateFlow<List<String>>(emptyList())
+    val smartIds: StateFlow<List<String>> = _smartIds.asStateFlow()
+
     private val _timelineItems = MutableStateFlow<List<NativeTimelineItem>>(emptyList())
     val timelineItems: StateFlow<List<NativeTimelineItem>> = _timelineItems.asStateFlow()
 
@@ -166,14 +172,18 @@ class NativeTimelineRepository(
         sortOrder: SortOrder = _sortOrder.value,
         viewMode: ViewMode = _viewMode.value,
         excluded: Set<String> = _excludedFolders.value,
-        favIds: Set<String> = _favIds.value
+        favIds: Set<String> = _favIds.value,
+        ftsIds: List<String> = _ftsIds.value,
+        smartIds: List<String> = _smartIds.value
     ) {
         if (_currentBucket.value == bucket &&
             _filterIndex.value == filterIndex &&
             _sortOrder.value == sortOrder &&
             _viewMode.value == viewMode &&
             _excludedFolders.value == excluded &&
-            _favIds.value == favIds) {
+            _favIds.value == favIds &&
+            _ftsIds.value == ftsIds &&
+            _smartIds.value == smartIds) {
             return
         }
         _currentBucket.value = bucket
@@ -182,6 +192,8 @@ class NativeTimelineRepository(
         _viewMode.value = viewMode
         _excludedFolders.value = excluded
         _favIds.value = favIds
+        _ftsIds.value = ftsIds
+        _smartIds.value = smartIds
         reloadJob?.cancel()
         reloadJob = scope.launch(ioDispatcher) {
             reload()
@@ -201,17 +213,21 @@ class NativeTimelineRepository(
         sortOrder: SortOrder = _sortOrder.value,
         filterIndex: Int = _filterIndex.value,
         excluded: Set<String> = _excludedFolders.value,
-        favIds: Set<String> = _favIds.value
+        favIds: Set<String> = _favIds.value,
+        ftsIds: List<String> = _ftsIds.value,
+        smartIds: List<String> = _smartIds.value
     ): List<MediaStub> = withContext(ioDispatcher) {
         val db = database ?: return@withContext emptyList()
         val qc = MediaQueryBuilder.buildMediaConditions(
             bucket = bucket,
             filterIndex = filterIndex,
             excluded = excluded,
-            favIds = favIds
+            favIds = favIds,
+            ftsIds = ftsIds,
+            smartIds = smartIds
         )
         val whereClause = MediaQueryBuilder.buildWhereClause(qc)
-        val orderClause = MediaQueryBuilder.buildOrderClause(sortOrder.name, bucket, emptyList())
+        val orderClause = MediaQueryBuilder.buildOrderClause(sortOrder.name, bucket, smartIds)
         val sql = "SELECT cm.id, cm.filePath, cm.uriString, cm.dateAdded, cm.dateModified, cm.isVideo, cm.durationMs, cm.bucketName, cm.size FROM core_media cm $whereClause $orderClause"
 
         val result = ArrayList<MediaStub>()
@@ -273,21 +289,27 @@ class NativeTimelineRepository(
         filterIndex: Int = _filterIndex.value,
         viewMode: ViewMode = _viewMode.value,
         excluded: Set<String> = _excludedFolders.value,
-        favIds: Set<String> = _favIds.value
+        favIds: Set<String> = _favIds.value,
+        ftsIds: List<String> = _ftsIds.value,
+        smartIds: List<String> = _smartIds.value
     ): List<NativeTimelineItem> = withContext(ioDispatcher) {
         val db = database ?: return@withContext emptyList()
         val qc = MediaQueryBuilder.buildMediaConditions(
             bucket = bucket,
             filterIndex = filterIndex,
             excluded = excluded,
-            favIds = favIds
+            favIds = favIds,
+            ftsIds = ftsIds,
+            smartIds = smartIds
         )
         val whereClause = MediaQueryBuilder.buildWhereClause(qc)
-        val orderClause = MediaQueryBuilder.buildOrderClause(sortOrder.name, bucket, emptyList())
+        val orderClause = MediaQueryBuilder.buildOrderClause(sortOrder.name, bucket, smartIds)
         val isDateSort = (sortOrder == SortOrder.NewToOld ||
                          sortOrder == SortOrder.OldToNew ||
                          sortOrder == SortOrder.DateModifiedNewToOld ||
-                         sortOrder == SortOrder.DateModifiedOldToNew) && (viewMode == ViewMode.Grouped)
+                         sortOrder == SortOrder.DateModifiedOldToNew) && 
+                         (viewMode == ViewMode.Grouped) &&
+                         (bucket != BucketNames.SEARCH_SMART)
 
         val sql = "SELECT cm.id, cm.filePath, cm.uriString, cm.dateAdded, cm.dateModified, cm.isVideo, cm.durationMs, cm.bucketName, cm.size FROM core_media cm $whereClause $orderClause"
 
@@ -369,9 +391,11 @@ class NativeTimelineRepository(
         filterIndex: Int = _filterIndex.value,
         viewMode: ViewMode = _viewMode.value,
         excluded: Set<String> = _excludedFolders.value,
-        favIds: Set<String> = _favIds.value
+        favIds: Set<String> = _favIds.value,
+        ftsIds: List<String> = _ftsIds.value,
+        smartIds: List<String> = _smartIds.value
     ): List<NativeTimelineItem> = withContext(ioDispatcher) {
-        fetchTimelineItemsDirect(bucket, sortOrder, filterIndex, viewMode, excluded, favIds)
+        fetchTimelineItemsDirect(bucket, sortOrder, filterIndex, viewMode, excluded, favIds, ftsIds, smartIds)
     }
 
     private suspend fun reload() {
@@ -383,7 +407,9 @@ class NativeTimelineRepository(
                 filterIndex = _filterIndex.value,
                 viewMode = _viewMode.value,
                 excluded = _excludedFolders.value,
-                favIds = _favIds.value
+                favIds = _favIds.value,
+                ftsIds = _ftsIds.value,
+                smartIds = _smartIds.value
             )
             _timelineItems.value = items
         } finally {
