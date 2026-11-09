@@ -53,6 +53,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -1036,22 +1037,20 @@ private fun SetupAiPage(
 
             // Interactive Playground Card: Tap sample concept chips to see results update live
             Surface(
-                shape = ShapeLarge,
+                shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(SpacingTokens.M),
+                        .padding(SpacingTokens.L),
                     verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
                 ) {
                     // Simulated Search Input Pill
                     Surface(
                         shape = ShapeFull,
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1153,16 +1152,15 @@ private fun SetupAiPage(
 
             // 1. Smart Search (Semantic AI) Card
             Surface(
-                shape = ShapeLargeIncreased,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(SpacingTokens.L),
-                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1170,21 +1168,21 @@ private fun SetupAiPage(
                     ) {
                         Surface(
                             shape = OfficialM3Shapes.Clover4Leaf,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(46.dp)
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -1202,24 +1200,24 @@ private fun SetupAiPage(
 
                         Surface(
                             color = if (isModelDownloaded) {
-                                MaterialTheme.colorScheme.primaryContainer
+                                MaterialTheme.colorScheme.primary
                             } else if (isDownloading) {
-                                MaterialTheme.colorScheme.tertiaryContainer
+                                MaterialTheme.colorScheme.primaryContainer
                             } else {
                                 MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
+                            contentColor = if (isModelDownloaded) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else if (isDownloading) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             shape = ShapeFull
                         ) {
                             Text(
                                 text = if (isModelDownloaded) "Ready • 147 MB" else if (isDownloading) "$downloadProgress%" else "~147 MB",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (isModelDownloaded) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else if (isDownloading) {
-                                    MaterialTheme.colorScheme.onTertiaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
                                 modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
                             )
                         }
@@ -1232,7 +1230,7 @@ private fun SetupAiPage(
                     )
 
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         thickness = 0.5.dp
                     )
 
@@ -1248,10 +1246,10 @@ private fun SetupAiPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = ShapeMedium,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(40.dp)
+                            shape = OfficialM3Shapes.PuffyDiamond,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
@@ -1263,7 +1261,7 @@ private fun SetupAiPage(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -1295,7 +1293,7 @@ private fun SetupAiPage(
                     }
 
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         thickness = 0.5.dp
                     )
 
@@ -1364,8 +1362,8 @@ private fun SetupAiPage(
                         }
                     } else if (isModelDownloaded) {
                         Surface(
-                            shape = ShapeMedium,
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -1380,7 +1378,7 @@ private fun SetupAiPage(
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                                 Text(
-                                    text = "Model ready (147 MB). Natural search enabled.",
+                                    text = "Model ready (147 MB) • Natural search enabled",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -1425,38 +1423,37 @@ private fun SetupAiPage(
 
             // 2. Text (OCR) Indexing Card (Separated from CLIP - Built into Android, 0 MB)
             Surface(
-                shape = ShapeLargeIncreased,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(SpacingTokens.L),
-                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(46.dp)
+                            shape = OfficialM3Shapes.ClamShell,
+                            color = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.onSecondary,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -1473,13 +1470,13 @@ private fun SetupAiPage(
                         }
 
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            color = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary,
                             shape = ShapeFull
                         ) {
                             Text(
                                 text = "Built-in",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
                             )
                         }
@@ -1492,7 +1489,7 @@ private fun SetupAiPage(
                     )
 
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         thickness = 0.5.dp
                     )
 
@@ -1508,22 +1505,22 @@ private fun SetupAiPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = ShapeMedium,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(40.dp)
+                            shape = OfficialM3Shapes.Bun,
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                            contentColor = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.secondary,
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -1548,10 +1545,39 @@ private fun SetupAiPage(
                                 settingsViewModel?.setOcrIndexingEnabled(checked)
                             },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                                checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                                checkedTrackColor = MaterialTheme.colorScheme.secondary
                             )
                         )
+                    }
+
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                        thickness = 0.5.dp
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(IconSizeTokens.M)
+                            )
+                            Text(
+                                text = "Built into Android • Zero download required",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
                     }
                 }
             }
@@ -1560,38 +1586,37 @@ private fun SetupAiPage(
 
             // 3. Face Recognition & People Grouping Card
             Surface(
-                shape = ShapeLargeIncreased,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.40f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(SpacingTokens.L),
-                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(46.dp)
+                            shape = OfficialM3Shapes.Cookie12Sided,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            contentColor = MaterialTheme.colorScheme.onTertiary,
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.onTertiary,
                                     modifier = Modifier.size(IconSizeTokens.L)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -1609,24 +1634,24 @@ private fun SetupAiPage(
 
                         Surface(
                             color = if (faceModelDownloaded) {
-                                MaterialTheme.colorScheme.primaryContainer
+                                MaterialTheme.colorScheme.tertiary
                             } else if (isFaceDownloading) {
                                 MaterialTheme.colorScheme.tertiaryContainer
                             } else {
                                 MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
+                            contentColor = if (faceModelDownloaded) {
+                                MaterialTheme.colorScheme.onTertiary
+                            } else if (isFaceDownloading) {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             shape = ShapeFull
                         ) {
                             Text(
                                 text = if (faceModelDownloaded) "Ready • 13 MB" else if (isFaceDownloading) "$faceDownloadProgress%" else "~13 MB",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (faceModelDownloaded) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else if (isFaceDownloading) {
-                                    MaterialTheme.colorScheme.onTertiaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
                                 modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
                             )
                         }
@@ -1639,7 +1664,7 @@ private fun SetupAiPage(
                     )
 
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         thickness = 0.5.dp
                     )
 
@@ -1655,22 +1680,22 @@ private fun SetupAiPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = ShapeMedium,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(40.dp)
+                            shape = OfficialM3Shapes.Flower,
+                            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+                            contentColor = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.tertiary,
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(SpacingTokens.M))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -1695,15 +1720,15 @@ private fun SetupAiPage(
                                 settingsViewModel?.setFaceRecognitionEnabled(checked)
                             },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                                checkedThumbColor = MaterialTheme.colorScheme.onTertiary,
+                                checkedTrackColor = MaterialTheme.colorScheme.tertiary
                             )
                         )
                     }
 
                     if (faceRecognitionEnabled) {
                         HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                             thickness = 0.5.dp
                         )
 
@@ -1719,22 +1744,22 @@ private fun SetupAiPage(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                shape = ShapeMedium,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(40.dp)
+                                shape = OfficialM3Shapes.Sunny,
+                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+                                contentColor = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(38.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = MaterialTheme.colorScheme.tertiary,
                                         modifier = Modifier.size(IconSizeTokens.M)
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(SpacingTokens.M))
+                            Spacer(modifier = Modifier.width(14.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -1759,14 +1784,14 @@ private fun SetupAiPage(
                                     settingsViewModel?.setFaceAutoIndex(checked)
                                 },
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                    checkedThumbColor = MaterialTheme.colorScheme.onTertiary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.tertiary
                                 )
                             )
                         }
 
                         HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                             thickness = 0.5.dp
                         )
 
@@ -1784,7 +1809,7 @@ private fun SetupAiPage(
                                     Text(
                                         text = "Downloading: $faceDownloadProgress%",
                                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = MaterialTheme.colorScheme.tertiary
                                     )
                                     Text(
                                         text = if (faceBytesDownloaded > 0L) "${formatBytes(faceBytesDownloaded)} / ${formatBytes(faceTotalBytes)}" else "${formatBytes(faceTotalBytes)}",
@@ -1795,6 +1820,7 @@ private fun SetupAiPage(
 
                                 LinearWavyProgressIndicator(
                                     progress = { faceDownloadProgress / 100f },
+                                    color = MaterialTheme.colorScheme.tertiary,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(10.dp)
@@ -1835,8 +1861,8 @@ private fun SetupAiPage(
                             }
                         } else if (faceModelDownloaded) {
                             Surface(
-                                shape = ShapeMedium,
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -1847,13 +1873,13 @@ private fun SetupAiPage(
                                     Icon(
                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = MaterialTheme.colorScheme.tertiary,
                                         modifier = Modifier.size(IconSizeTokens.M)
                                     )
                                     Text(
-                                        text = "Model ready (13 MB). Face grouping enabled.",
+                                        text = "Model ready (13 MB) • Face grouping enabled",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
                                     )
                                 }
                             }
@@ -1865,8 +1891,8 @@ private fun SetupAiPage(
                                 },
                                 shape = ShapeFull,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                    containerColor = MaterialTheme.colorScheme.tertiary,
+                                    contentColor = MaterialTheme.colorScheme.onTertiary
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
