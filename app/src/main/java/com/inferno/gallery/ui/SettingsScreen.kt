@@ -1695,33 +1695,24 @@ fun SettingsScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
 
-                                    // Chips
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        ModelSpecChip(text = "Google ML Kit", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
-                                        ModelSpecChip(text = "Built into Android by default")
-                                    }
-
-                                    // Links
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        ModelLinkChip(
-                                            label = "Model Source: Google ML Kit",
-                                            url = "https://developers.google.com/ml-kit/vision/text-recognition/android",
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                    ModelMetadataPanel(
+                                        specs = listOf(
+                                            ModelSpecItem("Google ML Kit", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                            ModelSpecItem("Built into Android by default")
+                                        ),
+                                        links = listOf(
+                                            ModelLinkItem(
+                                                label = "Model Source: Google ML Kit",
+                                                url = "https://developers.google.com/ml-kit/vision/text-recognition/android",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                            ),
+                                            ModelLinkItem(
+                                                label = "Runtime: Play Services",
+                                                url = "https://developers.google.com/android/guides/setup",
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                            )
                                         )
-                                        ModelLinkChip(
-                                            label = "Runtime: Play Services",
-                                            url = "https://developers.google.com/android/guides/setup",
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
-                                        )
-                                    }
+                                    )
 
                                     if (ocrTotal > 0) {
                                         val progressFloat = (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f)
@@ -1874,33 +1865,24 @@ fun SettingsScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
 
-                                        // Chips
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            ModelSpecChip(text = "OpenAI CLIP ViT-B/16", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
-                                            ModelSpecChip(text = "ONNX INT8 Quantized")
-                                        }
-
-                                        // Links
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            ModelLinkChip(
-                                                label = "Model Source: Hugging Face",
-                                                url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                        ModelMetadataPanel(
+                                            specs = listOf(
+                                                ModelSpecItem("OpenAI CLIP ViT-B/16", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                                ModelSpecItem("ONNX INT8 Quantized")
+                                            ),
+                                            links = listOf(
+                                                ModelLinkItem(
+                                                    label = "Model Source: Hugging Face",
+                                                    url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                                ),
+                                                ModelLinkItem(
+                                                    label = "Model Hosted: GitHub Releases",
+                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                                )
                                             )
-                                            ModelLinkChip(
-                                                label = "Model Hosted: GitHub Releases",
-                                                url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
-                                            )
-                                        }
+                                        )
 
                                         if (isDownloading) {
                                             LinearWavyProgressIndicator(
@@ -1956,9 +1938,24 @@ fun SettingsScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            Surface(
+                                                shape = ExpressiveShapes.Clover4Leaf,
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(44.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.width(14.dp))
                                             Text(
-                                                text = "AI Embedding Generation",
-                                                style = MaterialTheme.typography.titleMedium,
+                                                text = "Smart Search (Semantic AI)",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                 modifier = Modifier.weight(1f)
                                             )
 
@@ -1991,33 +1988,30 @@ fun SettingsScreen(
                                             }
                                         }
 
-                                        // Chips
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            ModelSpecChip(text = "OpenAI CLIP ViT-B/16", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
-                                            ModelSpecChip(text = "ONNX INT8 Quantized")
-                                        }
+                                        Text(
+                                            text = "Search photos with natural descriptions using on-device OpenAI CLIP embeddings.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
 
-                                        // Links
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            ModelLinkChip(
-                                                label = "Model Source: Hugging Face",
-                                                url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                        ModelMetadataPanel(
+                                            specs = listOf(
+                                                ModelSpecItem("OpenAI CLIP ViT-B/16", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                                ModelSpecItem("ONNX INT8 Quantized")
+                                            ),
+                                            links = listOf(
+                                                ModelLinkItem(
+                                                    label = "Model Source: Hugging Face",
+                                                    url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                                ),
+                                                ModelLinkItem(
+                                                    label = "Model Hosted: GitHub Releases",
+                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                                )
                                             )
-                                            ModelLinkChip(
-                                                label = "Model Hosted: GitHub Releases",
-                                                url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
-                                            )
-                                        }
+                                        )
 
                                         if (displayClipTotal > 0) {
                                             val progressFloat = (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f)
@@ -2194,33 +2188,24 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
 
-                                            // Chips
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                ModelSpecChip(text = "MobileFaceNet", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
-                                                ModelSpecChip(text = "InsightFace (w600k)")
-                                            }
-
-                                            // Links
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                ModelLinkChip(
-                                                    label = "Model Source: Hugging Face",
-                                                    url = "https://huggingface.co/deepghs/insightface",
-                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                            ModelMetadataPanel(
+                                                specs = listOf(
+                                                    ModelSpecItem("MobileFaceNet", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                                    ModelSpecItem("InsightFace (w600k)")
+                                                ),
+                                                links = listOf(
+                                                    ModelLinkItem(
+                                                        label = "Model Source: Hugging Face",
+                                                        url = "https://huggingface.co/deepghs/insightface",
+                                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                                    ),
+                                                    ModelLinkItem(
+                                                        label = "Model Hosted: GitHub Releases",
+                                                        url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                                    )
                                                 )
-                                                ModelLinkChip(
-                                                    label = "Model Hosted: GitHub Releases",
-                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
-                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
-                                                )
-                                            }
+                                            )
 
                                             if (isFaceDownloading) {
                                                 LinearWavyProgressIndicator(
@@ -2276,9 +2261,24 @@ fun SettingsScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                Surface(
+                                                    shape = ShapeFull,
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.size(40.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(14.dp))
                                                 Text(
                                                     text = "Face Scanning & Clustering",
-                                                    style = MaterialTheme.typography.titleMedium,
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                     modifier = Modifier.weight(1f)
                                                 )
 
@@ -2311,33 +2311,30 @@ fun SettingsScreen(
                                                 }
                                             }
 
-                                            // Chips
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                ModelSpecChip(text = "MobileFaceNet", icon = ImageVector.vectorResource(R.drawable.ic_ms_code))
-                                                ModelSpecChip(text = "InsightFace (w600k)")
-                                            }
+                                            Text(
+                                                text = "Scan and cluster detected faces on-device to organize photos into private People albums.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
 
-                                            // Links
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                ModelLinkChip(
-                                                    label = "Model Source: Hugging Face",
-                                                    url = "https://huggingface.co/deepghs/insightface",
-                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                            ModelMetadataPanel(
+                                                specs = listOf(
+                                                    ModelSpecItem("MobileFaceNet", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                                    ModelSpecItem("InsightFace (w600k)")
+                                                ),
+                                                links = listOf(
+                                                    ModelLinkItem(
+                                                        label = "Model Source: Hugging Face",
+                                                        url = "https://huggingface.co/deepghs/insightface",
+                                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
+                                                    ),
+                                                    ModelLinkItem(
+                                                        label = "Model Hosted: GitHub Releases",
+                                                        url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
+                                                    )
                                                 )
-                                                ModelLinkChip(
-                                                    label = "Model Hosted: GitHub Releases",
-                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
-                                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
-                                                )
-                                            }
+                                            )
 
                                             if (isFaceIndexing || (faceTotal > 0 && faceProcessed < faceTotal)) {
                                                 val animatedFaceProgress by animateFloatAsState(
@@ -2680,14 +2677,136 @@ private data class CategoryItem(
     val section: String
 )
 
+
+private data class ModelSpecItem(
+    val text: String,
+    val icon: ImageVector? = null
+)
+
+private data class ModelLinkItem(
+    val label: String,
+    val url: String,
+    val icon: ImageVector? = null
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelMetadataPanel(
+    specs: List<ModelSpecItem>,
+    links: List<ModelLinkItem>,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Specifications Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_code),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = "SPECIFICATIONS",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.6.sp,
+                        fontSize = 10.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Specs Chips
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                specs.forEach { spec ->
+                    ModelSpecChip(
+                        text = spec.text,
+                        icon = spec.icon,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            if (links.isNotEmpty()) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+
+                // Links Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "UPSTREAM & RUNTIME",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.6.sp,
+                            fontSize = 10.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Links Chips
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    links.forEach { link ->
+                        ModelLinkChip(
+                            label = link.label,
+                            url = link.url,
+                            icon = link.icon
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ModelSpecChip(
     text: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
     Surface(
         modifier = modifier,
@@ -2709,7 +2828,7 @@ private fun ModelSpecChip(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(11.dp),
-                    tint = contentColor
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
             Text(
@@ -2728,7 +2847,7 @@ private fun ModelLinkChip(
     label: String,
     url: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new)
+    icon: ImageVector? = null
 ) {
     val uriHandler = LocalUriHandler.current
     val haptic = LocalHapticFeedback.current
@@ -2739,40 +2858,40 @@ private fun ModelLinkChip(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 uriHandler.openUri(url)
             },
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-        contentColor = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         shape = ShapeSmall,
         border = BorderStroke(
-            width = 0.75.dp,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
         )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = icon ?: ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(13.dp)
+                modifier = Modifier.size(12.dp)
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 11.sp
                 ),
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Icon(
                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(11.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.size(10.dp)
             )
         }
     }
