@@ -799,8 +799,8 @@ private class NativePhotonAdapter(
                 val textView = TextView(parent.context).apply {
                     val density = resources.displayMetrics.density
                     val padH = (16 * density).toInt()
-                    val padTop = (16 * density).toInt()
-                    val padBottom = (12 * density).toInt()
+                    val padTop = (20 * density).toInt()
+                    val padBottom = (16 * density).toInt()
                     setPadding(padH, padTop, padH, padBottom)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 15.5f)
                     typeface = Typeface.create("sans-serif", Typeface.BOLD)

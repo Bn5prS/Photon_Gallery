@@ -646,7 +646,7 @@ fun PhotoMapScreen(
                                                 color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = 8.dp, vertical = 12.dp)
+                                                    .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 14.dp)
                                             )
                                         }
                                         is GalleryListItem.Item -> {

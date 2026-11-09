@@ -603,8 +603,8 @@ fun TimelineSectionHeader(
             .padding(
                 start = 16.dp,
                 end = 16.dp,
-                top = 16.dp,
-                bottom = 16.dp
+                top = 20.dp,
+                bottom = 18.dp
             ),
         contentAlignment = if (isCenter) Alignment.Center else Alignment.CenterStart
     ) {
