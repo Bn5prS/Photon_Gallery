@@ -2490,7 +2490,7 @@ private fun ViewerActionButtonsRow(
 
                 // 3. Edit / Tune
                 ViewerToolTile(
-                    icon = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_tune),
+                    icon = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_edit else R.drawable.ic_ms_tune),
                     contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
                     enabled = currentItem?.localExists == true,
                     onClick = onEdit,
