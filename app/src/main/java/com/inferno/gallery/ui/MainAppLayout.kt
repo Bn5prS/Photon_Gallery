@@ -67,6 +67,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -710,7 +713,9 @@ fun MainAppLayout(
                             ) {
                                 PhotonBackButton(
                                     onClick = {
-                                        if (settingsActiveSection != null) {
+                                        if (settingsActiveSection == "Customize Toolbars") {
+                                            settingsActiveSection = "Layout & Navigation"
+                                        } else if (settingsActiveSection != null) {
                                             settingsActiveSection = null
                                         } else {
                                             nestedNavController.popBackStackSafely()
@@ -720,6 +725,7 @@ fun MainAppLayout(
                                 val settingsHeaderTitle = when (settingsActiveSection) {
                                     "Look & Feel" -> stringResource(R.string.category_theme_display)
                                     "Layout & Navigation" -> stringResource(R.string.category_layout_navigation)
+                                    "Customize Toolbars" -> stringResource(R.string.customize_toolbars_title)
                                     "General" -> stringResource(R.string.category_general)
                                     "Smart Search & OCR" -> stringResource(R.string.smart_search)
                                     "Privacy & Security" -> stringResource(R.string.category_security_privacy)
@@ -887,99 +893,180 @@ fun MainAppLayout(
                         )
                     }
                 } else {
-                    androidx.compose.material3.Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pointerInput(Unit) {},
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        tonalElevation = 0.dp
+                    NavigationBar(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets.navigationBars
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .height(56.dp)
-                                .padding(horizontal = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceAround,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            DockItem(
-                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = stringResource(R.string.nav_photos), modifier = Modifier.size(24.dp)) },
-                                label = stringResource(R.string.nav_photos),
-                                isSelected = currentRoute == "photos",
-                                onClick = { 
-                                    if (nestedNavController.currentDestination?.route == "photos") {
-                                        viewModel.triggerPhotosScrollToTop()
-                                    } else {
-                                        nestedNavController.navigate("photos") {
-                                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                        NavigationBarItem(
+                            selected = currentRoute == "photos",
+                            onClick = {
+                                if (nestedNavController.currentDestination?.route == "photos") {
+                                    viewModel.triggerPhotosScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("photos") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
                                 }
-                            )
-                            if (showVideosInDock) {
-                                DockItem(
-                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_play_arrow), contentDescription = stringResource(R.string.album_videos), modifier = Modifier.size(24.dp)) },
-                                    label = stringResource(R.string.album_videos),
-                                    isSelected = currentRoute == "videos",
-                                    onClick = {
-                                        if (nestedNavController.currentDestination?.route == "videos") {
-                                            viewModel.triggerVideosScrollToTop()
-                                        } else {
-                                            nestedNavController.navigate("videos") {
-                                                popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    }
+                            },
+                            icon = {
+                                Icon(
+                                    ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                    contentDescription = stringResource(R.string.nav_photos)
                                 )
-                            }
-                            DockItem(
-                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_album), contentDescription = stringResource(R.string.nav_albums), modifier = Modifier.size(24.dp)) },
-                                label = stringResource(R.string.nav_albums),
-                                isSelected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
-                                onClick = { 
-                                    if (nestedNavController.currentDestination?.route == "albums") {
-                                        viewModel.triggerAlbumsScrollToTop()
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.nav_photos),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                        if (showVideosInDock) {
+                            NavigationBarItem(
+                                selected = currentRoute == "videos",
+                                onClick = {
+                                    if (nestedNavController.currentDestination?.route == "videos") {
+                                        viewModel.triggerVideosScrollToTop()
                                     } else {
-                                        nestedNavController.navigate("albums") {
+                                        nestedNavController.navigate("videos") {
                                             popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                             launchSingleTop = true
                                             restoreState = true
                                         }
                                     }
-                                }
+                                },
+                                icon = {
+                                    Icon(
+                                        ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                        contentDescription = stringResource(R.string.album_videos)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = stringResource(R.string.album_videos),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
-                            DockItem(
-                                icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_dashboard), contentDescription = stringResource(R.string.nav_collections), modifier = Modifier.size(24.dp)) },
-                                label = stringResource(R.string.nav_collections),
-                                isSelected = currentRoute == "collections",
-                                onClick = { 
-                                    if (nestedNavController.currentDestination?.route == "collections") {
-                                        viewModel.triggerCollectionsScrollToTop()
-                                    } else {
-                                        nestedNavController.navigate("collections") {
-                                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                        }
+                        NavigationBarItem(
+                            selected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
+                            onClick = {
+                                if (nestedNavController.currentDestination?.route == "albums") {
+                                    viewModel.triggerAlbumsScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("albums") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
                                 }
+                            },
+                            icon = {
+                                Icon(
+                                    ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                    contentDescription = stringResource(R.string.nav_albums)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.nav_albums),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            DockItem(
-                                icon = { Icon(imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = stringResource(R.string.nav_search), modifier = Modifier.size(24.dp)) },
-                                label = stringResource(R.string.nav_search),
-                                isSelected = currentRoute == "search",
-                                onClick = { nestedNavController.navigate("search") {
+                        )
+                        NavigationBarItem(
+                            selected = currentRoute == "collections",
+                            onClick = {
+                                if (nestedNavController.currentDestination?.route == "collections") {
+                                    viewModel.triggerCollectionsScrollToTop()
+                                } else {
+                                    nestedNavController.navigate("collections") {
+                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                                    contentDescription = stringResource(R.string.nav_collections)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.nav_collections),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                        NavigationBarItem(
+                            selected = currentRoute == "search",
+                            onClick = {
+                                nestedNavController.navigate("search") {
                                     popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
-                                } }
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                                    contentDescription = stringResource(R.string.nav_search)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.nav_search),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
+                        )
                     }
                 }
             }

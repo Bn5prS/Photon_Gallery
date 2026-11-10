@@ -14,6 +14,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -442,7 +447,14 @@ fun NavigationGraph(
                 com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
                     onBackClick = { navController.popBackStackSafely(backStackEntry) },
                     settingsViewModel = settingsViewModel,
-                    initialTarget = initialTarget
+                    initialTarget = initialTarget,
+                    showTopBar = true,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .verticalScroll(rememberScrollState())
                 )
             }
 

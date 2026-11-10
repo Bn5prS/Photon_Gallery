@@ -3,18 +3,20 @@ package com.inferno.gallery.ui.settings
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -46,7 +49,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -63,6 +68,7 @@ import com.inferno.gallery.ui.model.SelectionDockAction
 import com.inferno.gallery.ui.model.ViewerToolbarAction
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeExtraLarge
+import com.inferno.gallery.ui.theme.getSegmentShape
 
 enum class ToolbarCustomizationTarget {
     VIEWER,
@@ -75,6 +81,7 @@ fun CustomizeToolbarsScreen(
     onBackClick: () -> Unit,
     settingsViewModel: com.inferno.gallery.ui.SettingsViewModel,
     initialTarget: ToolbarCustomizationTarget = ToolbarCustomizationTarget.VIEWER,
+    showTopBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -96,72 +103,77 @@ fun CustomizeToolbarsScreen(
 
     val dragDropState = rememberToolbarDragDropState(minSlots = 2, maxSlots = 6)
 
+    var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
     var toolbarBounds by remember { mutableStateOf<Rect?>(null) }
     var shelfBounds by remember { mutableStateOf<Rect?>(null) }
     val slotCenters = remember { mutableStateMapOf<Int, Float>() }
 
-    Column(
+    Box(
         modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        // ── Header ─────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            PhotonBackButton(onClick = onBackClick)
-            Column {
-                Text(
-                    text = stringResource(R.string.customize_toolbars_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = stringResource(R.string.customize_toolbars_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            .fillMaxWidth()
+            .onGloballyPositioned { coords ->
+                rootBoxTopLeft = coords.positionInRoot()
             }
-        }
-
-        // ── Target Switcher ────────────────────────────────
-        SingleChoiceSegmentedButtonRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        ) {
-            SegmentedButton(
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                onClick = {
-                    selectedTarget = ToolbarCustomizationTarget.VIEWER
-                    dragDropState.reset()
-                },
-                selected = selectedTarget == ToolbarCustomizationTarget.VIEWER,
-                label = { Text(stringResource(R.string.toolbar_target_viewer)) }
-            )
-            SegmentedButton(
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                onClick = {
-                    selectedTarget = ToolbarCustomizationTarget.SELECTION_DOCK
-                    dragDropState.reset()
-                },
-                selected = selectedTarget == ToolbarCustomizationTarget.SELECTION_DOCK,
-                label = { Text(stringResource(R.string.toolbar_target_selection)) }
-            )
-        }
-
+    ) {
         Column(
             modifier = Modifier
-                .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ── Header ─────────────────────────────────────────
+            if (showTopBar) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    PhotonBackButton(onClick = onBackClick)
+                    Column {
+                        Text(
+                            text = stringResource(R.string.customize_toolbars_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = stringResource(R.string.customize_toolbars_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // ── Target Switcher ────────────────────────────────
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    onClick = {
+                        selectedTarget = ToolbarCustomizationTarget.VIEWER
+                        dragDropState.reset()
+                        slotCenters.clear()
+                    },
+                    selected = selectedTarget == ToolbarCustomizationTarget.VIEWER,
+                    label = { Text(stringResource(R.string.toolbar_target_viewer)) }
+                )
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    onClick = {
+                        selectedTarget = ToolbarCustomizationTarget.SELECTION_DOCK
+                        dragDropState.reset()
+                        slotCenters.clear()
+                    },
+                    selected = selectedTarget == ToolbarCustomizationTarget.SELECTION_DOCK,
+                    label = { Text(stringResource(R.string.toolbar_target_selection)) }
+                )
+            }
+
             // ── Live Interactive Preview Area ───────────────────
             Surface(
                 shape = RoundedCornerShape(24.dp),
@@ -176,6 +188,9 @@ fun CustomizeToolbarsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
+                    .onGloballyPositioned { coordinates ->
+                        toolbarBounds = coordinates.boundsInRoot()
+                    }
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -211,29 +226,39 @@ fun CustomizeToolbarsScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 12.dp)
-                            .onGloballyPositioned { coordinates ->
-                                toolbarBounds = coordinates.boundsInRoot()
-                            },
+                            .padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (selectedTarget == ToolbarCustomizationTarget.VIEWER) {
-                            // Viewer Stadium Capsule
+                            // Viewer Segmented Layered Pill (Exact 1:1 match with DetailScreen)
                             Surface(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surfaceContainer,
-                                tonalElevation = 2.dp,
-                                shadowElevation = 4.dp,
-                                modifier = Modifier.height(64.dp)
+                                border = null,
+                                tonalElevation = 0.dp,
+                                shadowElevation = 0.dp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 380.dp)
+                                    .height(64.dp)
                             ) {
                                 Row(
                                     modifier = Modifier
+                                        .fillMaxSize()
                                         .padding(6.dp),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val total = currentActiveIds.size
                                     currentActiveIds.forEachIndexed { index, id ->
                                         val action = ViewerToolbarAction.fromId(id) ?: return@forEachIndexed
+                                        val tileShape = getSegmentShape(
+                                            index = index,
+                                            total = total,
+                                            outerCorner = 26.dp,
+                                            innerCorner = 6.dp
+                                        )
+
                                         val isBeingDragged = dragDropState.isDragging &&
                                                 dragDropState.dragSourceZone == DragDropTargetZone.TOOLBAR &&
                                                 dragDropState.draggedId == id
@@ -244,41 +269,37 @@ fun CustomizeToolbarsScreen(
 
                                         val slotScale by animateFloatAsState(
                                             targetValue = when {
-                                                isBeingDragged -> 1.18f
-                                                isSlotHovered -> 1.08f
+                                                isSlotHovered && !isBeingDragged -> 1.08f
                                                 else -> 1f
                                             },
                                             animationSpec = MotionTokens.bouncySpring(),
                                             label = "viewerSlotScale"
                                         )
 
-                                        Box(
+                                        var itemPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+
+                                        Surface(
                                             modifier = Modifier
-                                                .size(52.dp)
+                                                .weight(1f)
+                                                .fillMaxHeight()
                                                 .onGloballyPositioned { coords ->
-                                                    val bounds = coords.boundsInRoot()
-                                                    toolbarBounds?.let { tb ->
-                                                        slotCenters[index] = bounds.center.x - tb.left
-                                                    }
+                                                    itemPositionInRoot = coords.positionInRoot()
+                                                    slotCenters[index] = coords.boundsInRoot().center.x
                                                 }
-                                                .zIndex(if (isBeingDragged) 10f else 1f)
                                                 .graphicsLayer {
                                                     scaleX = slotScale
                                                     scaleY = slotScale
-                                                    if (isBeingDragged) {
-                                                        translationX = dragDropState.dragOffset.x
-                                                        translationY = dragDropState.dragOffset.y
-                                                    }
+                                                    alpha = if (isBeingDragged) 0.25f else 1f
                                                 }
                                                 .pointerInput(id, index) {
-                                                    detectDragGesturesAfterLongPress(
-                                                        onDragStart = { offset ->
+                                                    detectDragGestures(
+                                                        onDragStart = { localOffset ->
                                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                             dragDropState.startDrag(
                                                                 id = id,
                                                                 sourceZone = DragDropTargetZone.TOOLBAR,
                                                                 sourceIndex = index,
-                                                                initialGlobalOffset = offset
+                                                                initialGlobalOffset = itemPositionInRoot + localOffset
                                                             )
                                                         },
                                                         onDrag = { change, dragAmount ->
@@ -304,22 +325,30 @@ fun CustomizeToolbarsScreen(
                                                         },
                                                         onDragCancel = { dragDropState.reset() }
                                                     )
-                                                }
-                                                .clip(CircleShape)
-                                                .background(
-                                                    if (isSlotHovered && !isBeingDragged)
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                                    else
-                                                        MaterialTheme.colorScheme.surfaceContainerHighest
-                                                ),
-                                            contentAlignment = Alignment.Center
+                                                },
+                                            shape = tileShape,
+                                            color = if (isSlotHovered && !isBeingDragged)
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            border = null,
+                                            tonalElevation = 0.dp,
+                                            shadowElevation = 0.dp
                                         ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(action.iconRes),
-                                                contentDescription = stringResource(action.labelRes),
-                                                tint = MaterialTheme.colorScheme.onSurface,
-                                                modifier = Modifier.size(24.dp)
-                                            )
+                                            Box(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(action.iconRes),
+                                                    contentDescription = stringResource(action.labelRes),
+                                                    tint = if (isSlotHovered && !isBeingDragged)
+                                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else
+                                                        MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -349,41 +378,36 @@ fun CustomizeToolbarsScreen(
 
                                         val slotScale by animateFloatAsState(
                                             targetValue = when {
-                                                isBeingDragged -> 1.18f
-                                                isSlotHovered -> 1.08f
+                                                isSlotHovered && !isBeingDragged -> 1.15f
                                                 else -> 1f
                                             },
                                             animationSpec = MotionTokens.bouncySpring(),
                                             label = "dockSlotScale"
                                         )
 
+                                        var itemPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+
                                         Box(
                                             modifier = Modifier
                                                 .size(44.dp)
                                                 .onGloballyPositioned { coords ->
-                                                    val bounds = coords.boundsInRoot()
-                                                    toolbarBounds?.let { tb ->
-                                                        slotCenters[index] = bounds.center.x - tb.left
-                                                    }
+                                                    itemPositionInRoot = coords.positionInRoot()
+                                                    slotCenters[index] = coords.boundsInRoot().center.x
                                                 }
-                                                .zIndex(if (isBeingDragged) 10f else 1f)
                                                 .graphicsLayer {
                                                     scaleX = slotScale
                                                     scaleY = slotScale
-                                                    if (isBeingDragged) {
-                                                        translationX = dragDropState.dragOffset.x
-                                                        translationY = dragDropState.dragOffset.y
-                                                    }
+                                                    alpha = if (isBeingDragged) 0.25f else 1f
                                                 }
                                                 .pointerInput(id, index) {
-                                                    detectDragGesturesAfterLongPress(
-                                                        onDragStart = { offset ->
+                                                    detectDragGestures(
+                                                        onDragStart = { localOffset ->
                                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                             dragDropState.startDrag(
                                                                 id = id,
                                                                 sourceZone = DragDropTargetZone.TOOLBAR,
                                                                 sourceIndex = index,
-                                                                initialGlobalOffset = offset
+                                                                initialGlobalOffset = itemPositionInRoot + localOffset
                                                             )
                                                         },
                                                         onDrag = { change, dragAmount ->
@@ -413,7 +437,7 @@ fun CustomizeToolbarsScreen(
                                                 .clip(RoundedCornerShape(12.dp))
                                                 .background(
                                                     if (isSlotHovered && !isBeingDragged)
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                                     else
                                                         Color.Transparent
                                                 ),
@@ -504,29 +528,28 @@ fun CustomizeToolbarsScreen(
                                         dragDropState.dragSourceZone == DragDropTargetZone.SHELF &&
                                         dragDropState.draggedId == id
 
+                                var itemPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                     modifier = Modifier
-                                        .zIndex(if (isBeingDragged) 10f else 1f)
+                                        .onGloballyPositioned { coords ->
+                                            itemPositionInRoot = coords.positionInRoot()
+                                        }
                                         .graphicsLayer {
-                                            if (isBeingDragged) {
-                                                scaleX = 1.15f
-                                                scaleY = 1.15f
-                                                translationX = dragDropState.dragOffset.x
-                                                translationY = dragDropState.dragOffset.y
-                                            }
+                                            alpha = if (isBeingDragged) 0.25f else 1f
                                         }
                                         .pointerInput(id, index) {
-                                            detectDragGesturesAfterLongPress(
-                                                onDragStart = { offset ->
+                                            detectDragGestures(
+                                                onDragStart = { localOffset ->
                                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     dragDropState.startDrag(
                                                         id = id,
                                                         sourceZone = DragDropTargetZone.SHELF,
                                                         sourceIndex = index,
-                                                        initialGlobalOffset = offset
+                                                        initialGlobalOffset = itemPositionInRoot + localOffset
                                                     )
                                                 },
                                                 onDrag = { change, dragAmount ->
@@ -616,6 +639,52 @@ fun CustomizeToolbarsScreen(
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
+                }
+            }
+        }
+
+        // ── Floating Dragged Action Overlay ───────────────────
+        if (dragDropState.isDragging && dragDropState.draggedId != null) {
+            val draggedId = dragDropState.draggedId!!
+            val (iconRes, labelRes) = if (selectedTarget == ToolbarCustomizationTarget.VIEWER) {
+                val action = ViewerToolbarAction.fromId(draggedId)
+                (action?.iconRes ?: R.drawable.ic_ms_tune) to (action?.labelRes ?: R.string.customize_toolbars_title)
+            } else {
+                val action = SelectionDockAction.fromId(draggedId)
+                (action?.iconRes ?: R.drawable.ic_ms_tune) to (action?.labelRes ?: R.string.customize_toolbars_title)
+            }
+
+            val pointer = dragDropState.currentPointer
+            val density = LocalDensity.current
+            val iconRadiusPx = with(density) { 28.dp.toPx() }
+
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shadowElevation = 12.dp,
+                tonalElevation = 6.dp,
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .zIndex(999f)
+                    .graphicsLayer {
+                        translationX = pointer.x - rootBoxTopLeft.x - iconRadiusPx
+                        translationY = pointer.y - rootBoxTopLeft.y - iconRadiusPx
+                        scaleX = 1.15f
+                        scaleY = 1.15f
+                    }
+                    .size(56.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(iconRes),
+                        contentDescription = stringResource(labelRes),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
         }

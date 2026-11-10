@@ -1463,7 +1463,8 @@ fun SettingsScreen(
                         "Customize Toolbars" -> {
                             com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
                                 onBackClick = { onActiveSectionChange("Layout & Navigation") },
-                                settingsViewModel = viewModel
+                                settingsViewModel = viewModel,
+                                showTopBar = false
                             )
                         }
 

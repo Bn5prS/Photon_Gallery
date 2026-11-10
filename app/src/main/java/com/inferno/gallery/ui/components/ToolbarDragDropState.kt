@@ -113,6 +113,7 @@ class ToolbarDragDropState(
     var hoverSlotIndex by mutableIntStateOf(-1)
 
     val isDragging: Boolean get() = draggedId != null
+    val currentPointer: Offset get() = dragInitialGlobalOffset + dragOffset
 
     fun startDrag(
         id: String,
@@ -137,17 +138,20 @@ class ToolbarDragDropState(
     ) {
         if (!isDragging) return
         dragOffset += dragDelta
-        val currentPointer = dragInitialGlobalOffset + dragOffset
+        val pointer = dragInitialGlobalOffset + dragOffset
 
         hoverTargetZone = when {
-            toolbarBounds != null && toolbarBounds.contains(currentPointer) -> DragDropTargetZone.TOOLBAR
-            shelfBounds != null && shelfBounds.contains(currentPointer) -> DragDropTargetZone.SHELF
+            toolbarBounds != null && shelfBounds != null -> {
+                val dividingY = (toolbarBounds.bottom + shelfBounds.top) / 2f
+                if (pointer.y < dividingY) DragDropTargetZone.TOOLBAR else DragDropTargetZone.SHELF
+            }
+            toolbarBounds != null && toolbarBounds.contains(pointer) -> DragDropTargetZone.TOOLBAR
+            shelfBounds != null && shelfBounds.contains(pointer) -> DragDropTargetZone.SHELF
             else -> DragDropTargetZone.NONE
         }
 
         if (hoverTargetZone == DragDropTargetZone.TOOLBAR && slotCenters.isNotEmpty()) {
-            val localX = currentPointer.x - (toolbarBounds?.left ?: 0f)
-            hoverSlotIndex = ToolbarDragDropMath.calculateTargetSlot(localX, slotCenters)
+            hoverSlotIndex = ToolbarDragDropMath.calculateTargetSlot(pointer.x, slotCenters)
         } else {
             hoverSlotIndex = -1
         }
