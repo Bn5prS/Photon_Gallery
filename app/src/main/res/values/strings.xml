@@ -573,4 +573,18 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="toast_vault_restored">Restored to gallery</string>
     <string name="toast_vault_deleted">Deleted permanently</string>
     <string name="toast_select_at_least_two_photos">Select at least 2 photos</string>
+
+    <!-- Customizable Toolbars -->
+    <string name="customize_toolbars_title">Customize Toolbars</string>
+    <string name="customize_toolbars_subtitle">Rearrange and choose tools for photo viewer and selection dock</string>
+    <string name="toolbar_target_viewer">Viewer Pill</string>
+    <string name="toolbar_target_selection">Selection Dock</string>
+    <string name="toolbar_live_preview">Live Interactive Preview</string>
+    <string name="toolbar_drag_hint">Long-press and drag horizontally to swap, or drag down to shelf to remove</string>
+    <string name="toolbar_available_shelf">Available Tools Shelf</string>
+    <string name="toolbar_shelf_drop_hint">Drag up into toolbar to add</string>
+    <string name="toolbar_all_tools_active">All available tools are currently added to the toolbar</string>
+    <string name="toolbar_min_limit_toast">At least 2 tools must remain in the toolbar</string>
+    <string name="toolbar_reset_toast">Toolbar reset to default</string>
+    <string name="toolbar_reset_button">Reset to Default</string>
 </resources>

@@ -324,6 +324,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         started = SharingStarted.Eagerly,
         initialValue = true
     )
+
+    val viewerToolbarActions: StateFlow<List<String>> = settingsRepository.viewerToolbarActionsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS
+    )
+
+    val selectionDockActions: StateFlow<List<String>> = settingsRepository.selectionDockActionsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS
+    )
     val albumsExpandedDocuments: StateFlow<Boolean> = settingsRepository.albumsExpandedDocumentsFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,

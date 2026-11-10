@@ -181,6 +181,42 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val viewerToolbarActions: StateFlow<List<String>> = repository.viewerToolbarActionsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS
+    )
+
+    val selectionDockActions: StateFlow<List<String>> = repository.selectionDockActionsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS
+    )
+
+    fun updateViewerToolbarActions(actions: List<String>) {
+        viewModelScope.launch {
+            repository.updateViewerToolbarActions(actions)
+        }
+    }
+
+    fun updateSelectionDockActions(actions: List<String>) {
+        viewModelScope.launch {
+            repository.updateSelectionDockActions(actions)
+        }
+    }
+
+    fun resetViewerToolbarActions() {
+        viewModelScope.launch {
+            repository.resetViewerToolbarActions()
+        }
+    }
+
+    fun resetSelectionDockActions() {
+        viewModelScope.launch {
+            repository.resetSelectionDockActions()
+        }
+    }
+
     val useMaterialYou: StateFlow<Boolean> = repository.useMaterialYouFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
