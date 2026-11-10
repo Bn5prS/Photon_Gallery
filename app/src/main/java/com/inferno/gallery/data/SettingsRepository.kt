@@ -49,6 +49,8 @@ class SettingsRepository private constructor(private val context: Context) {
         val ALBUM_LAYOUT_MODE = stringPreferencesKey("album_layout_mode")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
+        val VIEWER_TOOLBAR_ACTIONS = stringPreferencesKey("viewer_toolbar_actions")
+        val SELECTION_DOCK_ACTIONS = stringPreferencesKey("selection_dock_actions")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
         val USE_AMOLED_BLACK = booleanPreferencesKey("use_amoled_black")
         val GRID_AUTO_PLAY = booleanPreferencesKey("grid_auto_play")
@@ -262,6 +264,28 @@ class SettingsRepository private constructor(private val context: Context) {
     val showVideosInDockFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[SHOW_VIDEOS_IN_DOCK] ?: false
+        }
+
+    val viewerToolbarActionsFlow: Flow<List<String>> = context.dataStore.data
+        .map { preferences ->
+            val raw = preferences[VIEWER_TOOLBAR_ACTIONS]
+            if (raw.isNullOrBlank()) {
+                com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS
+            } else {
+                val list = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                com.inferno.gallery.ui.model.ViewerToolbarAction.sanitize(list)
+            }
+        }
+
+    val selectionDockActionsFlow: Flow<List<String>> = context.dataStore.data
+        .map { preferences ->
+            val raw = preferences[SELECTION_DOCK_ACTIONS]
+            if (raw.isNullOrBlank()) {
+                com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS
+            } else {
+                val list = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                com.inferno.gallery.ui.model.SelectionDockAction.sanitize(list)
+            }
         }
 
     val useMaterialYouFlow: Flow<Boolean> = context.dataStore.data
@@ -522,6 +546,28 @@ class SettingsRepository private constructor(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_VIDEOS_IN_DOCK] = show
         }
+    }
+
+    suspend fun updateViewerToolbarActions(actions: List<String>) {
+        val sanitized = com.inferno.gallery.ui.model.ViewerToolbarAction.sanitize(actions)
+        context.dataStore.edit { preferences ->
+            preferences[VIEWER_TOOLBAR_ACTIONS] = sanitized.joinToString(",")
+        }
+    }
+
+    suspend fun updateSelectionDockActions(actions: List<String>) {
+        val sanitized = com.inferno.gallery.ui.model.SelectionDockAction.sanitize(actions)
+        context.dataStore.edit { preferences ->
+            preferences[SELECTION_DOCK_ACTIONS] = sanitized.joinToString(",")
+        }
+    }
+
+    suspend fun resetViewerToolbarActions() {
+        updateViewerToolbarActions(com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS)
+    }
+
+    suspend fun resetSelectionDockActions() {
+        updateSelectionDockActions(com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS)
     }
 
 
