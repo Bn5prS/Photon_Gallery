@@ -6,8 +6,8 @@ import com.inferno.gallery.R
 
 sealed class ViewerToolbarAction(
     val id: String,
-    @property:StringRes val labelRes: Int,
-    @property:DrawableRes val iconRes: Int
+    @param:StringRes val labelRes: Int,
+    @param:DrawableRes val iconRes: Int
 ) {
     object Share : ViewerToolbarAction("share", R.string.detail_share, R.drawable.ic_ms_share)
     object Favorite : ViewerToolbarAction("favorite", R.string.detail_favorite, R.drawable.ic_ms_favorite)
@@ -42,8 +42,8 @@ sealed class ViewerToolbarAction(
 
 sealed class SelectionDockAction(
     val id: String,
-    @property:StringRes val labelRes: Int,
-    @property:DrawableRes val iconRes: Int
+    @param:StringRes val labelRes: Int,
+    @param:DrawableRes val iconRes: Int
 ) {
     object Share : SelectionDockAction("share", R.string.detail_share, R.drawable.ic_ms_share)
     object Copy : SelectionDockAction("copy", R.string.action_copy, R.drawable.ic_ms_content_copy)
