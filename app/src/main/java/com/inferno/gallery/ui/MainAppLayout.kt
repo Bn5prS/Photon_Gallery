@@ -187,6 +187,7 @@ fun MainAppLayout(
     onCreateStitch: (List<String>) -> Unit = {},
     onOpenEditor: (String) -> Unit = {},
     onNavigateToVault: () -> Unit = {},
+    onNavigateToCustomizeToolbars: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = viewModel()
 ) {
@@ -205,6 +206,7 @@ fun MainAppLayout(
     }
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
+    val selectionDockActions by viewModel.selectionDockActions.collectAsState()
     val isDragSelecting by viewModel.isDragSelecting.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
@@ -2485,6 +2487,93 @@ fun MainAppLayout(
                 var createMenuExpanded by remember { mutableStateOf(false) }
                 var moreMenuExpanded by remember { mutableStateOf(false) }
 
+                val onShareSelectedAction = {
+                    if (selectedUris.isNotEmpty()) {
+                        coroutineScope.launch {
+                            val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                            com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, selectedUris.map { android.net.Uri.parse(it) }, strip)
+                        }
+                    }
+                    Unit
+                }
+
+                val onVaultSelectedAction = {
+                    val activity = context as? androidx.fragment.app.FragmentActivity
+                    if (activity != null) {
+                        viewModel.vaultAuthManager.authenticate(
+                            activity = activity,
+                            negativeButtonText = "Cancel",
+                            unlockSession = false,
+                            onSuccess = {
+                                val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
+                                viewModel.hideMedia(uris)
+                                viewModel.vaultAuthManager.lock()
+                                viewModel.clearSelection()
+                            },
+                            onFailure = {}
+                        )
+                    }
+                    Unit
+                }
+
+                val onDeleteSelectedAction = {
+                    val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
+                    val isSessionPermanent = viewModel.sessionSkipRecycleBin
+
+                    if (isSessionSkipConfirm || !confirmDeleteEnabled) {
+                        val rawSelected = selectedUris.toList()
+                        val parsedUris = rawSelected.map { Uri.parse(it) }
+                        if (parsedUris.isNotEmpty()) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
+                                    if (ghostUris.isNotEmpty()) {
+                                        val ghostStrings = ghostUris.flatMap {
+                                            listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
+                                        }.distinct()
+                                        viewModel.deleteSelectedMediaFromDb(ghostStrings)
+                                    }
+
+                                    if (validUris.isEmpty()) {
+                                        withContext(Dispatchers.Main) {
+                                            viewModel.clearSelection()
+                                            android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                        return@launch
+                                    }
+
+                                    pendingTrashUris = validUris.map { it.toString() }
+                                    val intentSender = if (isSessionPermanent) {
+                                        android.provider.MediaStore.createDeleteRequest(context.contentResolver, validUris).intentSender
+                                    } else {
+                                        android.provider.MediaStore.createTrashRequest(context.contentResolver, validUris, true).intentSender
+                                    }
+                                    val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
+                                    withContext(Dispatchers.Main) {
+                                        if (isSessionPermanent) {
+                                            permanentDeleteLauncher.launch(request)
+                                        } else {
+                                            trashLauncher.launch(request)
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                            viewModel.deleteSelectedMediaFromDb(rawSelected)
+                                            viewModel.clearSelection()
+                                            android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        showMultiDeleteConfirmDialog = true
+                    }
+                }
+
                 Surface(
                     shape = ShapeExtraLarge,
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -2497,123 +2586,75 @@ fun MainAppLayout(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Share
-                        IconButton(onClick = {
-                            if (selectedUris.isNotEmpty()) {
-                                coroutineScope.launch {
-                                    val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
-                                    com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, selectedUris.map { android.net.Uri.parse(it) }, strip)
+                        selectionDockActions.forEach { actionId ->
+                            when (actionId) {
+                                "share" -> {
+                                    IconButton(onClick = onShareSelectedAction) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                    }
                                 }
-                            }
-                        }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                        }
-
-                        // Copy
-                        IconButton(onClick = { showCopySheet = true }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = "Copy", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                        }
-
-                        // Move
-                        IconButton(onClick = { showMoveSheet = true }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = "Move", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                        }
-
-                        // Create (Collage/Stitch)
-                        Box {
-                            IconButton(onClick = { createMenuExpanded = true }) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_add), contentDescription = "Create", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                            }
-                            DropdownMenu(
-                                expanded = createMenuExpanded,
-                                onDismissRequest = { createMenuExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_collage)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                    onClick = {
-                                        createMenuExpanded = false
-                                        if (isCreateEnabled) {
-                                            onCreateCollage(selectedUris.toList())
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
+                                "copy" -> {
+                                    IconButton(onClick = { showCopySheet = true }) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = "Copy", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                                     }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_stitch)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                    onClick = {
-                                        createMenuExpanded = false
-                                        if (isStitchEnabled) {
-                                            onCreateStitch(selectedUris.toList())
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
+                                }
+                                "move" -> {
+                                    IconButton(onClick = { showMoveSheet = true }) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = "Move", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                                     }
-                                )
-                            }
-                        }
-
-                        // Delete
-                        IconButton(onClick = {
-                            val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
-                            val isSessionPermanent = viewModel.sessionSkipRecycleBin
-
-                            if (isSessionSkipConfirm || !confirmDeleteEnabled) {
-                                val rawSelected = selectedUris.toList()
-                                val parsedUris = rawSelected.map { Uri.parse(it) }
-                                if (parsedUris.isNotEmpty()) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
-                                            if (ghostUris.isNotEmpty()) {
-                                                val ghostStrings = ghostUris.flatMap {
-                                                    listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
-                                                }.distinct()
-                                                viewModel.deleteSelectedMediaFromDb(ghostStrings)
-                                            }
-
-                                            if (validUris.isEmpty()) {
-                                                withContext(Dispatchers.Main) {
-                                                    viewModel.clearSelection()
-                                                    android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                                "create" -> {
+                                    Box {
+                                        IconButton(onClick = { createMenuExpanded = true }) {
+                                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_add), contentDescription = "Create", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                        }
+                                        DropdownMenu(
+                                            expanded = createMenuExpanded,
+                                            onDismissRequest = { createMenuExpanded = false }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.action_collage)) },
+                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                                onClick = {
+                                                    createMenuExpanded = false
+                                                    if (isCreateEnabled) {
+                                                        onCreateCollage(selectedUris.toList())
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
-                                                return@launch
-                                            }
-
-                                            pendingTrashUris = validUris.map { it.toString() }
-                                            val intentSender = if (isSessionPermanent) {
-                                                android.provider.MediaStore.createDeleteRequest(context.contentResolver, validUris).intentSender
-                                            } else {
-                                                android.provider.MediaStore.createTrashRequest(context.contentResolver, validUris, true).intentSender
-                                            }
-                                            val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
-                                            withContext(Dispatchers.Main) {
-                                                if (isSessionPermanent) {
-                                                    permanentDeleteLauncher.launch(request)
-                                                } else {
-                                                    trashLauncher.launch(request)
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.action_stitch)) },
+                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
+                                                onClick = {
+                                                    createMenuExpanded = false
+                                                    if (isStitchEnabled) {
+                                                        onCreateStitch(selectedUris.toList())
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
-                                                    viewModel.deleteSelectedMediaFromDb(rawSelected)
-                                                    viewModel.clearSelection()
-                                                    android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
-                                                } else {
-                                                    android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
+                                            )
                                         }
                                     }
                                 }
-                            } else {
-                                showMultiDeleteConfirmDialog = true
+                                "delete" -> {
+                                    IconButton(onClick = onDeleteSelectedAction) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error, modifier = Modifier.size(IconSizeTokens.L))
+                                    }
+                                }
+                                "vault" -> {
+                                    IconButton(onClick = onVaultSelectedAction) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = stringResource(R.string.action_hide), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                    }
+                                }
+                                "selectAll" -> {
+                                    IconButton(onClick = { viewModel.toggleSelectAll() }) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_select_all), contentDescription = stringResource(R.string.action_select_all), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                    }
+                                }
                             }
-                        }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error, modifier = Modifier.size(IconSizeTokens.L))
                         }
 
                         // More options
@@ -2625,27 +2666,102 @@ fun MainAppLayout(
                                 expanded = moreMenuExpanded,
                                 onDismissRequest = { moreMenuExpanded = false }
                             ) {
-                                // Hide (Private Space)
+                                if ("share" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_share)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            onShareSelectedAction()
+                                        }
+                                    )
+                                }
+                                if ("copy" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_copy)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            showCopySheet = true
+                                        }
+                                    )
+                                }
+                                if ("move" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_move)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            showMoveSheet = true
+                                        }
+                                    )
+                                }
+                                if ("create" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_collage)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            if (isCreateEnabled) {
+                                                onCreateCollage(selectedUris.toList())
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_stitch)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            if (isStitchEnabled) {
+                                                onCreateStitch(selectedUris.toList())
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                }
+                                if ("vault" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_hide)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            onVaultSelectedAction()
+                                        }
+                                    )
+                                }
+                                if ("selectAll" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_select_all)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_select_all), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            viewModel.toggleSelectAll()
+                                        }
+                                    )
+                                }
+                                if ("delete" !in selectionDockActions) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_delete), color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            onDeleteSelectedAction()
+                                        }
+                                    )
+                                }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.action_hide)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
+                                    text = { Text(stringResource(R.string.customize_toolbars_title)) },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
                                     onClick = {
                                         moreMenuExpanded = false
-                                        val activity = context as? androidx.fragment.app.FragmentActivity
-                                        if (activity != null) {
-                                            viewModel.vaultAuthManager.authenticate(
-                                                activity = activity,
-                                                negativeButtonText = "Cancel",
-                                                unlockSession = false,
-                                                onSuccess = {
-                                                    val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
-                                                    viewModel.hideMedia(uris)
-                                                    viewModel.vaultAuthManager.lock()
-                                                    viewModel.clearSelection()
-                                                },
-                                                onFailure = {}
-                                            )
-                                        }
+                                        onNavigateToCustomizeToolbars?.invoke()
                                     }
                                 )
                             }
