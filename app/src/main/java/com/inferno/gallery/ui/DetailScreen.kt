@@ -202,11 +202,14 @@ fun DetailScreen(
     onBack: () -> Unit,
     onNavigateToEditor: (android.net.Uri) -> Unit = {},
     onNavigateToFrameExtractor: (android.net.Uri) -> Unit = {},
-    onNavigateToPerson: ((Long) -> Unit)? = null
+    onNavigateToPerson: ((Long) -> Unit)? = null,
+    onNavigateToCustomizeToolbars: (() -> Unit)? = null
 ) {
     androidx.compose.runtime.LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
     }
+
+    val viewerToolbarActions by viewModel.viewerToolbarActions.collectAsState()
 
     val context = LocalContext.current
     val settingsRepo = viewModel.settingsRepository
@@ -1747,6 +1750,211 @@ fun DetailScreen(
         }
         }
 
+        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
+        val heartView = androidx.compose.ui.platform.LocalView.current
+
+        val onRestoreAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (isMediaStoreUri) {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(normUri), false)
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                restoreLauncher.launch(request)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Unable to restore: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val onPermanentDeleteAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (isMediaStoreUri) {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(normUri))
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                launcher.launch(request)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                    viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
+                                    android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val onShareAction = {
+            val item = currentItem
+            if (item != null) {
+                coroutineScope.launch {
+                    val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                    com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
+                }
+            }
+        }
+
+        val onEditAction = {
+            if (currentItem != null) {
+                flushPendingRotation()
+                val uri = resolvedCurrentUri ?: currentItem.uri
+                if (!currentItem.isVideo) {
+                    onNavigateToEditor(uri)
+                } else {
+                    val editIntent = Intent(Intent.ACTION_EDIT).apply {
+                        setDataAndType(uri, "video/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    }
+                    try {
+                        context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        val onFavoriteAction = {
+            if (currentItem != null) {
+                heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                viewModel.toggleFavorite(currentItem.id)
+            }
+        }
+
+        val onDeleteAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (!isMediaStoreUri) {
+                    android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
+                    val isSessionPermanent = viewModel.sessionSkipRecycleBin
+
+                    if (isSessionSkipConfirm || !confirmDeleteEnabled) {
+                        if (isSessionPermanent) {
+                            onPermanentDeleteAction()
+                        } else {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                                    val trashIntent = MediaStore.createTrashRequest(
+                                        context.contentResolver,
+                                        listOf(normUri),
+                                        true
+                                    )
+                                    val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                    withContext(Dispatchers.Main) {
+                                        launcher.launch(request)
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                            viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
+                                            android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Unable to trash this item: ${e.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        showDeleteConfirmDialog = true
+                    }
+                }
+            }
+        }
+
+        val onWallpaperAction = {
+            if (currentItem != null) {
+                val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
+                    setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    putExtra("mimeType", "image/*")
+                }
+                try {
+                    context.startActivity(Intent.createChooser(intent, "Set as..."))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        val onRotateAction = {
+            if (currentItem != null) {
+                val target = currentItem
+                pendingRotateItem = target
+                val currentTarget = targetRotationMap[target.id] ?: 0f
+                val nextTarget = currentTarget + 90f
+                targetRotationMap[target.id] = nextTarget
+                pendingRotateDelta = (pendingRotateDelta + 90) % 360
+                val anim = animRotationMap[target.id]
+
+                coroutineScope.launch {
+                    anim?.animateTo(
+                        targetValue = nextTarget,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                    )
+                }
+
+                pendingRotateJob?.cancel()
+                pendingRotateJob = coroutineScope.launch {
+                    kotlinx.coroutines.delay(650)
+                    flushPendingRotation()
+                }
+            }
+        }
+
+        val onVaultAction = {
+            if (currentItem != null) {
+                val act = context as? androidx.fragment.app.FragmentActivity
+                if (act != null) {
+                    viewModel.vaultAuthManager.authenticate(
+                        activity = act,
+                        negativeButtonText = "Cancel",
+                        unlockSession = false,
+                        onSuccess = {
+                            viewModel.hideMedia(listOf(currentItem.uri))
+                            viewModel.vaultAuthManager.lock()
+                            safeOnBack()
+                        },
+                        onFailure = {}
+                    )
+                }
+            }
+        }
+
         val onLensAction = {
             if (currentItem != null) {
                 val targetUri = resolvedCurrentUri ?: currentItem.uri
@@ -1966,27 +2174,18 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null && !currentItem.isVideo) {
+                                if (currentItem != null && !currentItem.isVideo && "wallpaper" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.detail_set_wallpaper)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
                                             showMoreMenu = false
-                                            val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
-                                                setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                putExtra("mimeType", "image/*")
-                                            }
-                                            try {
-                                                context.startActivity(Intent.createChooser(intent, "Set as..."))
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
-                                            }
+                                            onWallpaperAction()
                                         }
                                     )
                                 }
-                                if (currentItem != null) {
+                                if (currentItem != null && "copy" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_copy)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
@@ -1997,7 +2196,7 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null) {
+                                if (currentItem != null && "move" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_move)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
@@ -2008,38 +2207,13 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null && !currentItem.isVideo) {
+                                if (currentItem != null && !currentItem.isVideo && "rotate" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_rotate)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
-                                            // Keep 3-dot menu open so the user can tap Rotate repeatedly
-                                            val target = currentItem
-                                            pendingRotateItem = target
-                                            val currentTarget = targetRotationMap[target.id] ?: 0f
-                                            val nextTarget = currentTarget + 90f
-                                            targetRotationMap[target.id] = nextTarget
-                                            pendingRotateDelta = (pendingRotateDelta + 90) % 360
-                                            val anim = animRotationMap[target.id]
-
-                                            // 1. Instantly and fluidly animate UI rotation with zero frame drops
-                                            coroutineScope.launch {
-                                                anim?.animateTo(
-                                                    targetValue = nextTarget,
-                                                    animationSpec = androidx.compose.animation.core.spring(
-                                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                                                    )
-                                                )
-                                            }
-
-                                            // 2. Debounce disk persistence so rapid taps never stall the UI
-                                            pendingRotateJob?.cancel()
-                                            pendingRotateJob = coroutineScope.launch {
-                                                kotlinx.coroutines.delay(650)
-                                                flushPendingRotation()
-                                            }
+                                            onRotateAction()
                                         }
                                     )
                                 }
@@ -2066,31 +2240,81 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                // Hide (Private Space)
-                                if (currentItem != null) {
+                                if (currentItem != null && "share" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_share)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onShareAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "favorite" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(if (isFavorite) R.string.detail_unfavorite else R.string.detail_favorite)) },
+                                        leadingIcon = { Icon(if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite), contentDescription = null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onFavoriteAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "edit" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(if (currentItem.isVideo) R.string.action_edit else R.string.detail_edit)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(if (currentItem.isVideo) R.drawable.ic_ms_edit else R.drawable.ic_ms_tune), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onEditAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "info" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_details)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showInfoCard = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "vault" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.detail_move_vault)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
                                             showMoreMenu = false
-                                            val activity = context as? androidx.fragment.app.FragmentActivity
-                                            if (activity != null) {
-                                                viewModel.vaultAuthManager.authenticate(
-                                                    activity = activity,
-                                                    negativeButtonText = "Cancel",
-                                                    unlockSession = false,
-                                                    onSuccess = {
-                                                        viewModel.hideMedia(listOf(currentItem.uri))
-                                                        viewModel.vaultAuthManager.lock()
-                                                        safeOnBack()
-                                                    },
-                                                    onFailure = {}
-                                                )
-                                            }
+                                            onVaultAction()
                                         }
                                     )
                                 }
+                                if (currentItem != null && "delete" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_delete), color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onDeleteAction()
+                                        }
+                                    )
+                                }
+                                androidx.compose.material3.HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.customize_toolbars_title)) },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        onNavigateToCustomizeToolbars?.invoke()
+                                    }
+                                )
                             }
                         }
                 }
@@ -2124,152 +2348,6 @@ fun DetailScreen(
             )
         }
 
-        val currentItem = galleryItems.getOrNull(pagerState.currentPage)
-        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
-        val heartView = androidx.compose.ui.platform.LocalView.current
-
-        val onRestoreAction = {
-            if (currentItem != null) {
-                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                if (isMediaStoreUri) {
-                    pendingDeleteItem = currentItem
-                    pendingDeletePage = pagerState.currentPage
-                    coroutineScope.launch(Dispatchers.IO) {
-                        try {
-                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
-                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(normUri), false)
-                            val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
-                            withContext(Dispatchers.Main) {
-                                restoreLauncher.launch(request)
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "Unable to restore: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        val onPermanentDeleteAction = {
-            if (currentItem != null) {
-                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                if (isMediaStoreUri) {
-                    pendingDeleteItem = currentItem
-                    pendingDeletePage = pagerState.currentPage
-                    coroutineScope.launch(Dispatchers.IO) {
-                        try {
-                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
-                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(normUri))
-                            val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
-                            withContext(Dispatchers.Main) {
-                                launcher.launch(request)
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
-                                    viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
-                                    android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
-                                } else {
-                                    android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        val onShareAction = {
-            val item = currentItem
-            if (item != null) {
-                coroutineScope.launch {
-                    val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
-                    com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
-                }
-            }
-        }
-
-        val onEditAction = {
-            if (currentItem != null) {
-                flushPendingRotation()
-                val uri = resolvedCurrentUri ?: currentItem.uri
-                if (!currentItem.isVideo) {
-                    onNavigateToEditor(uri)
-                } else {
-                    val editIntent = Intent(Intent.ACTION_EDIT).apply {
-                        setDataAndType(uri, "video/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                    }
-                    try {
-                        context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
-                    } catch (e: Exception) {
-                        android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-
-        val onFavoriteAction = {
-            if (currentItem != null) {
-                heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                viewModel.toggleFavorite(currentItem.id)
-            }
-        }
-
-        val onDeleteAction = {
-            if (currentItem != null) {
-                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                if (!isMediaStoreUri) {
-                    android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
-                } else {
-                    pendingDeleteItem = currentItem
-                    pendingDeletePage = pagerState.currentPage
-                    val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
-                    val isSessionPermanent = viewModel.sessionSkipRecycleBin
-
-                    if (isSessionSkipConfirm || !confirmDeleteEnabled) {
-                        if (isSessionPermanent) {
-                            onPermanentDeleteAction()
-                        } else {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
-                                    val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
-                                    val trashIntent = MediaStore.createTrashRequest(
-                                        context.contentResolver,
-                                        listOf(normUri),
-                                        true
-                                    )
-                                    val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                    withContext(Dispatchers.Main) {
-                                        launcher.launch(request)
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
-                                            viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
-                                            android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Unable to trash this item: ${e.message}",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        showDeleteConfirmDialog = true
-                    }
-                }
-            }
-        }
-
-
-
         // ── Floating Action Dock ──
         AnimatedVisibility(
             visible = showUi,
@@ -2288,6 +2366,7 @@ fun DetailScreen(
                 currentItem = currentItem,
                 isTrash = bucketName == "Trash",
                 isFavorite = isFavorite,
+                actions = viewerToolbarActions,
                 onRestore = onRestoreAction,
                 onPermanentDelete = onPermanentDeleteAction,
                 onShare = onShareAction,
@@ -2295,6 +2374,11 @@ fun DetailScreen(
                 onFavorite = onFavoriteAction,
                 onDelete = onDeleteAction,
                 onInfo = { showInfoCard = true },
+                onMove = { showMoveSheet = true },
+                onVault = onVaultAction,
+                onWallpaper = onWallpaperAction,
+                onRotate = onRotateAction,
+                onCopy = { showCopySheet = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 380.dp)
@@ -2407,6 +2491,7 @@ private fun ViewerActionButtonsRow(
     currentItem: GalleryItem?,
     isTrash: Boolean,
     isFavorite: Boolean,
+    actions: List<String> = com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS,
     onRestore: () -> Unit,
     onPermanentDelete: () -> Unit,
     onShare: () -> Unit,
@@ -2414,6 +2499,11 @@ private fun ViewerActionButtonsRow(
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
     onInfo: () -> Unit,
+    onMove: () -> Unit = {},
+    onVault: () -> Unit = {},
+    onWallpaper: () -> Unit = {},
+    onRotate: () -> Unit = {},
+    onCopy: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Outer Pill container for bottom controls pill:
@@ -2453,68 +2543,107 @@ private fun ViewerActionButtonsRow(
                     modifier = Modifier.weight(1f)
                 )
             } else {
-                // 1. Share
-                ViewerToolTile(
-                    icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
-                    contentDescription = stringResource(R.string.detail_share),
-                    enabled = currentItem?.localExists == true,
-                    onClick = onShare,
-                    tileShape = getViewerSegmentShape(index = 0, total = 5),
-                    modifier = Modifier.weight(1f)
-                )
-
-                // 2. Favorite with spring bounce animation
-                val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
-                var heartBounce by remember { mutableStateOf(false) }
-                val heartScale by animateFloatAsState(
-                    targetValue = if (heartBounce) 1.45f else 1f,
-                    animationSpec = MotionTokens.bouncySpring(),
-                    label = "heartScale",
-                    finishedListener = { if (heartBounce) heartBounce = false }
-                )
-                ViewerToolTile(
-                    icon = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                    contentDescription = stringResource(R.string.detail_favorite),
-                    tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
-                    iconModifier = Modifier.graphicsLayer {
-                        scaleX = heartScale
-                        scaleY = heartScale
-                    },
-                    onClick = {
-                        heartBounce = true
-                        onFavorite()
-                    },
-                    tileShape = getViewerSegmentShape(index = 1, total = 5),
-                    modifier = Modifier.weight(1f)
-                )
-
-                // 3. Edit / Tune
-                ViewerToolTile(
-                    icon = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_edit else R.drawable.ic_ms_tune),
-                    contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
-                    enabled = currentItem?.localExists == true,
-                    onClick = onEdit,
-                    tileShape = getViewerSegmentShape(index = 2, total = 5),
-                    modifier = Modifier.weight(1f)
-                )
-
-                // 4. Info / Details
-                ViewerToolTile(
-                    icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                    contentDescription = stringResource(R.string.detail_details),
-                    onClick = onInfo,
-                    tileShape = getViewerSegmentShape(index = 3, total = 5),
-                    modifier = Modifier.weight(1f)
-                )
-
-                // 5. Delete
-                ViewerToolTile(
-                    icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                    contentDescription = stringResource(R.string.detail_delete),
-                    onClick = onDelete,
-                    tileShape = getViewerSegmentShape(index = 4, total = 5),
-                    modifier = Modifier.weight(1f)
-                )
+                val total = actions.size
+                actions.forEachIndexed { index, actionId ->
+                    val tileShape = getViewerSegmentShape(index = index, total = total)
+                    when (actionId) {
+                        "share" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                            contentDescription = stringResource(R.string.detail_share),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onShare,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "favorite" -> {
+                            val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
+                            var heartBounce by remember { mutableStateOf(false) }
+                            val heartScale by animateFloatAsState(
+                                targetValue = if (heartBounce) 1.45f else 1f,
+                                animationSpec = MotionTokens.bouncySpring(),
+                                label = "heartScale",
+                                finishedListener = { if (heartBounce) heartBounce = false }
+                            )
+                            ViewerToolTile(
+                                icon = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                                contentDescription = stringResource(R.string.detail_favorite),
+                                tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
+                                iconModifier = Modifier.graphicsLayer {
+                                    scaleX = heartScale
+                                    scaleY = heartScale
+                                },
+                                onClick = {
+                                    heartBounce = true
+                                    onFavorite()
+                                },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        "edit" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_edit else R.drawable.ic_ms_tune),
+                            contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onEdit,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "info" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                            contentDescription = stringResource(R.string.detail_details),
+                            onClick = onInfo,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "delete" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                            contentDescription = stringResource(R.string.detail_delete),
+                            onClick = onDelete,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "move" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                            contentDescription = stringResource(R.string.action_move),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onMove,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "vault" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
+                            contentDescription = stringResource(R.string.detail_move_vault),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onVault,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "wallpaper" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                            contentDescription = stringResource(R.string.detail_set_wallpaper),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onWallpaper,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "rotate" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_rotate_right),
+                            contentDescription = stringResource(R.string.action_rotate),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onRotate,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "copy" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
+                            contentDescription = stringResource(R.string.action_copy),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onCopy,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         }
     }
