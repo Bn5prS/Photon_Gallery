@@ -192,3 +192,4 @@ fun rememberToolbarDragDropState(
 ): ToolbarDragDropState {
     return remember { ToolbarDragDropState(minSlots = minSlots, maxSlots = maxSlots) }
 }
+

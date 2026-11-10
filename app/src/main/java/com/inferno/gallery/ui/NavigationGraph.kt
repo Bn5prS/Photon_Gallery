@@ -210,6 +210,7 @@ fun NavigationGraph(
                         navController.navigate("editor?uri=$encoded")
                     },
                     onNavigateToVault = { navController.navigate("vault") },
+                    onNavigateToCustomizeToolbars = { navController.navigate("customize_toolbars?target=selection") },
                     viewModel = galleryViewModel
                 )
             }
@@ -265,6 +266,7 @@ fun NavigationGraph(
                     onNavigateToPerson = { personId ->
                         navController.navigate("person/$personId")
                     },
+                    onNavigateToCustomizeToolbars = { navController.navigate("customize_toolbars?target=viewer") },
                     viewModel = galleryViewModel
                 )
             }
@@ -418,6 +420,29 @@ fun NavigationGraph(
                         val encoded = android.net.Uri.encode(uris.joinToString(","))
                         navController.navigate("stitch?uris=$encoded")
                     }
+                )
+            }
+
+            composable(
+                route = "customize_toolbars?target={target}",
+                arguments = listOf(
+                    navArgument("target") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = "viewer"
+                    }
+                )
+            ) { backStackEntry ->
+                val targetArg = backStackEntry.arguments?.getString("target") ?: "viewer"
+                val initialTarget = if (targetArg.equals("selection", ignoreCase = true)) {
+                    com.inferno.gallery.ui.settings.ToolbarCustomizationTarget.SELECTION_DOCK
+                } else {
+                    com.inferno.gallery.ui.settings.ToolbarCustomizationTarget.VIEWER
+                }
+                com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
+                    onBackClick = { navController.popBackStackSafely(backStackEntry) },
+                    settingsViewModel = settingsViewModel,
+                    initialTarget = initialTarget
                 )
             }
 

@@ -118,3 +118,4 @@ class ToolbarDragDropMathTest {
         assertEquals(available, result.updatedAvailable)
     }
 }
+

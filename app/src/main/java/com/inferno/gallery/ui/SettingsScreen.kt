@@ -656,7 +656,13 @@ fun SettingsScreen(
 
 
     androidx.activity.compose.BackHandler(enabled = activeSection != null) {
-        onActiveSectionChange(if (activeSection == "Update Log") "About" else null)
+        onActiveSectionChange(
+            when (activeSection) {
+                "Update Log" -> "About"
+                "Customize Toolbars" -> "Layout & Navigation"
+                else -> null
+            }
+        )
     }
 
     Column(
@@ -1437,6 +1443,27 @@ fun SettingsScreen(
                                         }
                                     }
                                 }
+                            )
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.customize_toolbars_title),
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.customize_toolbars_title),
+                                            subtitle = stringResource(R.string.customize_toolbars_subtitle),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                            onClick = { onActiveSectionChange("Customize Toolbars") }
+                                        )
+                                    }
+                                )
+                            )
+                        }
+
+                        "Customize Toolbars" -> {
+                            com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
+                                onBackClick = { onActiveSectionChange("Layout & Navigation") },
+                                settingsViewModel = viewModel
                             )
                         }
 

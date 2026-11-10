@@ -72,3 +72,4 @@ class SettingsRepositoryToolbarTest {
         assertEquals("selection_dock_actions", SettingsRepository.SELECTION_DOCK_ACTIONS.name)
     }
 }
+
