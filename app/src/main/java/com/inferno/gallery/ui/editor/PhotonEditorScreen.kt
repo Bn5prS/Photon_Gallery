@@ -691,6 +691,28 @@ fun PhotonEditorScreen(
                                 val updatedCrop = currentSnapshot.cropState.copy(cropRect = newRect)
                                 updateLiveSnapshot(currentSnapshot.copy(cropState = updatedCrop))
                             },
+                            onPhotoPanZoomStateChange = { active ->
+                                if (active) {
+                                    isCropDragging = true
+                                    isDraggingCropHandle = false
+                                    dragStartCropSnapshot = currentSnapshot
+                                    if (animProgress.isRunning) {
+                                        scope.launch { animProgress.snapTo(1f) }
+                                    }
+                                } else {
+                                    isCropDragging = false
+                                    dragStartCropSnapshot?.let { startSnap ->
+                                        if (startSnap != currentSnapshot) {
+                                            historyState = EditorHistoryState(
+                                                past = historyState.past + startSnap,
+                                                current = currentSnapshot,
+                                                future = emptyList()
+                                            )
+                                        }
+                                    }
+                                    dragStartCropSnapshot = null
+                                }
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     } else if (isCropped) {
