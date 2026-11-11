@@ -1,5 +1,6 @@
 package com.inferno.gallery.ui
 
+import com.inferno.gallery.data.model.ExifStripAction
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -60,6 +61,7 @@ import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.core.graphics.ColorUtils
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeSmall
@@ -192,6 +194,8 @@ fun SettingsScreen(
     val totalImagesCount by viewModel.totalImagesCount.collectAsState()
     val unindexedOcrImagesCount by viewModel.unindexedOcrImagesCount.collectAsState()
     val stripMetadataOnShare by viewModel.stripMetadataOnShare.collectAsState()
+    val exifStripAction by viewModel.exifStripAction.collectAsState()
+    var showExifStripActionDialog by remember { mutableStateOf(false) }
     val maxBrightnessEnabled by viewModel.maxBrightnessEnabled.collectAsState()
     val useSystemFont by viewModel.useSystemFont.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
@@ -2594,9 +2598,76 @@ fun SettingsScreen(
                                             checked = stripMetadataOnShare,
                                             onCheckedChange = { viewModel.setStripMetadataOnShare(it) }
                                         )
+                                    },
+                                    {
+                                        val actionSubtitle = when (exifStripAction) {
+                                            ExifStripAction.ASK_EVERY_TIME -> stringResource(R.string.setting_exif_strip_action_ask)
+                                            ExifStripAction.SAVE_AS_COPY -> stringResource(R.string.setting_exif_strip_action_copy)
+                                            ExifStripAction.OVERWRITE_ORIGINAL -> stringResource(R.string.setting_exif_strip_action_overwrite)
+                                        }
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.setting_exif_strip_action_title),
+                                            subtitle = actionSubtitle,
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services),
+                                            onClick = { showExifStripActionDialog = true }
+                                        )
                                     }
                                 )
                             )
+
+                            if (showExifStripActionDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showExifStripActionDialog = false },
+                                    title = { Text(stringResource(R.string.setting_exif_strip_action_title)) },
+                                    text = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = stringResource(R.string.setting_exif_strip_action_desc),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            ExifStripAction.entries.forEach { action ->
+                                                val label = when (action) {
+                                                    ExifStripAction.ASK_EVERY_TIME -> stringResource(R.string.setting_exif_strip_action_ask)
+                                                    ExifStripAction.SAVE_AS_COPY -> stringResource(R.string.setting_exif_strip_action_copy)
+                                                    ExifStripAction.OVERWRITE_ORIGINAL -> stringResource(R.string.setting_exif_strip_action_overwrite)
+                                                }
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            viewModel.setExifStripAction(action)
+                                                            showExifStripActionDialog = false
+                                                        }
+                                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    RadioButton(
+                                                        selected = (exifStripAction == action),
+                                                        onClick = {
+                                                            viewModel.setExifStripAction(action)
+                                                            showExifStripActionDialog = false
+                                                        }
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { showExifStripActionDialog = false }) {
+                                            Text(stringResource(android.R.string.cancel))
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         "Excluded Folders" -> {
