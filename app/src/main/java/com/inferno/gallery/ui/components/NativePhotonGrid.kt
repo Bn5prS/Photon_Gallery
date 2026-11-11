@@ -75,6 +75,7 @@ import com.inferno.gallery.data.NativeTimelineItem
 import com.inferno.gallery.data.ThumbnailScrollThrottle
 import com.inferno.gallery.ui.GalleryItem
 import com.inferno.gallery.ui.GalleryListItem
+import com.inferno.gallery.ui.GalleryViewModel
 import com.inferno.gallery.ui.StableUriSet
 import com.inferno.gallery.ui.formatDuration
 import com.inferno.gallery.ui.theme.MotionTokens
@@ -470,6 +471,9 @@ fun NativePhotonGrid(
                 scroller.addView(rv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
                 scroller.attachRecyclerView(rv)
                 scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
+                scroller.onFastScrollSettled = { firstPos, topOffset ->
+                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                }
 
                 targetRecyclerView = rv
                 scroller
@@ -482,6 +486,16 @@ fun NativePhotonGrid(
                 targetRecyclerView = recyclerView
 
                 scroller.timelineItems = items
+                scroller.dateLookup = { pos ->
+                    when (val item = adapter.getItem(pos)) {
+                        is NativeTimelineItem.Header -> item.title
+                        is NativeTimelineItem.Media -> GalleryViewModel.formatGroupHeader(item.dateAdded)
+                        null -> null
+                    }
+                }
+                scroller.onFastScrollSettled = { firstPos, topOffset ->
+                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                }
                 scroller.setThemeColors(
                     primary = currentColorScheme.primary,
                     onPrimary = currentColorScheme.onPrimary,

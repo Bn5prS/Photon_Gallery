@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.inferno.gallery.R
@@ -70,6 +71,9 @@ class NativeFastScroller @JvmOverloads constructor(
 
     var attachedRecyclerView: RecyclerView? = null
         private set
+
+    var onFastScrollStateChanged: ((isFastScrolling: Boolean) -> Unit)? = null
+    var onFastScrollSettled: ((firstVisiblePosition: Int, offset: Int) -> Unit)? = null
 
     private var isDragging = false
     private var grabOffsetY = 0f
@@ -489,12 +493,18 @@ class NativeFastScroller @JvmOverloads constructor(
             if (firstVisible == RecyclerView.NO_POSITION) return 0f
 
             val firstView = lm.findViewByPosition(firstVisible)
+            val topOffset = (trackPaddingTop - (firstView?.top ?: trackPaddingTop)).coerceAtLeast(0)
             val fraction = if (firstView != null && firstView.height > 0) {
-                (-firstView.top.toFloat() / firstView.height.toFloat()).coerceIn(0f, 1f)
+                (topOffset.toFloat() / firstView.height.toFloat()).coerceIn(0f, 1f)
             } else 0f
 
             val lastVisible = lm.findLastVisibleItemPosition()
-            val visibleCount = (lastVisible - firstVisible + 1).coerceAtLeast(1)
+            val visibleCount = if (lastVisible != RecyclerView.NO_POSITION && lastVisible >= firstVisible) {
+                (lastVisible - firstVisible + 1).coerceAtLeast(1)
+            } else {
+                val span = (lm as? GridLayoutManager)?.spanCount ?: 1
+                (span * 8).coerceAtLeast(1)
+            }
             val maxScrollable = (totalItems - visibleCount).coerceAtLeast(1).toFloat()
             val continuous = firstVisible.toFloat() + fraction
             return (continuous / maxScrollable).coerceIn(0f, 1f)
@@ -600,6 +610,7 @@ class NativeFastScroller @JvmOverloads constructor(
         removeCallbacks(hideRunnable)
         thumbView.setInteracting(true)
         ThumbnailScrollThrottle.isFastScrolling = true
+        onFastScrollStateChanged?.invoke(true)
         tick()
         updateScrubbing(touchY)
     }
@@ -613,8 +624,18 @@ class NativeFastScroller @JvmOverloads constructor(
 
         val totalItems = resolveTotalItemCount()
         if (totalItems > 0) {
-            val maxIndex = totalItems - 1
-            val targetIndex = (progress * maxIndex).toInt().coerceIn(0, maxIndex)
+            val lm = attachedRecyclerView?.layoutManager as? LinearLayoutManager
+            val first = lm?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+            val last = lm?.findLastVisibleItemPosition() ?: RecyclerView.NO_POSITION
+            val visibleCount = if (first != RecyclerView.NO_POSITION && last != RecyclerView.NO_POSITION && last >= first) {
+                (last - first + 1).coerceAtLeast(1)
+            } else {
+                val span = (lm as? GridLayoutManager)?.spanCount ?: 1
+                (span * 8).coerceAtLeast(1)
+            }
+            val maxScrollable = (totalItems - visibleCount).coerceAtLeast(1)
+            val maxIndex = (totalItems - 1).coerceAtLeast(0)
+            val targetIndex = (progress * maxScrollable).toInt().coerceIn(0, maxIndex)
 
             // Instant O(1) Date Bubble lookup
             val dateText = lookupDate(targetIndex)
@@ -633,11 +654,10 @@ class NativeFastScroller @JvmOverloads constructor(
             if (targetIndex != lastScrolledIndex) {
                 lastScrolledIndex = targetIndex
 
-                val lm = attachedRecyclerView?.layoutManager as? LinearLayoutManager
                 val actualCount = lm?.itemCount ?: attachedRecyclerView?.adapter?.itemCount ?: 0
                 if (actualCount > 0) {
                     val actualTarget = targetIndex.coerceIn(0, actualCount - 1)
-                    lm?.scrollToPositionWithOffset(actualTarget, 0)
+                    lm?.scrollToPositionWithOffset(actualTarget, trackPaddingTop)
                 }
 
                 if (dateText != lastDateText && !dateText.isNullOrBlank()) {
@@ -652,6 +672,7 @@ class NativeFastScroller @JvmOverloads constructor(
         isDragging = false
         thumbView.setInteracting(false)
         ThumbnailScrollThrottle.isFastScrolling = false
+        onFastScrollStateChanged?.invoke(false)
         parent?.requestDisallowInterceptTouchEvent(false)
         lastScrolledIndex = -1
         lastDateText = null
@@ -667,13 +688,17 @@ class NativeFastScroller @JvmOverloads constructor(
 
         postAutoHide(1200L)
 
+        // Asynchronously notify settled position once RecyclerView processes the scroll layout
         val rv = attachedRecyclerView
         val lm = rv?.layoutManager as? LinearLayoutManager
-        if (rv != null && lm != null) {
-            val first = lm.findFirstVisibleItemPosition()
-            val last = lm.findLastVisibleItemPosition()
-            if (first != RecyclerView.NO_POSITION && last != RecyclerView.NO_POSITION && last >= first) {
-                rv.adapter?.notifyItemRangeChanged(first, last - first + 1, 1)
+        rv?.post {
+            if (lm != null) {
+                val first = lm.findFirstVisibleItemPosition()
+                if (first != RecyclerView.NO_POSITION && first >= 0) {
+                    val firstView = lm.findViewByPosition(first)
+                    val topOffset = (firstView?.top ?: trackPaddingTop) - trackPaddingTop
+                    onFastScrollSettled?.invoke(first, topOffset)
+                }
             }
         }
     }
