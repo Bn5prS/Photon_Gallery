@@ -2327,7 +2327,16 @@ fun DetailScreen(
             onDismiss = { showInfoCard = false },
             galleryItem = galleryItems.getOrNull(pagerState.currentPage),
             exifData = currentExif,
-            onPersonClick = onNavigateToPerson
+            onPersonClick = onNavigateToPerson,
+            onStripComplete = { _, isCopy ->
+                if (!isCopy) {
+                    coroutineScope.launch {
+                        galleryItems.getOrNull(pagerState.currentPage)?.let { item ->
+                            currentExif = extractDetailedExif(context, item)
+                        }
+                    }
+                }
+            }
         )
 
         val tipMotionDismissed by settingsRepo.tipMotionPhotoDismissedFlow.collectAsState(initial = true)
