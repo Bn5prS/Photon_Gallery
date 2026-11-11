@@ -541,7 +541,7 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_pinned">Pinned</string>
     <string name="toast_max_pinned_albums">Maximum 15 albums can be pinned</string>
-    <string name="exif_date_taken">Date Taken / Created</string>
+    <string name="exif_date_taken">Date</string>
     <string name="exif_date_modified">Date Modified</string>
     <string name="exif_file_size">File Size</string>
     <string name="exif_geometry_dimensions">Geometry &amp; Dimensions</string>
