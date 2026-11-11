@@ -2088,75 +2088,8 @@ fun DetailScreen(
                         }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (motionPhotoInfo?.isMotionPhoto == true) {
-                            Surface(
-                                onClick = {
-                                    isMotionLooping = !isMotionLooping
-                                    isMotionPlaying = isMotionLooping
-                                },
-                                shape = ShapeFull,
-                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
-                                        contentDescription = "Motion Photo",
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = "LIVE",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        if (isCurrentItemUltraHdr) {
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
-                                        contentDescription = stringResource(R.string.badge_ultra_hdr),
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.badge_ultra_hdr),
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        // Right Island: Circular more button
-                        Box {
+                    // Right Island: Circular more button
+                    Box {
                             FilledTonalIconButton(
                                 onClick = { showMoreMenu = true },
                                 shape = CircleShape,
@@ -2376,9 +2309,85 @@ fun DetailScreen(
                             }
                         }
                 }
+
+                // Floating Badges Column: Positioned directly beneath the 3-dot More button
+                if ((motionPhotoInfo?.isMotionPhoto == true) || isCurrentItemUltraHdr) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .statusBarsPadding()
+                            .padding(top = 56.dp, end = 14.dp),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (motionPhotoInfo?.isMotionPhoto == true) {
+                            Surface(
+                                onClick = {
+                                    isMotionLooping = !isMotionLooping
+                                    isMotionPlaying = isMotionLooping
+                                },
+                                shape = ShapeFull,
+                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                shadowElevation = 2.dp,
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
+                                        contentDescription = "Motion Photo",
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "LIVE",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        if (isCurrentItemUltraHdr) {
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                shadowElevation = 2.dp,
+                                modifier = Modifier.height(26.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
+                                        contentDescription = stringResource(R.string.badge_ultra_hdr),
+                                        modifier = Modifier.size(15.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.badge_ultra_hdr),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.3.sp,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-    }
 
         ExifDetailsSheet(
             isOpen = showInfoCard,
