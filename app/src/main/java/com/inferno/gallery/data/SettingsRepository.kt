@@ -942,6 +942,17 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    val hdrDisplayEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[HDR_DISPLAY_ENABLED] ?: true
+        }
+
+    suspend fun updateHdrDisplayEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HDR_DISPLAY_ENABLED] = enabled
+        }
+    }
+
     // ── Album Custom Covers ──
     // Stored as a comma-separated list of "bucketName=uriString" pairs.
     val albumCustomCoversFlow: Flow<Map<String, String>> = context.dataStore.data

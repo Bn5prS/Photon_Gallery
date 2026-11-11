@@ -617,4 +617,9 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="toolbar_min_limit_toast">At least 2 tools must remain in the toolbar</string>
     <string name="toolbar_reset_toast">Toolbar reset to default</string>
     <string name="toolbar_reset_button">Reset to Default</string>
+
+    <!-- Ultra HDR -->
+    <string name="settings_ultra_hdr_title">Ultra HDR Display</string>
+    <string name="settings_ultra_hdr_desc">Render photos in full dynamic range on supported HDR displays</string>
+    <string name="badge_ultra_hdr">Ultra HDR</string>
 </resources>

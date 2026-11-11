@@ -912,6 +912,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val hdrDisplayEnabled: StateFlow<Boolean> = repository.hdrDisplayEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setHdrDisplayEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateHdrDisplayEnabled(enabled)
+        }
+    }
+
 
 
     val showAlbumSize: StateFlow<Boolean> = repository.showAlbumSizeFlow.stateIn(
