@@ -159,6 +159,7 @@ dependencies {
 
     // ── EXIF ──
     implementation(libs.androidx.exifinterface)
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
 
     // ── Room — Database (stable 2.6.1, FTS5 support) ──
     implementation(libs.room.runtime)

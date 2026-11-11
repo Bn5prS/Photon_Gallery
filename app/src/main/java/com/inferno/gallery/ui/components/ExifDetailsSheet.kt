@@ -11,9 +11,16 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
+import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.Directory
+import com.drew.metadata.Metadata
+import com.drew.metadata.Tag
+import java.io.BufferedInputStream
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -142,107 +149,45 @@ data class DetailedExifData(
     val allTags: List<DeepExifTag>
 )
 
-// ── Raw EXIF Tag Names to Inspect ─────────────────────────────────────────────
-
-private val KNOWN_EXIF_TAGS = listOf(
-    // Image Structure
-    "Image Structure" to listOf(
-        ExifInterface.TAG_IMAGE_WIDTH,
-        ExifInterface.TAG_IMAGE_LENGTH,
-        ExifInterface.TAG_BITS_PER_SAMPLE,
-        ExifInterface.TAG_COMPRESSION,
-        ExifInterface.TAG_PHOTOMETRIC_INTERPRETATION,
-        ExifInterface.TAG_ORIENTATION,
-        ExifInterface.TAG_SAMPLES_PER_PIXEL,
-        ExifInterface.TAG_PLANAR_CONFIGURATION,
-        ExifInterface.TAG_Y_CB_CR_SUB_SAMPLING,
-        ExifInterface.TAG_Y_CB_CR_POSITIONING,
-        ExifInterface.TAG_X_RESOLUTION,
-        ExifInterface.TAG_Y_RESOLUTION,
-        ExifInterface.TAG_RESOLUTION_UNIT
-    ),
-    // Camera & Hardware
-    "Camera & Hardware" to listOf(
-        ExifInterface.TAG_MAKE,
-        ExifInterface.TAG_MODEL,
-        ExifInterface.TAG_SOFTWARE,
-        ExifInterface.TAG_ARTIST,
-        ExifInterface.TAG_COPYRIGHT,
-        ExifInterface.TAG_LENS_MAKE,
-        ExifInterface.TAG_LENS_MODEL,
-        ExifInterface.TAG_LENS_SPECIFICATION,
-        ExifInterface.TAG_LENS_SERIAL_NUMBER,
-        ExifInterface.TAG_BODY_SERIAL_NUMBER,
-        ExifInterface.TAG_CAMERA_OWNER_NAME,
-        ExifInterface.TAG_DEVICE_SETTING_DESCRIPTION
-    ),
-    // Capture & Exposure Parameters
-    "Capture Parameters" to listOf(
-        ExifInterface.TAG_DATETIME,
-        ExifInterface.TAG_DATETIME_ORIGINAL,
-        ExifInterface.TAG_DATETIME_DIGITIZED,
-        ExifInterface.TAG_OFFSET_TIME,
-        ExifInterface.TAG_OFFSET_TIME_ORIGINAL,
-        ExifInterface.TAG_EXPOSURE_TIME,
-        ExifInterface.TAG_F_NUMBER,
-        ExifInterface.TAG_EXPOSURE_PROGRAM,
-        ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
-        ExifInterface.TAG_SHUTTER_SPEED_VALUE,
-        ExifInterface.TAG_APERTURE_VALUE,
-        ExifInterface.TAG_BRIGHTNESS_VALUE,
-        ExifInterface.TAG_EXPOSURE_BIAS_VALUE,
-        ExifInterface.TAG_MAX_APERTURE_VALUE,
-        ExifInterface.TAG_SUBJECT_DISTANCE,
-        ExifInterface.TAG_METERING_MODE,
-        ExifInterface.TAG_LIGHT_SOURCE,
-        ExifInterface.TAG_FLASH,
-        ExifInterface.TAG_FOCAL_LENGTH,
-        ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM,
-        ExifInterface.TAG_COLOR_SPACE,
-        ExifInterface.TAG_EXPOSURE_MODE,
-        ExifInterface.TAG_WHITE_BALANCE,
-        ExifInterface.TAG_DIGITAL_ZOOM_RATIO,
-        ExifInterface.TAG_SCENE_CAPTURE_TYPE,
-        ExifInterface.TAG_GAIN_CONTROL,
-        ExifInterface.TAG_CONTRAST,
-        ExifInterface.TAG_SATURATION,
-        ExifInterface.TAG_SHARPNESS,
-        ExifInterface.TAG_SUBJECT_DISTANCE_RANGE,
-        ExifInterface.TAG_SENSING_METHOD,
-        ExifInterface.TAG_SCENE_TYPE
-    ),
-    // GPS & Positioning
-    "GPS & Location" to listOf(
-        ExifInterface.TAG_GPS_VERSION_ID,
-        ExifInterface.TAG_GPS_LATITUDE_REF,
-        ExifInterface.TAG_GPS_LATITUDE,
-        ExifInterface.TAG_GPS_LONGITUDE_REF,
-        ExifInterface.TAG_GPS_LONGITUDE,
-        ExifInterface.TAG_GPS_ALTITUDE_REF,
-        ExifInterface.TAG_GPS_ALTITUDE,
-        ExifInterface.TAG_GPS_TIMESTAMP,
-        ExifInterface.TAG_GPS_SATELLITES,
-        ExifInterface.TAG_GPS_STATUS,
-        ExifInterface.TAG_GPS_MEASURE_MODE,
-        ExifInterface.TAG_GPS_DOP,
-        ExifInterface.TAG_GPS_SPEED_REF,
-        ExifInterface.TAG_GPS_SPEED,
-        ExifInterface.TAG_GPS_TRACK_REF,
-        ExifInterface.TAG_GPS_TRACK,
-        ExifInterface.TAG_GPS_IMG_DIRECTION_REF,
-        ExifInterface.TAG_GPS_IMG_DIRECTION,
-        ExifInterface.TAG_GPS_MAP_DATUM,
-        ExifInterface.TAG_GPS_DATESTAMP,
-        ExifInterface.TAG_GPS_PROCESSING_METHOD,
-        ExifInterface.TAG_GPS_H_POSITIONING_ERROR
-    )
-)
+private fun mapDirectoryCategory(rawName: String): String {
+    val lower = rawName.lowercase(Locale.ROOT)
+    return when {
+        lower.contains("subifd") -> "Exif SubIFD (Optics & Shot)"
+        lower.contains("ifd0") -> "Exif IFD0 (Device & Hardware)"
+        lower.contains("gps") -> "GPS & Location"
+        lower.contains("makernote") -> {
+            val brand = rawName.replace("Makernote", "", ignoreCase = true)
+                .replace("Maker Note", "", ignoreCase = true).trim()
+            if (brand.isNotBlank()) "MakerNote ($brand)" else "MakerNote"
+        }
+        lower.contains("xmp") -> "XMP & Computational Photo"
+        lower.contains("icc") -> "Color & ICC Profile"
+        lower.contains("iptc") -> "IPTC & Editorial"
+        lower.contains("photoshop") -> "Photoshop & Adjustments"
+        lower.contains("mp4") || lower.contains("quicktime") -> "Video & Audio Tracks"
+        lower.contains("thumbnail") -> "Thumbnail Metadata"
+        lower.contains("file type") || lower.contains("file") -> "File & Format"
+        else -> rawName.trim()
+    }
+}
 
 // ── Extraction Helper ─────────────────────────────────────────────────────────
 
 suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedExifData = withContext(Dispatchers.IO) {
     val uri = item.uri
     val allTagsList = mutableListOf<DeepExifTag>()
+    val seenTagKeys = mutableSetOf<String>()
+
+    fun addTag(category: String, tag: String, value: String) {
+        val cleanCat = category.trim()
+        val cleanTag = tag.trim()
+        val cleanVal = value.trim()
+        if (cleanVal.isBlank()) return
+        val key = "${cleanCat.lowercase(Locale.ROOT)}_${cleanTag.lowercase(Locale.ROOT)}"
+        if (seenTagKeys.add(key)) {
+            allTagsList.add(DeepExifTag(cleanCat, cleanTag, cleanVal))
+        }
+    }
 
     var make: String? = null
     var model: String? = null
@@ -266,53 +211,115 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
     var imgW = 0
     var imgH = 0
 
+    // 1. Surgical deep metadata extraction via Drew Noakes metadata-extractor
+    try {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            BufferedInputStream(stream).use { buffered ->
+                val metadata = ImageMetadataReader.readMetadata(buffered)
+                for (directory in metadata.directories) {
+                    val category = mapDirectoryCategory(directory.name)
+                    for (tag in directory.tags) {
+                        val tagName = tag.tagName?.trim() ?: "Tag 0x${Integer.toHexString(tag.tagType)}"
+                        val desc = tag.description?.trim()
+                        if (!desc.isNullOrBlank()) {
+                            addTag(category, tagName, desc)
+
+                            // Pick up high-value metadata values directly with rich decoded descriptions
+                            when {
+                                category.contains("SubIFD") && tagName.contains("Flash", ignoreCase = true) && flash == null -> flash = desc
+                                category.contains("SubIFD") && tagName.contains("White Balance", ignoreCase = true) && whiteBalance == null -> whiteBalance = desc
+                                category.contains("SubIFD") && tagName.contains("Exposure Mode", ignoreCase = true) && exposureMode == null -> exposureMode = desc
+                                category.contains("SubIFD") && tagName.contains("Metering Mode", ignoreCase = true) && meteringMode == null -> meteringMode = desc
+                                category.contains("SubIFD") && (tagName.contains("Lens Model", ignoreCase = true) || tagName.contains("Lens Specification", ignoreCase = true)) && lensModel == null -> lensModel = desc
+                                category.contains("Color") && tagName.contains("Profile Description", ignoreCase = true) && colorSpaceStr == null -> colorSpaceStr = desc
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (_: Exception) {}
+
+    // 2. Video track, codec & color standard extraction via MediaMetadataRetriever (if video)
+    if (item.isVideo) {
+        try {
+            MediaMetadataRetriever().use { retriever ->
+                retriever.setDataSource(context, uri)
+                val cat = "Video & Audio Tracks"
+
+                fun addVideoTag(tag: String, keyCode: Int, transform: ((String) -> String)? = null) {
+                    retriever.extractMetadata(keyCode)?.trim()?.takeIf { it.isNotBlank() }?.let { v ->
+                        val display = transform?.invoke(v) ?: v
+                        addTag(cat, tag, display)
+                    }
+                }
+
+                addVideoTag("Duration", MediaMetadataRetriever.METADATA_KEY_DURATION) { ms ->
+                    val sec = (ms.toLongOrNull() ?: 0L) / 1000
+                    String.format(Locale.US, "%02d:%02d (%s ms)", sec / 60, sec % 60, ms)
+                }
+                addVideoTag("Video Resolution", MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH) { w ->
+                    val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT) ?: "?"
+                    "$w × $h px"
+                }
+                addVideoTag("Video Bitrate", MediaMetadataRetriever.METADATA_KEY_BITRATE) { bps ->
+                    val kbps = (bps.toLongOrNull() ?: 0L) / 1000
+                    "$kbps kbps"
+                }
+                addVideoTag("Video Rotation", MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION) { "${it}°" }
+                addVideoTag("MIME Type", MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+                addVideoTag("Capture Frame Rate", MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE) { "${it} fps" }
+                addVideoTag("Creation Date", MediaMetadataRetriever.METADATA_KEY_DATE)
+                addVideoTag("Location", MediaMetadataRetriever.METADATA_KEY_LOCATION)
+                addVideoTag("Track Count", MediaMetadataRetriever.METADATA_KEY_NUM_TRACKS)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    addVideoTag("Color Standard", MediaMetadataRetriever.METADATA_KEY_COLOR_STANDARD)
+                    addVideoTag("Color Transfer", MediaMetadataRetriever.METADATA_KEY_COLOR_TRANSFER)
+                    addVideoTag("Color Range", MediaMetadataRetriever.METADATA_KEY_COLOR_RANGE)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    addVideoTag("Frame Count", MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    // 3. AndroidX ExifInterface for standard fields & GPS coordinates
     try {
         context.contentResolver.openInputStream(uri)?.use { stream ->
             val exif = ExifInterface(stream)
 
-            // Extract known tags into raw tag list
-            for ((category, tags) in KNOWN_EXIF_TAGS) {
-                for (tagName in tags) {
-                    val value = exif.getAttribute(tagName)
-                    if (!value.isNullOrBlank()) {
-                        allTagsList.add(DeepExifTag(category, tagName, value.trim()))
-                    }
-                }
-            }
+            if (make == null) make = exif.getAttribute(ExifInterface.TAG_MAKE)?.trim()
+            if (model == null) model = exif.getAttribute(ExifInterface.TAG_MODEL)?.trim()
+            if (lensModel == null) lensModel = exif.getAttribute(ExifInterface.TAG_LENS_MODEL)?.trim()
+            if (software == null) software = exif.getAttribute(ExifInterface.TAG_SOFTWARE)?.trim()
 
-            make = exif.getAttribute(ExifInterface.TAG_MAKE)?.trim()
-            model = exif.getAttribute(ExifInterface.TAG_MODEL)?.trim()
-            lensModel = exif.getAttribute(ExifInterface.TAG_LENS_MODEL)?.trim()
-            software = exif.getAttribute(ExifInterface.TAG_SOFTWARE)?.trim()
-
-            aperture = exif.getAttribute(ExifInterface.TAG_F_NUMBER)?.let { "f/$it" }
-            iso = exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)?.let { "ISO $it" }
+            if (aperture == null) aperture = exif.getAttribute(ExifInterface.TAG_F_NUMBER)?.let { "f/$it" }
+            if (iso == null) iso = exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)?.let { "ISO $it" }
 
             val exposureTime = exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
-            shutterSpeed = when {
-                exposureTime <= 0.0 -> null
-                exposureTime < 1.0 -> {
-                    val denominator = (1.0 / exposureTime).roundToInt()
-                    "1/${denominator}s"
+            if (exposureTime > 0.0 && shutterSpeed == null) {
+                shutterSpeed = when {
+                    exposureTime < 1.0 -> "1/${(1.0 / exposureTime).roundToInt()}s"
+                    else -> String.format(Locale.US, "%.1fs", exposureTime)
                 }
-                else -> String.format(Locale.US, "%.1fs", exposureTime)
             }
 
-            focalLength = exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH)?.let { "${it}mm" }
-            focalLength35mm = exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM)?.let { "${it}mm (35mm eq)" }
+            if (focalLength == null) focalLength = exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH)?.let { "${it} mm" }
+            if (focalLength35mm == null) focalLength35mm = exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM)?.let { "${it} mm" }
 
             val flashVal = exif.getAttributeInt(ExifInterface.TAG_FLASH, -1)
-            if (flashVal != -1) {
+            if (flashVal != -1 && flash == null) {
                 flash = if (flashVal and 1 != 0) "Fired" else "Did not fire"
             }
 
             val wbVal = exif.getAttributeInt(ExifInterface.TAG_WHITE_BALANCE, -1)
-            if (wbVal != -1) {
-                whiteBalance = if (wbVal == ExifInterface.WHITE_BALANCE_AUTO.toInt()) "Auto White Balance" else "Manual White Balance"
+            if (wbVal != -1 && whiteBalance == null) {
+                whiteBalance = if (wbVal == ExifInterface.WHITE_BALANCE_AUTO.toInt()) "Auto" else "Manual"
             }
 
             val expModeVal = exif.getAttributeInt(ExifInterface.TAG_EXPOSURE_MODE, -1)
-            if (expModeVal != -1) {
+            if (expModeVal != -1 && exposureMode == null) {
                 exposureMode = when (expModeVal) {
                     ExifInterface.EXPOSURE_MODE_AUTO.toInt() -> "Auto Exposure"
                     ExifInterface.EXPOSURE_MODE_MANUAL.toInt() -> "Manual Exposure"
@@ -321,7 +328,7 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
             }
 
             val meterVal = exif.getAttributeInt(ExifInterface.TAG_METERING_MODE, -1)
-            if (meterVal != -1) {
+            if (meterVal != -1 && meteringMode == null) {
                 meteringMode = when (meterVal) {
                     1 -> "Average"
                     2 -> "Center-weighted Average"
@@ -334,21 +341,21 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
             }
 
             val csVal = exif.getAttributeInt(ExifInterface.TAG_COLOR_SPACE, -1)
-            if (csVal != -1) {
-                colorSpaceStr = if (csVal == 1) "sRGB" else "Uncalibrated / Adobe RGB"
+            if (csVal != -1 && colorSpaceStr == null) {
+                colorSpaceStr = if (csVal == 1) "sRGB" else "Adobe RGB / Wide Gamut"
             }
 
             val orientVal = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)
             orientationStr = when (orientVal) {
                 ExifInterface.ORIENTATION_NORMAL -> "0° (Normal)"
-                ExifInterface.ORIENTATION_ROTATE_90 -> "90° Clockwise"
+                ExifInterface.ORIENTATION_ROTATE_90 -> "90° CW"
                 ExifInterface.ORIENTATION_ROTATE_180 -> "180°"
-                ExifInterface.ORIENTATION_ROTATE_270 -> "270° Clockwise"
-                else -> "Default"
+                ExifInterface.ORIENTATION_ROTATE_270 -> "270° CW"
+                else -> "Normal"
             }
 
-            imgW = exif.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, 0)
-            imgH = exif.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, 0)
+            if (imgW <= 0) imgW = exif.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, 0)
+            if (imgH <= 0) imgH = exif.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, 0)
 
             val latLong = exif.latLong
             if (latLong != null && latLong.size >= 2) {
@@ -365,9 +372,7 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
                 } catch (_: Exception) {}
             }
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
+    } catch (_: Exception) {}
 
     // Fallback image dimensions from BitmapFactory or MediaStore if EXIF was empty
     if (imgW <= 0 || imgH <= 0) {
