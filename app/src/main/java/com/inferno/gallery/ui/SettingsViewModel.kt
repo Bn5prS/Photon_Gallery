@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.SettingsRepository
+import com.inferno.gallery.data.model.ExifStripAction
 import com.inferno.gallery.data.DockStyle
 import com.inferno.gallery.data.MemoriesCarouselStyle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -526,6 +527,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setStripMetadataOnShare(enabled: Boolean) {
         viewModelScope.launch {
             repository.updateStripMetadataOnShare(enabled)
+        }
+    }
+
+    val exifStripAction: StateFlow<ExifStripAction> = repository.exifStripActionFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ExifStripAction.ASK_EVERY_TIME
+    )
+
+    fun setExifStripAction(action: ExifStripAction) {
+        viewModelScope.launch {
+            repository.setExifStripAction(action)
         }
     }
 

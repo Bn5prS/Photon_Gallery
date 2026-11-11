@@ -1,5 +1,6 @@
 package com.inferno.gallery.data
 
+import com.inferno.gallery.data.model.ExifStripAction
 import android.content.Context
 import android.os.Build
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -61,6 +62,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val ONBOARDING_V210_COMPLETED = booleanPreferencesKey("onboarding_v210_completed")
         val STRIP_METADATA_ON_SHARE = booleanPreferencesKey("strip_metadata_on_share")
+        val PREF_EXIF_STRIP_ACTION = stringPreferencesKey("pref_exif_strip_action")
         val SMART_SEARCH_AUTO_INDEX = booleanPreferencesKey("smart_search_auto_index")
         val FACE_RECOGNITION_ENABLED = booleanPreferencesKey("face_recognition_enabled")
         val FACE_AUTO_INDEX = booleanPreferencesKey("face_auto_index")
@@ -757,6 +759,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateStripMetadataOnShare(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[STRIP_METADATA_ON_SHARE] = enabled
+        }
+    }
+
+    val exifStripActionFlow: Flow<ExifStripAction> = context.dataStore.data
+        .map { preferences ->
+            ExifStripAction.fromId(preferences[PREF_EXIF_STRIP_ACTION] ?: ExifStripAction.ASK_EVERY_TIME.id)
+        }
+
+    suspend fun setExifStripAction(action: ExifStripAction) {
+        context.dataStore.edit { preferences ->
+            preferences[PREF_EXIF_STRIP_ACTION] = action.id
         }
     }
 
