@@ -143,6 +143,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import coil3.compose.AsyncImage
+import coil3.toBitmap
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -158,6 +159,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.SettingsRepository
+import com.inferno.gallery.ui.utils.UltraHdrHelper
 import com.inferno.gallery.ui.components.DetailedExifData
 import com.inferno.gallery.ui.components.ExifDetailsSheet
 import com.inferno.gallery.ui.components.extractDetailedExif
@@ -220,7 +222,7 @@ fun DetailScreen(
         }
     }.value
     val confirmDeleteEnabled by settingsRepo.confirmDeleteEnabledFlow.collectAsState(initial = true)
-    val activity = context as? android.app.Activity
+    val activity = remember(context) { UltraHdrHelper.findActivity(context) ?: (context as? android.app.Activity) }
     val window = activity?.window
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
     val coroutineScope = rememberCoroutineScope()
@@ -571,6 +573,25 @@ fun DetailScreen(
                               isMotionLooping ||
                               isVideoScrubbing ||
                               isFilmstripScrolling
+
+    val hdrDisplayEnabled by settingsRepo.hdrDisplayEnabledFlow.collectAsState(initial = true)
+    val ultraHdrMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val isCurrentItemUltraHdr = currentItem?.let { ultraHdrMap[it.uri.toString()] } == true
+    val isHdrSupported = remember(context) { UltraHdrHelper.isHdrSupported(context) }
+    val shouldEnableHdr = isCurrentItemUltraHdr && hdrDisplayEnabled && !isFilmstripOverview && isHdrSupported
+
+    // Dynamically manages Window HDR color mode for Ultra HDR photos per Android 14+ guidance
+    DisposableEffect(shouldEnableHdr, window) {
+        if (shouldEnableHdr) {
+            UltraHdrHelper.setWindowHdrMode(window, true)
+            onDispose {
+                UltraHdrHelper.setWindowHdrMode(window, false)
+            }
+        } else {
+            UltraHdrHelper.setWindowHdrMode(window, false)
+            onDispose {}
+        }
+    }
 
     val overviewProgress by animateFloatAsState(
         targetValue = if (isFilmstripOverview) 1f else 0f,
@@ -1251,6 +1272,13 @@ fun DetailScreen(
                                 val size = state.painter.intrinsicSize
                                 if (size.width > 0f && size.height > 0f && size.width.isFinite() && size.height.isFinite()) {
                                     imageAspectRatio = size.width / size.height
+                                }
+                                if (!item.isVideo) {
+                                    val bitmap = (state.result.image as? BitmapImage)?.bitmap
+                                        ?: (try { state.result.image.toBitmap() } catch (_: Throwable) { null })
+                                    if (UltraHdrHelper.hasGainmap(bitmap)) {
+                                        ultraHdrMap[item.uri.toString()] = true
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -2097,6 +2125,36 @@ fun DetailScreen(
                             }
                         }
 
+                        if (isCurrentItemUltraHdr) {
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
+                                        contentDescription = stringResource(R.string.badge_ultra_hdr),
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.badge_ultra_hdr),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
                         // Right Island: Circular more button
                         Box {
                             FilledTonalIconButton(
@@ -2327,6 +2385,7 @@ fun DetailScreen(
             onDismiss = { showInfoCard = false },
             galleryItem = galleryItems.getOrNull(pagerState.currentPage),
             exifData = currentExif,
+            isUltraHdr = isCurrentItemUltraHdr,
             onPersonClick = onNavigateToPerson,
             onStripComplete = { _, isCopy ->
                 if (!isCopy) {
