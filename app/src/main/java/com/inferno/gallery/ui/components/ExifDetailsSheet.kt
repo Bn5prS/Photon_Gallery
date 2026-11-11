@@ -858,12 +858,14 @@ fun ExifDetailsSheet(
                         } else "Unknown"
 
                         DetailKeyValueRowTight(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_aspect_ratio),
                             label = stringResource(R.string.exif_dimensions),
                             value = dimValue
                         )
 
                         // File Size
                         DetailKeyValueRowTight(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_description),
                             label = stringResource(R.string.exif_file_size),
                             value = "${formatDetailedSize(galleryItem.size)} (${String.format(Locale.US, "%,d", galleryItem.size)} B)"
                         )
@@ -875,6 +877,7 @@ fun ExifDetailsSheet(
 
                         if (createdDate != null) {
                             DetailKeyValueRowTight(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_calendar_month),
                                 label = stringResource(R.string.exif_date_taken),
                                 value = formatFullTimestamp(createdDate)
                             )
@@ -882,6 +885,7 @@ fun ExifDetailsSheet(
 
                         if (isModifiedDifferent || createdDate == null) {
                             DetailKeyValueRowTight(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
                                 label = stringResource(R.string.exif_date_modified),
                                 value = formatFullTimestamp(modifiedDate)
                             )
@@ -891,6 +895,7 @@ fun ExifDetailsSheet(
                         val colorSpace = localExifData?.colorSpace ?: "sRGB"
                         val formatDesc = localExifData?.formatDescription ?: (if (galleryItem.isVideo) "Video" else "Image")
                         DetailKeyValueRowTight(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
                             label = stringResource(R.string.exif_color_space),
                             value = "$colorSpace • $formatDesc"
                         )
@@ -948,6 +953,7 @@ fun ExifDetailsSheet(
                                 .joinToString(" ")
                             if (cameraName.isNotBlank()) {
                                 DetailKeyValueRowTight(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
                                     label = "Camera",
                                     value = cameraName
                                 )
@@ -956,6 +962,7 @@ fun ExifDetailsSheet(
                             // Lens
                             localExifData?.lensModel?.let { lens ->
                                 DetailKeyValueRowTight(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
                                     label = "Lens",
                                     value = lens
                                 )
@@ -969,6 +976,7 @@ fun ExifDetailsSheet(
                             )
                             if (exposureParts.isNotEmpty()) {
                                 DetailKeyValueRowTight(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
                                     label = stringResource(R.string.exif_exposure),
                                     value = exposureParts.joinToString(" • ")
                                 )
@@ -982,6 +990,7 @@ fun ExifDetailsSheet(
                             } else focal ?: focal35
                             if (focalStr != null) {
                                 DetailKeyValueRowTight(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_straighten),
                                     label = stringResource(R.string.exif_focal_length),
                                     value = focalStr
                                 )
@@ -990,6 +999,7 @@ fun ExifDetailsSheet(
                             // Flash
                             localExifData?.flash?.let { fl ->
                                 DetailKeyValueRowTight(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
                                     label = stringResource(R.string.exif_flash),
                                     value = fl
                                 )
@@ -998,6 +1008,7 @@ fun ExifDetailsSheet(
                             // White Balance
                             localExifData?.whiteBalance?.let { wb ->
                                 DetailKeyValueRowTight(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_wb_twilight),
                                     label = stringResource(R.string.exif_white_balance),
                                     value = wb
                                 )
@@ -1574,15 +1585,28 @@ private fun DeepMetadataInspectorSheet(
 fun DetailKeyValueRowTight(
     label: String,
     value: String,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier,
-    labelWidth: androidx.compose.ui.unit.Dp = 105.dp
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    labelWidth: androidx.compose.ui.unit.Dp = 100.dp
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 3.5.dp),
         verticalAlignment = Alignment.Top
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier
+                    .size(16.dp)
+                    .padding(top = 2.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
