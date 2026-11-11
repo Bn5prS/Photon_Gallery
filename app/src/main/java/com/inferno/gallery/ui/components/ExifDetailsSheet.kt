@@ -118,6 +118,7 @@ data class DetailedExifData(
     val aspectRatioString: String,
     val colorSpace: String?,
     val orientation: String?,
+    val isUltraHdr: Boolean = false,
 
     // Camera & Optics
     val cameraMaker: String?,
@@ -421,6 +422,13 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
         "${String.format(Locale.US, "%.5f", kotlin.math.abs(finalLat))}° $latDir, ${String.format(Locale.US, "%.5f", kotlin.math.abs(finalLng))}° $lngDir"
     } else null
 
+    val isGainmapPresent = allTagsList.any {
+        it.tag.contains("GainMap", ignoreCase = true) ||
+        it.value.contains("GainMap", ignoreCase = true) ||
+        it.value.contains("hdr-gain-map", ignoreCase = true) ||
+        it.value.contains("hdrgm", ignoreCase = true)
+    }
+
     DetailedExifData(
         fileName = item.name,
         fileSizeBytes = item.size,
@@ -437,6 +445,7 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
         aspectRatioString = aspectStr,
         colorSpace = colorSpaceStr,
         orientation = orientationStr,
+        isUltraHdr = isGainmapPresent,
         cameraMaker = make,
         cameraModel = model,
         lensModel = lensModel,
@@ -480,6 +489,7 @@ fun ExifDetailsSheet(
     onDismiss: () -> Unit,
     galleryItem: GalleryItem?,
     exifData: DetailedExifData?,
+    isUltraHdr: Boolean = false,
     onPersonClick: ((Long) -> Unit)? = null,
     onStripComplete: ((Uri?, Boolean) -> Unit)? = null
 ) {
@@ -897,12 +907,14 @@ fun ExifDetailsSheet(
                         }
 
                         // Color Space & Format
+                        val isHdr = isUltraHdr || localExifData?.isUltraHdr == true
                         val colorSpace = localExifData?.colorSpace ?: "sRGB"
                         val formatDesc = localExifData?.formatDescription ?: (if (galleryItem.isVideo) "Video" else "Image")
+                        val formatDisplay = if (isHdr) "$colorSpace • $formatDesc • Ultra HDR" else "$colorSpace • $formatDesc"
                         DetailKeyValueRowTight(
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                            icon = ImageVector.vectorResource(if (isHdr) R.drawable.ic_ms_hdr_on else R.drawable.ic_ms_palette),
                             label = stringResource(R.string.exif_color_space),
-                            value = "$colorSpace • $formatDesc"
+                            value = formatDisplay
                         )
                     }
                 }

@@ -157,6 +157,7 @@ import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.photonColors
 import com.inferno.gallery.ui.utils.pressScale
+import com.inferno.gallery.ui.utils.UltraHdrHelper
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -197,6 +198,7 @@ fun SettingsScreen(
     val exifStripAction by viewModel.exifStripAction.collectAsState()
     var showExifStripActionDialog by remember { mutableStateOf(false) }
     val maxBrightnessEnabled by viewModel.maxBrightnessEnabled.collectAsState()
+    val hdrDisplayEnabled by viewModel.hdrDisplayEnabled.collectAsState()
     val useSystemFont by viewModel.useSystemFont.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val secureRecentsEnabled by viewModel.secureRecentsEnabled.collectAsState()
@@ -225,6 +227,7 @@ fun SettingsScreen(
     val faceAutoIndex by viewModel.faceAutoIndex.collectAsState()
 
     val context = LocalContext.current
+    val isHdrSupported = remember(context) { UltraHdrHelper.isHdrSupported(context) }
     val uriHandler = LocalUriHandler.current
     val haptic = LocalHapticFeedback.current
 
@@ -1108,6 +1111,16 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
                                             checked = maxBrightnessEnabled,
                                             onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.settings_ultra_hdr_title),
+                                            subtitle = stringResource(R.string.settings_ultra_hdr_desc),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
+                                            checked = hdrDisplayEnabled,
+                                            onCheckedChange = { viewModel.setHdrDisplayEnabled(it) },
+                                            enabled = isHdrSupported
                                         )
                                     }
                                 )
