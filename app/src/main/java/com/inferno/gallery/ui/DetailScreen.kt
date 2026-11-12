@@ -2309,83 +2309,6 @@ fun DetailScreen(
                             }
                         }
                 }
-
-                // Floating Badges Column: Positioned directly beneath the 3-dot More button
-                if ((motionPhotoInfo?.isMotionPhoto == true) || isCurrentItemUltraHdr) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .statusBarsPadding()
-                            .padding(top = 56.dp, end = 14.dp),
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (motionPhotoInfo?.isMotionPhoto == true) {
-                            Surface(
-                                onClick = {
-                                    isMotionLooping = !isMotionLooping
-                                    isMotionPlaying = isMotionLooping
-                                },
-                                shape = ShapeFull,
-                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
-                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                shadowElevation = 2.dp,
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
-                                        contentDescription = "Motion Photo",
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = "LIVE",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp,
-                                            fontSize = 10.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        if (isCurrentItemUltraHdr) {
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                shadowElevation = 2.dp,
-                                modifier = Modifier.height(26.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
-                                        contentDescription = stringResource(R.string.badge_ultra_hdr),
-                                        modifier = Modifier.size(15.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.badge_ultra_hdr),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            letterSpacing = 0.3.sp,
-                                            fontSize = 10.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -2421,11 +2344,11 @@ fun DetailScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = if (viewerFilmstripEnabled && galleryItems.size > 1) 136.dp else 84.dp)
+                    .padding(bottom = if (viewerFilmstripEnabled && galleryItems.size > 1) 180.dp else 130.dp)
             )
         }
 
-        // ── Floating Action Dock ──
+        // ── Floating Action Dock & Motion Photo Control ──
         AnimatedVisibility(
             visible = showUi,
             enter = fadeIn(MotionTokens.gentleSpring()) +
@@ -2439,33 +2362,72 @@ fun DetailScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
         ) {
-            ViewerActionButtonsRow(
-                currentItem = currentItem,
-                isTrash = bucketName == "Trash",
-                isFavorite = isFavorite,
-                actions = viewerToolbarActions,
-                onRestore = onRestoreAction,
-                onPermanentDelete = onPermanentDeleteAction,
-                onShare = onShareAction,
-                onEdit = onEditAction,
-                onFavorite = onFavoriteAction,
-                onDelete = onDeleteAction,
-                onInfo = { showInfoCard = true },
-                onMove = { showMoveSheet = true },
-                onVault = onVaultAction,
-                onWallpaper = onWallpaperAction,
-                onRotate = onRotateAction,
-                onCopy = { showCopySheet = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 380.dp)
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            userInteractionTrigger++
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (motionPhotoInfo?.isMotionPhoto == true) {
+                    Surface(
+                        onClick = {
+                            isMotionLooping = !isMotionLooping
+                            isMotionPlaying = isMotionLooping
+                        },
+                        shape = ShapeFull,
+                        color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                        contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
+                                contentDescription = "Motion Photo",
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "LIVE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    fontSize = 11.sp
+                                )
+                            )
                         }
                     }
-            )
+                }
+
+                ViewerActionButtonsRow(
+                    currentItem = currentItem,
+                    isTrash = bucketName == "Trash",
+                    isFavorite = isFavorite,
+                    actions = viewerToolbarActions,
+                    onRestore = onRestoreAction,
+                    onPermanentDelete = onPermanentDeleteAction,
+                    onShare = onShareAction,
+                    onEdit = onEditAction,
+                    onFavorite = onFavoriteAction,
+                    onDelete = onDeleteAction,
+                    onInfo = { showInfoCard = true },
+                    onMove = { showMoveSheet = true },
+                    onVault = onVaultAction,
+                    onWallpaper = onWallpaperAction,
+                    onRotate = onRotateAction,
+                    onCopy = { showCopySheet = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 380.dp)
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                userInteractionTrigger++
+                            }
+                        }
+                )
+            }
         }
     }
 }

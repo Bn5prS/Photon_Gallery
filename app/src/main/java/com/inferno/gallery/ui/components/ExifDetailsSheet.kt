@@ -670,13 +670,47 @@ fun ExifDetailsSheet(
                             softWrap = false
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = galleryItem.name,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        val isHdr = isUltraHdr || localExifData?.isUltraHdr == true
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = galleryItem.name,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (isHdr) {
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(13.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.badge_ultra_hdr),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                     FilledTonalIconButton(
                         onClick = onDismiss,
