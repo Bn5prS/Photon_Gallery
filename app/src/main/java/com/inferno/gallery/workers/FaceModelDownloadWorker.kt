@@ -229,13 +229,15 @@ class FaceModelDownloadWorker(
             val db = DatabaseProvider.getDatabase(context)
             val shouldAutoIndex = withContext(Dispatchers.IO) {
                 val settingsRepo = SettingsRepository.getInstance(context)
-                settingsRepo.faceAutoIndexFlow.first() && db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                val faceEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
+                val autoIndex = settingsRepo.faceAutoIndexFlow.first()
+                faceEnabled && autoIndex && db.faceDao().getUnindexedMediaIds().isNotEmpty()
             }
             if (shouldAutoIndex) {
                 val indexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>().build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     "FaceIndexWorker",
-                    ExistingWorkPolicy.KEEP,
+                    ExistingWorkPolicy.REPLACE,
                     indexRequest
                 )
             }

@@ -12,6 +12,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -66,30 +67,37 @@ fun PhotonGalleryTheme(
             (colorPresetName == "dynamic" || dynamicColor) &&
             (colorPresetName != "custom")
 
-        val seedColor: Color = if (colorPresetName == "custom" && appSeedColor != -1) {
-            Color(appSeedColor)
-        } else if (useDynamic) {
-            dynamicLightColorScheme(context).primary
+        val baseScheme: ColorScheme = if (useDynamic) {
+            // Official Stock Material 3 Monet engine directly from Android OS framework
+            if (darkTheme) {
+                dynamicDarkColorScheme(context)
+            } else {
+                dynamicLightColorScheme(context)
+            }
         } else {
-            val palette = ThemePalettes.getById(colorPresetName)
-            palette.seedColor
+            val seedColor: Color = if (colorPresetName == "custom" && appSeedColor != -1) {
+                Color(appSeedColor)
+            } else {
+                val palette = ThemePalettes.getById(colorPresetName)
+                palette.seedColor
+            }
+
+            val resolvedStyle = try {
+                val style = PaletteStyle.valueOf(paletteStyleName)
+                if (style == PaletteStyle.Expressive) PaletteStyle.TonalSpot else style
+            } catch (e: Exception) {
+                PaletteStyle.TonalSpot
+            }
+
+            val effectiveSeed = if (resolvedStyle == PaletteStyle.Monochrome) Color.Gray else seedColor
+
+            dynamicColorScheme(
+                seedColor = effectiveSeed,
+                isDark = darkTheme,
+                isAmoled = false,
+                style = resolvedStyle,
+            )
         }
-
-        val resolvedStyle = try {
-            val style = PaletteStyle.valueOf(paletteStyleName)
-            if (style == PaletteStyle.Expressive) PaletteStyle.TonalSpot else style
-        } catch (e: Exception) {
-            PaletteStyle.TonalSpot
-        }
-
-        val effectiveSeed = if (resolvedStyle == PaletteStyle.Monochrome) Color.Gray else seedColor
-
-        val baseScheme = dynamicColorScheme(
-            seedColor = effectiveSeed,
-            isDark = darkTheme,
-            isAmoled = false,
-            style = resolvedStyle,
-        )
 
         if (darkTheme && useAmoledBlack) {
             baseScheme.copy(

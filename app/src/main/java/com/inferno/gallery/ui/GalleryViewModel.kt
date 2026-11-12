@@ -238,7 +238,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val showMemoriesSetting: StateFlow<Boolean> = settingsRepository.showMemoriesFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = false
     )
 
     val memoriesCarouselStyle: StateFlow<com.inferno.gallery.data.MemoriesCarouselStyle> = settingsRepository.memoriesCarouselStyleFlow.stateIn(
@@ -428,73 +428,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
 
         // Fast initial sync: if Room is empty, bulk-insert MediaStore metadata
-        // directly on IO. This populates the grid in ~1s instead of waiting
-        // ~10s for WorkManager to schedule and execute MediaSyncWorker.
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val count = database.mediaDao().getAllMediaCount()
-                if (count == 0) {
-                    _isInitialSyncRunning.value = true
-                    Log.d("GalleryViewModel", "Room empty — running fast initial sync")
-                    val mediaList = repository.getImagesListForSync()
-                    if (mediaList.isNotEmpty()) {
-                        val vaultUris = database.vaultDao().getAllOriginalUris().toSet()
-                        val vaultPaths = database.vaultDao().getAllOriginalPaths().toSet()
+        // directly on IO. This populates the grid in sub-second time instead of waiting
+        // for WorkManager to schedule and execute MediaSyncWorker.
+        runFastInitialSync()
 
-                        val entities = mediaList
-                            .filter { !vaultUris.contains(it.uri.toString()) && !vaultPaths.contains(it.path) }
-                            .map { media ->
-                                com.inferno.gallery.data.db.CoreMediaEntity(
-                                    id = media.id,
-                                    uriString = media.uri.toString(),
-                                    filePath = media.path,
-                                    bucketName = media.bucketName,
-                                    dateAdded = media.dateAdded,
-                                    dateModified = media.dateModified,
-                                    size = media.size,
-                                    name = media.name,
-                                    mimeType = null,
-                                    isVideo = media.isVideo,
-                                    durationMs = media.durationMs,
-                                    isIndexedOcr = false,
-                                    pHash = null,
-                                    latitude = null,
-                                    longitude = null,
-                                    fileHash = null
-                                )
-                            }
-                        if (entities.isNotEmpty()) {
-                            database.mediaDao().insertAll(entities)
-                        }
-                        Log.d("GalleryViewModel", "Fast sync complete: ${entities.size} items inserted")
-                    }
-                    _isInitialSyncRunning.value = false
-                    refreshMemories()
-                nativeTimelineRepository.refresh()
-                    scanPhotoSpheres()
-                } else {
-                    try {
-                        com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
-                        refreshMemories()
-                nativeTimelineRepository.refresh()
-                        scanPhotoSpheres()
-                    } catch (e: Exception) {
-                        Log.e("GalleryViewModel", "Startup sync failed: ${e.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")
-                _isInitialSyncRunning.value = false
-            }
-
-            // Auto-trigger GPS extraction & Reverse Geocoding in background on startup
-            val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
-            WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-                "ReverseGeocodeWorker",
-                ExistingWorkPolicy.KEEP,
-                geocodeRequest
-            )
-        }
+        // Auto-trigger GPS extraction & Reverse Geocoding in background on startup
+        val geocodeRequest = androidx.work.OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "ReverseGeocodeWorker",
+            ExistingWorkPolicy.KEEP,
+            geocodeRequest
+        )
 
         getApplication<Application>().contentResolver.registerContentObserver(
             android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -557,6 +501,77 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
+     * Executes an immediate, sub-second fast synchronization on Dispatchers.IO.
+     * When Room is empty (e.g. fresh install after permissions granted), this
+     * queries MediaStore directly and bulk-inserts all entries into Room in ~200ms,
+     * immediately populating the timeline without waiting 5-10s for WorkManager.
+     */
+    fun runFastInitialSync(force: Boolean = false) {
+        if (!hasStoragePermissions(getApplication())) {
+            android.util.Log.d("GalleryViewModel", "Fast sync deferred: storage permissions not yet granted")
+            return
+        }
+        _isInitialSyncRunning.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val count = database.mediaDao().getAllMediaCount()
+                if (count == 0 || force) {
+                    android.util.Log.d("GalleryViewModel", "Room empty or forced — running fast initial sync on IO")
+                    val mediaList = repository.getImagesListForSync()
+                    if (mediaList.isNotEmpty()) {
+                        val vaultUris = database.vaultDao().getAllOriginalUris().toSet()
+                        val vaultPaths = database.vaultDao().getAllOriginalPaths().toSet()
+
+                        val entities = mediaList
+                            .filter { !vaultUris.contains(it.uri.toString()) && !vaultPaths.contains(it.path) }
+                            .map { media ->
+                                com.inferno.gallery.data.db.CoreMediaEntity(
+                                    id = media.id,
+                                    uriString = media.uri.toString(),
+                                    filePath = media.path,
+                                    bucketName = media.bucketName,
+                                    dateAdded = media.dateAdded,
+                                    dateModified = media.dateModified,
+                                    size = media.size,
+                                    name = media.name,
+                                    mimeType = null,
+                                    isVideo = media.isVideo,
+                                    durationMs = media.durationMs,
+                                    isIndexedOcr = false,
+                                    pHash = null,
+                                    latitude = null,
+                                    longitude = null,
+                                    fileHash = null
+                                )
+                            }
+                        if (entities.isNotEmpty()) {
+                            database.mediaDao().insertAll(entities)
+                        }
+                        android.util.Log.d("GalleryViewModel", "Fast sync complete: ${entities.size} items inserted")
+                    }
+                    _isInitialSyncRunning.value = false
+                    refreshMemories()
+                    nativeTimelineRepository.refresh()
+                    scanPhotoSpheres()
+                } else {
+                    _isInitialSyncRunning.value = false
+                    try {
+                        com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
+                        refreshMemories()
+                        nativeTimelineRepository.refresh()
+                        scanPhotoSpheres()
+                    } catch (e: Exception) {
+                        android.util.Log.e("GalleryViewModel", "Startup sync failed: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")
+                _isInitialSyncRunning.value = false
+            }
+        }
+    }
+
+    /**
      * Resolves localExists and resolvedUri for a GalleryItem.
      */
     private fun resolveFileUri(uri: Uri, path: String, bucketName: String? = null): Uri {
@@ -591,9 +606,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         excluded: Set<String> = emptySet(),
         favIds: Set<String> = emptySet(),
         ftsIds: List<String> = emptyList(),
-        smartIds: List<String> = emptyList()
+        smartIds: List<String> = emptyList(),
+        albumMediaFilter: com.inferno.gallery.data.AlbumMediaFilter = com.inferno.gallery.data.AlbumMediaFilter.ALL
     ): MediaQueryBuilder.QueryConditions {
-        return MediaQueryBuilder.buildMediaConditions(bucket, filterIndex, excluded, favIds, ftsIds, smartIds)
+        return MediaQueryBuilder.buildMediaConditions(bucket, filterIndex, excluded, favIds, ftsIds, smartIds, albumMediaFilter)
     }
 
     private fun buildWhereClause(qc: MediaQueryBuilder.QueryConditions): String {
@@ -749,10 +765,21 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private val _currentBucket = MutableStateFlow<String?>(null)
+    val currentBucket: StateFlow<String?> = _currentBucket.asStateFlow()
+
+    private val _albumMediaFilter = MutableStateFlow(com.inferno.gallery.data.AlbumMediaFilter.ALL)
+    val albumMediaFilter: StateFlow<com.inferno.gallery.data.AlbumMediaFilter> = _albumMediaFilter.asStateFlow()
+
+    fun setAlbumMediaFilter(filter: com.inferno.gallery.data.AlbumMediaFilter) {
+        if (_albumMediaFilter.value != filter) {
+            _albumMediaFilter.value = filter
+        }
+    }
 
     fun setBucket(bucket: String?) {
         if (_currentBucket.value != bucket) {
             _currentBucket.value = bucket
+            _albumMediaFilter.value = com.inferno.gallery.data.AlbumMediaFilter.ALL
         }
     }
 
@@ -821,10 +848,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             combine(
-                combine(_currentBucket, selectedFilterIndex, sortOrder) { b, f, o -> Triple(b, f, o) },
+                combine(_currentBucket, selectedFilterIndex, sortOrder, albumMediaFilter) { b, f, o, af ->
+                    Triple(b, f, Pair(o, af))
+                },
                 combine(viewMode, excludedFolders, favoritesManager.favoritesFlow) { m, e, fav -> Triple(m, e, fav) },
                 combine(ftsSearchResults, smartSearchResults) { fts, smart -> Pair(fts, smart) }
-            ) { (b, f, o), (m, e, fav), (fts, smart) ->
+            ) { (b, f, orderAndFilter), (m, e, fav), (fts, smart) ->
+                val (o, af) = orderAndFilter
                 nativeTimelineRepository.updatePipeline(
                     bucket = b,
                     filterIndex = f,
@@ -833,7 +863,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     excluded = e,
                     favIds = fav,
                     ftsIds = fts.map { it.id },
-                    smartIds = smart.map { it.id }
+                    smartIds = smart.map { it.id },
+                    albumMediaFilter = af
                 )
             }.collect()
         }
@@ -1120,7 +1151,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 excluded = excludedFolders.value,
                 favIds = favoriteIds.value,
                 ftsIds = ftsIds,
-                smartIds = smartIds
+                smartIds = smartIds,
+                albumMediaFilter = albumMediaFilter.value
             )
             val queryString = "SELECT cm.* FROM core_media cm " +
                 buildWhereClause(qc) + buildOrderClause(order, bucketName, smartIds)
@@ -1892,7 +1924,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun scanForDuplicates() {
         if (_duplicateScanState.value is DuplicateScanState.Scanning) return
         viewModelScope.launch(Dispatchers.IO) {
-            _duplicateScanState.value = DuplicateScanState.Scanning(0, 0)
             try {
                 // Instantly find candidates that share the same byte size
                 val candidates = database.mediaDao().getMediaSharingSameSize()
@@ -1904,33 +1935,38 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     return@launch
                 }
 
+                _duplicateScanState.value = DuplicateScanState.Scanning(0, total)
+
                 val app = getApplication<Application>()
-                // The grid's PagingSource observes core_media, so every insertAll drops all
-                // loaded pages and re-runs the query. Batching at 20 meant hundreds of full
-                // grid reloads during startup on a large library; larger batches cut that by
-                // an order of magnitude while keeping individual transactions short.
-                val batchSize = 200
+                val updates = mutableListOf<com.inferno.gallery.data.db.CoreMediaEntity>()
+                val saveBatchSize = 100
                 var processed = 0
 
-                for (batch in needsHash.chunked(batchSize)) {
-                    val updates = batch.mapNotNull { entity ->
-                        val uri = Uri.parse(entity.uriString)
-                        val hash = com.inferno.gallery.utils.HashUtils.computeMediaHash(
-                            app.contentResolver,
-                            uri,
-                            entity.filePath
-                        )
-                        if (hash != null && hash != entity.fileHash) {
-                            entity.copy(fileHash = hash)
-                        } else null
+                for (entity in needsHash) {
+                    val uri = Uri.parse(entity.uriString)
+                    val hash = com.inferno.gallery.utils.HashUtils.computeMediaHash(
+                        app.contentResolver,
+                        uri,
+                        entity.filePath
+                    )
+                    if (hash != null && hash != entity.fileHash) {
+                        updates.add(entity.copy(fileHash = hash))
                     }
 
-                    if (updates.isNotEmpty()) {
+                    if (updates.size >= saveBatchSize) {
                         database.mediaDao().insertAll(updates)
+                        updates.clear()
                     }
 
-                    processed += batch.size
-                    _duplicateScanState.value = DuplicateScanState.Scanning(processed, total)
+                    processed++
+                    if (processed % 5 == 0 || processed == total) {
+                        _duplicateScanState.value = DuplicateScanState.Scanning(processed, total)
+                    }
+                }
+
+                if (updates.isNotEmpty()) {
+                    database.mediaDao().insertAll(updates)
+                    updates.clear()
                 }
 
                 _duplicateScanState.value = DuplicateScanState.Done
@@ -2363,7 +2399,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                     return@async emptyList()
                                 }
 
-                                val adaptiveThreshold = maxOf(minConfidence, topScore - 0.055f)
+                                val tokenCount = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.size
+                                val adaptiveGap = when {
+                                    tokenCount <= 1 -> 0.070f // Broad query: increase recall for single words (e.g. "car", "dog", "sunset")
+                                    tokenCount == 2 -> 0.058f
+                                    else -> 0.045f            // Specific query (e.g. "red sports car in rain")
+                                }
+                                val adaptiveThreshold = maxOf(minConfidence, topScore - adaptiveGap)
                                 val maxResults = 200
                                 val matched = scored.filter { it.second >= adaptiveThreshold }.take(maxResults)
                                 android.util.Log.i(
@@ -2423,6 +2465,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val smartResults = smartDeferred.await().distinctBy { it.id }
                     val ftsIds = ftsResults.map { it.id }.toSet()
                     val unclassifiedSmart = smartResults.filterNot { it.id in ftsIds }
+
+                    // Boost items that matched BOTH FTS (OCR/filename) AND semantic search:
+                    // Dual-matching items are the highest-confidence results in the library.
+                    val smartScoreMap = smartResults.associate { it.id to (it.searchScore ?: 0f) }
+                    ftsResults.sortByDescending { item ->
+                        val semanticScore = smartScoreMap[item.id] ?: 0f
+                        if (semanticScore > 0.235f) 10f + semanticScore else 1f
+                    }
 
                     val cleanQ = query.trim()
                     val queryTokens = cleanQ.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
@@ -2844,6 +2894,175 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun renameAlbum(
+        oldBucketName: String,
+        newBucketName: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val trimmed = newBucketName.trim()
+        if (trimmed.isEmpty()) {
+            showToast("Album name cannot be empty")
+            onComplete?.invoke(false, null)
+            return
+        }
+        if (trimmed == oldBucketName) {
+            onComplete?.invoke(true, trimmed)
+            return
+        }
+        if (!com.inferno.gallery.data.BucketNames.isRenameableAlbum(oldBucketName)) {
+            showToast("This album cannot be renamed")
+            onComplete?.invoke(false, null)
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val entities = database.mediaDao().getMediaByBucket(oldBucketName)
+                if (entities.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        showToast("No media found in album $oldBucketName")
+                        onComplete?.invoke(false, null)
+                    }
+                    return@launch
+                }
+
+                val movedPaths = mutableListOf<String>()
+                val oldPaths = mutableListOf<String>()
+
+                // Locate directory on disk
+                val firstFile = entities.firstNotNullOfOrNull {
+                    val f = java.io.File(it.filePath)
+                    if (f.exists()) f else null
+                }
+                val oldDir = firstFile?.parentFile
+
+                if (oldDir != null && oldDir.exists() && oldDir.isDirectory) {
+                    val targetDir = java.io.File(oldDir.parentFile, trimmed)
+                    val renamed = oldDir.renameTo(targetDir)
+                    if (!renamed) {
+                        if (!targetDir.exists()) {
+                            targetDir.mkdirs()
+                        }
+                        for (entity in entities) {
+                            val src = java.io.File(entity.filePath)
+                            if (src.exists()) {
+                                val dst = java.io.File(targetDir, src.name)
+                                if (src.renameTo(dst)) {
+                                    oldPaths.add(src.absolutePath)
+                                    movedPaths.add(dst.absolutePath)
+                                    database.mediaDao().updatePathAndBucket(
+                                        id = entity.id,
+                                        newPath = dst.absolutePath,
+                                        newBucket = trimmed,
+                                        newName = dst.name
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Entire folder directory was atomically renamed
+                        val oldDirPath = oldDir.absolutePath
+                        val targetDirPath = targetDir.absolutePath
+                        for (entity in entities) {
+                            val oldPath = entity.filePath
+                            val newPath = if (oldPath.startsWith(oldDirPath)) {
+                                targetDirPath + oldPath.substring(oldDirPath.length)
+                            } else {
+                                java.io.File(targetDir, java.io.File(oldPath).name).absolutePath
+                            }
+                            oldPaths.add(oldPath)
+                            movedPaths.add(newPath)
+                            database.mediaDao().updatePathAndBucket(
+                                id = entity.id,
+                                newPath = newPath,
+                                newBucket = trimmed,
+                                newName = entity.name
+                            )
+                        }
+                    }
+                } else {
+                    database.mediaDao().updateBucketName(oldBucketName, trimmed)
+                }
+
+                // Update MediaStore BUCKET_DISPLAY_NAME
+                try {
+                    val resolver = getApplication<android.app.Application>().contentResolver
+                    val values = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.BUCKET_DISPLAY_NAME, trimmed)
+                    }
+                    for (entity in entities) {
+                        if (entity.uriString.startsWith("content://")) {
+                            try {
+                                resolver.update(android.net.Uri.parse(entity.uriString), values, null, null)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("GalleryViewModel", "Error updating MediaStore for album rename: ${e.message}")
+                }
+
+                // Trigger MediaScanner for new and old paths
+                if (movedPaths.isNotEmpty()) {
+                    android.media.MediaScannerConnection.scanFile(
+                        getApplication(),
+                        movedPaths.toTypedArray(),
+                        null,
+                        null
+                    )
+                }
+                if (oldPaths.isNotEmpty()) {
+                    android.media.MediaScannerConnection.scanFile(
+                        getApplication(),
+                        oldPaths.toTypedArray(),
+                        null,
+                        null
+                    )
+                }
+
+                // Update pinned folders preference
+                settingsRepository.renamePinnedFolder(oldBucketName, trimmed)
+
+                // Update custom album shape
+                val shape = albumCustomShapes.value[oldBucketName]
+                if (shape != null) {
+                    removeAlbumCustomShape(oldBucketName)
+                    setAlbumCustomShape(trimmed, shape)
+                }
+
+                // Update custom album cover
+                val cover = albumCustomCovers.value[oldBucketName]
+                if (cover != null) {
+                    removeAlbumCustomCover(oldBucketName)
+                    setAlbumCustomCover(trimmed, cover)
+                }
+
+                // If currently viewing this bucket, update current bucket
+                if (_currentBucket.value == oldBucketName) {
+                    _currentBucket.value = trimmed
+                }
+
+                // Schedule background media sync
+                val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+                androidx.work.WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+                    "MediaSyncWorker",
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    syncWorkRequest
+                )
+
+                withContext(Dispatchers.Main) {
+                    showToast("Album renamed to \"$trimmed\"")
+                    onComplete?.invoke(true, trimmed)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GalleryViewModel", "Error renaming album: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    showToast("Error renaming album: ${e.message}")
+                    onComplete?.invoke(false, null)
+                }
+            }
+        }
+    }
+
     fun moveSelectedMediaToPath(targetDirectoryPath: String) {
         val selected = _selectedUris.value.toList()
         if (selected.isEmpty()) return
@@ -3190,16 +3409,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     val currentMediaCount: StateFlow<Int> = combine(
-        combine(_currentBucket, selectedFilterIndex, favoritesManager.favoritesFlow) { b, f, favs -> Triple(b, f, favs) },
+        combine(_currentBucket, selectedFilterIndex, favoritesManager.favoritesFlow, albumMediaFilter) { b, f, favs, af ->
+            Triple(b, f, Pair(favs, af))
+        },
         combine(excludedFolders, ftsSearchResults, smartSearchResults) { excl, fts, smart -> Triple(excl, fts, smart) }
-    ) { (bucket, filterIndex, favs), (excluded, fts, smart) ->
+    ) { (bucket, filterIndex, favsAndFilter), (excluded, fts, smart) ->
+        val (favs, af) = favsAndFilter
         val qc = buildMediaConditions(
             bucket = bucket,
             filterIndex = filterIndex,
             excluded = excluded,
             favIds = favs,
             ftsIds = fts.map { it.id },
-            smartIds = smart.map { it.id }
+            smartIds = smart.map { it.id },
+            albumMediaFilter = af
         )
         val queryString = "SELECT COUNT(*) FROM core_media cm " + buildWhereClause(qc)
         androidx.sqlite.db.SimpleSQLiteQuery(queryString, qc.args.toTypedArray())
@@ -3208,10 +3431,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
     private val rawPagerFlow: Flow<PagingData<com.inferno.gallery.data.db.CoreMediaProjection>> = combine(
-        combine(_currentBucket, selectedFilterIndex, sortOrder) { b, f, o -> Triple(b, f, o) },
+        combine(_currentBucket, selectedFilterIndex, sortOrder, albumMediaFilter) { b, f, o, af ->
+            Triple(b, f, Pair(o, af))
+        },
         combine(favoritesManager.favoritesFlow, excludedFolders) { favs, excluded -> Pair(favs, excluded) },
         combine(ftsSearchResults, smartSearchResults) { fts, smart -> Pair(fts, smart) }
-    ) { (bucket, filterIndex, order), (favs, excluded), (fts, smart) ->
+    ) { (bucket, filterIndex, orderAndFilter), (favs, excluded), (fts, smart) ->
+        val (order, af) = orderAndFilter
         val smartIds = smart.map { it.id }
         val ftsIds = fts.map { it.id }
         val qc = buildMediaConditions(
@@ -3220,7 +3446,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             excluded = excluded,
             favIds = favs,
             ftsIds = ftsIds,
-            smartIds = smartIds
+            smartIds = smartIds,
+            albumMediaFilter = af
         )
         val isSmartSearch = bucket == com.inferno.gallery.data.BucketNames.SEARCH_SMART && smartIds.isNotEmpty()
 

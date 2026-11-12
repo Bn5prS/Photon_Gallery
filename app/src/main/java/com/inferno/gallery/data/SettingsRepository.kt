@@ -381,7 +381,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val showMemoriesFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[SHOW_MEMORIES] ?: true
+            preferences[SHOW_MEMORIES] ?: false
         }
 
     suspend fun updateShowMemories(enabled: Boolean) {
@@ -876,6 +876,23 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun savePinnedFoldersOrder(order: List<String>) {
         context.dataStore.edit { preferences ->
             preferences[PINNED_FOLDERS_ORDER] = order.joinToString(",")
+        }
+    }
+
+    suspend fun renamePinnedFolder(oldName: String, newName: String) {
+        context.dataStore.edit { preferences ->
+            val currentPinned = (preferences[PINNED_FOLDERS] ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+            val idx = currentPinned.indexOf(oldName)
+            if (idx != -1) {
+                currentPinned[idx] = newName
+                preferences[PINNED_FOLDERS] = currentPinned.distinct().joinToString(",")
+            }
+            val currentOrder = (preferences[PINNED_FOLDERS_ORDER] ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+            val orderIdx = currentOrder.indexOf(oldName)
+            if (orderIdx != -1) {
+                currentOrder[orderIdx] = newName
+                preferences[PINNED_FOLDERS_ORDER] = currentOrder.joinToString(",")
+            }
         }
     }
 

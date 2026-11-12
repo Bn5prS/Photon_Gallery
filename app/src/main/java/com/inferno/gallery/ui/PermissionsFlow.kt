@@ -64,6 +64,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -140,7 +141,13 @@ fun hasStoragePermissions(context: Context): Boolean {
             context,
             Manifest.permission.READ_MEDIA_VIDEO
         ) == PackageManager.PERMISSION_GRANTED
-        readImages && readVideos
+        val partialMedia = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            ) == PackageManager.PERMISSION_GRANTED
+        } else false
+        (readImages && readVideos) || readImages || partialMedia
     } else {
         ContextCompat.checkSelfPermission(
             context,
@@ -1322,6 +1329,8 @@ private fun SetupAiPage(
 
                             LinearWavyProgressIndicator(
                                 progress = { downloadProgress / 100f },
+                                wavelength = WavyProgressTokens.LinearWavelength,
+                                waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(10.dp)
@@ -1820,6 +1829,8 @@ private fun SetupAiPage(
 
                                 LinearWavyProgressIndicator(
                                     progress = { faceDownloadProgress / 100f },
+                                    wavelength = WavyProgressTokens.LinearWavelength,
+                                    waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                                     color = MaterialTheme.colorScheme.tertiary,
                                     modifier = Modifier
                                         .fillMaxWidth()

@@ -54,6 +54,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -250,7 +251,7 @@ fun CollectionsScreen(
                     LazyRow(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                     ) {
                         item {
                             // "Explore Map" Hero Card
@@ -389,7 +390,7 @@ fun CollectionsScreen(
                         exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
                     ) {
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
                             contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
                         ) {
                             items(documentBuckets, key = { "document_${it.bucketName}" }) { docBucket ->
@@ -517,7 +518,7 @@ fun CollectionsScreen(
                         exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
                     ) {
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
                             contentPadding = PaddingValues(horizontal = SpacingTokens.XS)
                         ) {
                             items(mediaTypeBuckets, key = { "media_type_${it.bucketName}" }) { mediaType ->
@@ -552,7 +553,7 @@ fun CollectionsScreen(
                                     color = MaterialTheme.colorScheme.surfaceContainer,
                                     shadowElevation = 0.dp,
                                     modifier = Modifier
-                                        .width(120.dp)
+                                        .width(160.dp)
                                         .pressScale(pressedScale = 0.96f)
                                 ) {
                                     Column(
@@ -564,7 +565,7 @@ fun CollectionsScreen(
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .aspectRatio(1f)
+                                                .aspectRatio(16f / 9f)
                                                 .clip(ShapeMedium),
                                             shape = ShapeMedium,
                                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -574,7 +575,7 @@ fun CollectionsScreen(
                                                 AsyncImage(
                                                     model = ImageRequest.Builder(context)
                                                         .data(mediaType.coverUri)
-                                                        .size(280)
+                                                        .size(360)
                                                         .crossfade(true)
                                                         .build(),
                                                     contentDescription = null,
@@ -646,31 +647,36 @@ fun CollectionsScreen(
                 val screenTitle = stringResource(R.string.album_screenshots)
                 val vidTitle = stringResource(R.string.album_videos)
                 val vaultTitle = stringResource(R.string.album_vault)
+                val vaultProtected = stringResource(R.string.vault_status_protected)
 
-                val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount, favTitle, screenTitle, vidTitle, vaultTitle) {
+                val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount, favTitle, screenTitle, vidTitle, vaultTitle, vaultProtected) {
                     listOf(
                         UtilityItem(
                             title = favTitle,
                             iconRes = R.drawable.ic_ms_star,
                             count = favoriteItems.size,
+                            subtitle = if (favoriteItems.size == 1) "1 photo" else "${favoriteItems.size} photos",
                             onClick = { onAlbumClick("Favorites") }
                         ),
                         UtilityItem(
                             title = screenTitle,
                             iconRes = R.drawable.ic_ms_aspect_ratio,
                             count = screenshotsCount,
+                            subtitle = if (screenshotsCount == 1) "1 item" else "$screenshotsCount items",
                             onClick = { onAlbumClick("Screenshots") }
                         ),
                         UtilityItem(
                             title = vidTitle,
                             iconRes = R.drawable.ic_ms_play_arrow,
                             count = videoCount,
+                            subtitle = if (videoCount == 1) "1 clip" else "$videoCount clips",
                             onClick = { onAlbumClick("Videos") }
                         ),
                         UtilityItem(
                             title = vaultTitle,
                             iconRes = R.drawable.ic_ms_lock,
                             count = vaultItemCount,
+                            subtitle = vaultProtected,
                             onClick = {
                                 val activity = context as? androidx.fragment.app.FragmentActivity
                                 if (activity != null) {
@@ -701,12 +707,17 @@ fun CollectionsScreen(
                 val stitchTitle = stringResource(R.string.action_stitch)
                 val editorTitle = stringResource(R.string.action_edit)
                 val cleanUpTitle = stringResource(R.string.utility_clean_up)
+                val layoutsSub = stringResource(R.string.tool_sub_layouts)
+                val mergeSub = stringResource(R.string.tool_sub_merge)
+                val adjustSub = stringResource(R.string.tool_sub_adjust)
+                val duplicatesSub = stringResource(R.string.tool_sub_duplicates)
 
-                val tools = remember(collageTitle, stitchTitle, editorTitle, cleanUpTitle) {
+                val tools = remember(collageTitle, stitchTitle, editorTitle, cleanUpTitle, layoutsSub, mergeSub, adjustSub, duplicatesSub) {
                     listOf(
                         UtilityItem(
                             title = collageTitle,
                             iconRes = R.drawable.ic_ms_dashboard,
+                            subtitle = layoutsSub,
                             onClick = {
                                 pickCollageLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -716,6 +727,7 @@ fun CollectionsScreen(
                         UtilityItem(
                             title = stitchTitle,
                             iconRes = R.drawable.ic_ms_merge,
+                            subtitle = mergeSub,
                             onClick = {
                                 pickStitchLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -725,6 +737,7 @@ fun CollectionsScreen(
                         UtilityItem(
                             title = editorTitle,
                             iconRes = R.drawable.ic_ms_tune,
+                            subtitle = adjustSub,
                             onClick = {
                                 pickEditorLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -734,9 +747,14 @@ fun CollectionsScreen(
                         UtilityItem(
                             title = cleanUpTitle,
                             iconRes = R.drawable.ic_ms_cleaning_services,
+                            subtitle = duplicatesSub,
                             onClick = onNavigateToDuplicateCleaner
                         )
                     )
+                }
+
+                val allUtilitiesAndTools = remember(utilities, tools) {
+                    utilities + tools
                 }
 
                 AnimatedVisibility(
@@ -746,10 +764,9 @@ fun CollectionsScreen(
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        UtilityCardRow(items = utilities)
-                        UtilityCardRow(items = tools)
+                        UtilityGrid(items = allUtilitiesAndTools)
                         TrashRow(trashCount = trashCount, onAlbumClick = onAlbumClick)
                     }
                 }

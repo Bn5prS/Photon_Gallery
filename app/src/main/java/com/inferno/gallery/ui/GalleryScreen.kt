@@ -222,19 +222,22 @@ fun GalleryScreen(
     val nativeTimelineItems by viewModel.nativeTimelineItems.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
+    val albumMediaFilter by viewModel.albumMediaFilter.collectAsState()
 
     var previousFilter by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(selectedFilterIndex) }
     var previousBucket by rememberSaveable { mutableStateOf(bucketName) }
     var previousSortOrder by rememberSaveable { mutableStateOf(sortOrder) }
     var previousViewMode by rememberSaveable { mutableStateOf(viewMode) }
+    var previousAlbumFilter by rememberSaveable { mutableStateOf(albumMediaFilter) }
 
     // Only scroll to top when filter, bucket, sortOrder, or viewMode ACTUALLY changes, NOT when returning from detail screen
-    LaunchedEffect(selectedFilterIndex, bucketName, sortOrder, viewMode) {
-        if (previousFilter != selectedFilterIndex || previousBucket != bucketName || previousSortOrder != sortOrder || previousViewMode != viewMode) {
+    LaunchedEffect(selectedFilterIndex, bucketName, sortOrder, viewMode, albumMediaFilter) {
+        if (previousFilter != selectedFilterIndex || previousBucket != bucketName || previousSortOrder != sortOrder || previousViewMode != viewMode || previousAlbumFilter != albumMediaFilter) {
             previousFilter = selectedFilterIndex
             previousBucket = bucketName
             previousSortOrder = sortOrder
             previousViewMode = viewMode
+            previousAlbumFilter = albumMediaFilter
             viewModel.resetGridScrollPosition(bucketName)
             lazyGridState.scrollToItem(0, 0)
         }

@@ -44,7 +44,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import com.inferno.gallery.R
-import com.inferno.gallery.ui.theme.ExpressiveShapes
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.PresetThemePalette
 
@@ -108,16 +107,16 @@ fun FourQuadrantColorSwatch(
                         .border(
                             width = 2.5.dp,
                             color = MaterialTheme.colorScheme.primary,
-                            shape = ExpressiveShapes.Scallop
+                            shape = CircleShape
                         )
                 )
             }
 
-            // 4-Quadrant scalloped canvas
+            // 4-Quadrant circular canvas
             Box(
                 modifier = Modifier
                     .size(if (isSelected) 46.dp else 48.dp)
-                    .clip(ExpressiveShapes.Scallop),
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.size(if (isSelected) 46.dp else 48.dp)) {
@@ -159,7 +158,7 @@ fun FourQuadrantColorSwatch(
                 ) {
                     Surface(
                         modifier = Modifier.size(20.dp),
-                        shape = ExpressiveShapes.Scallop,
+                        shape = CircleShape,
                         color = MaterialTheme.colorScheme.primary,
                         shadowElevation = 2.dp
                     ) {

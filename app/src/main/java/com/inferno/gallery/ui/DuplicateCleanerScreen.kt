@@ -48,6 +48,7 @@ import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -173,7 +174,9 @@ fun DuplicateCleanerScreen(
                 actions = {
                     if (scanState is DuplicateScanState.Scanning) {
                         CircularWavyProgressIndicator(
-                            modifier = Modifier.size(24.dp).padding(end = 8.dp),
+                            wavelength = WavyProgressTokens.CircularWavelength,
+                            waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                            modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     } else {
@@ -278,10 +281,10 @@ fun DuplicateCleanerScreen(
                 .fillMaxSize()
                 .padding(top = paddingValues.calculateTopPadding())
         ) {
-            // Scanning progress bar if currently running
-            if (scanState is DuplicateScanState.Scanning) {
+            // Scanning progress bar if currently running and duplicates are already populated
+            if (scanState is DuplicateScanState.Scanning && exactDuplicates.isNotEmpty()) {
                 val state = scanState as DuplicateScanState.Scanning
-                val progress = if (state.total > 0) state.processed.toFloat() / state.total else 0f
+                val progress = if (state.total > 0) (state.processed.toFloat() / state.total).coerceIn(0f, 1f) else 0f
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -292,22 +295,32 @@ fun DuplicateCleanerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            "Analyzing identical files...",
+                            "Analyzing identical files…",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "${state.processed} / ${state.total}",
+                            if (state.total > 0) "${state.processed} / ${state.total}" else "Calculating…",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    LinearWavyProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(10.dp)
-                    )
+                    if (state.total > 0) {
+                        LinearWavyProgressIndicator(
+                            progress = { progress },
+                            wavelength = WavyProgressTokens.LinearWavelength,
+                            waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                            modifier = Modifier.fillMaxWidth().height(10.dp)
+                        )
+                    } else {
+                        LinearWavyProgressIndicator(
+                            wavelength = WavyProgressTokens.LinearWavelength,
+                            waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                            modifier = Modifier.fillMaxWidth().height(10.dp)
+                        )
+                    }
                 }
             }
 
@@ -400,15 +413,84 @@ fun DuplicateCleanerScreen(
                         .padding(bottom = paddingValues.calculateBottomPadding()),
                     contentAlignment = Alignment.Center
                 ) {
-                    PhotonEmptyState(
-                        icon = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                        title = if (scanState is DuplicateScanState.Scanning) "Scanning Photos..." else "No Duplicates Found",
-                        subtitle = if (scanState is DuplicateScanState.Scanning) {
-                            "Comparing identical files in your storage"
-                        } else {
-                            "Your gallery has zero duplicate files!"
+                    if (scanState is DuplicateScanState.Scanning) {
+                        val state = scanState as DuplicateScanState.Scanning
+                        val progress = if (state.total > 0) (state.processed.toFloat() / state.total).coerceIn(0f, 1f) else 0f
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        ) {
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(80.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularWavyProgressIndicator(
+                                        wavelength = WavyProgressTokens.CircularWavelength,
+                                        waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                                        modifier = Modifier.size(72.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Scanning for Duplicates…",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Text(
+                                text = if (state.total > 0) {
+                                    "Analyzing candidate files: ${state.processed} of ${state.total} checked"
+                                } else {
+                                    "Comparing identical files in your storage…"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+
+                            if (state.total > 0) {
+                                LinearWavyProgressIndicator(
+                                    progress = { progress },
+                                    wavelength = WavyProgressTokens.LinearWavelength,
+                                    waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.75f)
+                                        .height(10.dp)
+                                )
+
+                                Text(
+                                    text = "${(progress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                LinearWavyProgressIndicator(
+                                    wavelength = WavyProgressTokens.LinearWavelength,
+                                    waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.75f)
+                                        .height(10.dp)
+                                )
+                            }
                         }
-                    )
+                    } else {
+                        PhotonEmptyState(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                            title = "No Duplicates Found",
+                            subtitle = "Your gallery has zero duplicate files!"
+                        )
+                    }
                 }
             } else {
                 LazyColumn(

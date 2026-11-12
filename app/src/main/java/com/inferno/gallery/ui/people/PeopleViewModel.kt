@@ -83,10 +83,15 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startFaceModelDownload() {
         val request = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+            .setConstraints(
+                androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                    .build()
+            )
             .build()
         WorkManager.getInstance(getApplication()).enqueueUniqueWork(
             "FaceModelDownloadWorker",
-            androidx.work.ExistingWorkPolicy.KEEP,
+            androidx.work.ExistingWorkPolicy.REPLACE,
             request
         )
     }
@@ -96,6 +101,14 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     val faceProgress = com.inferno.gallery.data.IndexingProgressManager.faceProgress
+
+    val unindexedFacesCount: StateFlow<Int> = faceDao.observeUnindexedCount()
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalPhotosCount: StateFlow<Int> = database.mediaDao().observeTotalImageCount()
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val _isInitialLoading = MutableStateFlow(true)
     val isInitialLoading: StateFlow<Boolean> = _isInitialLoading.asStateFlow()
@@ -489,7 +502,7 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
             val request = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceIndexWorker>().build()
             WorkManager.getInstance(getApplication()).enqueueUniqueWork(
                 "FaceIndexWorker",
-                if (forceRescan) androidx.work.ExistingWorkPolicy.REPLACE else androidx.work.ExistingWorkPolicy.KEEP,
+                androidx.work.ExistingWorkPolicy.REPLACE,
                 request
             )
         }
@@ -507,5 +520,10 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopFaceIndexing() {
         WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+            isIndexing = false,
+            progress = 0,
+            total = 0
+        )
     }
 }

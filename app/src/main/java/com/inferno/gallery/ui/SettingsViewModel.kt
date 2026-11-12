@@ -374,7 +374,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val showMemories: StateFlow<Boolean> = repository.showMemoriesFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = false
     )
 
     fun setShowMemories(show: Boolean) {
@@ -719,10 +719,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun startFaceModelDownload() {
         val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+            .setConstraints(
+                androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                    .build()
+            )
             .build()
         WorkManager.getInstance(getApplication()).enqueueUniqueWork(
             "FaceModelDownloadWorker",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request
         )
     }
@@ -745,7 +750,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 .build()
             WorkManager.getInstance(getApplication()).enqueueUniqueWork(
                 "FaceIndexWorker",
-                if (forceRescan) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,
                 request
             )
         }
@@ -759,6 +764,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun stopFaceIndexing() {
         WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+            isIndexing = false,
+            progress = 0,
+            total = 0
+        )
     }
 
     fun clearFaceIndex() {

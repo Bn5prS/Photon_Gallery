@@ -55,6 +55,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -145,11 +146,24 @@ fun PeopleScreen(
     val pendingSuggestions by viewModel.pendingMergeSuggestions.collectAsState()
     val faceProgressState by viewModel.faceProgress.collectAsState()
     val faceIndexWorkInfo by viewModel.faceIndexWorkInfo.collectAsState()
-    val isScanning = faceProgressState.isIndexing ||
-            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
-            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-    val scanProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
-    val scanTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
+    val unindexedFacesCount by viewModel.unindexedFacesCount.collectAsState()
+    val totalPhotosCount by viewModel.totalPhotosCount.collectAsState()
+
+    val isWorkRunning = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
+    val isWorkQueued = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+    val isWorkTerminal = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.FAILED ||
+            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.CANCELLED ||
+            faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.SUCCEEDED
+    val isScanningActive = isWorkRunning || (faceProgressState.isIndexing && !isWorkTerminal)
+    val isScanQueued = !isScanningActive && isWorkQueued
+    val isScanning = isScanningActive || isScanQueued
+
+    val rawScanProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
+    val rawScanTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
+    val scanTotal = if (rawScanTotal > 0) rawScanTotal else totalPhotosCount
+    val scanProcessed = if (rawScanTotal > 0) rawScanProcessed else (totalPhotosCount - unindexedFacesCount).coerceAtLeast(0)
+    val scanPending = (scanTotal - scanProcessed).coerceAtLeast(0).let { if (it > 0) it else unindexedFacesCount }
+    val scanProgressFloat = if (scanTotal > 0) (scanProcessed.toFloat() / scanTotal.toFloat()).coerceIn(0f, 1f) else 0f
 
     val isModelDownloaded by viewModel.isFaceModelDownloaded.collectAsState()
     val faceModelDownloadWorkInfo by viewModel.faceModelDownloadWorkInfo.collectAsState()
@@ -667,18 +681,29 @@ fun PeopleScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        val currentImageName = faceProgressState.currentImageName
-                        val progressText = if (!currentImageName.isNullOrBlank()) {
-                            if (scanTotal > 0) "Scanning: $currentImageName ($scanProcessed / $scanTotal)" else "Scanning: $currentImageName"
-                        } else if (scanTotal > 0) {
-                            "Scanning faces: $scanProcessed / $scanTotal photos"
+                        if (isScanningActive) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         } else {
-                            "Scanning photos for faces…"
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        val currentImageName = faceProgressState.currentImageName
+                        val progressText = if (isScanningActive) {
+                            if (!currentImageName.isNullOrBlank()) {
+                                "Scanning: $currentImageName ($scanProcessed / $scanTotal • $scanPending pending)"
+                            } else {
+                                "Scanning faces: $scanProcessed / $scanTotal photos ($scanPending pending)"
+                            }
+                        } else {
+                            "Face scan scheduled • $scanPending photos pending"
                         }
                         Text(
                             text = progressText,
@@ -721,40 +746,80 @@ fun PeopleScreen(
                             modifier = Modifier.size(56.dp)
                         )
 
-                        Text(
-                            text = "Scanning photos for faces…",
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
-                        )
+                        if (isScanningActive) {
+                            Text(
+                                text = "Scanning photos for faces…",
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
 
-                        val scanSub = if (scanTotal > 0) {
-                            "Processed $scanProcessed of $scanTotal photos. Recognized people will appear here automatically."
-                        } else {
-                            "Analyzing faces in your gallery on-device. Recognized people will appear here automatically."
-                        }
-                        Text(
-                            text = scanSub,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = SpacingTokens.L)
-                        )
+                            val scanSub = if (scanTotal > 0) {
+                                "Processed $scanProcessed of $scanTotal photos ($scanPending pending). Recognized people will appear here automatically."
+                            } else {
+                                "Analyzing faces in your gallery on-device. Recognized people will appear here automatically."
+                            }
+                            Text(
+                                text = scanSub,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = SpacingTokens.L)
+                            )
 
-                        if (scanTotal > 0) {
-                            val progressFloat = (scanProcessed.toFloat() / scanTotal.toFloat()).coerceIn(0f, 1f)
                             LinearWavyProgressIndicator(
-                                progress = { progressFloat },
+                                progress = { scanProgressFloat },
+                                wavelength = WavyProgressTokens.LinearWavelength,
+                                waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                                 modifier = Modifier
                                     .fillMaxWidth(0.7f)
                                     .height(10.dp)
                             )
+
+                            if (scanTotal > 0) {
+                                Text(
+                                    text = "$scanProcessed / $scanTotal photos (${(scanProgressFloat * 100).toInt()}%)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         } else {
+                            Text(
+                                text = "Face Scan Scheduled",
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "$scanPending photos waiting to be scanned. Background scan will run when charging and idle, or tap below to scan now.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = SpacingTokens.L)
+                            )
+
                             LinearWavyProgressIndicator(
+                                progress = { scanProgressFloat },
+                                wavelength = WavyProgressTokens.LinearWavelength,
+                                waveSpeed = WavyProgressTokens.IdleWaveSpeed,
                                 modifier = Modifier
                                     .fillMaxWidth(0.7f)
                                     .height(10.dp)
                             )
+
+                            Text(
+                                text = "$scanProcessed / $scanTotal scanned (${(scanProgressFloat * 100).toInt()}%)",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            FilledTonalButton(
+                                onClick = { viewModel.startFaceIndexing(forceRescan = false) },
+                                shape = ShapeFull
+                            ) {
+                                Text("Scan Faces Now")
+                            }
                         }
                     }
                 }
@@ -859,6 +924,8 @@ fun PeopleScreen(
 
                                 LinearWavyProgressIndicator(
                                     progress = { (modelDownloadProgress / 100f).coerceIn(0f, 1f) },
+                                    wavelength = WavyProgressTokens.LinearWavelength,
+                                    waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                                     modifier = Modifier
                                         .fillMaxWidth(0.7f)
                                         .height(10.dp)

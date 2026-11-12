@@ -85,9 +85,16 @@ class FaceIndexWorker(
         }
     }
 
+    private suspend fun safeSetForeground(text: String, current: Int = 0, total: Int = 0) {
+        try {
+            setForeground(createForegroundInfo(text, current, total))
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot set foreground info: ${e.message}")
+        }
+    }
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val context = applicationContext
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         val database = DatabaseProvider.getDatabase(context)
         val faceDao = database.faceDao()
         val engine = FaceRecognitionEngine.getInstance(context)
@@ -96,45 +103,71 @@ class FaceIndexWorker(
         // 1. Ensure engine is supported and model is available
         if (!FaceRecognitionEngine.isSupported()) {
             Log.w(TAG, "Device architecture does not support ONNX Runtime face inference.")
+            com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                isIndexing = false,
+                progress = 0,
+                total = 0
+            )
             return@withContext Result.success()
         }
 
         if (!engine.isModelDownloaded()) {
-            Log.w(TAG, "Face model is not yet downloaded. Aborting indexing.")
-            return@withContext Result.failure()
-        }
-        engine.loadModel()
-
-
-        // 2. Query strictly non-vault, unindexed media
-        val unindexedIds = faceDao.getUnindexedMediaIds()
-        val totalPhotos = faceDao.getTotalNonVaultMediaCount().coerceAtLeast(unindexedIds.size)
-        if (unindexedIds.isEmpty()) {
-            Log.d(TAG, "All media faces are up to date.")
+            Log.w(TAG, "Face model is not yet downloaded. Triggering download and deferring indexing.")
             com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
                 isIndexing = false,
-                progress = totalPhotos,
-                total = totalPhotos
+                progress = 0,
+                total = 0
             )
-            setProgress(workDataOf("processed" to totalPhotos, "total" to totalPhotos))
-            return@withContext Result.success()
+            val downloadRequest = androidx.work.OneTimeWorkRequestBuilder<FaceModelDownloadWorker>()
+                .setConstraints(
+                    androidx.work.Constraints.Builder()
+                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                "FaceModelDownloadWorker",
+                androidx.work.ExistingWorkPolicy.KEEP,
+                downloadRequest
+            )
+            return@withContext Result.failure()
         }
 
-        val alreadyIndexed = (totalPhotos - unindexedIds.size).coerceAtLeast(0)
+        var detector: com.google.mlkit.vision.face.FaceDetector? = null
         var processedCount = 0
-
-        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
-            isIndexing = true,
-            progress = alreadyIndexed,
-            total = totalPhotos
-        )
-        setProgress(workDataOf("processed" to alreadyIndexed, "total" to totalPhotos))
-
-        // 3. Initialize detector using FaceScanHelper options (0.02f minFaceSize)
-        val detector = FaceDetection.getClient(FaceScanHelper.createDetectorOptions())
-        val pacer = com.inferno.gallery.workers.utils.ScanThermalPacer(context, "FaceIndex")
+        var totalPhotos = 0
 
         try {
+            engine.loadModel()
+
+            // 2. Query strictly non-vault, unindexed media
+            val unindexedIds = faceDao.getUnindexedMediaIds()
+            totalPhotos = faceDao.getTotalNonVaultMediaCount().coerceAtLeast(unindexedIds.size)
+            if (unindexedIds.isEmpty()) {
+                Log.d(TAG, "All media faces are up to date.")
+                com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                    isIndexing = false,
+                    progress = totalPhotos,
+                    total = totalPhotos
+                )
+                setProgress(workDataOf("processed" to totalPhotos, "total" to totalPhotos))
+                return@withContext Result.success()
+            }
+
+            val alreadyIndexed = (totalPhotos - unindexedIds.size).coerceAtLeast(0)
+            safeSetForeground("Scanning faces: $alreadyIndexed of $totalPhotos…", alreadyIndexed, totalPhotos)
+
+            com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+                isIndexing = true,
+                progress = alreadyIndexed,
+                total = totalPhotos
+            )
+            setProgress(workDataOf("processed" to alreadyIndexed, "total" to totalPhotos))
+
+            // 3. Initialize detector using FaceScanHelper options (0.02f minFaceSize)
+            detector = FaceDetection.getClient(FaceScanHelper.createDetectorOptions())
+            val pacer = com.inferno.gallery.workers.utils.ScanThermalPacer(context, "FaceIndex")
+
             for (batch in unindexedIds.chunked(BATCH_SIZE)) {
                 if (isStopped) {
                     Log.d(TAG, "Face indexing worker stopped by system or user.")
@@ -142,6 +175,15 @@ class FaceIndexWorker(
                 }
 
                 val mediaEntities = database.mediaDao().getMediaByIdsList(batch)
+                val foundIds = mediaEntities.map { it.id }.toSet()
+                val missingIds = batch.filter { it !in foundIds }
+                if (missingIds.isNotEmpty()) {
+                    val now = System.currentTimeMillis()
+                    faceDao.insertFaceStatuses(missingIds.map {
+                        com.inferno.gallery.data.db.MediaFaceStatusEntity(mediaId = it, faceCount = 0, scannedAt = now)
+                    })
+                }
+
                 for (media in mediaEntities) {
                     if (isStopped) return@withContext Result.retry()
 
@@ -173,6 +215,7 @@ class FaceIndexWorker(
                     )
                     if (processedCount % 5 == 0 || processedCount == unindexedIds.size) {
                         setProgress(workDataOf("processed" to currentProgress, "total" to totalPhotos))
+                        safeSetForeground("Scanning: $photoName ($currentProgress / $totalPhotos)", currentProgress, totalPhotos)
                     }
                 }
 
@@ -192,8 +235,11 @@ class FaceIndexWorker(
                 runCatching { clusteringManager.consolidateClusters() }
             }
             Result.success()
+        } catch (e: Exception) {
+            Log.e(TAG, "FaceIndexWorker encountered error: ${e.message}", e)
+            Result.retry()
         } finally {
-            val total = runCatching { faceDao.getTotalNonVaultMediaCount() }.getOrDefault(0)
+            val total = runCatching { faceDao.getTotalNonVaultMediaCount() }.getOrDefault(totalPhotos)
             val unindexed = runCatching { faceDao.getUnindexedMediaIds().size }.getOrDefault(0)
             com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
                 isIndexing = false,
@@ -204,7 +250,8 @@ class FaceIndexWorker(
                 runCatching { clusteringManager.consolidateClusters() }
             }
             runCatching { faceDao.recalculateAllPersonFaceCounts() }
-            detector.close()
+            runCatching { detector?.close() }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         }
     }
 }

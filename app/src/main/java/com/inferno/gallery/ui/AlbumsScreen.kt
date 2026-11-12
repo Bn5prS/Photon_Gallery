@@ -105,6 +105,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -167,6 +168,7 @@ fun AlbumsScreen(
     val customCovers by viewModel.albumCustomCovers.collectAsState()
     val customShapes by viewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
+    var albumToRename by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
@@ -296,6 +298,7 @@ fun AlbumsScreen(
                             customShapes = customShapes,
                             customCovers = customCovers,
                             showAlbumSize = showAlbumSize,
+                            gridCellsCount = albumsGridCellsCount,
                             onAlbumClick = onAlbumClick,
                             onSeeAllClick = onNavigateToPinnedAlbums,
                             onTogglePin = { bucketName ->
@@ -308,7 +311,8 @@ fun AlbumsScreen(
                             onChangeCover = { bucketName -> onChangeCover(bucketName) },
                             onDeleteCover = { bucketName -> onDeleteCover(bucketName) },
                             onChangeShape = { bucket -> shapePickerBucket = bucket },
-                            onResetShape = { bucketName -> viewModel.removeAlbumCustomShape(bucketName) }
+                            onResetShape = { bucketName -> viewModel.removeAlbumCustomShape(bucketName) },
+                            onRename = { bucketName -> albumToRename = bucketName }
                         )
                     }
 
@@ -385,7 +389,8 @@ fun AlbumsScreen(
                                 onChangeCover = { onChangeCover(bucket.bucketName) },
                                 onDeleteCover = { onDeleteCover(bucket.bucketName) },
                                 onChangeShape = { shapePickerBucket = bucket },
-                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
+                                onRename = { albumToRename = bucket.bucketName }
                             )
                         }
                     }
@@ -438,7 +443,8 @@ fun AlbumsScreen(
                                 onChangeCover = { onChangeCover(bucket.bucketName) },
                                 onDeleteCover = { onDeleteCover(bucket.bucketName) },
                                 onChangeShape = { shapePickerBucket = bucket },
-                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) }
+                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
+                                onRename = { albumToRename = bucket.bucketName }
                             )
                         }
                     }
@@ -461,6 +467,16 @@ fun AlbumsScreen(
             },
             onDismissRequest = {
                 shapePickerBucket = null
+            }
+        )
+    }
+
+    albumToRename?.let { targetAlbum ->
+        com.inferno.gallery.ui.components.RenameAlbumDialog(
+            currentName = targetAlbum,
+            onDismissRequest = { albumToRename = null },
+            onConfirm = { newName ->
+                viewModel.renameAlbum(targetAlbum, newName)
             }
         )
     }
@@ -492,8 +508,95 @@ data class UtilityItem(
     val title: String,
     @DrawableRes val iconRes: Int,
     val count: Int? = null,
+    val subtitle: String? = null,
+    val iconTint: Color? = null,
+    val iconBgColor: Color? = null,
+    val subtitleColor: Color? = null,
     val onClick: () -> Unit
 )
+
+@Composable
+fun UtilityGrid(
+    items: List<UtilityItem>,
+    modifier: Modifier = Modifier
+) {
+    val rows = items.chunked(2)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        rows.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                rowItems.forEach { item ->
+                    UtilityGridCard(
+                        item = item,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size < 2) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UtilityGridCard(
+    item: UtilityItem,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = item.onClick,
+        modifier = modifier
+            .height(56.dp)
+            .pressScale(pressedScale = 0.96f),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = ImageVector.vectorResource(item.iconRes),
+                contentDescription = item.title,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun UtilityBentoPod(
+    items: List<UtilityItem>,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    tileColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    showLabel: Boolean = true,
+    labelColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    UtilityGrid(items = items, modifier = modifier)
+}
 
 @Composable
 fun UtilityCardRow(
@@ -1026,6 +1129,7 @@ fun PinnedAlbumsShelf(
     customShapes: Map<String, String>,
     customCovers: Map<String, String>,
     showAlbumSize: Boolean = false,
+    gridCellsCount: Int = 3,
     onAlbumClick: (String) -> Unit,
     onSeeAllClick: () -> Unit,
     onTogglePin: (String) -> Unit,
@@ -1033,8 +1137,17 @@ fun PinnedAlbumsShelf(
     onDeleteCover: (String) -> Unit,
     onChangeShape: (AlbumBucket) -> Unit,
     onResetShape: (String) -> Unit,
+    onRename: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val cardWidth = when (gridCellsCount) {
+        2 -> 160.dp
+        3 -> 116.dp
+        else -> 88.dp
+    }
+
+    val shelfSpacing = if (gridCellsCount >= 4) SpacingTokens.S else SpacingTokens.M
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
@@ -1094,7 +1207,7 @@ fun PinnedAlbumsShelf(
 
         // Horizontal Scrolling Shelf
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+            horizontalArrangement = Arrangement.spacedBy(shelfSpacing),
             contentPadding = PaddingValues(horizontal = 0.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -1116,6 +1229,8 @@ fun PinnedAlbumsShelf(
                         bucket = bucket.copy(bucketName = displayBucketName),
                         customShape = albumShape,
                         showAlbumSize = showAlbumSize,
+                        cardWidth = cardWidth,
+                        gridCellsCount = gridCellsCount,
                         onClick = { onAlbumClick(bucket.bucketName) },
                         onLongPress = { showCardMenu = true }
                     )
@@ -1131,7 +1246,8 @@ fun PinnedAlbumsShelf(
                         onChangeCover = { onChangeCover(bucket.bucketName) },
                         onDeleteCover = { onDeleteCover(bucket.bucketName) },
                         onChangeShape = { onChangeShape(bucket) },
-                        onResetShape = { onResetShape(bucket.bucketName) }
+                        onResetShape = { onResetShape(bucket.bucketName) },
+                        onRename = onRename?.let { cb -> { cb(bucket.bucketName) } }
                     )
                 }
             }
@@ -1145,14 +1261,18 @@ fun PinnedShelfCard(
     modifier: Modifier = Modifier,
     customShape: Shape? = null,
     showAlbumSize: Boolean = false,
+    cardWidth: Dp = 116.dp,
+    gridCellsCount: Int = 3,
     onClick: () -> Unit = {},
     onLongPress: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val cardShape = ShapeLargeIncreased
+    val cardShape = if (gridCellsCount >= 4) ShapeLarge else ShapeLargeIncreased
     val defaultCoverShape = ShapeMedium
     val tileShape = customShape ?: defaultCoverShape
+    val isLarge = gridCellsCount == 2
+    val isCompact = gridCellsCount >= 4
 
     var loadFailed by remember(bucket.coverUri) { mutableStateOf(false) }
     val effectiveUri = if (loadFailed && bucket.defaultCoverUri != Uri.EMPTY) {
@@ -1174,7 +1294,7 @@ fun PinnedShelfCard(
 
     Surface(
         modifier = modifier
-            .width(116.dp)
+            .width(cardWidth)
             .pressScale(pressedScale = 0.96f)
             .clip(cardShape)
             .combinedClickable(
@@ -1264,7 +1384,11 @@ fun PinnedShelfCard(
             // Album title
             Text(
                 text = bucket.bucketName,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = when {
+                    isLarge -> MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    isCompact -> MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium, fontSize = 11.sp)
+                    else -> MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                },
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1278,7 +1402,11 @@ fun PinnedShelfCard(
             }
             Text(
                 text = countText,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                style = when {
+                    isLarge -> MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal, fontSize = 13.sp)
+                    isCompact -> MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal, fontSize = 10.sp)
+                    else -> MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal, fontSize = 11.sp)
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1469,7 +1597,8 @@ fun AlbumDropdownMenu(
     onChangeCover: () -> Unit,
     onDeleteCover: () -> Unit,
     onChangeShape: () -> Unit,
-    onResetShape: () -> Unit
+    onResetShape: () -> Unit,
+    onRename: (() -> Unit)? = null
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -1490,6 +1619,22 @@ fun AlbumDropdownMenu(
                 onClick = {
                     onDismissRequest()
                     onTogglePin()
+                }
+            )
+        }
+        if (com.inferno.gallery.data.BucketNames.isRenameableAlbum(bucketName) && onRename != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_rename_album), style = MaterialTheme.typography.bodyMedium) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                        contentDescription = null,
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onRename()
                 }
             )
         }
@@ -2057,6 +2202,7 @@ internal fun Modifier.albumsGridPinchZoom(
                                                     currentOnGridCountChange(currentCols - 1)
                                                     lastChangeTime = now
                                                     accumulatedScale = 1.0f
+                                                    initialDistance = currDist
                                                     currentOnPinchScaleChange(1.0f)
                                                 }
                                             }
@@ -2068,6 +2214,7 @@ internal fun Modifier.albumsGridPinchZoom(
                                                     currentOnGridCountChange(currentCols + 1)
                                                     lastChangeTime = now
                                                     accumulatedScale = 1.0f
+                                                    initialDistance = currDist
                                                     currentOnPinchScaleChange(1.0f)
                                                 }
                                             }
@@ -2076,12 +2223,16 @@ internal fun Modifier.albumsGridPinchZoom(
                                 }
                             }
                         }
-                    } else if (pinchActive) {
-                        event.changes.forEach { it.consume() }
+                    } else {
+                        if (pinchEverActivated) {
+                            event.changes.forEach { it.consume() }
+                        }
+                        pinchActive = false
+                        initialDistance = -1f
                     }
                 } while (event.changes.any { it.pressed })
             } finally {
-                if (pinchActive) {
+                if (pinchEverActivated) {
                     currentOnPinchEnd()
                 }
             }

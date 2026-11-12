@@ -67,6 +67,12 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMedia(): List<CoreMediaEntity>
 
+    @Query("SELECT * FROM core_media WHERE bucketName = :bucket AND uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
+    suspend fun getMediaByBucket(bucket: String): List<CoreMediaEntity>
+
+    @Query("UPDATE core_media SET bucketName = :newBucket WHERE bucketName = :oldBucket")
+    suspend fun updateBucketName(oldBucket: String, newBucket: String)
+
     /** Row count only — avoids materialising the whole table just to test emptiness. */
     @Query("SELECT COUNT(*) FROM core_media WHERE uriString NOT IN (SELECT originalUri FROM vault_media) AND filePath NOT IN (SELECT originalPath FROM vault_media)")
     suspend fun getAllMediaCount(): Int
@@ -239,6 +245,52 @@ interface MediaDao {
         ORDER BY cm.dateAdded DESC
     """)
     suspend fun getOnThisDayMedia(month: String, day: String, excludeYear: String): List<CoreMediaEntity>
+
+    @Query("""
+        SELECT * FROM core_media cm
+        WHERE strftime('%m-%d', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) IN (:monthDays)
+          AND strftime('%Y', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) != :excludeYear
+          AND cm.bucketName != 'Trash'
+          AND cm.bucketName NOT IN ('Screenshots', 'Screenshot', 'Download', 'Downloads')
+          AND cm.filePath NOT LIKE '%/Screenshots/%'
+          AND cm.filePath NOT LIKE '%/Screenshot/%'
+          AND cm.size >= 50000
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ORDER BY cm.dateAdded DESC
+    """)
+    suspend fun getOnThisDayRangeMedia(monthDays: List<String>, excludeYear: String): List<CoreMediaEntity>
+
+    @Query("""
+        SELECT * FROM core_media cm
+        WHERE strftime('%m', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) = :month
+          AND strftime('%Y', datetime(CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END, 'unixepoch', 'localtime')) != :excludeYear
+          AND cm.bucketName != 'Trash'
+          AND cm.bucketName NOT IN ('Screenshots', 'Screenshot', 'Download', 'Downloads')
+          AND cm.filePath NOT LIKE '%/Screenshots/%'
+          AND cm.filePath NOT LIKE '%/Screenshot/%'
+          AND cm.size >= 50000
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ORDER BY cm.dateAdded DESC
+        LIMIT :limit
+    """)
+    suspend fun getPastYearsMonthMedia(month: String, excludeYear: String, limit: Int = 300): List<CoreMediaEntity>
+
+    @Query("""
+        SELECT * FROM core_media cm
+        WHERE (CASE WHEN cm.dateAdded > 100000000000 THEN cm.dateAdded / 1000 ELSE cm.dateAdded END) < :beforeTimestampSec
+          AND cm.bucketName != 'Trash'
+          AND cm.bucketName NOT IN ('Screenshots', 'Screenshot', 'Download', 'Downloads')
+          AND cm.filePath NOT LIKE '%/Screenshots/%'
+          AND cm.filePath NOT LIKE '%/Screenshot/%'
+          AND cm.size >= 50000
+          AND cm.uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND cm.filePath NOT IN (SELECT originalPath FROM vault_media)
+        ORDER BY cm.dateAdded DESC
+        LIMIT :limit
+    """)
+    suspend fun getHistoricalMedia(beforeTimestampSec: Long, limit: Int = 400): List<CoreMediaEntity>
 
     @Query("""
         SELECT * FROM core_media cm

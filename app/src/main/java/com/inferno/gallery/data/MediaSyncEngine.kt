@@ -314,18 +314,32 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
                 val faceEngine = FaceRecognitionEngine.getInstance(appContext)
                 val unindexedFaceCount = database.faceDao().getUnindexedMediaIds().size
-                if (faceRecognitionEnabled && autoIndexFacesEnabled && faceEngine.isModelDownloaded() && unindexedFaceCount > 0) {
-                    val constraints = androidx.work.Constraints.Builder()
-                        .setRequiresBatteryNotLow(true)
-                        .build()
-                    val faceIndexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
-                        .setConstraints(constraints)
-                        .build()
-                    WorkManager.getInstance(appContext).enqueueUniqueWork(
-                        "FaceIndexWorker",
-                        ExistingWorkPolicy.KEEP,
-                        faceIndexRequest
-                    )
+                if (faceRecognitionEnabled && autoIndexFacesEnabled && unindexedFaceCount > 0) {
+                    if (!faceEngine.isModelDownloaded()) {
+                        val downloadConstraints = androidx.work.Constraints.Builder()
+                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                            .build()
+                        val downloadRequest = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+                            .setConstraints(downloadConstraints)
+                            .build()
+                        WorkManager.getInstance(appContext).enqueueUniqueWork(
+                            "FaceModelDownloadWorker",
+                            ExistingWorkPolicy.KEEP,
+                            downloadRequest
+                        )
+                    } else {
+                        val constraints = androidx.work.Constraints.Builder()
+                            .setRequiresBatteryNotLow(true)
+                            .build()
+                        val faceIndexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
+                            .setConstraints(constraints)
+                            .build()
+                        WorkManager.getInstance(appContext).enqueueUniqueWork(
+                            "FaceIndexWorker",
+                            ExistingWorkPolicy.KEEP,
+                            faceIndexRequest
+                        )
+                    }
                 }
 
                 val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()

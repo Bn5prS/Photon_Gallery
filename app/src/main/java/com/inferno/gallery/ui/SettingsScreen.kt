@@ -55,7 +55,6 @@ import com.inferno.gallery.ui.components.PhotonConnectedCardWrapper
 import com.inferno.gallery.ui.components.PhotonBackButton
 import com.inferno.gallery.ui.components.PhotonCloseButton
 import com.inferno.gallery.ui.components.PhotonHeaderIconButton
-import com.inferno.gallery.ui.components.PhotonPaletteGrid
 import com.inferno.gallery.ui.components.PhotonCustomColorSection
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
@@ -83,6 +82,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -173,7 +173,6 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsState()
     val useMaterialYou by viewModel.useMaterialYou.collectAsState()
     val colorPresetName by viewModel.colorPresetName.collectAsState()
-    val themePaletteStyle by viewModel.themePaletteStyle.collectAsState()
     val appSeedColor by viewModel.appSeedColor.collectAsState()
     val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
@@ -242,7 +241,6 @@ fun SettingsScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var currentLanguageTag by remember { mutableStateOf(getCurrentAppLanguageTag(context)) }
     var showCustomColorSheet by remember { mutableStateOf(false) }
-    var showPaletteStyleSheet by remember { mutableStateOf(false) }
     var showCuratedPalettesCard by remember { mutableStateOf(false) }
 
     if (showLanguageDialog) {
@@ -318,69 +316,6 @@ fun SettingsScreen(
         }
     }
 
-    if (showPaletteStyleSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showPaletteStyleSheet = false },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            shape = ShapeEdgeTop,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            text = stringResource(R.string.setting_palette_style_title),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.setting_palette_style_sub),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = { showPaletteStyleSheet = false },
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            text = stringResource(R.string.action_done),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                        )
-                    }
-                }
-
-                val effectiveSeedColor = if (colorPresetName == "custom" && appSeedColor != -1) {
-                    Color(appSeedColor)
-                } else if (useMaterialYou || colorPresetName == "dynamic") {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    ThemePalettes.getById(colorPresetName).seedColor
-                }
-
-                PhotonPaletteGrid(
-                    currentStyle = themePaletteStyle,
-                    seedColor = effectiveSeedColor,
-                    isDark = isCurrentlyDark,
-                    isAmoled = useAmoledBlack && isCurrentlyDark,
-                    onStyleSelected = { selectedStyle ->
-                        viewModel.setThemePaletteStyle(selectedStyle)
-                    }
-                )
-            }
-        }
-    }
 
     if (showCuratedPalettesCard) {
         Dialog(
@@ -1010,70 +945,6 @@ fun SettingsScreen(
                                             ) {
                                                 Text(
                                                     text = stringResource(R.string.action_customize),
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    {
-                                        val styleDisplayName = when (themePaletteStyle) {
-                                            "TonalSpot" -> "Tonal Spot"
-                                            "Neutral" -> "Neutral"
-                                            "Vibrant" -> "Vibrant"
-                                            "Monochrome" -> "Monochrome"
-                                            "Expressive" -> "Tonal Spot"
-                                            else -> themePaletteStyle
-                                        }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { showPaletteStyleSheet = true }
-                                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.secondaryContainer),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                                Column {
-                                                    Text(
-                                                        text = stringResource(R.string.setting_palette_style_title),
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    Text(
-                                                        text = styleDisplayName,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        fontWeight = FontWeight.SemiBold
-                                                    )
-                                                }
-                                            }
-
-                                            FilledTonalButton(
-                                                onClick = { showPaletteStyleSheet = true },
-                                                shape = CircleShape,
-                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                            ) {
-                                                Text(
-                                                    text = stringResource(R.string.action_change),
                                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                                                 )
                                             }
@@ -1932,6 +1803,8 @@ fun SettingsScreen(
                                         if (isDownloading) {
                                             LinearWavyProgressIndicator(
                                                 progress = { downloadProgress / 100f },
+                                                wavelength = WavyProgressTokens.LinearWavelength,
+                                                waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                                                 modifier = Modifier.fillMaxWidth().height(10.dp)
                                             )
                                             Row(
@@ -2162,12 +2035,20 @@ fun SettingsScreen(
                             // ── Face Recognition & Clustering Group Card ──
                             val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
                                     faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-                            val isFaceIndexing = faceProgressState.isIndexing ||
-                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
-                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+                            val isFaceWorkRunning = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
+                            val isFaceWorkQueued = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+                            val isFaceWorkTerminal = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.FAILED ||
+                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.CANCELLED ||
+                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.SUCCEEDED
+                            val isFaceScanningActive = isFaceWorkRunning || (faceProgressState.isIndexing && !isFaceWorkTerminal)
+                            val isFaceScanQueued = !isFaceScanningActive && isFaceWorkQueued
+                            val isFaceIndexing = isFaceScanningActive || isFaceScanQueued
                             val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
-                            val faceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
-                            val faceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
+                            val rawFaceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
+                            val rawFaceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
+                            val faceTotal = if (rawFaceTotal > 0) rawFaceTotal else totalImagesCount
+                            val faceProcessed = if (rawFaceTotal > 0) rawFaceProcessed else (totalImagesCount - unindexedFacesCount).coerceAtLeast(0)
+                            val facePending = (faceTotal - faceProcessed).coerceAtLeast(0).let { if (it > 0) it else unindexedFacesCount }
                             val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
                             val faceItems = mutableListOf<@Composable () -> Unit>()
 
@@ -2255,6 +2136,8 @@ fun SettingsScreen(
                                             if (isFaceDownloading) {
                                                 LinearWavyProgressIndicator(
                                                     progress = { faceDownloadProgress / 100f },
+                                                    wavelength = WavyProgressTokens.LinearWavelength,
+                                                    waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                                                     modifier = Modifier.fillMaxWidth().height(10.dp)
                                                 )
                                                 Row(
@@ -2327,9 +2210,18 @@ fun SettingsScreen(
                                                     modifier = Modifier.weight(1f)
                                                 )
 
-                                                val badgeColor = if (isFaceIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                                                val badgeTextColor = if (isFaceIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                                val badgeText = if (isFaceIndexing) "Indexing" else if (unindexedFacesCount == 0) "Completed" else "Ready"
+                                                val badgeColor = if (isFaceScanningActive) MaterialTheme.colorScheme.tertiaryContainer
+                                                    else if (isFaceScanQueued) MaterialTheme.colorScheme.secondaryContainer
+                                                    else if (unindexedFacesCount == 0) MaterialTheme.colorScheme.primaryContainer
+                                                    else MaterialTheme.colorScheme.surfaceVariant
+                                                val badgeTextColor = if (isFaceScanningActive) MaterialTheme.colorScheme.onTertiaryContainer
+                                                    else if (isFaceScanQueued) MaterialTheme.colorScheme.onSecondaryContainer
+                                                    else if (unindexedFacesCount == 0) MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                                val badgeText = if (isFaceScanningActive) "Scanning"
+                                                    else if (isFaceScanQueued) "Scheduled"
+                                                    else if (unindexedFacesCount == 0) "Completed"
+                                                    else "Ready"
 
                                                 Surface(
                                                     color = badgeColor,
@@ -2341,11 +2233,18 @@ fun SettingsScreen(
                                                         verticalAlignment = Alignment.CenterVertically,
                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
-                                                        if (isFaceIndexing) {
+                                                        if (isFaceScanningActive) {
                                                             CircularProgressIndicator(
                                                                 modifier = Modifier.size(12.dp),
                                                                 strokeWidth = 2.dp,
                                                                 color = badgeTextColor
+                                                            )
+                                                        } else if (isFaceScanQueued) {
+                                                            Icon(
+                                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(12.dp),
+                                                                tint = badgeTextColor
                                                             )
                                                         }
                                                         Text(
@@ -2381,30 +2280,19 @@ fun SettingsScreen(
                                                 )
                                             )
 
-                                            if (isFaceIndexing || (faceTotal > 0 && faceProcessed < faceTotal)) {
-                                                val animatedFaceProgress by animateFloatAsState(
-                                                    targetValue = faceProgressFloat,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessLow),
-                                                    label = "faceProgress"
-                                                )
+                                            if (isFaceIndexing) {
                                                 Column(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
-                                                    if (faceTotal > 0) {
-                                                        LinearWavyProgressIndicator(
-                                                            progress = { animatedFaceProgress.coerceIn(0f, 1f) },
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .height(10.dp)
-                                                        )
-                                                    } else {
-                                                        LinearWavyProgressIndicator(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .height(10.dp)
-                                                        )
-                                                    }
+                                                    LinearWavyProgressIndicator(
+                                                        progress = { faceProgressFloat },
+                                                        wavelength = WavyProgressTokens.LinearWavelength,
+                                                        waveSpeed = if (isFaceScanningActive) WavyProgressTokens.CalmWaveSpeed else WavyProgressTokens.IdleWaveSpeed,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(10.dp)
+                                                    )
 
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth(),
@@ -2412,24 +2300,23 @@ fun SettingsScreen(
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
                                                         val currentFaceImage = faceProgressState.currentImageName
+                                                        val progressDescription = when {
+                                                            isFaceScanningActive && !currentFaceImage.isNullOrBlank() -> "Scanning: $currentFaceImage"
+                                                            isFaceScanningActive -> "Scanning: $faceProcessed of $faceTotal photos ($facePending pending)"
+                                                            isFaceScanQueued -> "Background scan scheduled ($facePending pending)"
+                                                            unindexedFacesCount == 0 && faceTotal > 0 -> "All photos scanned"
+                                                            else -> "$facePending photos pending"
+                                                        }
                                                         Text(
-                                                            text = if (isFaceIndexing) {
-                                                                if (!currentFaceImage.isNullOrBlank()) "Scanning: $currentFaceImage"
-                                                                else if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos"
-                                                                else "Scanning faces in your gallery…"
-                                                            } else if (faceProcessed == faceTotal && faceTotal > 0) {
-                                                                "Face indexing complete"
-                                                            } else {
-                                                                "Progress"
-                                                            },
+                                                            text = progressDescription,
                                                             style = MaterialTheme.typography.labelMedium,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             modifier = Modifier.weight(1f),
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis
                                                         )
-                                                        val pctInt = (animatedFaceProgress * 100).toInt()
-                                                        val displayPct = if (faceProcessed == faceTotal && faceTotal > 0) "100%"
+                                                        val pctInt = (faceProgressFloat * 100).toInt()
+                                                        val displayPct = if (unindexedFacesCount == 0 && faceTotal > 0) "100%"
                                                             else if (faceProcessed > 0 && pctInt == 0) "<1%"
                                                             else "$pctInt%"
                                                         Text(
@@ -2438,24 +2325,58 @@ fun SettingsScreen(
                                                             color = MaterialTheme.colorScheme.primary
                                                         )
                                                     }
+
+                                                    if (isFaceScanQueued) {
+                                                        Text(
+                                                            text = "Runs automatically when device is idle and battery is healthy, or tap Scan Faces Now to run immediately.",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                        )
+                                                    }
                                                 }
                                             } else {
-                                                Text(
-                                                    text = if (unindexedFacesCount == 0) {
-                                                        "All photos have been scanned and organized into People."
-                                                    } else {
-                                                        "$unindexedFacesCount photos waiting to be scanned for faces."
-                                                    },
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
+                                                Column(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                 ) {
+                                                     if (faceTotal > 0 && faceProcessed > 0 && faceProcessed < faceTotal) {
+                                                         Box(
+                                                             modifier = Modifier
+                                                                 .fillMaxWidth()
+                                                                 .height(10.dp)
+                                                                 .background(
+                                                                     color = MaterialTheme.colorScheme.surfaceVariant,
+                                                                     shape = CircleShape
+                                                                 )
+                                                         ) {
+                                                             Box(
+                                                                 modifier = Modifier
+                                                                     .fillMaxWidth(faceProgressFloat)
+                                                                     .fillMaxHeight()
+                                                                     .background(
+                                                                         color = MaterialTheme.colorScheme.primary,
+                                                                         shape = CircleShape
+                                                                     )
+                                                             )
+                                                         }
+                                                     }
+                                                     Text(
+                                                         text = if (unindexedFacesCount == 0) {
+                                                             "All photos have been scanned and organized into People."
+                                                         } else {
+                                                             "$unindexedFacesCount photos waiting to be scanned for faces."
+                                                         },
+                                                         style = MaterialTheme.typography.bodyMedium,
+                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                     )
+                                                 }
                                             }
 
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                if (isFaceIndexing) {
+                                                if (isFaceScanningActive) {
                                                     ExpressiveButton(
                                                         onClick = { viewModel.stopFaceIndexing() },
                                                         colors = ButtonDefaults.buttonColors(
@@ -2479,16 +2400,25 @@ fun SettingsScreen(
                                                     ) {
                                                         Text(if (unindexedFacesCount == 0) "Rescan All Faces" else "Scan Faces Now")
                                                     }
-                                                    OutlinedButton(
-                                                        onClick = { showClearFacesConfirm = true },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_clear_faces))
+                                                    if (isFaceScanQueued) {
+                                                        OutlinedButton(
+                                                            onClick = { viewModel.stopFaceIndexing() },
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Text("Cancel Queue")
+                                                        }
+                                                    } else {
+                                                        OutlinedButton(
+                                                            onClick = { showClearFacesConfirm = true },
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Text(stringResource(R.string.btn_clear_faces))
+                                                        }
                                                     }
                                                 }
                                             }
 
-                                            if (!isFaceIndexing) {
+                                            if (!isFaceScanningActive) {
                                                 OutlinedButton(
                                                     onClick = { showDeleteFaceModelConfirm = true },
                                                     colors = ButtonDefaults.outlinedButtonColors(

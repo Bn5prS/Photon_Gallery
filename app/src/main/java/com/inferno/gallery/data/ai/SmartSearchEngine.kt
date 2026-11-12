@@ -54,7 +54,20 @@ class SmartSearchEngine(private val context: Context) {
             Regex("""\b(chappal(s)?|slippers)\b""", RegexOption.IGNORE_CASE) to "slippers sandals footwear",
             Regex("""\b(mobile|cellphone|cell\s*phone)\b""", RegexOption.IGNORE_CASE) to "smartphone mobile phone",
             Regex("""\b(doggie|doggy)\b""", RegexOption.IGNORE_CASE) to "dog puppy",
-            Regex("""\b(kitty)\b""", RegexOption.IGNORE_CASE) to "cat kitten"
+            Regex("""\b(kitty)\b""", RegexOption.IGNORE_CASE) to "cat kitten",
+            Regex("""\b(aadhaar|aadhar|pan\s*card|voter\s*id|ration\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card government id document",
+            Regex("""\b(driving\s*licen[sc]e|dl)\b""", RegexOption.IGNORE_CASE) to "driving license card id document",
+            Regex("""\b(bill|receipt|invoice)\b""", RegexOption.IGNORE_CASE) to "printed receipt bill paper invoice",
+            Regex("""\b(screen\s*shot(s)?|screenshots?)\b""", RegexOption.IGNORE_CASE) to "phone screenshot screen capture interface",
+            Regex("""\b(bike|two\s*wheeler)\b""", RegexOption.IGNORE_CASE) to "motorcycle motorbike",
+            Regex("""\b(gadi|gaadi)\b""", RegexOption.IGNORE_CASE) to "automobile car passenger vehicle",
+            Regex("""\b(laptop|notebook\s*pc)\b""", RegexOption.IGNORE_CASE) to "laptop computer keyboard",
+            Regex("""\b(earphones|earbuds|airpods|headset)\b""", RegexOption.IGNORE_CASE) to "headphones earbuds audio device",
+            Regex("""\b(charger|adapter|data\s*cable)\b""", RegexOption.IGNORE_CASE) to "phone charger power adapter cable",
+            Regex("""\b(selfie|selfies)\b""", RegexOption.IGNORE_CASE) to "selfie portrait front camera photo",
+            Regex("""\b(baby|infant|toddler)\b""", RegexOption.IGNORE_CASE) to "cute baby infant child",
+            Regex("""\b(biryani|biriyani)\b""", RegexOption.IGNORE_CASE) to "spiced rice biryani dish food",
+            Regex("""\b(id\s*card|identity\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card badge document"
         )
 
         fun normalizeQuery(query: String): String {
@@ -75,6 +88,7 @@ class SmartSearchEngine(private val context: Context) {
     private var visionSession: OrtSession? = null
     private var tokenizer: BPETokenizer? = null
     private var isLoaded = false
+    private val queryVectorCache = android.util.LruCache<String, FloatArray>(64)
 
     fun getModelDir(): File = modelDirFile
 
@@ -176,6 +190,9 @@ class SmartSearchEngine(private val context: Context) {
     @Synchronized
     fun close() {
         try {
+            synchronized(queryVectorCache) {
+                queryVectorCache.evictAll()
+            }
             textSession?.close()
             textSession = null
             visionSession?.close()
@@ -196,21 +213,69 @@ class SmartSearchEngine(private val context: Context) {
         val trimmed = normalizeQuery(query)
         if (trimmed.isEmpty()) return FloatArray(512)
 
+        synchronized(queryVectorCache) {
+            val cached = queryVectorCache.get(trimmed)
+            if (cached != null) return cached
+        }
+
         if (trimmed.startsWith("a photo of", ignoreCase = true) ||
             trimmed.startsWith("a picture of", ignoreCase = true) ||
             trimmed.startsWith("photo of", ignoreCase = true)
         ) {
-            return encodeSingleText(trimmed)
+            val res = encodeSingleText(trimmed)
+            synchronized(queryVectorCache) { queryVectorCache.put(trimmed, res) }
+            return res
         }
 
-        // Canonical CLIP multi-template prompt ensembling:
-        // Averages embeddings across multiple descriptive templates to maximize retrieval recall
-        val templates = listOf(
+        // Canonical CLIP multi-template prompt ensembling with category awareness
+        val templates = mutableListOf(
             trimmed,
             "a photo of $trimmed",
             "a photo of the $trimmed",
             "a close-up photo of $trimmed"
         )
+
+        val lower = trimmed.lowercase()
+        when {
+            // Nature, Landscapes, Weather
+            lower.contains("sunset") || lower.contains("sunrise") || lower.contains("beach") ||
+            lower.contains("mountain") || lower.contains("sky") || lower.contains("forest") ||
+            lower.contains("waterfall") || lower.contains("sea") || lower.contains("ocean") ||
+            lower.contains("river") || lower.contains("garden") || lower.contains("flowers") -> {
+                templates.add("a beautiful scenic photo of $trimmed")
+                templates.add("a wide landscape shot of $trimmed")
+            }
+            // Animals, Pets
+            lower.contains("dog") || lower.contains("puppy") || lower.contains("cat") ||
+            lower.contains("kitten") || lower.contains("bird") || lower.contains("pet") ||
+            lower.contains("horse") || lower.contains("cow") || lower.contains("wildlife") -> {
+                templates.add("a photo of a cute $trimmed")
+                templates.add("a clear picture of the animal $trimmed")
+            }
+            // Food, Drinks
+            lower.contains("food") || lower.contains("pizza") || lower.contains("burger") ||
+            lower.contains("biryani") || lower.contains("cake") || lower.contains("coffee") ||
+            lower.contains("tea") || lower.contains("dish") || lower.contains("meal") ||
+            lower.contains("dessert") || lower.contains("snack") || lower.contains("breakfast") ||
+            lower.contains("dinner") || lower.contains("lunch") -> {
+                templates.add("a delicious photo of $trimmed food")
+                templates.add("a plate of $trimmed")
+            }
+            // Documents, Bills, IDs, Cards
+            lower.contains("receipt") || lower.contains("bill") || lower.contains("invoice") ||
+            lower.contains("document") || lower.contains("card") || lower.contains("passport") ||
+            lower.contains("license") || lower.contains("statement") || lower.contains("notes") ||
+            lower.contains("ticket") -> {
+                templates.add("a photo of a printed document $trimmed")
+                templates.add("a clean scan or document of $trimmed")
+            }
+            // Vehicles, Transportation
+            lower.contains("car") || lower.contains("bike") || lower.contains("motorcycle") ||
+            lower.contains("scooter") || lower.contains("truck") || lower.contains("bus") ||
+            lower.contains("train") || lower.contains("airplane") || lower.contains("vehicle") -> {
+                templates.add("a photo of the vehicle $trimmed")
+            }
+        }
 
         val ensembled = FloatArray(512)
         for (tpl in templates) {
@@ -219,7 +284,11 @@ class SmartSearchEngine(private val context: Context) {
                 ensembled[i] += vec[i]
             }
         }
-        return l2Normalize(ensembled)
+        val normalized = l2Normalize(ensembled)
+        synchronized(queryVectorCache) {
+            queryVectorCache.put(trimmed, normalized)
+        }
+        return normalized
     }
 
     private fun encodeSingleText(text: String): FloatArray {
@@ -286,18 +355,44 @@ class SmartSearchEngine(private val context: Context) {
             bitmap
         }
 
-        val inputBitmap = prepareCenterCropInputBitmap(softwareBitmap, 224)
-        if (softwareBitmap != bitmap) {
-            softwareBitmap.recycle()
+        val aspect = softwareBitmap.width.toFloat() / softwareBitmap.height.toFloat()
+        val isNonSquare = aspect < 0.82f || aspect > 1.22f
+
+        val centerCropBitmap = prepareCenterCropInputBitmap(softwareBitmap, 224)
+        val centerEmbedding = runVisionInference(centerCropBitmap, currentEnv, currentVisionSession)
+        if (centerCropBitmap != softwareBitmap && centerCropBitmap != bitmap) {
+            centerCropBitmap.recycle()
         }
 
+        if (!isNonSquare) {
+            if (softwareBitmap != bitmap) softwareBitmap.recycle()
+            return l2Normalize(centerEmbedding)
+        }
+
+        // Dual-Crop Ensembling for non-square photos (e.g. 9:16 vertical portraits or 16:9 landscapes):
+        // Blend 70% center crop (high-resolution central subject) + 30% full-aspect letterbox (global composition context)
+        val letterboxBitmap = prepareLetterboxInputBitmap(softwareBitmap, 224)
+        val letterboxEmbedding = runVisionInference(letterboxBitmap, currentEnv, currentVisionSession)
+        if (letterboxBitmap != softwareBitmap && letterboxBitmap != bitmap) {
+            letterboxBitmap.recycle()
+        }
+        if (softwareBitmap != bitmap) softwareBitmap.recycle()
+
+        val blended = FloatArray(512) { i ->
+            0.70f * centerEmbedding[i] + 0.30f * letterboxEmbedding[i]
+        }
+        return l2Normalize(blended)
+    }
+
+    private fun runVisionInference(
+        inputBitmap: Bitmap,
+        environment: OrtEnvironment,
+        session: OrtSession
+    ): FloatArray {
         // Preprocess pixels into RGB flat NCHW buffer for CLIP ViT-B/16 (224x224)
         val planeSize = 224 * 224
         val pixels = IntArray(planeSize)
         inputBitmap.getPixels(pixels, 0, 224, 0, 0, 224, 224)
-        if (inputBitmap != bitmap) {
-            inputBitmap.recycle()
-        }
 
         val floatBuffer = FloatArray(3 * planeSize)
         for (i in 0 until planeSize) {
@@ -313,14 +408,11 @@ class SmartSearchEngine(private val context: Context) {
         }
 
         val shape = longArrayOf(1, 3, 224, 224)
-        val imageTensor = OnnxTensor.createTensor(currentEnv, FloatBuffer.wrap(floatBuffer), shape)
-
-        val inputs = mapOf(
-            "pixel_values" to imageTensor
-        )
+        val imageTensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(floatBuffer), shape)
+        val inputs = mapOf("pixel_values" to imageTensor)
 
         try {
-            currentVisionSession.run(inputs).use { result ->
+            session.run(inputs).use { result ->
                 val embedsObj = result[0].value
                 val rawEmbeds = when (embedsObj) {
                     is Array<*> -> {

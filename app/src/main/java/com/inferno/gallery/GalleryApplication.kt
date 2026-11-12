@@ -90,25 +90,36 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             val faceEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
             val autoIndexFaces = settingsRepo.faceAutoIndexFlow.first()
             val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(this@GalleryApplication)
-            if (faceEnabled && autoIndexFaces && faceEngine.isModelDownloaded()) {
-                val db = DatabaseProvider.getDatabase(this@GalleryApplication)
-                val prefs = getSharedPreferences("face_scan_meta", android.content.Context.MODE_PRIVATE)
-                val scanVersion = prefs.getInt("scan_version", 1)
-                if (scanVersion < 2) {
-                    db.faceDao().clearZeroFaceStatuses()
-                    prefs.edit().putInt("scan_version", 2).apply()
-                }
-
-                val unindexedFaces = db.faceDao().getUnindexedMediaIds().isNotEmpty()
-                if (unindexedFaces) {
-                    val faceConstraints = androidx.work.Constraints.Builder()
-                        .setRequiresBatteryNotLow(true)
+            if (faceEnabled && autoIndexFaces) {
+                if (!faceEngine.isModelDownloaded()) {
+                    val downloadConstraints = androidx.work.Constraints.Builder()
+                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
                         .build()
-                    val faceRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
-                        .setConstraints(faceConstraints)
+                    val downloadRequest = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+                        .setConstraints(downloadConstraints)
                         .build()
                     WorkManager.getInstance(this@GalleryApplication)
-                        .enqueueUniqueWork("FaceIndexWorker", androidx.work.ExistingWorkPolicy.KEEP, faceRequest)
+                        .enqueueUniqueWork("FaceModelDownloadWorker", androidx.work.ExistingWorkPolicy.KEEP, downloadRequest)
+                } else {
+                    val db = DatabaseProvider.getDatabase(this@GalleryApplication)
+                    val prefs = getSharedPreferences("face_scan_meta", android.content.Context.MODE_PRIVATE)
+                    val scanVersion = prefs.getInt("scan_version", 1)
+                    if (scanVersion < 2) {
+                        db.faceDao().clearZeroFaceStatuses()
+                        prefs.edit().putInt("scan_version", 2).apply()
+                    }
+
+                    val unindexedFaces = db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                    if (unindexedFaces) {
+                        val faceConstraints = androidx.work.Constraints.Builder()
+                            .setRequiresBatteryNotLow(true)
+                            .build()
+                        val faceRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
+                            .setConstraints(faceConstraints)
+                            .build()
+                        WorkManager.getInstance(this@GalleryApplication)
+                            .enqueueUniqueWork("FaceIndexWorker", androidx.work.ExistingWorkPolicy.KEEP, faceRequest)
+                    }
                 }
             }
 

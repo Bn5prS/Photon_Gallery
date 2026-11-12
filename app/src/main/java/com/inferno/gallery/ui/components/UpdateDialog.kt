@@ -40,6 +40,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -711,7 +712,7 @@ fun UpdateDialog() {
                             initialValue = 0.96f,
                             targetValue = 1.04f,
                             animationSpec = infiniteRepeatable(
-                                animation = tween(1200, easing = MotionTokens.StandardEasing),
+                                animation = tween(2400, easing = MotionTokens.StandardEasing),
                                 repeatMode = RepeatMode.Reverse
                             ),
                             label = "pulse_scale"
@@ -770,6 +771,8 @@ fun UpdateDialog() {
 
                         LinearWavyProgressIndicator(
                             progress = { animatedProgress },
+                            wavelength = WavyProgressTokens.LinearWavelength,
+                            waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(10.dp),

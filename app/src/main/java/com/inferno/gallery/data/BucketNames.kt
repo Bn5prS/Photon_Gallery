@@ -40,4 +40,13 @@ object BucketNames {
     const val DOC_PAYMENTS = "doc:payments"
     const val DOC_RECEIPTS = "doc:receipts"
     const val DOC_SOCIAL = "doc:social"
+
+    fun isRenameableAlbum(bucketName: String?): Boolean {
+        if (bucketName.isNullOrBlank()) return false
+        if (bucketName == ALL || bucketName == FAVORITES || bucketName == TRASH || bucketName == VIDEOS) return false
+        if (bucketName.equals(SCREENSHOTS, ignoreCase = true) || bucketName.equals(SCREENSHOT, ignoreCase = true)) return false
+        if (bucketName == SEARCH_TEXT || bucketName == SEARCH_SMART) return false
+        if (bucketName.startsWith("place:") || bucketName.startsWith("doc:") || bucketName.startsWith("mediatype:")) return false
+        return true
+    }
 }

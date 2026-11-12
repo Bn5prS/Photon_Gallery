@@ -9,6 +9,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MotionScheme
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
 /**
  * Photon Gallery motion facade — a thin wrapper over the official Material 3
  * Expressive motion system.
@@ -115,3 +118,19 @@ object MotionTokens {
      * destinations expect so they don't fight the bounds morph. */
     const val CrossfadeDuration = Durations.Short
 }
+
+/**
+ * Calm, steady motion tokens for wavy progress indicators across the app.
+ * Keeps waves relaxed, proportional to activity, and avoids rapid/frantic oscillations.
+ */
+object WavyProgressTokens {
+    /** Relaxed, wide wave crest spacing for linear indicators */
+    val LinearWavelength: Dp = 24.dp
+    /** Relaxed wave crest spacing for circular indicators */
+    val CircularWavelength: Dp = 16.dp
+    /** Smooth, steady glide speed during active work (calm and deliberate) */
+    val CalmWaveSpeed: Dp = 4.dp
+    /** Very slow idle/queued wave glide speed */
+    val IdleWaveSpeed: Dp = 2.dp
+}
+

@@ -232,7 +232,12 @@ fun MainAppLayout(
     }
 
 
-    val albumNameArg = navBackStackEntry?.arguments?.getString("bucketName")
+    val rawAlbumName = navBackStackEntry?.arguments?.getString("bucketName")
+    val albumNameArg = remember(rawAlbumName) { rawAlbumName?.let { try { android.net.Uri.decode(it) } catch (e: Exception) { it } } }
+    var showAlbumOptionsMenu by remember { mutableStateOf(false) }
+    var showRenameAlbumDialog by remember { mutableStateOf(false) }
+    var showFilterAlbumSheet by remember { mutableStateOf(false) }
+    val albumMediaFilter by viewModel.albumMediaFilter.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     val context = LocalContext.current
@@ -285,6 +290,7 @@ fun MainAppLayout(
     var hasRequestedMediaOnce by remember { mutableStateOf(false) }
 
     val triggerSync = {
+        viewModel.runFastInitialSync()
         val syncWorkRequest = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             "MediaSyncWorker",
@@ -299,6 +305,7 @@ fun MainAppLayout(
         videosGranted = checkVideosPermission()
         allFilesGranted = checkAllFilesPermission()
         if (!wasMediaGranted && photosGranted) {
+            viewModel.runFastInitialSync()
             triggerSync()
         }
     }
@@ -433,6 +440,7 @@ fun MainAppLayout(
             onContinueClick = {
                 onboardingFinishedLocally = true
                 viewModel.completeOnboarding()
+                viewModel.runFastInitialSync()
                 triggerSync()
             },
             settingsViewModel = settingsViewModel,
@@ -697,9 +705,114 @@ fun MainAppLayout(
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier
-                                        .padding(start = 16.dp, end = 16.dp)
+                                        .padding(start = 16.dp, end = 8.dp)
                                         .weight(1f)
                                 )
+
+                                val canRenameAlbum = remember(albumNameArg) {
+                                    com.inferno.gallery.data.BucketNames.isRenameableAlbum(albumNameArg)
+                                }
+
+                                // Active filter pill indicator
+                                if (albumMediaFilter != com.inferno.gallery.data.AlbumMediaFilter.ALL) {
+                                    Surface(
+                                        onClick = { showFilterAlbumSheet = true },
+                                        shape = ShapeFull,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier
+                                            .padding(end = 4.dp)
+                                            .height(28.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = albumMediaFilter.label,
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                                            )
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                contentDescription = "Clear filter",
+                                                modifier = Modifier
+                                                    .size(14.dp)
+                                                    .clickable { viewModel.setAlbumMediaFilter(com.inferno.gallery.data.AlbumMediaFilter.ALL) }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 3-dot overflow options menu
+                                Box {
+                                    IconButton(
+                                        onClick = { showAlbumOptionsMenu = true },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                                            contentDescription = "Album options",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showAlbumOptionsMenu,
+                                        onDismissRequest = { showAlbumOptionsMenu = false },
+                                        shape = ShapeExtraLarge,
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        if (canRenameAlbum) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.action_rename_album), style = MaterialTheme.typography.bodyMedium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(IconSizeTokens.M)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showAlbumOptionsMenu = false
+                                                    showRenameAlbumDialog = true
+                                                }
+                                            )
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                        }
+
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(stringResource(R.string.action_filter_album), style = MaterialTheme.typography.bodyMedium)
+                                                    if (albumMediaFilter != com.inferno.gallery.data.AlbumMediaFilter.ALL) {
+                                                        Text(
+                                                            text = albumMediaFilter.label,
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.padding(start = 8.dp)
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(IconSizeTokens.M)
+                                                )
+                                            },
+                                            onClick = {
+                                                showAlbumOptionsMenu = false
+                                                showFilterAlbumSheet = true
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     } else if (currentRoute == "settings") {
@@ -2411,6 +2524,32 @@ fun MainAppLayout(
                             )
                         }
                     }
+                )
+            }
+
+            if (showRenameAlbumDialog && albumNameArg != null) {
+                com.inferno.gallery.ui.components.RenameAlbumDialog(
+                    currentName = albumNameArg,
+                    onDismissRequest = { showRenameAlbumDialog = false },
+                    onConfirm = { newName ->
+                        viewModel.renameAlbum(albumNameArg, newName) { success, finalName ->
+                            if (success && finalName != null) {
+                                val encoded = android.net.Uri.encode(finalName)
+                                nestedNavController.popBackStack()
+                                nestedNavController.navigate("album/$encoded")
+                            }
+                        }
+                    }
+                )
+            }
+
+            if (showFilterAlbumSheet) {
+                com.inferno.gallery.ui.components.AlbumFilterBottomSheet(
+                    selectedFilter = albumMediaFilter,
+                    onFilterSelected = { filter ->
+                        viewModel.setAlbumMediaFilter(filter)
+                    },
+                    onDismissRequest = { showFilterAlbumSheet = false }
                 )
             }
             
