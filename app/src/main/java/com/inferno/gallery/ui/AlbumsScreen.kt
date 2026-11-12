@@ -289,16 +289,56 @@ fun AlbumsScreen(
                             }
                     ) {
 
-                if (albumLayoutMode == AlbumLayoutMode.LIST) {
-                    if (userPinnedAlbums.isNotEmpty()) {
-                        item(key = "row_pinned_hub") {
-                            PinnedHubListRow(
-                                pinnedAlbums = userPinnedAlbums,
-                                onClick = onNavigateToPinnedAlbums
+                if (userPinnedAlbums.isNotEmpty()) {
+                    item(key = "section_pinned_shelf", span = { GridItemSpan(maxLineSpan) }) {
+                        PinnedAlbumsShelf(
+                            pinnedAlbums = userPinnedAlbums,
+                            customShapes = customShapes,
+                            customCovers = customCovers,
+                            showAlbumSize = showAlbumSize,
+                            onAlbumClick = onAlbumClick,
+                            onSeeAllClick = onNavigateToPinnedAlbums,
+                            onTogglePin = { bucketName ->
+                                viewModel.togglePinAlbum(bucketName) { success ->
+                                    if (!success) {
+                                        Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            onChangeCover = { bucketName -> onChangeCover(bucketName) },
+                            onDeleteCover = { bucketName -> onDeleteCover(bucketName) },
+                            onChangeShape = { bucket -> shapePickerBucket = bucket },
+                            onResetShape = { bucketName -> viewModel.removeAlbumCustomShape(bucketName) }
+                        )
+                    }
+
+                    item(key = "section_all_albums_header", span = { GridItemSpan(maxLineSpan) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = SpacingTokens.S, bottom = SpacingTokens.XS),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.section_albums),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val countText = remember(unpinnedAlbums.size) {
+                                val formatted = NumberFormat.getInstance(Locale.US).format(unpinnedAlbums.size)
+                                if (unpinnedAlbums.size == 1) "1 album" else "$formatted albums"
+                            }
+                            Text(
+                                text = countText,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                }
 
+                if (albumLayoutMode == AlbumLayoutMode.LIST) {
                     items(
                         items = unpinnedAlbums,
                         key = { "album_${it.bucketName}" }
@@ -350,18 +390,6 @@ fun AlbumsScreen(
                         }
                     }
                 } else {
-                    if (userPinnedAlbums.isNotEmpty()) {
-                        item(key = "card_pinned_hub") {
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                PinnedHubCard(
-                                    pinnedAlbums = userPinnedAlbums,
-                                    isCompact = albumsGridCellsCount >= 3,
-                                    onClick = onNavigateToPinnedAlbums
-                                )
-                            }
-                        }
-                    }
-
                     items(
                         items = unpinnedAlbums,
                         key = { "album_${it.bucketName}" }
@@ -986,6 +1014,276 @@ fun AlbumListRow(
                 }
             }
 
+        }
+    }
+}
+
+// ── Pinned Albums 1-Tap Horizontal Shelf ─────────────────────────────────────
+
+@Composable
+fun PinnedAlbumsShelf(
+    pinnedAlbums: List<AlbumBucket>,
+    customShapes: Map<String, String>,
+    customCovers: Map<String, String>,
+    showAlbumSize: Boolean = false,
+    onAlbumClick: (String) -> Unit,
+    onSeeAllClick: () -> Unit,
+    onTogglePin: (String) -> Unit,
+    onChangeCover: (String) -> Unit,
+    onDeleteCover: (String) -> Unit,
+    onChangeShape: (AlbumBucket) -> Unit,
+    onResetShape: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+    ) {
+        // Shelf Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_pin),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(IconSizeTokens.S)
+                )
+                Text(
+                    text = stringResource(R.string.section_pinned),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (pinnedAlbums.size > 5) {
+                androidx.compose.material3.TextButton(
+                    onClick = onSeeAllClick,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "See all (${pinnedAlbums.size})",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else {
+                val countText = remember(pinnedAlbums.size) {
+                    if (pinnedAlbums.size == 1) "1 album" else "${pinnedAlbums.size} albums"
+                }
+                Text(
+                    text = countText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Horizontal Scrolling Shelf
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+            contentPadding = PaddingValues(horizontal = 0.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(
+                items = pinnedAlbums,
+                key = { "shelf_pinned_${it.bucketName}" }
+            ) { bucket ->
+                val displayBucketName = when (bucket.bucketName) {
+                    "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+                    else -> bucket.bucketName
+                }
+                var showCardMenu by remember { mutableStateOf(false) }
+                val albumShape = remember(customShapes, bucket.bucketName) {
+                    AlbumShapes.getShape(customShapes[bucket.bucketName])
+                }
+
+                Box {
+                    PinnedShelfCard(
+                        bucket = bucket.copy(bucketName = displayBucketName),
+                        customShape = albumShape,
+                        showAlbumSize = showAlbumSize,
+                        onClick = { onAlbumClick(bucket.bucketName) },
+                        onLongPress = { showCardMenu = true }
+                    )
+
+                    AlbumDropdownMenu(
+                        expanded = showCardMenu,
+                        onDismissRequest = { showCardMenu = false },
+                        bucketName = bucket.bucketName,
+                        isUserPinned = true,
+                        hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                        hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                        onTogglePin = { onTogglePin(bucket.bucketName) },
+                        onChangeCover = { onChangeCover(bucket.bucketName) },
+                        onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                        onChangeShape = { onChangeShape(bucket) },
+                        onResetShape = { onResetShape(bucket.bucketName) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PinnedShelfCard(
+    bucket: AlbumBucket,
+    modifier: Modifier = Modifier,
+    customShape: Shape? = null,
+    showAlbumSize: Boolean = false,
+    onClick: () -> Unit = {},
+    onLongPress: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val cardShape = ShapeLargeIncreased
+    val defaultCoverShape = ShapeMedium
+    val tileShape = customShape ?: defaultCoverShape
+
+    var loadFailed by remember(bucket.coverUri) { mutableStateOf(false) }
+    val effectiveUri = if (loadFailed && bucket.defaultCoverUri != Uri.EMPTY) {
+        bucket.defaultCoverUri
+    } else {
+        bucket.coverUri
+    }
+
+    val request = remember<ImageRequest>(effectiveUri) {
+        ImageRequest.Builder(context)
+            .data(effectiveUri)
+            .size(Size(360, 360))
+            .precision(Precision.EXACT)
+            .crossfade(false)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
+
+    Surface(
+        modifier = modifier
+            .width(116.dp)
+            .pressScale(pressedScale = 0.96f)
+            .clip(cardShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongPress?.invoke()
+                }
+            ),
+        shape = cardShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(7.dp),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(tileShape),
+                shape = tileShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shadowElevation = 0.dp
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (effectiveUri == Uri.EMPTY) {
+                        val icon = if (bucket.bucketName == "Favorites") {
+                            ImageVector.vectorResource(R.drawable.ic_ms_favorite)
+                        } else {
+                            ImageVector.vectorResource(R.drawable.ic_ms_photo_album)
+                        }
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = bucket.bucketName,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(IconSizeTokens.M)
+                            )
+                        }
+                    } else {
+                        AsyncImage(
+                            model = request,
+                            contentDescription = bucket.bucketName,
+                            contentScale = ContentScale.Crop,
+                            onError = {
+                                if (!loadFailed && bucket.defaultCoverUri != Uri.EMPTY && bucket.defaultCoverUri != bucket.coverUri) {
+                                    loadFailed = true
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(tileShape)
+                        )
+                    }
+
+                    // Pinned icon badge in top-right of cover
+                    Surface(
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(20.dp),
+                        shadowElevation = 1.dp
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_pin),
+                                contentDescription = "Pinned",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(SpacingTokens.XS))
+
+            // Album title
+            Text(
+                text = bucket.bucketName,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+
+            // Item count
+            val countText = remember(bucket.itemCount) {
+                val formatted = NumberFormat.getInstance(Locale.US).format(bucket.itemCount)
+                if (bucket.itemCount == 1) "1 item" else "$formatted items"
+            }
+            Text(
+                text = countText,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
         }
     }
 }
