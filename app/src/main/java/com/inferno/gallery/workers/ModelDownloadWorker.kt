@@ -35,23 +35,23 @@ class ModelDownloadWorker(
         private const val NOTIFICATION_ID = 55
         private const val CHANNEL_ID = "model_download_channel"
 
-        const val TEXT_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/text_model_quantized.onnx"
-        const val VISION_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/vision_model_quantized.onnx"
-        const val TOKENIZER_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v1/tokenizer.json"
+        const val TEXT_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v2/text_model_quantized.onnx"
+        const val VISION_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v2/vision_model_quantized.onnx"
+        const val TOKENIZER_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v2/tokenizer.json"
 
         const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
         const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
         const val TOKENIZER_NAME = "tokenizer.json"
 
-        const val VISION_MODEL_SIZE = 87_461_602L
-        const val TEXT_MODEL_SIZE = 64_504_507L
+        const val VISION_MODEL_SIZE = 36_735_889L
+        const val TEXT_MODEL_SIZE = 64_117_260L
         const val TOKENIZER_SIZE = 2_224_081L
 
-        const val TEXT_MODEL_SHA256 = "9106b51e6c663a56b99182ec617c2b3d53577b037e7e24a7717eb78048a0c97a"
-        const val VISION_MODEL_SHA256 = "44eece4fe5fe4e0359a88268a327adf758633a1aade3917690b952bef1501f96"
+        const val TEXT_MODEL_SHA256 = "f8aaa97cf17fbadd78b0bd6d5f6a1c57f712402cacc3055ea92c1a3331357dfe"
+        const val VISION_MODEL_SHA256 = "16e40c4f6be7111ebc8230d0ae8dce6314a1e5e3ac010584e9c256e7acb7262d"
         const val TOKENIZER_SHA256 = "72ed5c96db5729294468543e4bc75fce14ca63f58e37300290189ba1c1e52b85"
-        const val MODEL_DIR = "smart_search_model_v3"
-        const val SEMANTIC_MODEL_VERSION = 3
+        const val MODEL_DIR = "smart_search_model_v4"
+        const val SEMANTIC_MODEL_VERSION = 4
     }
 
     private data class DownloadTarget(
@@ -112,6 +112,14 @@ class ModelDownloadWorker(
     override suspend fun doWork(): Result {
         (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         try {
+            // Clean up any legacy model directories from previous versions
+            listOf("smart_search_model_v1", "smart_search_model_v2", "smart_search_model_v3").forEach { legacyDirName ->
+                val legacyDir = File(applicationContext.filesDir, legacyDirName)
+                if (legacyDir.exists()) {
+                    try { legacyDir.deleteRecursively() } catch (_: Exception) {}
+                }
+            }
+
             val modelDir = File(applicationContext.filesDir, MODEL_DIR)
             if (!modelDir.exists()) {
                 modelDir.mkdirs()

@@ -170,7 +170,7 @@ class SmartSearchIndexWorker(
             var sampleSize = 1
             val halfHeight = options.outHeight / 2
             val halfWidth = options.outWidth / 2
-            while (halfHeight / sampleSize >= 224 && halfWidth / sampleSize >= 224) {
+            while (halfHeight / sampleSize >= 256 && halfWidth / sampleSize >= 256) {
                 sampleSize *= 2
             }
 

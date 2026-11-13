@@ -1575,34 +1575,12 @@ fun SettingsScreen(
                                             modifier = Modifier.weight(1f)
                                         )
 
-                                        val badgeColor = if (isOcrRunning) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                        val badgeTextColor = if (isOcrRunning) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                        val badgeText = if (isOcrRunning) "Indexing" else if (ocrTotal > 0 && ocrIndexed == ocrTotal) "Indexed" else "Idle"
-
-                                        Surface(
-                                            color = badgeColor,
-                                            contentColor = badgeTextColor,
-                                            shape = ShapeFull,
+                                        val ocrBadgeText = if (isOcrRunning) "Indexing" else if (ocrTotal > 0 && ocrIndexed == ocrTotal) "Indexed" else "Idle"
+                                        ModelStatusBadge(
+                                            isActive = isOcrRunning,
+                                            text = ocrBadgeText,
                                             modifier = Modifier.padding(start = 8.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                if (isOcrRunning) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(12.dp),
-                                                        strokeWidth = 2.dp,
-                                                        color = badgeTextColor
-                                                    )
-                                                }
-                                                Text(
-                                                    text = badgeText,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
-                                                )
-                                            }
-                                        }
+                                        )
                                     }
 
                                     Text(
@@ -1630,55 +1608,27 @@ fun SettingsScreen(
                                         )
                                     )
 
-                                    if (ocrTotal > 0) {
-                                        val progressFloat = (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f)
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(10.dp)
-                                                    .background(
-                                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                                        shape = CircleShape
-                                                    )
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth(progressFloat)
-                                                        .fillMaxHeight()
-                                                        .background(
-                                                            color = MaterialTheme.colorScheme.primary,
-                                                            shape = CircleShape
-                                                        )
-                                                )
-                                            }
-
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                val currentImageName = ocrProgressState.currentImageName
-                                                Text(
-                                                    text = if (isOcrRunning && !currentImageName.isNullOrBlank()) "Scanning: $currentImageName"
-                                                    else if (ocrIndexed == ocrTotal) "Indexing complete"
-                                                    else "Progress",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.weight(1f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = if (ocrIndexed == ocrTotal && ocrTotal > 0) "100%" else "$ocrIndexed / $ocrTotal images (${(progressFloat * 100).toInt()}%)",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
+                                    if (ocrTotal > 0 || isOcrRunning) {
+                                        val ocrProgressFloat = if (ocrTotal > 0) (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f) else 0f
+                                        val currentImageName = ocrProgressState.currentImageName
+                                        val statusText = when {
+                                            isOcrRunning && !currentImageName.isNullOrBlank() -> "Scanning: $currentImageName"
+                                            isOcrRunning -> "Indexing text in photos…"
+                                            ocrTotal > 0 && ocrIndexed == ocrTotal -> "Indexing complete"
+                                            else -> "Progress"
                                         }
+                                        val pctInt = (ocrProgressFloat * 100).toInt()
+                                        val progressText = if (ocrIndexed == ocrTotal && ocrTotal > 0) "100%"
+                                            else if (ocrIndexed > 0 && pctInt == 0) "<1%"
+                                            else if (ocrTotal > 0) "$ocrIndexed / $ocrTotal images ($pctInt%)"
+                                            else "$pctInt%"
+
+                                        ModelScanProgressBar(
+                                            isScanning = isOcrRunning,
+                                            progressFloat = ocrProgressFloat,
+                                            statusText = statusText,
+                                            progressText = progressText
+                                        )
                                     }
 
                                     Row(
@@ -1743,36 +1693,32 @@ fun SettingsScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Surface(
-                                                shape = ExpressiveShapes.Clover4Leaf,
+                                                shape = CircleShape,
                                                 color = MaterialTheme.colorScheme.primaryContainer,
                                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(44.dp)
+                                                modifier = Modifier.size(40.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                                     Icon(
                                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                                         contentDescription = null,
-                                                        modifier = Modifier.size(22.dp)
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
                                                     )
                                                 }
                                             }
-                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
                                             Text(
                                                 text = "Smart Search (Semantic AI)",
                                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                 modifier = Modifier.weight(1f)
                                             )
-                                            Surface(
-                                                color = if (isDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                shape = ShapeFull
-                                            ) {
-                                                Text(
-                                                    text = if (isDownloading) "Downloading" else "No Model",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = if (isDownloading) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                                )
-                                            }
+                                            val smartModelBadgeText = if (isDownloading) "Downloading" else "No Model"
+                                            ModelStatusBadge(
+                                                isActive = isDownloading,
+                                                text = smartModelBadgeText,
+                                                modifier = Modifier.padding(start = 8.dp)
+                                            )
                                         }
 
                                         Text(
@@ -1783,18 +1729,18 @@ fun SettingsScreen(
 
                                         ModelMetadataPanel(
                                             specs = listOf(
-                                                ModelSpecItem("OpenAI CLIP ViT-B/16", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                                ModelSpecItem("Apple MobileCLIP-S2", ImageVector.vectorResource(R.drawable.ic_ms_code)),
                                                 ModelSpecItem("ONNX INT8 Quantized")
                                             ),
                                             links = listOf(
                                                 ModelLinkItem(
                                                     label = "Model Source: Hugging Face",
-                                                    url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
+                                                    url = "https://huggingface.co/Xenova/mobileclip_s2",
                                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
                                                 ),
                                                 ModelLinkItem(
                                                     label = "Model Hosted: GitHub Releases",
-                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v2",
                                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
                                                 )
                                             )
@@ -1802,9 +1748,11 @@ fun SettingsScreen(
 
                                         if (isDownloading) {
                                             LinearWavyProgressIndicator(
-                                                progress = { downloadProgress / 100f },
+                                                progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
                                                 wavelength = WavyProgressTokens.LinearWavelength,
                                                 waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 modifier = Modifier.fillMaxWidth().height(10.dp)
                                             )
                                             Row(
@@ -1814,7 +1762,7 @@ fun SettingsScreen(
                                             ) {
                                                 Text(
                                                     text = "Downloading model: $downloadProgress%",
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                     color = MaterialTheme.colorScheme.primary
                                                 )
                                                 TextButton(
@@ -1857,53 +1805,33 @@ fun SettingsScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Surface(
-                                                shape = ExpressiveShapes.Clover4Leaf,
+                                                shape = CircleShape,
                                                 color = MaterialTheme.colorScheme.primaryContainer,
                                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(44.dp)
+                                                modifier = Modifier.size(40.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                                     Icon(
                                                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
                                                         contentDescription = null,
-                                                        modifier = Modifier.size(22.dp)
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
                                                     )
                                                 }
                                             }
-                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
                                             Text(
                                                 text = "Smart Search (Semantic AI)",
                                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                 modifier = Modifier.weight(1f)
                                             )
 
-                                            val badgeColor = if (isClipIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                                            val badgeTextColor = if (isClipIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                            val badgeText = if (isClipIndexing) "Indexing" else if (displayClipTotal > 0 && displayClipIndexed == displayClipTotal) "Indexed" else "Ready"
-
-                                            Surface(
-                                                color = badgeColor,
-                                                contentColor = badgeTextColor,
-                                                shape = ShapeFull
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    if (isClipIndexing) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(12.dp),
-                                                            strokeWidth = 2.dp,
-                                                            color = badgeTextColor
-                                                        )
-                                                    }
-                                                    Text(
-                                                        text = badgeText,
-                                                        style = MaterialTheme.typography.labelSmall
-                                                    )
-                                                }
-                                            }
+                                            val smartBadgeText = if (isClipIndexing) "Indexing" else if (displayClipTotal > 0 && displayClipIndexed == displayClipTotal) "Indexed" else "Ready"
+                                            ModelStatusBadge(
+                                                isActive = isClipIndexing,
+                                                text = smartBadgeText,
+                                                modifier = Modifier.padding(start = 8.dp)
+                                            )
                                         }
 
                                         Text(
@@ -1914,71 +1842,43 @@ fun SettingsScreen(
 
                                         ModelMetadataPanel(
                                             specs = listOf(
-                                                ModelSpecItem("OpenAI CLIP ViT-B/16", ImageVector.vectorResource(R.drawable.ic_ms_code)),
+                                                ModelSpecItem("Apple MobileCLIP-S2", ImageVector.vectorResource(R.drawable.ic_ms_code)),
                                                 ModelSpecItem("ONNX INT8 Quantized")
                                             ),
                                             links = listOf(
                                                 ModelLinkItem(
                                                     label = "Model Source: Hugging Face",
-                                                    url = "https://huggingface.co/Xenova/clip-vit-base-patch16",
+                                                    url = "https://huggingface.co/Xenova/mobileclip_s2",
                                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_code)
                                                 ),
                                                 ModelLinkItem(
                                                     label = "Model Hosted: GitHub Releases",
-                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1",
+                                                    url = "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v2",
                                                     icon = ImageVector.vectorResource(R.drawable.ic_ms_download)
                                                 )
                                             )
                                         )
 
-                                        if (displayClipTotal > 0) {
-                                            val progressFloat = (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f)
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(10.dp)
-                                                        .background(
-                                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                                            shape = CircleShape
-                                                        )
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth(progressFloat)
-                                                            .fillMaxHeight()
-                                                            .background(
-                                                                color = MaterialTheme.colorScheme.primary,
-                                                                shape = CircleShape
-                                                            )
-                                                    )
-                                                }
-
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = if (isClipIndexing && !smartCurrentImageName.isNullOrBlank()) "Scanning: $smartCurrentImageName"
-                                                        else if (displayClipIndexed == displayClipTotal) "AI indexing complete"
-                                                        else "Progress",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.weight(1f),
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Text(
-                                                        text = if (displayClipIndexed == displayClipTotal && displayClipTotal > 0) "100%" else "$displayClipIndexed / $displayClipTotal images (${(progressFloat * 100).toInt()}%)",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
+                                        val clipProgressFloat = if (displayClipTotal > 0) (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f) else 0f
+                                        if (displayClipTotal > 0 || isClipIndexing) {
+                                            val statusText = when {
+                                                isClipIndexing && !smartCurrentImageName.isNullOrBlank() -> "Scanning: $smartCurrentImageName"
+                                                isClipIndexing -> "Indexing photos with AI…"
+                                                displayClipTotal > 0 && displayClipIndexed == displayClipTotal -> "AI indexing complete"
+                                                else -> "Progress"
                                             }
+                                            val pctInt = (clipProgressFloat * 100).toInt()
+                                            val progressText = if (displayClipIndexed == displayClipTotal && displayClipTotal > 0) "100%"
+                                                else if (displayClipIndexed > 0 && pctInt == 0) "<1%"
+                                                else if (displayClipTotal > 0) "$displayClipIndexed / $displayClipTotal images ($pctInt%)"
+                                                else "$pctInt%"
+
+                                            ModelScanProgressBar(
+                                                isScanning = isClipIndexing,
+                                                progressFloat = clipProgressFloat,
+                                                statusText = statusText,
+                                                progressText = progressText
+                                            )
                                         }
 
                                         Row(
@@ -2076,7 +1976,7 @@ fun SettingsScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Surface(
-                                                    shape = ShapeFull,
+                                                    shape = CircleShape,
                                                     color = MaterialTheme.colorScheme.primaryContainer,
                                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                                     modifier = Modifier.size(40.dp)
@@ -2085,27 +1985,23 @@ fun SettingsScreen(
                                                         Icon(
                                                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                                             contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
                                                             modifier = Modifier.size(20.dp)
                                                         )
                                                     }
                                                 }
-                                                Spacer(modifier = Modifier.width(14.dp))
+                                                Spacer(modifier = Modifier.width(12.dp))
                                                 Text(
                                                     text = "Face Recognition Model",
                                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                     modifier = Modifier.weight(1f)
                                                 )
-                                                Surface(
-                                                    color = if (isFaceDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    shape = ShapeFull
-                                                ) {
-                                                    Text(
-                                                        text = if (isFaceDownloading) "Downloading" else "Needs Download",
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                        color = if (isFaceDownloading) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                                    )
-                                                }
+                                                val faceModelBadgeText = if (isFaceDownloading) "Downloading" else "Needs Download"
+                                                ModelStatusBadge(
+                                                    isActive = isFaceDownloading,
+                                                    text = faceModelBadgeText,
+                                                    modifier = Modifier.padding(start = 8.dp)
+                                                )
                                             }
 
                                             Text(
@@ -2135,9 +2031,11 @@ fun SettingsScreen(
 
                                             if (isFaceDownloading) {
                                                 LinearWavyProgressIndicator(
-                                                    progress = { faceDownloadProgress / 100f },
+                                                    progress = { (faceDownloadProgress / 100f).coerceIn(0f, 1f) },
                                                     wavelength = WavyProgressTokens.LinearWavelength,
                                                     waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                     modifier = Modifier.fillMaxWidth().height(10.dp)
                                                 )
                                                 Row(
@@ -2147,7 +2045,7 @@ fun SettingsScreen(
                                                 ) {
                                                     Text(
                                                         text = "Downloading model: $faceDownloadProgress%",
-                                                        style = MaterialTheme.typography.labelMedium,
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
                                                     TextButton(
@@ -2190,7 +2088,7 @@ fun SettingsScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Surface(
-                                                    shape = ShapeFull,
+                                                    shape = CircleShape,
                                                     color = MaterialTheme.colorScheme.primaryContainer,
                                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                                     modifier = Modifier.size(40.dp)
@@ -2199,60 +2097,30 @@ fun SettingsScreen(
                                                         Icon(
                                                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
                                                             contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
                                                             modifier = Modifier.size(20.dp)
                                                         )
                                                     }
                                                 }
-                                                Spacer(modifier = Modifier.width(14.dp))
+                                                Spacer(modifier = Modifier.width(12.dp))
                                                 Text(
                                                     text = "Face Scanning & Clustering",
                                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                     modifier = Modifier.weight(1f)
                                                 )
 
-                                                val badgeColor = if (isFaceScanningActive) MaterialTheme.colorScheme.tertiaryContainer
-                                                    else if (isFaceScanQueued) MaterialTheme.colorScheme.secondaryContainer
-                                                    else if (unindexedFacesCount == 0) MaterialTheme.colorScheme.primaryContainer
-                                                    else MaterialTheme.colorScheme.surfaceVariant
-                                                val badgeTextColor = if (isFaceScanningActive) MaterialTheme.colorScheme.onTertiaryContainer
-                                                    else if (isFaceScanQueued) MaterialTheme.colorScheme.onSecondaryContainer
-                                                    else if (unindexedFacesCount == 0) MaterialTheme.colorScheme.onPrimaryContainer
-                                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                                val badgeText = if (isFaceScanningActive) "Scanning"
-                                                    else if (isFaceScanQueued) "Scheduled"
-                                                    else if (unindexedFacesCount == 0) "Completed"
-                                                    else "Ready"
-
-                                                Surface(
-                                                    color = badgeColor,
-                                                    contentColor = badgeTextColor,
-                                                    shape = ShapeFull
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                    ) {
-                                                        if (isFaceScanningActive) {
-                                                            CircularProgressIndicator(
-                                                                modifier = Modifier.size(12.dp),
-                                                                strokeWidth = 2.dp,
-                                                                color = badgeTextColor
-                                                            )
-                                                        } else if (isFaceScanQueued) {
-                                                            Icon(
-                                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
-                                                                contentDescription = null,
-                                                                modifier = Modifier.size(12.dp),
-                                                                tint = badgeTextColor
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = badgeText,
-                                                            style = MaterialTheme.typography.labelSmall
-                                                        )
-                                                    }
+                                                val faceBadgeText = when {
+                                                    isFaceScanningActive -> "Scanning"
+                                                    isFaceScanQueued -> "Scheduled"
+                                                    unindexedFacesCount == 0 && faceTotal > 0 -> "Completed"
+                                                    else -> "Ready"
                                                 }
+                                                ModelStatusBadge(
+                                                    isActive = isFaceScanningActive,
+                                                    isQueued = isFaceScanQueued,
+                                                    text = faceBadgeText,
+                                                    modifier = Modifier.padding(start = 8.dp)
+                                                )
                                             }
 
                                             Text(
@@ -2280,96 +2148,46 @@ fun SettingsScreen(
                                                 )
                                             )
 
-                                            if (isFaceIndexing) {
-                                                Column(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    LinearWavyProgressIndicator(
-                                                        progress = { faceProgressFloat },
-                                                        wavelength = WavyProgressTokens.LinearWavelength,
-                                                        waveSpeed = if (isFaceScanningActive) WavyProgressTokens.CalmWaveSpeed else WavyProgressTokens.IdleWaveSpeed,
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .height(10.dp)
-                                                    )
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        val currentFaceImage = faceProgressState.currentImageName
-                                                        val progressDescription = when {
-                                                            isFaceScanningActive && !currentFaceImage.isNullOrBlank() -> "Scanning: $currentFaceImage"
-                                                            isFaceScanningActive -> "Scanning: $faceProcessed of $faceTotal photos ($facePending pending)"
-                                                            isFaceScanQueued -> "Background scan scheduled ($facePending pending)"
-                                                            unindexedFacesCount == 0 && faceTotal > 0 -> "All photos scanned"
-                                                            else -> "$facePending photos pending"
-                                                        }
-                                                        Text(
-                                                            text = progressDescription,
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.weight(1f),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        val pctInt = (faceProgressFloat * 100).toInt()
-                                                        val displayPct = if (unindexedFacesCount == 0 && faceTotal > 0) "100%"
-                                                            else if (faceProcessed > 0 && pctInt == 0) "<1%"
-                                                            else "$pctInt%"
-                                                        Text(
-                                                            text = if (faceTotal > 0) "$faceProcessed / $faceTotal ($displayPct)" else displayPct,
-                                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-
-                                                    if (isFaceScanQueued) {
-                                                        Text(
-                                                            text = "Runs automatically when device is idle and battery is healthy, or tap Scan Faces Now to run immediately.",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                                        )
-                                                    }
+                                            if (faceTotal > 0 || isFaceIndexing) {
+                                                val currentFaceImage = faceProgressState.currentImageName
+                                                val progressDescription = when {
+                                                    isFaceScanningActive && !currentFaceImage.isNullOrBlank() -> "Scanning: $currentFaceImage"
+                                                    isFaceScanningActive -> "Scanning: $faceProcessed of $faceTotal photos ($facePending pending)"
+                                                    isFaceScanQueued -> "Background scan scheduled ($facePending pending)"
+                                                    unindexedFacesCount == 0 && faceTotal > 0 -> "All photos scanned"
+                                                    else -> "$facePending photos pending"
                                                 }
-                                            } else {
-                                                Column(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                 ) {
-                                                     if (faceTotal > 0 && faceProcessed > 0 && faceProcessed < faceTotal) {
-                                                         Box(
-                                                             modifier = Modifier
-                                                                 .fillMaxWidth()
-                                                                 .height(10.dp)
-                                                                 .background(
-                                                                     color = MaterialTheme.colorScheme.surfaceVariant,
-                                                                     shape = CircleShape
-                                                                 )
-                                                         ) {
-                                                             Box(
-                                                                 modifier = Modifier
-                                                                     .fillMaxWidth(faceProgressFloat)
-                                                                     .fillMaxHeight()
-                                                                     .background(
-                                                                         color = MaterialTheme.colorScheme.primary,
-                                                                         shape = CircleShape
-                                                                     )
-                                                             )
-                                                         }
-                                                     }
-                                                     Text(
-                                                         text = if (unindexedFacesCount == 0) {
-                                                             "All photos have been scanned and organized into People."
-                                                         } else {
-                                                             "$unindexedFacesCount photos waiting to be scanned for faces."
-                                                         },
-                                                         style = MaterialTheme.typography.bodyMedium,
-                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                     )
-                                                 }
+                                                val pctInt = (faceProgressFloat * 100).toInt()
+                                                val displayPct = if (unindexedFacesCount == 0 && faceTotal > 0) "100%"
+                                                    else if (faceProcessed > 0 && pctInt == 0) "<1%"
+                                                    else "$pctInt%"
+                                                val progressText = if (faceTotal > 0) "$faceProcessed / $faceTotal ($displayPct)" else displayPct
+
+                                                ModelScanProgressBar(
+                                                    isScanning = isFaceScanningActive,
+                                                    isQueued = isFaceScanQueued,
+                                                    progressFloat = faceProgressFloat,
+                                                    statusText = progressDescription,
+                                                    progressText = progressText
+                                                )
+
+                                                if (isFaceScanQueued) {
+                                                    Text(
+                                                        text = "Runs automatically when device is idle and battery is healthy, or tap Scan Faces Now to run immediately.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                    )
+                                                } else if (!isFaceScanningActive) {
+                                                    Text(
+                                                        text = if (unindexedFacesCount == 0) {
+                                                            "All photos have been scanned and organized into People."
+                                                        } else {
+                                                            "$unindexedFacesCount photos waiting to be scanned for faces."
+                                                        },
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
                                             }
 
                                             Row(
@@ -2730,6 +2548,128 @@ private data class ModelLinkItem(
     val url: String,
     val icon: ImageVector? = null
 )
+
+@Composable
+private fun ModelStatusBadge(
+    isActive: Boolean,
+    text: String,
+    isQueued: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = when {
+        isActive -> MaterialTheme.colorScheme.primaryContainer
+        isQueued -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = when {
+        isActive -> MaterialTheme.colorScheme.onPrimaryContainer
+        isQueued -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = ShapeFull,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (isActive) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else if (isQueued) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = contentColor
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ModelScanProgressBar(
+    isScanning: Boolean,
+    progressFloat: Float,
+    statusText: String,
+    progressText: String,
+    isQueued: Boolean = false
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (isScanning || isQueued) {
+            LinearWavyProgressIndicator(
+                progress = { progressFloat },
+                wavelength = WavyProgressTokens.LinearWavelength,
+                waveSpeed = if (isScanning) WavyProgressTokens.CalmWaveSpeed else WavyProgressTokens.IdleWaveSpeed,
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shape = CircleShape
+                    )
+            ) {
+                if (progressFloat > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFloat)
+                            .fillMaxHeight()
+                            .background(
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = progressText,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

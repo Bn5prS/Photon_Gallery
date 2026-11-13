@@ -1223,7 +1223,7 @@ private fun SetupAiPage(
                             shape = ShapeFull
                         ) {
                             Text(
-                                text = if (isModelDownloaded) "Ready • 147 MB" else if (isDownloading) "$downloadProgress%" else "~147 MB",
+                                text = if (isModelDownloaded) "Ready • ~103 MB" else if (isDownloading) "$downloadProgress%" else "~103 MB",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
                             )
@@ -1387,7 +1387,7 @@ private fun SetupAiPage(
                                     modifier = Modifier.size(IconSizeTokens.M)
                                 )
                                 Text(
-                                    text = "Model ready (147 MB) • Natural search enabled",
+                                    text = "Model ready (103 MB) • Natural search enabled",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -1419,7 +1419,7 @@ private fun SetupAiPage(
                                     modifier = Modifier.size(IconSizeTokens.S)
                                 )
                                 Text(
-                                    text = "Download Model (147 MB)",
+                                    text = "Download Model (103 MB)",
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                                 )
                             }

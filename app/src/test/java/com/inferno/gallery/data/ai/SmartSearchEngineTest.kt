@@ -22,7 +22,7 @@ class SmartSearchEngineTest {
         return result
     }
 
-    private fun calculateLetterboxDimensions(sourceWidth: Int, sourceHeight: Int, targetSize: Int = 224): Pair<Int, Int> {
+    private fun calculateLetterboxDimensions(sourceWidth: Int, sourceHeight: Int, targetSize: Int = 256): Pair<Int, Int> {
         val scale = targetSize.toFloat() / maxOf(sourceWidth, sourceHeight).toFloat()
         val scaledWidth = maxOf(1, (sourceWidth * scale).roundToInt())
         val scaledHeight = maxOf(1, (sourceHeight * scale).roundToInt())
@@ -44,29 +44,29 @@ class SmartSearchEngineTest {
     @Test
     fun testLetterboxDimensionsPortraitPhonePhoto() {
         // Typical portrait 9:16 phone photo: 1080 x 2400
-        val (w, h) = calculateLetterboxDimensions(1080, 2400, 224)
-        assertEquals(224, h)
-        // 1080 * (224 / 2400) = 100.8 -> 101
-        assertEquals(101, w)
-        assertTrue(w <= 224)
-        assertTrue(h <= 224)
+        val (w, h) = calculateLetterboxDimensions(1080, 2400, 256)
+        assertEquals(256, h)
+        // 1080 * (256 / 2400) = 115.2 -> 115
+        assertEquals(115, w)
+        assertTrue(w <= 256)
+        assertTrue(h <= 256)
     }
 
     @Test
     fun testLetterboxDimensionsLandscapePhoto() {
         // Typical landscape 16:9 photo: 2400 x 1080
-        val (w, h) = calculateLetterboxDimensions(2400, 1080, 224)
-        assertEquals(224, w)
-        assertEquals(101, h)
-        assertTrue(w <= 224)
-        assertTrue(h <= 224)
+        val (w, h) = calculateLetterboxDimensions(2400, 1080, 256)
+        assertEquals(256, w)
+        assertEquals(115, h)
+        assertTrue(w <= 256)
+        assertTrue(h <= 256)
     }
 
     @Test
     fun testLetterboxDimensionsSquarePhoto() {
-        val (w, h) = calculateLetterboxDimensions(500, 500, 224)
-        assertEquals(224, w)
-        assertEquals(224, h)
+        val (w, h) = calculateLetterboxDimensions(500, 500, 256)
+        assertEquals(256, w)
+        assertEquals(256, h)
     }
 
     @Test
@@ -84,7 +84,7 @@ class SmartSearchEngineTest {
         assertEquals(1.0f, length, 1e-4f)
     }
 
-    private fun calculateCenterCropDimensions(sourceWidth: Int, sourceHeight: Int, targetSize: Int = 224): Triple<Int, Int, Pair<Int, Int>> {
+    private fun calculateCenterCropDimensions(sourceWidth: Int, sourceHeight: Int, targetSize: Int = 256): Triple<Int, Int, Pair<Int, Int>> {
         val scale = targetSize.toFloat() / minOf(sourceWidth, sourceHeight).toFloat()
         val scaledWidth = maxOf(targetSize, (sourceWidth * scale).roundToInt())
         val scaledHeight = maxOf(targetSize, (sourceHeight * scale).roundToInt())
@@ -96,31 +96,31 @@ class SmartSearchEngineTest {
     @Test
     fun testCenterCropDimensionsPortraitPhoto() {
         // Typical portrait 9:16 phone photo: 1080 x 2400
-        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(1080, 2400, 224)
-        assertEquals(224, scaledW)
-        // 2400 * (224 / 1080) = 497.77 -> 498
-        assertEquals(498, scaledH)
+        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(1080, 2400, 256)
+        assertEquals(256, scaledW)
+        // 2400 * (256 / 1080) = 568.88 -> 569
+        assertEquals(569, scaledH)
         val (xOffset, yOffset) = offsets
         assertEquals(0, xOffset)
-        assertEquals((498 - 224) / 2, yOffset)
+        assertEquals((569 - 256) / 2, yOffset)
     }
 
     @Test
     fun testCenterCropDimensionsLandscapePhoto() {
         // Typical landscape 16:9 photo: 2400 x 1080
-        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(2400, 1080, 224)
-        assertEquals(498, scaledW)
-        assertEquals(224, scaledH)
+        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(2400, 1080, 256)
+        assertEquals(569, scaledW)
+        assertEquals(256, scaledH)
         val (xOffset, yOffset) = offsets
-        assertEquals((498 - 224) / 2, xOffset)
+        assertEquals((569 - 256) / 2, xOffset)
         assertEquals(0, yOffset)
     }
 
     @Test
     fun testCenterCropDimensionsSquarePhoto() {
-        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(500, 500, 224)
-        assertEquals(224, scaledW)
-        assertEquals(224, scaledH)
+        val (scaledW, scaledH, offsets) = calculateCenterCropDimensions(500, 500, 256)
+        assertEquals(256, scaledW)
+        assertEquals(256, scaledH)
         assertEquals(Pair(0, 0), offsets)
     }
 

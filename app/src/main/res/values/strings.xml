@@ -518,7 +518,7 @@
     <string name="dialog_clear_smart_search_title">Clear Smart Search Index</string>
     <string name="dialog_clear_smart_search_msg">This will wipe out all computed image embeddings for semantic search. You will need to run the indexer again to use smart search. Are you sure you want to proceed?</string>
     <string name="dialog_delete_ai_models_title">Delete AI Model Files</string>
-    <string name="dialog_delete_ai_models_msg">This will delete the local ONNX model files (approx. 150MB). You will not be able to use semantic search or index new images until you download them again. Are you sure?</string>
+    <string name="dialog_delete_ai_models_msg">This will delete the local ONNX model files (approx. 103MB). You will not be able to use semantic search or index new images until you download them again. Are you sure?</string>
     <string name="dialog_delete_files_confirm">Delete Files</string>
     <string name="dialog_rescan_faces_title">Rescan All Faces</string>
     <string name="dialog_rescan_faces_msg">This will reset face scan status and re-analyze all photos in your gallery using the on-device face engine.

@@ -20,10 +20,11 @@ class SmartSearchEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "SmartSearchEngine"
-        private const val MODEL_DIR = "smart_search_model_v3"
+        private const val MODEL_DIR = "smart_search_model_v4"
         private const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
         private const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
         private const val TOKENIZER_NAME = "tokenizer.json"
+        const val IMAGE_SIZE = 256
 
         @Volatile
         private var INSTANCE: SmartSearchEngine? = null
@@ -358,7 +359,7 @@ class SmartSearchEngine(private val context: Context) {
         val aspect = softwareBitmap.width.toFloat() / softwareBitmap.height.toFloat()
         val isNonSquare = aspect < 0.82f || aspect > 1.22f
 
-        val centerCropBitmap = prepareCenterCropInputBitmap(softwareBitmap, 224)
+        val centerCropBitmap = prepareCenterCropInputBitmap(softwareBitmap, IMAGE_SIZE)
         val centerEmbedding = runVisionInference(centerCropBitmap, currentEnv, currentVisionSession)
         if (centerCropBitmap != softwareBitmap && centerCropBitmap != bitmap) {
             centerCropBitmap.recycle()
@@ -371,7 +372,7 @@ class SmartSearchEngine(private val context: Context) {
 
         // Dual-Crop Ensembling for non-square photos (e.g. 9:16 vertical portraits or 16:9 landscapes):
         // Blend 70% center crop (high-resolution central subject) + 30% full-aspect letterbox (global composition context)
-        val letterboxBitmap = prepareLetterboxInputBitmap(softwareBitmap, 224)
+        val letterboxBitmap = prepareLetterboxInputBitmap(softwareBitmap, IMAGE_SIZE)
         val letterboxEmbedding = runVisionInference(letterboxBitmap, currentEnv, currentVisionSession)
         if (letterboxBitmap != softwareBitmap && letterboxBitmap != bitmap) {
             letterboxBitmap.recycle()
@@ -389,10 +390,10 @@ class SmartSearchEngine(private val context: Context) {
         environment: OrtEnvironment,
         session: OrtSession
     ): FloatArray {
-        // Preprocess pixels into RGB flat NCHW buffer for CLIP ViT-B/16 (224x224)
-        val planeSize = 224 * 224
+        // Preprocess pixels into RGB flat NCHW buffer for MobileCLIP-S2 (256x256)
+        val planeSize = IMAGE_SIZE * IMAGE_SIZE
         val pixels = IntArray(planeSize)
-        inputBitmap.getPixels(pixels, 0, 224, 0, 0, 224, 224)
+        inputBitmap.getPixels(pixels, 0, IMAGE_SIZE, 0, 0, IMAGE_SIZE, IMAGE_SIZE)
 
         val floatBuffer = FloatArray(3 * planeSize)
         for (i in 0 until planeSize) {
@@ -401,13 +402,13 @@ class SmartSearchEngine(private val context: Context) {
             val g = ((pixel shr 8) and 0xFF) / 255.0f
             val b = (pixel and 0xFF) / 255.0f
 
-            // Official OpenAI CLIP Image Normalization
-            floatBuffer[i] = (r - 0.48145466f) / 0.26862954f
-            floatBuffer[i + planeSize] = (g - 0.4578275f) / 0.26130258f
-            floatBuffer[i + 2 * planeSize] = (b - 0.40821073f) / 0.2757771f
+            // Apple MobileCLIP-S2 Preprocessing: direct [0.0, 1.0] rescale without mean/std subtraction
+            floatBuffer[i] = r
+            floatBuffer[i + planeSize] = g
+            floatBuffer[i + 2 * planeSize] = b
         }
 
-        val shape = longArrayOf(1, 3, 224, 224)
+        val shape = longArrayOf(1, 3, IMAGE_SIZE.toLong(), IMAGE_SIZE.toLong())
         val imageTensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(floatBuffer), shape)
         val inputs = mapOf("pixel_values" to imageTensor)
 
@@ -435,11 +436,11 @@ class SmartSearchEngine(private val context: Context) {
     }
 
     /**
-     * Canonical aspect-preserving center crop for CLIP ViT-B/16.
+     * Canonical aspect-preserving center crop for MobileCLIP-S2.
      * Scales image so min(width, height) = targetSize, then extracts central targetSize x targetSize square.
      * Prevents artificial black letterbox borders that distort vision transformer attention.
      */
-    fun prepareCenterCropInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {
+    fun prepareCenterCropInputBitmap(bitmap: Bitmap, targetSize: Int = IMAGE_SIZE): Bitmap {
         val sourceWidth = bitmap.width
         val sourceHeight = bitmap.height
         if (sourceWidth <= 0 || sourceHeight <= 0) {
@@ -468,7 +469,7 @@ class SmartSearchEngine(private val context: Context) {
         return output
     }
 
-    fun prepareLetterboxInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {
+    fun prepareLetterboxInputBitmap(bitmap: Bitmap, targetSize: Int = IMAGE_SIZE): Bitmap {
         val sourceWidth = bitmap.width
         val sourceHeight = bitmap.height
         if (sourceWidth <= 0 || sourceHeight <= 0) {
