@@ -190,7 +190,7 @@
     <string name="setting_trash_retention">Vider la corbeille automatiquement</string>
     <string name="setting_trash_retention_sub">Supprimer définitivement les éléments de la corbeille après 30 jours</string>
     <string name="setting_privacy_policy">Politique de confidentialité</string>
-    <string name="setting_privacy_policy_sub">100% hors ligne, zéro traceur, zéro télémétrie, respect total de la vie privée</string>
+    <string name="setting_privacy_policy_sub">Entièrement hors ligne, zéro traceur, zéro télémétrie, respect total de la vie privée</string>
     <string name="setting_app_version">Version de l\'application</string>
     <string name="setting_github_repo">Dépôt GitHub</string>
     <string name="setting_github_repo_sub">Consulter le code source, soutenir le projet ou contribuer</string>
@@ -329,6 +329,12 @@
     <string name="update_status_uptodate">Installé : v%1$s (À jour)</string>
     <string name="update_status_downloaded">v%1$s téléchargée. Prête à être installée</string>
     <string name="update_status_build">Installé : v%1$s (Version %2$d)</string>
+    <string name="notification_channel_updates">Mises à jour de l\'app</string>
+    <string name="notification_channel_updates_desc">Prévient lorsqu\'une nouvelle version de Photon Gallery est disponible</string>
+    <string name="notification_update_title">Photon Gallery %1$s disponible</string>
+    <string name="notification_update_body_named">%1$s • Appuyez pour télécharger et installer</string>
+    <string name="notification_update_body_version">La version %1$s est prête à être téléchargée et installée</string>
+    <string name="notification_update_available">Mise à jour disponible</string>
     <string name="setting_display_preferences_title">Préférences d\'affichage</string>
     <string name="setting_media_viewer_title">Visionneuse de médias</string>
     <string name="setting_media_viewer_sub">Arrière-plan flou, mini-carte et luminosité</string>

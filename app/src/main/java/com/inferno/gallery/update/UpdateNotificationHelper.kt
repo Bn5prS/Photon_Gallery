@@ -19,10 +19,10 @@ object UpdateNotificationHelper {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "App Updates",
+            context.getString(R.string.notification_channel_updates),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Notifies when a new version of Photon Gallery is available"
+            description = context.getString(R.string.notification_channel_updates_desc)
             enableLights(true)
             enableVibration(true)
         }
@@ -52,19 +52,19 @@ object UpdateNotificationHelper {
         )
 
         val summaryText = if (updateInfo.releaseTitle.isNotBlank() && updateInfo.releaseTitle != updateInfo.latestVersion) {
-            "${updateInfo.releaseTitle} • Tap to download and install"
+            context.getString(R.string.notification_update_body_named, updateInfo.releaseTitle)
         } else {
-            "Version ${updateInfo.latestVersion} is ready to download and install"
+            context.getString(R.string.notification_update_body_version, updateInfo.latestVersion)
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_ms_download)
-            .setContentTitle("Photon Gallery ${updateInfo.latestVersion} Available")
+            .setContentTitle(context.getString(R.string.notification_update_title, updateInfo.latestVersion))
             .setContentText(summaryText)
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(if (updateInfo.changelog.isNotBlank()) updateInfo.changelog.take(300) else summaryText)
-                    .setSummaryText("Update Available")
+                    .setSummaryText(context.getString(R.string.notification_update_available))
             )
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

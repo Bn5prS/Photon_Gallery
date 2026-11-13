@@ -329,6 +329,12 @@
     <string name="update_status_uptodate">Instalado: v%1$s (Atualizado)</string>
     <string name="update_status_downloaded">v%1$s baixada. Pronta para instalar</string>
     <string name="update_status_build">Instalado: v%1$s (Compilação %2$d)</string>
+    <string name="notification_channel_updates">Atualizações do app</string>
+    <string name="notification_channel_updates_desc">Avisa quando uma nova versão do Photon Gallery estiver disponível</string>
+    <string name="notification_update_title">Photon Gallery %1$s disponível</string>
+    <string name="notification_update_body_named">%1$s • Toque para baixar e instalar</string>
+    <string name="notification_update_body_version">A versão %1$s está pronta para baixar e instalar</string>
+    <string name="notification_update_available">Atualização disponível</string>
     <string name="setting_display_preferences_title">Preferências de exibição</string>
     <string name="setting_media_viewer_title">Visualizador de mídia</string>
     <string name="setting_media_viewer_sub">Fundo desfocado, minimapa e brilho</string>

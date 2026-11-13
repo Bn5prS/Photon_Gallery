@@ -876,7 +876,7 @@ fun PeopleScreen(
                                         contentColor = MaterialTheme.colorScheme.error
                                     )
                                 ) {
-                                    Text("Cancel")
+                                    Text(stringResource(R.string.action_cancel))
                                 }
                             } else {
                                 Surface(

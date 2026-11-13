@@ -1236,12 +1236,12 @@ private fun DeepMetadataInspectorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp),
-                placeholder = { Text("Filter metadata tags…", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text(stringResource(R.string.exif_filter_tags), style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_search), contentDescription = null, modifier = Modifier.size(18.dp)) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_close), contentDescription = stringResource(R.string.cd_clear_search), modifier = Modifier.size(16.dp))
                         }
                     }
                 },
