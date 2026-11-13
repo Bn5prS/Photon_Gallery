@@ -1,7 +1,7 @@
 <resources>
     <!-- Application Brand -->
     <string name="app_name">Photon Gallery</string>
-    <string name="app_description">Una galería de Android de código abierto y sin conexión diseñada para la privacidad, el rendimiento y una experiencia visual impresionante.</string>
+    <string name="app_description">Una galería de Android de código abierto centrada en la privacidad, el rendimiento y una experiencia visual impresionante.</string>
 
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Fotos</string>
@@ -35,7 +35,7 @@
     <!-- Gallery &amp; Media Grid -->
     <string name="today">Hoy</string>
     <string name="yesterday">Ayer</string>
-    <string name="empty_gallery_title">No hay fotos ni videos</string>
+    <string name="empty_gallery_title">No hay fotos ni vídeos</string>
     <string name="empty_gallery_subtitle">Los momentos capturados y los archivos descargados aparecerán aquí</string>
     <string name="media_count_single">%1$d elemento</string>
     <string name="media_count_multiple">%1$d elementos</string>
@@ -45,9 +45,9 @@
     <string name="album_camera">Cámara</string>
     <string name="album_screenshots">Capturas de pantalla</string>
     <string name="album_favorites">Favoritos</string>
-    <string name="album_videos">Videos</string>
+    <string name="album_videos">Vídeos</string>
     <string name="album_trash">Papelera</string>
-    <string name="album_archive">Archivo</string>
+    <string name="album_archive">Archivados</string>
     <string name="album_vault">Caja fuerte privada</string>
     <string name="pinned_albums">Álbumes fijados</string>
     <string name="all_albums">Todos los álbumes</string>
@@ -104,11 +104,11 @@
     <string name="onboarding_welcome_to">Bienvenido a</string>
     <string name="onboarding_welcome_tagline">Un espacio privado y hermoso para todos tus recuerdos.</string>
     <string name="onboarding_required_permissions">Permisos necesarios</string>
-    <string name="onboarding_perm_photos_videos_title">Acceso a fotos y videos</string>
-    <string name="onboarding_perm_photos_videos_desc">Necesario para ver, organizar y administrar tu biblioteca de fotos y videos</string>
+    <string name="onboarding_perm_photos_videos_title">Acceso a fotos y vídeos</string>
+    <string name="onboarding_perm_photos_videos_desc">Necesario para ver, organizar y gestionar tu biblioteca de fotos y vídeos</string>
     <string name="onboarding_perm_storage_title">Acceso al almacenamiento</string>
     <string name="onboarding_perm_all_files_title">Acceso a todos los archivos</string>
-    <string name="onboarding_perm_all_files_desc">Necesario para mover carpetas, eliminar archivos y la Caja fuerte</string>
+    <string name="onboarding_perm_all_files_desc">Necesario para mover carpetas, eliminar archivos y usar la caja fuerte</string>
     <string name="onboarding_action_next">Siguiente</string>
     <string name="onboarding_action_grant">Conceder permisos</string>
     <string name="select_language">Seleccionar idioma</string>
@@ -125,10 +125,10 @@
     <string name="action_show_all">Ver todo</string>
     <string name="settings_category_theme_sub">Tema, colores, negro AMOLED y preferencias de pantalla</string>
     <string name="settings_category_layout_sub">Columnas de cuadrícula, estilo de barra y formas de álbumes</string>
-    <string name="settings_category_general_sub">Visibilidad de álbumes, vibración, reproducción de video y confirmaciones</string>
+    <string name="settings_category_general_sub">Visibilidad de álbumes, vibración, reproducción de vídeo y confirmaciones</string>
     <string name="settings_category_smart_search_sub">Búsqueda semántica por IA, agrupación de rostros y reconocimiento de texto</string>
     <string name="settings_category_privacy_sub">Eliminación de metadatos, reglas de borrado y control de datos</string>
-    <string name="settings_category_about_sub">Información de la app, actualizaciones, desarrollador y licencias</string>
+    <string name="settings_category_about_sub">Información de la app, actualizaciones, mantenedor y licencias de código abierto</string>
     <string name="setting_theme_mode">Tema y modo</string>
     <string name="setting_theme_system">Sistema</string>
     <string name="setting_theme_light">Claro</string>
@@ -145,16 +145,16 @@
     <string name="setting_dock_floating">Píldora flotante</string>
     <string name="setting_dock_classic">Barra de navegación de ancho completo</string>
     <string name="setting_dock_classic_sub">Extender la barra de navegación a todo el ancho de la pantalla en lugar de una píldora flotante</string>
-    <string name="setting_dock_videos">Mostrar pestaña de videos</string>
-    <string name="setting_dock_videos_sub">Mostrar un acceso directo dedicado para videos en la barra</string>
+    <string name="setting_dock_videos">Mostrar pestaña de vídeos</string>
+    <string name="setting_dock_videos_sub">Mostrar un acceso directo para vídeos en la barra</string>
     <string name="setting_grid_columns">Densidad de cuadrícula</string>
     <string name="setting_timeline_layout">Diseño de línea de tiempo</string>
     <string name="setting_timeline_mosaic">Mosaico expresivo</string>
     <string name="setting_timeline_grid">Cuadrícula uniforme</string>
     <string name="setting_album_shapes">Formas de álbumes</string>
-    <string name="setting_album_shapes_sub">Aplicar formas de flor, círculo o píldora a los álbumes</string>
-    <string name="setting_show_album_count">Mostrar cantidad de fotos</string>
-    <string name="setting_show_album_count_sub">Mostrar conteo de fotos y videos en las tarjetas de álbumes</string>
+    <string name="setting_album_shapes_sub">Aplicar formas de cuadrado redondeado, flor o píldora a las tarjetas de álbum</string>
+    <string name="setting_show_album_count">Mostrar recuento de archivos</string>
+    <string name="setting_show_album_count_sub">Mostrar el recuento de fotos y vídeos en las tarjetas de álbum</string>
     <string name="setting_show_album_size">Mostrar tamaño de álbum</string>
     <string name="setting_show_album_size_sub">Mostrar espacio ocupado en disco en las tarjetas de álbumes</string>
     <string name="setting_app_language">Idioma de la app</string>
@@ -165,10 +165,10 @@
     <string name="setting_show_empty_sub">Mostrar carpetas de álbumes sin ninguna foto</string>
     <string name="setting_haptics">Respuesta táctil (vibración)</string>
     <string name="setting_haptics_sub">Vibrar suavemente con gestos, toques y deslizadores</string>
-    <string name="setting_video_autoplay">Reproducción automática de video</string>
-    <string name="setting_video_autoplay_sub">Reproducir videos en silencio al desplazarse por la galería</string>
-    <string name="setting_video_loop">Repetir videos en bucle</string>
-    <string name="setting_video_loop_sub">Reiniciar automáticamente el video al finalizar</string>
+    <string name="setting_video_autoplay">Reproducción automática de vídeo</string>
+    <string name="setting_video_autoplay_sub">Reproducir vídeos en silencio al desplazarse por la cronología</string>
+    <string name="setting_video_loop">Repetir vídeos en bucle</string>
+    <string name="setting_video_loop_sub">Reiniciar automáticamente el vídeo al terminar</string>
     <string name="setting_confirm_delete">Confirmar eliminación</string>
     <string name="setting_confirm_delete_sub">Preguntar antes de mover fotos a la papelera</string>
     <string name="setting_memories">Recuerdos destacados</string>
@@ -176,12 +176,12 @@
     <string name="setting_smart_search_title">Búsqueda semántica por IA</string>
     <string name="setting_smart_search_desc">Búsqueda visual CLIP en el dispositivo usando descripciones en lenguaje natural</string>
     <string name="setting_face_clustering">Reconocimiento de rostros y personas</string>
-    <string name="setting_face_clustering_desc">Agrupar rostros similares en álbumes privados de personas sin conexión</string>
+    <string name="setting_face_clustering_desc">Agrupar rostros similares en álbumes privados de personas, todo en el dispositivo</string>
     <string name="setting_ocr_search">Búsqueda de texto en fotos (OCR)</string>
     <string name="setting_ocr_search_desc">Buscar texto dentro de capturas de pantalla, documentos y recibos</string>
     <string name="setting_download_models">Descargar modelos de IA</string>
     <string name="setting_model_status_ready">Instalado y listo</string>
-    <string name="setting_rescan_faces">Reescanear todos los rostros</string>
+    <string name="setting_rescan_faces">Volver a escanear todos los rostros</string>
     <string name="setting_clear_face_index">Borrar índice de rostros</string>
     <string name="setting_rebuild_ocr">Reconstruir índice de texto</string>
     <string name="setting_delete_models">Eliminar modelos de IA</string>
@@ -190,12 +190,12 @@
     <string name="setting_trash_retention">Vaciar papelera automáticamente</string>
     <string name="setting_trash_retention_sub">Eliminar permanentemente elementos de la papelera tras 30 días</string>
     <string name="setting_privacy_policy">Aviso de privacidad</string>
-    <string name="setting_privacy_policy_sub">100% sin conexión, sin rastreadores ni analíticas, privado por diseño</string>
+    <string name="setting_privacy_policy_sub">Todo en local, sin rastreadores ni analíticas, privada por diseño</string>
     <string name="setting_app_version">Versión de la app</string>
     <string name="setting_github_repo">Repositorio de GitHub</string>
     <string name="setting_github_repo_sub">Ver código fuente, apoyar el proyecto o contribuir</string>
-    <string name="setting_report_bug">Reportar error o sugerencia</string>
-    <string name="setting_report_bug_sub">Abrir un reporte en el registro de GitHub</string>
+    <string name="setting_report_bug">Informar de un error o sugerencia</string>
+    <string name="setting_report_bug_sub">Abrir una incidencia en el repositorio de GitHub</string>
     <string name="setting_update_log">Novedades y cambios</string>
     <string name="detail_share">Compartir</string>
     <string name="detail_edit">Editar</string>
@@ -206,7 +206,7 @@
     <string name="detail_details">Detalles</string>
     <string name="detail_slideshow">Presentación</string>
     <string name="detail_set_wallpaper">Establecer como fondo</string>
-    <string name="detail_move_vault">Mover a la Bóveda Privada</string>
+    <string name="detail_move_vault">Mover a la caja fuerte</string>
     <string name="detail_info_title">Detalles</string>
     <string name="detail_info_date">Fecha y hora</string>
     <string name="detail_info_dimensions">Dimensiones</string>
@@ -239,7 +239,7 @@
     <string name="editor_crop_square">Cuadrado</string>
     <string name="editor_adjust_brightness">Brillo</string>
     <string name="editor_adjust_contrast">Contraste</string>
-    <string name="editor_adjust_highlights">Zonas brillantes</string>
+    <string name="editor_adjust_highlights">Luces</string>
     <string name="editor_adjust_shadows">Sombras</string>
     <string name="editor_adjust_white_point">Punto blanco</string>
     <string name="editor_adjust_black_point">Punto negro</string>
@@ -251,11 +251,11 @@
     <string name="editor_adjust_vignette">Viñeta</string>
     <string name="editor_adjust_sharpen">Nitidez</string>
     <string name="editor_markup_pen">Pluma</string>
-    <string name="editor_markup_highlighter">Resaltador</string>
+    <string name="editor_markup_highlighter">Rotulador</string>
     <string name="editor_markup_redact">Censurar</string>
     <string name="editor_markup_text">Texto</string>
     <string name="editor_redact_blur">Desenfoque</string>
-    <string name="editor_redact_blackout">Oscurecer</string>
+    <string name="editor_redact_blackout">Tapar en negro</string>
     <string name="editor_redact_strength">Intensidad de desenfoque</string>
     <string name="editor_text_align_left">Izquierda</string>
     <string name="editor_text_align_center">Centro</string>
@@ -271,14 +271,14 @@
 
     <string name="people_title">Personas</string>
     <string name="people_and_faces">Personas y rostros</string>
-    <string name="people_carousel_hint">Toca para ver personas reconocidas y organizar tu galería</string>
+    <string name="people_carousel_hint">Pulsa para ver las personas reconocidas y organizar tu galería</string>
     <string name="people_unnamed">Sin nombre</string>
     <string name="photo_count_single">%1$d foto</string>
     <string name="photo_count_multiple">%1$d fotos</string>
     <string name="utility_clean_up">Limpieza</string>
     <string name="doc_books_magazines">Libros y revistas</string>
     <string name="doc_events">Eventos</string>
-    <string name="doc_ids">Identificaciones</string>
+    <string name="doc_ids">Documentos de identidad</string>
     <string name="doc_notes">Notas</string>
     <string name="doc_payments">Pagos y tarjetas</string>
     <string name="doc_receipts">Recibos</string>
@@ -308,10 +308,10 @@
     <string name="setting_strip_metadata_sub">Elimina GPS, modelo de cámara, fecha, zona horaria y datos del autor al compartir</string>
     <string name="setting_excluded_folders_title">Carpetas excluidas</string>
     <string name="setting_folder_visibility_title">Visibilidad de carpetas</string>
-    <string name="setting_excluded_folders_desc">Las carpetas excluidas no aparecerán en la pestaña Fotos ni en Álbumes. Aún puedes acceder a ellas buscándolas.</string>
+    <string name="setting_excluded_folders_desc">Las carpetas excluidas no aparecerán en la pestaña Fotos ni en la cuadrícula de Álbumes. Todavía puedes acceder a ellas mediante la búsqueda.</string>
     <string name="about_developer">DESARROLLADOR</string>
     <string name="about_creator_maintainer">Mantenedor principal</string>
-    <string name="about_star_project">Destacar proyecto</string>
+    <string name="about_star_project">Dar una estrella al proyecto</string>
     <string name="about_updates_delivery">Actualizaciones y versiones</string>
     <string name="about_check_updates">Buscar actualizaciones</string>
     <string name="about_update_log">Registro de cambios</string>
@@ -325,10 +325,16 @@
     <string name="about_licenses_sub">Atribuciones de bibliotecas y herramientas de terceros</string>
     <string name="about_brand_footer">Photon Gallery • Gratuita y de código abierto</string>
     <string name="update_status_checking">Buscando actualizaciones…</string>
-    <string name="update_status_available">¡v%1$s disponible! Toca para actualizar</string>
+    <string name="update_status_available">¡v%1$s disponible! Pulsa para actualizar</string>
     <string name="update_status_uptodate">Instalado: v%1$s (Actualizado)</string>
     <string name="update_status_downloaded">v%1$s descargada. Lista para instalar</string>
     <string name="update_status_build">Instalado: v%1$s (Compilación %2$d)</string>
+    <string name="notification_channel_updates">Actualizaciones de la app</string>
+    <string name="notification_channel_updates_desc">Avisa cuando hay una versión nueva de Photon Gallery disponible</string>
+    <string name="notification_update_title">Photon Gallery %1$s disponible</string>
+    <string name="notification_update_body_named">%1$s • Pulsa para descargar e instalar</string>
+    <string name="notification_update_body_version">La versión %1$s está lista para descargar e instalar</string>
+    <string name="notification_update_available">Actualización disponible</string>
     <string name="setting_display_preferences_title">Preferencias de pantalla</string>
     <string name="setting_media_viewer_title">Visor de medios</string>
     <string name="setting_media_viewer_sub">Fondo borroso, minimapa y brillo</string>
@@ -353,7 +359,7 @@
     <string name="setting_timeline_grid_title">Diseño y cuadrícula de la cronología</string>
     <string name="setting_date_header_align">Alineación del encabezado de fecha</string>
     <string name="setting_grid_style_title">Estilo de cuadrícula de la galería</string>
-    <string name="setting_grid_style_sub">Elige cómo se organizan las fotos y los videos en la cronología principal</string>
+    <string name="setting_grid_style_sub">Elige cómo se organizan las fotos y los vídeos en la cronología principal</string>
     <string name="setting_grid_items_per_row">Elementos por fila en la cuadrícula</string>
     <string name="setting_grid_items_sub">Número de columnas en la cronología</string>
     <string name="columns_count">%1$d columnas</string>
@@ -365,7 +371,7 @@
     <string name="setting_live_typography_preview">Vista previa tipográfica en vivo</string>
     <string name="setting_live_typography_desc">El texto se reorganiza dinámicamente con jerarquía expresiva e interlineado proporcional.</string>
     <string name="setting_live_layout_preview">Vista previa de diseño en vivo</string>
-    <string name="explore_map">Explorar mapa</string>
+    <string name="explore_map">Explorar el mapa</string>
     <string name="quick_tip">Consejo rápido</string>
     <string name="action_change_cover">Cambiar portada</string>
     <string name="action_reset_cover">Restablecer portada predeterminada</string>
@@ -373,9 +379,9 @@
     <string name="action_reset_shape">Restablecer forma predeterminada</string>
     <string name="setting_no_folders_found">No se encontraron carpetas</string>
     <string name="setting_no_folders_found_sub">Las carpetas multimedia aparecerán aquí una vez escaneadas</string>
-    <string name="tip_albums_customize">Mantén presionado cualquier álbum para cambiar su foto de portada o elegir formas personalizadas como Galleta, Trébol y Píldora.</string>
-    <string name="tip_motion_photo">Mantén presionado cualquier lugar de la foto para reproducir el video en movimiento.</string>
-    <string name="tip_markup_gesture">Toca el texto o las flechas para mover, escalar y rotar libremente con dos dedos.</string>
+    <string name="tip_albums_customize">Mantén pulsado cualquier álbum para cambiar su foto de portada o elegir formas personalizadas como galleta, trébol y píldora.</string>
+    <string name="tip_motion_photo">Mantén pulsado cualquier punto de la foto para reproducir el vídeo en movimiento.</string>
+    <string name="tip_markup_gesture">Pulsa el texto o las flechas para moverlos, escalarlos y girarlos libremente con dos dedos.</string>
     <string name="action_create">Crear</string>
     <string name="action_discard">Descartar</string>
     <string name="action_keep_editing">Seguir editando</string>
@@ -383,7 +389,7 @@
     <string name="action_open_with">Abrir con</string>
     <string name="action_extract_frame">Extraer fotograma</string>
     <string name="dialog_move_to_trash_title">Mover a la papelera</string>
-    <string name="dialog_move_to_trash_msg">Este elemento se moverá a la papelera de reciclaje.</string>
+    <string name="dialog_move_to_trash_msg">Este elemento se moverá a la papelera.</string>
     <string name="dialog_move_to_trash_confirm">Mover a papelera</string>
     <string name="dialog_rename_title">Renombrar archivo</string>
     <string name="dialog_rename_label">Nombre del archivo</string>
@@ -420,7 +426,7 @@
     <string name="map_title">Mapa de fotos</string>
     <string name="map_no_location_title">Sin datos de ubicación</string>
     <string name="map_no_location_desc">Ninguna de tus fotos incluye coordenadas GPS. Las fotos tomadas con ubicación aparecerán aquí.</string>
-    <string name="vault_lock_now">Bloquear caja fuerte ahora</string>
+    <string name="vault_lock_now">Bloquear la caja fuerte ahora</string>
     <string name="vault_change_pin">Cambiar PIN maestro</string>
     <string name="vault_empty_title">El espacio privado está vacío</string>
     <string name="people_merge_similar">Combinar rostros similares</string>
@@ -437,8 +443,8 @@
     <string name="dialog_delete_perm_title">Eliminar permanentemente</string>
     <string name="dialog_delete_perm_msg">¿Eliminar permanentemente %1$d elementos? Esta acción no se puede deshacer.</string>
     <string name="dialog_multi_trash_msg">¿Mover %1$d elementos a la papelera?</string>
-    <string name="search_empty_title">Buscar fotos y videos</string>
-    <string name="search_empty_subtitle">Busca por nombre, formato, álbum, fecha, texto en fotos o describe una escena.</string>
+    <string name="search_empty_title">Buscar fotos y vídeos</string>
+    <string name="search_empty_subtitle">Busca por nombre de archivo, formato, álbum, fecha, texto dentro de las fotos o describe una escena.</string>
     <string name="search_in_progress">Buscando…</string>
     <string name="search_no_results_title">Sin resultados para “%1$s”</string>
     <string name="search_no_results_subtitle">Prueba diferentes palabras clave, fechas o descripciones visuales.</string>
@@ -447,48 +453,48 @@
     <string name="setting_excluded_folders_category_sub">Ocultar carpetas específicas de la galería principal</string>
     <string name="sort_name_a_to_z_short">Nombre (A a la Z)</string>
     <string name="sort_name_z_to_a_short">Nombre (Z a la A)</string>
-    <string name="sort_count_most">Cantidad de elementos (Mayor primero)</string>
-    <string name="sort_count_least">Cantidad de elementos (Menor primero)</string>
+    <string name="sort_count_most">Recuento de elementos (más elementos primero)</string>
+    <string name="sort_count_least">Recuento de elementos (menos elementos primero)</string>
     <string name="align_left">Izquierda</string>
     <string name="align_center">Centro</string>
     <string name="layout_standard">Estándar</string>
     <string name="layout_editorial_mosaic">Mosaico editorial</string>
     <string name="dialog_clear_face_title">Borrar índice de rostros</string>
-    <string name="dialog_clear_face_msg">Esto borrará todos los rostros agrupados, personas reconocidas y nombres personalizados. ¿Seguro que deseas continuar?</string>
+    <string name="dialog_clear_face_msg">Esto borrará todos los rostros agrupados, las personas reconocidas y los nombres personalizados. ¿Quieres continuar?</string>
     <string name="dialog_clear_all_faces_confirm">Borrar todos los rostros</string>
     <string name="dialog_clear_smart_search_title">Borrar índice de búsqueda inteligente</string>
-    <string name="dialog_clear_smart_search_msg">Esto borrará todas las representaciones generadas para la búsqueda semántica. Deberás volver a indexar para usar la búsqueda inteligente. ¿Deseas continuar?</string>
+    <string name="dialog_clear_smart_search_msg">Esto borrará todas las representaciones calculadas para la búsqueda semántica. Tendrás que volver a indexar para usar la búsqueda inteligente. ¿Quieres continuar?</string>
     <string name="dialog_delete_ai_models_title">Eliminar archivos de modelos de IA</string>
-    <string name="dialog_delete_ai_models_msg">Esto eliminará los archivos locales del modelo ONNX (~150MB). No podrás usar la búsqueda semántica hasta que vuelvas a descargarlos. ¿Estás seguro?</string>
+    <string name="dialog_delete_ai_models_msg">Esto eliminará los archivos locales del modelo ONNX (~150 MB). No podrás usar la búsqueda semántica ni indexar imágenes nuevas hasta que los vuelvas a descargar. ¿Quieres continuar?</string>
     <string name="dialog_delete_files_confirm">Eliminar archivos</string>
     <string name="dialog_rescan_faces_title">Volver a escanear todos los rostros</string>
-    <string name="dialog_rescan_faces_msg">Esto reiniciará el análisis facial y reanalizará todas las fotos usando el motor local.
+    <string name="dialog_rescan_faces_msg">Esto reiniciará el estado del análisis facial y volverá a analizar todas las fotos de tu galería con el motor de rostros del dispositivo.
 
-Las personas nombradas, etiquetas y agrupaciones manuales se conservarán intactas. ¿Deseas continuar?</string>
-    <string name="dialog_rescan_all_confirm">Reescanear todo</string>
+Las personas con nombre, las etiquetas y las agrupaciones manuales se conservarán intactas. ¿Quieres volver a escanear?</string>
+    <string name="dialog_rescan_all_confirm">Volver a escanear todo</string>
     <string name="dialog_delete_face_model_title">Eliminar modelo de reconocimiento facial</string>
-    <string name="dialog_delete_face_model_msg">Esto eliminará el archivo local del modelo MobileFaceNet (~13MB).
+    <string name="dialog_delete_face_model_msg">Esto eliminará el archivo local del modelo MobileFaceNet (~13 MB).
 
-No podrás escanear nuevos rostros hasta descargarlo de nuevo. Las personas y etiquetas existentes se conservarán.</string>
+No podrás escanear ni agrupar rostros nuevos hasta que lo descargues de nuevo. Las personas y etiquetas que ya tengas en la galería no se modificarán.</string>
     <string name="dialog_rebuild_text_index_title">Reconstruir índice de texto</string>
-    <string name="dialog_rebuild_text_index_msg">Esto borrará todos los registros de texto OCR en caché y volverá a indexar todas las imágenes desde cero. ¿Deseas continuar?</string>
+    <string name="dialog_rebuild_text_index_msg">Esto borrará todas las entradas de texto OCR en caché y volverá a indexar el texto de todas las imágenes de tu galería desde cero. ¿Quieres continuar?</string>
     <string name="dialog_privacy_notice_title">Aviso de privacidad</string>
     <string name="dialog_understood">Entendido</string>
     <string name="btn_start_indexing">Iniciar indexación</string>
     <string name="btn_stop_indexing">Detener indexación</string>
     <string name="btn_rebuild_index">Reconstruir índice</string>
     <string name="btn_clear_index">Borrar índice</string>
-    <string name="btn_download_ai_models">Descargar modelos de IA</string>
+    <string name="btn_download_ai_models">Descargar archivos de modelos de IA</string>
     <string name="btn_download_face_model">Descargar modelo de reconocimiento facial</string>
     <string name="btn_start_scanning">Iniciar escaneo</string>
     <string name="btn_stop_scanning">Detener escaneo</string>
     <string name="btn_clear_faces">Borrar rostros</string>
-    <string name="action_export_motion_mp4">Exportar video con movimiento (MP4)</string>
+    <string name="action_export_motion_mp4">Exportar vídeo con movimiento (MP4)</string>
     <string name="people_hide_show_faces">Ocultar y mostrar rostros</string>
     <string name="people_photos_count_filter">+%1$d fotos (%2$d)</string>
     <string name="people_move_photos_title">Mover fotos a...</string>
-    <string name="people_move_photos_desc">Selecciona una persona para mover %1$d foto(s).</string>
-    <string name="vault_empty_instruction">Selecciona fotos en tu galería y toca \"Ocultar\" para moverlas a este espacio cifrado.</string>
+    <string name="people_move_photos_desc">Selecciona una persona a la que mover %1$d fotos.</string>
+    <string name="vault_empty_instruction">Selecciona fotos en tu galería y pulsa "Ocultar" para moverlas a este espacio cifrado.</string>
     <string name="picker_tab_all">Todo</string>
     <string name="cd_back">Atrás</string>
     <string name="cd_more_options">Más opciones</string>
@@ -533,14 +539,14 @@ No podrás escanear nuevos rostros hasta descargarlo de nuevo. Las personas y et
     <string name="search_show_all_semantic">Mostrar todas las coincidencias semánticas (%1$d)</string>
     <string name="toast_collage_saved">¡Collage guardado en la galería!</string>
     <string name="toast_stitch_saved">¡Guardado en la galería!</string>
-    <string name="toast_motion_saved">Video con movimiento guardado en Movies/Photon_Motion</string>
-    <string name="toast_motion_failed">Error al exportar el video con movimiento</string>
+    <string name="toast_motion_saved">Vídeo con movimiento guardado en Movies/Photon_Motion</string>
+    <string name="toast_motion_failed">Error al exportar el vídeo con movimiento</string>
     <string name="toast_no_app_open">No hay ninguna app disponible para abrir este archivo</string>
     <string name="toast_no_app_wallpaper">No hay ninguna app disponible para establecer el fondo</string>
     <string name="toast_no_editor">No hay ningún editor disponible en el dispositivo</string>
     <string name="toast_cannot_delete">No se puede eliminar este elemento</string>
     <string name="toast_coords_copied">¡Coordenadas copiadas!</string>
-    <string name="toast_metadata_copied">¡Todos los metadatos se copiaron al portapapeles!</string>
+    <string name="toast_metadata_copied">¡Metadatos copiados al portapapeles!</string>
     <string name="toast_pin_success">¡PIN de la caja fuerte creado correctamente!</string>
     <string name="toast_pin_mismatch">Los PIN no coinciden, inténtalo de nuevo</string>
     <string name="toast_pin_incorrect">PIN incorrecto</string>

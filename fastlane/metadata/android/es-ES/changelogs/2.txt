@@ -1,0 +1,16 @@
+### Personas y agrupación de rostros (novedad)
+* Reconocimiento facial 100 % en el dispositivo, agrupación automática y sugerencias de combinación, todo sin conexión.
+* Pon nombre, marca como favorito u oculta cada rostro, con filtros por número de fotos.
+
+### Anotación y pintura en el editor (#20)
+* Juego completo de dibujo dentro del editor de fotos: rotulador, subrayador, pincel neón, censura por desenfoque y formas geométricas.
+* Texto interactivo con escalado y exportación en alta resolución.
+
+### Privacidad y limpieza de metadatos
+* La eliminación a nivel de byte borra el 100 % de los registros EXIF, XMP, IPTC, MakerNotes, números de serie y los metadatos de ubicación y fecha de los vídeos.
+* La rotación física automática de los píxeles mantiene la orientación correcta al compartir.
+
+### Corrección de errores y estabilidad
+* Corregida la pérdida de adjuntos con Direct Share en las apps de mensajería (#17).
+* Corregida la sincronización de archivos con .nomedia y la caja fuerte (#18).
+* Corregido un fallo en la transición de borrado del visor de fotos (#19).
