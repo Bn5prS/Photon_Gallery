@@ -1722,7 +1722,7 @@ fun SettingsScreen(
                                         }
 
                                         Text(
-                                            text = "Download on-device OpenAI CLIP ViT-B/16 model (~150MB) to search photos using natural descriptions (e.g. 'dog sleeping on green rug', 'sunset at beach with friends'). Runs entirely on-device on CPU.",
+                                            text = "Download on-device Apple MobileCLIP-S2 model (~103MB) to search photos using natural descriptions (e.g. 'dog sleeping on green rug', 'sunset at beach with friends'). Runs entirely on-device on CPU.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1835,7 +1835,7 @@ fun SettingsScreen(
                                         }
 
                                         Text(
-                                            text = "Search photos with natural descriptions using on-device OpenAI CLIP embeddings.",
+                                            text = "Search photos with natural descriptions using on-device Apple MobileCLIP-S2 embeddings.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -3342,7 +3342,8 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
         "Coil 3 Image Loading" to "Apache License 2.0 • Coil Contributors",
         "Room Database" to "Apache License 2.0 • Google LLC",
         "ONNX Runtime" to "MIT License • Microsoft Corp.",
-        "CLIP Vision & Language" to "MIT License • OpenAI",
+        "Apple MobileCLIP-S2" to "MIT License • Apple / Xenova",
+        "MobileFaceNet" to "MIT License • InsightFace",
         "Roboto Flex & Google Sans Flex" to "SIL Open Font License 1.1 • Google LLC",
         "AndroidX WorkManager" to "Apache License 2.0 • Google LLC",
         "AndroidX Graphics Shapes" to "Apache License 2.0 • Google LLC",

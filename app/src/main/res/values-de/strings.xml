@@ -59,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Fotos, Orte, Daten, Texte suchen...</string>
     <string name="smart_search">Intelligente Suche</string>
-    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by CLIP ViT-B/16</string>
+    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by MobileCLIP-S2</string>
     <string name="recent_searches">Letzte Suchanfragen</string>
     <string name="clear_search_history">Suchverlauf löschen</string>
     <string name="no_search_results">Keine Ergebnisse gefunden</string>
@@ -175,7 +175,7 @@
     <string name="setting_memories">Erinnerungs-Highlights</string>
     <string name="setting_memories_sub">Karten mit Erinnerungen an diesen Tag oben in der Galerie anzeigen</string>
     <string name="setting_smart_search_title">Semantische KI-Suche</string>
-    <string name="setting_smart_search_desc">Lokale CLIP-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
+    <string name="setting_smart_search_desc">Lokale MobileCLIP-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
     <string name="setting_face_clustering">Gesichtserkennung &amp; Personen</string>
     <string name="setting_face_clustering_desc">Ähnliche Gesichter in privaten Personenalben auf dem Gerät gruppieren</string>
     <string name="setting_ocr_search">Lokale OCR-Textsuche</string>
@@ -460,7 +460,7 @@
     <string name="dialog_clear_smart_search_title">Smart-Search-Index löschen</string>
     <string name="dialog_clear_smart_search_msg">Dadurch werden alle Bild-Embeddings für die semantische Suche gelöscht. Sie müssen den Index neu erstellen. Fortfahren?</string>
     <string name="dialog_delete_ai_models_title">KI-Modelldateien löschen</string>
-    <string name="dialog_delete_ai_models_msg">Dadurch werden die lokalen ONNX-Modelldateien (~150 MB) gelöscht. Sie können die semantische Suche erst nach erneutem Download nutzen. Fortfahren?</string>
+    <string name="dialog_delete_ai_models_msg">Dadurch werden die lokalen ONNX-Modelldateien (~103 MB) gelöscht. Sie können die semantische Suche erst nach erneutem Download nutzen. Fortfahren?</string>
     <string name="dialog_delete_files_confirm">Dateien löschen</string>
     <string name="dialog_rescan_faces_title">Alle Gesichter neu scannen</string>
     <string name="dialog_rescan_faces_msg">Dies setzt den Gesichts-Scan zurück und analysiert alle Fotos neu.

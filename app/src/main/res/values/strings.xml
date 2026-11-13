@@ -67,7 +67,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Search photos, places, dates, text...</string>
     <string name="smart_search">Smart Search</string>
-    <string name="smart_search_description">Natural language on-device search powered by CLIP ViT-B/16</string>
+    <string name="smart_search_description">Natural language on-device search powered by MobileCLIP-S2</string>
     <string name="recent_searches">Recent Searches</string>
     <string name="clear_search_history">Clear Search History</string>
     <string name="no_search_results">No results found</string>
@@ -193,7 +193,7 @@
     <string name="setting_memories">Memories Spotlight</string>
     <string name="setting_memories_sub">Show \'On This Day\' throwback memory cards atop timeline</string>
     <string name="setting_smart_search_title">Semantic AI Search</string>
-    <string name="setting_smart_search_desc">On-device CLIP visual search using natural language descriptions</string>
+    <string name="setting_smart_search_desc">On-device MobileCLIP visual search using natural language descriptions</string>
     <string name="setting_face_clustering">Face Recognition &amp; People</string>
     <string name="setting_face_clustering_desc">Group similar faces into private on-device people albums</string>
     <string name="setting_ocr_search">On-Device OCR Text Search</string>

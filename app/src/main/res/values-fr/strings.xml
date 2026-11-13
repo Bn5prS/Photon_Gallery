@@ -59,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Rechercher photos, lieux, dates, texte...</string>
     <string name="smart_search">Recherche intelligente</string>
-    <string name="smart_search_description">Recherche en langage naturel sur l’appareil optimisée par CLIP ViT-B/16</string>
+    <string name="smart_search_description">Recherche en langage naturel sur l’appareil optimisée par MobileCLIP-S2</string>
     <string name="recent_searches">Recherches récentes</string>
     <string name="clear_search_history">Effacer l’historique de recherche</string>
     <string name="no_search_results">Aucun résultat trouvé</string>
@@ -175,7 +175,7 @@
     <string name="setting_memories">Souvenirs en vedette</string>
     <string name="setting_memories_sub">Afficher les cartes souvenirs \'Ce jour-là\' en haut de la galerie</string>
     <string name="setting_smart_search_title">Recherche sémantique IA</string>
-    <string name="setting_smart_search_desc">Recherche visuelle CLIP sur l\'appareil avec description en langage naturel</string>
+    <string name="setting_smart_search_desc">Recherche visuelle MobileCLIP sur l\'appareil avec description en langage naturel</string>
     <string name="setting_face_clustering">Reconnaissance faciale et personnes</string>
     <string name="setting_face_clustering_desc">Regrouper les visages similaires dans des albums de personnes hors ligne</string>
     <string name="setting_ocr_search">Recherche de texte OCR sur l\'appareil</string>
@@ -460,7 +460,7 @@
     <string name="dialog_clear_smart_search_title">Effacer l\'index de recherche intelligente</string>
     <string name="dialog_clear_smart_search_msg">Cela effacera tous les plongements d\'images pour la recherche sémantique. Vous devrez réindexer pour utiliser la recherche. Continuer ?</string>
     <string name="dialog_delete_ai_models_title">Supprimer les modèles d\'IA</string>
-    <string name="dialog_delete_ai_models_msg">Cela supprimera les fichiers modèles ONNX locaux (~150 Mo). Vous ne pourrez plus utiliser la recherche sémantique sans les retélécharger. Continuer ?</string>
+    <string name="dialog_delete_ai_models_msg">Cela supprimera les fichiers modèles ONNX locaux (~103 Mo). Vous ne pourrez plus utiliser la recherche sémantique sans les retélécharger. Continuer ?</string>
     <string name="dialog_delete_files_confirm">Supprimer les fichiers</string>
     <string name="dialog_rescan_faces_title">Rebalayer tous les visages</string>
     <string name="dialog_rescan_faces_msg">Cela réinitialisera l\'analyse faciale et réanalysera toutes les photos.

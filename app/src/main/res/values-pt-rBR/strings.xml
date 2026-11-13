@@ -59,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Pesquise fotos, locais, datas, textos...</string>
     <string name="smart_search">Pesquisa Inteligente</string>
-    <string name="smart_search_description">Pesquisa em linguagem natural no dispositivo com CLIP ViT-B/16</string>
+    <string name="smart_search_description">Pesquisa em linguagem natural no dispositivo com MobileCLIP-S2</string>
     <string name="recent_searches">Pesquisas recentes</string>
     <string name="clear_search_history">Limpar histórico de pesquisa</string>
     <string name="no_search_results">Nenhum resultado encontrado</string>
@@ -175,7 +175,7 @@
     <string name="setting_memories">Destaques de memórias</string>
     <string name="setting_memories_sub">Exibir cartões de lembranças de anos anteriores no topo da galeria</string>
     <string name="setting_smart_search_title">Busca semântica por IA</string>
-    <string name="setting_smart_search_desc">Busca visual CLIP no dispositivo usando descrições em linguagem natural</string>
+    <string name="setting_smart_search_desc">Busca visual MobileCLIP no dispositivo usando descrições em linguagem natural</string>
     <string name="setting_face_clustering">Reconhecimento facial e pessoas</string>
     <string name="setting_face_clustering_desc">Agrupar rostros semelhantes em álbuns privados de pessoas no dispositivo</string>
     <string name="setting_ocr_search">Busca de texto em fotos (OCR)</string>
@@ -460,7 +460,7 @@
     <string name="dialog_clear_smart_search_title">Limpar índice de busca inteligente</string>
     <string name="dialog_clear_smart_search_msg">Isso apagará todas as representações calculadas para busca semântica. Você precisará reindexar para usar a busca inteligente. Deseja continuar?</string>
     <string name="dialog_delete_ai_models_title">Excluir arquivos de modelos de IA</string>
-    <string name="dialog_delete_ai_models_msg">Isso excluirá os arquivos locais do modelo ONNX (~150MB). Você não poderá usar a busca semântica até baixá-los novamente. Tem certeza?</string>
+    <string name="dialog_delete_ai_models_msg">Isso excluirá os arquivos locais do modelo ONNX (~103MB). Você não poderá usar a busca semântica até baixá-los novamente. Tem certeza?</string>
     <string name="dialog_delete_files_confirm">Excluir arquivos</string>
     <string name="dialog_rescan_faces_title">Reescanear todos os rostos</string>
     <string name="dialog_rescan_faces_msg">Isso redefinirá a verificação de rostos e analisará novamente todas as fotos.

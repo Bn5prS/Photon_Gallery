@@ -966,7 +966,7 @@ private fun SetupAiPage(
     val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING
     val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
     val bytesDownloaded = modelDownloadWorkInfo?.progress?.getLong("bytesDownloaded", 0L) ?: 0L
-    val totalBytes = modelDownloadWorkInfo?.progress?.getLong("totalBytes", 154_190_190L) ?: 154_190_190L
+    val totalBytes = modelDownloadWorkInfo?.progress?.getLong("totalBytes", 103_077_230L) ?: 103_077_230L
     val speedBytesPerSec = modelDownloadWorkInfo?.progress?.getLong("speedBytesPerSec", 0L) ?: 0L
     val autoIndexEnabled = settingsViewModel?.smartSearchAutoIndex?.collectAsState()?.value ?: true
     val ocrIndexingEnabled = settingsViewModel?.ocrIndexingEnabled?.collectAsState()?.value ?: true
@@ -1199,7 +1199,7 @@ private fun SetupAiPage(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "OpenAI CLIP ViT-B/16 • ONNX INT8",
+                                text = "Apple MobileCLIP-S2 • ONNX INT8",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

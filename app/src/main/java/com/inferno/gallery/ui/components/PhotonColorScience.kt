@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -290,111 +291,37 @@ fun PhotonColorSlider(
             }
         }
 
-        if (trackBrush != null) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val totalWidthPx = constraints.maxWidth.toFloat()
-                val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
-
-                val trackHeight = 12.dp
-                val thumbSize = 28.dp
-                val gapDp = 3.dp
-                val gapPx = with(LocalDensity.current) { gapDp.toPx() }
-                val thumbHalf = with(LocalDensity.current) { (thumbSize / 2).toPx() }
-                val availableTravel = (totalWidthPx - 2 * thumbHalf).coerceAtLeast(0f)
-                val thumbCenterPx = thumbHalf + fraction * availableTravel
-                val leftEndPx = (thumbCenterPx - thumbHalf - gapPx).coerceAtLeast(0f)
-                val rightStartPx = (thumbCenterPx + thumbHalf + gapPx).coerceAtMost(totalWidthPx)
-
-                Canvas(
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+            thumb = {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(trackHeight)
-                ) {
-                    val h = size.height
-                    val outerCap = h / 2f
-                    val innerCap = 3.dp.toPx()
-
-                    if (leftEndPx > 0f) {
-                        val path = Path().apply {
-                            addRoundRect(
-                                RoundRect(
-                                    left = 0f,
-                                    top = 0f,
-                                    right = leftEndPx.coerceAtMost(size.width),
-                                    bottom = h,
-                                    topLeftCornerRadius = CornerRadius(outerCap, outerCap),
-                                    bottomLeftCornerRadius = CornerRadius(outerCap, outerCap),
-                                    topRightCornerRadius = CornerRadius(innerCap, innerCap),
-                                    bottomRightCornerRadius = CornerRadius(innerCap, innerCap)
-                                )
-                            )
-                        }
-                        drawPath(path = path, brush = trackBrush)
-                    }
-
-                    if (rightStartPx < size.width) {
-                        val path = Path().apply {
-                            addRoundRect(
-                                RoundRect(
-                                    left = rightStartPx,
-                                    top = 0f,
-                                    right = size.width,
-                                    bottom = h,
-                                    topLeftCornerRadius = CornerRadius(innerCap, innerCap),
-                                    bottomLeftCornerRadius = CornerRadius(innerCap, innerCap),
-                                    topRightCornerRadius = CornerRadius(outerCap, outerCap),
-                                    bottomRightCornerRadius = CornerRadius(outerCap, outerCap)
-                                )
-                            )
-                        }
-                        drawPath(path = path, brush = trackBrush)
-                    }
-                }
-
-                Slider(
-                    value = value,
-                    onValueChange = onValueChange,
-                    valueRange = valueRange,
-                    enabled = enabled,
-                    modifier = Modifier.fillMaxWidth(),
-                    thumb = {
-                        Box(
-                            modifier = Modifier
-                                .size(thumbSize)
-                                .shadow(elevation = 3.dp, shape = scallopShape)
-                                .clip(scallopShape)
-                                .background(if (enabled) activeThumb else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
-                                .border(1.5.dp, Color.White.copy(alpha = 0.9f), scallopShape)
-                        )
-                    },
-                    track = {
-                        Spacer(modifier = Modifier.fillMaxWidth())
-                    }
+                        .size(28.dp)
+                        .shadow(elevation = 3.dp, shape = scallopShape)
+                        .clip(scallopShape)
+                        .background(if (enabled) activeThumb else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.9f), scallopShape)
                 )
-            }
-        } else {
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                enabled = enabled,
-                thumb = {
+            },
+            track = {
+                if (trackBrush != null) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
-                            .shadow(elevation = 3.dp, shape = scallopShape)
-                            .clip(scallopShape)
-                            .background(if (enabled) activeThumb else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
-                            .border(1.5.dp, Color.White.copy(alpha = 0.9f), scallopShape)
+                            .fillMaxWidth()
+                            .height(14.dp)
+                            .clip(CircleShape)
+                            .background(trackBrush)
+                            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), CircleShape)
                     )
+                } else {
+                    Spacer(modifier = Modifier.fillMaxWidth())
                 }
-            )
-        }
+            }
+        )
     }
 }
 
@@ -407,9 +334,13 @@ fun PhotonCustomColorSection(
 ) {
     val initialHsl = remember(currentColor) {
         val out = FloatArray(3)
-        ColorUtils.colorToHSL(currentColor, out)
-        if (out[1] < 0.05f) out[1] = 0.8f
-        if (out[2] !in 0.05f..0.95f) out[2] = 0.5f
+        val validColor = if (currentColor != -1) currentColor else 0xFF4285F4.toInt()
+        ColorUtils.colorToHSL(validColor, out)
+        if (out[1] < 0.01f && (out[2] <= 0.01f || out[2] >= 0.99f)) {
+            out[0] = 217f
+            out[1] = 0.85f
+            out[2] = 0.55f
+        }
         out
     }
 
@@ -420,30 +351,34 @@ fun PhotonCustomColorSection(
     var lastDispatchedColor by rememberSaveable { mutableIntStateOf(currentColor) }
     var pendingColor by remember { mutableStateOf<Int?>(null) }
 
+    val displayColor = remember(localHue, localSaturation, localLightness) {
+        ColorUtils.HSLToColor(floatArrayOf(localHue, localSaturation, localLightness))
+    }
+
     LaunchedEffect(currentColor) {
-        if (currentColor != lastDispatchedColor && currentColor != -1) {
+        if (currentColor != -1 && currentColor != lastDispatchedColor && currentColor != displayColor) {
             val out = FloatArray(3)
             ColorUtils.colorToHSL(currentColor, out)
-            localHue = out[0]
-            localSaturation = if (out[1] < 0.05f) 0.8f else out[1]
-            localLightness = if (out[2] !in 0.05f..0.95f) 0.5f else out[2]
+            // Preserve local Hue if the external color has no chromaticity (e.g. pure gray/black/white)
+            if (out[1] >= 0.02f && out[2] in 0.02f..0.98f) {
+                localHue = out[0]
+            }
+            localSaturation = out[1]
+            localLightness = out[2]
+            lastDispatchedColor = currentColor
         }
     }
 
     LaunchedEffect(pendingColor) {
         val color = pendingColor ?: return@LaunchedEffect
         delay(40)
-        lastDispatchedColor = color
         onColorChanged(color)
     }
 
     fun updateColor(h: Float, s: Float, l: Float) {
         val calculated = ColorUtils.HSLToColor(floatArrayOf(h, s, l))
+        lastDispatchedColor = calculated
         pendingColor = calculated
-    }
-
-    val displayColor = remember(localHue, localSaturation, localLightness) {
-        ColorUtils.HSLToColor(floatArrayOf(localHue, localSaturation, localLightness))
     }
 
     val hexString = remember(displayColor) {
@@ -518,6 +453,14 @@ fun PhotonCustomColorSection(
                 }
             }
         }
+
+        Text(
+            text = "HSL Seed • Material 3 generates themes using Hue & Chroma (Tones are contrast-standardized)",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         PhotonColorSlider(
             label = "Hue",
