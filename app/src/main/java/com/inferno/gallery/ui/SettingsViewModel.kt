@@ -8,6 +8,7 @@ import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.model.ExifStripAction
 import com.inferno.gallery.data.DockStyle
 import com.inferno.gallery.data.MemoriesCarouselStyle
+import com.inferno.gallery.data.PinnedAlbumsStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -407,6 +408,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val pinnedAlbumsStyle: StateFlow<PinnedAlbumsStyle> = repository.pinnedAlbumsStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = PinnedAlbumsStyle.DEFAULT
+    )
+
+    fun setPinnedAlbumsStyle(style: PinnedAlbumsStyle) {
+        viewModelScope.launch {
+            repository.updatePinnedAlbumsStyle(style)
+        }
+    }
+
 
 
     val dockStyle: StateFlow<DockStyle> = repository.dockStyleFlow.map { modeString ->
@@ -430,7 +443,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val showVideosInDock: StateFlow<Boolean> = repository.showVideosInDockFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
+        initialValue = true
     )
 
     fun setShowVideosInDock(show: Boolean) {

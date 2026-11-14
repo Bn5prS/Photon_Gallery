@@ -192,7 +192,8 @@ fun PinnedAlbumsScreen(
         } else {
             val lazyGridState = rememberLazyGridState()
 
-            LazyVerticalGrid(
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
                 columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(albumsGridCellsCount),
                 state = lazyGridState,
                 contentPadding = PaddingValues(
@@ -292,6 +293,18 @@ fun PinnedAlbumsScreen(
                     }
                 }
             }
+
+            com.inferno.gallery.ui.components.ExpressiveScrollBar(
+                gridState = lazyGridState,
+                totalItemsCount = userPinnedAlbums.size,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = innerPadding.calculateBottomPadding()
+                    )
+            )
+        }
         }
 
         // Custom shape picker sheet

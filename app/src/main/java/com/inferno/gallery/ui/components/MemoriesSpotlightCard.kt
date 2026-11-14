@@ -372,82 +372,13 @@ private fun MultiBrowsePeekContent(
                 .height(196.dp)
         ) { page ->
             val group = memoryGroups.getOrNull(page) ?: return@HorizontalPager
-            val context = LocalContext.current
-            val imageRequest = remember(group.coverItem.uri) {
-                ImageRequest.Builder(context)
-                    .data(if (group.coverItem.localExists) group.coverItem.resolvedUri else group.coverItem.uri)
-                    .size(800, 600)
-                    .crossfade(true)
-                    .memoryCachePolicy(CachePolicy.ENABLED)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .build()
-            }
-
-            Surface(
-                shape = RoundedCornerShape(26.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pressScale(pressedScale = 0.98f)
-                    .clip(RoundedCornerShape(26.dp))
-                    .clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onOpenMemory(group)
-                    }
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = group.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    // Soft bottom gradient scrim (no heavy solid block, no play button badge)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(84.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.75f)
-                                    )
-                                )
-                            )
-                    )
-
-                    // Clean typography directly over scrim
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomStart)
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = group.title,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${group.formattedDate} • ${group.items.size} photos",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Medium
-                            ),
-                            color = Color.White.copy(alpha = 0.85f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            SpotlightMemoryCard(
+                group = group,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onOpenMemory(group)
                 }
-            }
+            )
         }
 
         // Tonal Indicator Dots if multi-page
@@ -469,6 +400,87 @@ private fun MultiBrowsePeekContent(
                             .size(width = if (isSelected) 18.dp else 6.dp, height = 6.dp)
                     ) {}
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpotlightMemoryCard(
+    group: MemoryDayGroup,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val imageRequest = remember(group.coverItem.uri) {
+        ImageRequest.Builder(context)
+            .data(if (group.coverItem.localExists) group.coverItem.resolvedUri else group.coverItem.uri)
+            .size(800, 600)
+            .crossfade(true)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
+
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .fillMaxSize()
+            .pressScale(pressedScale = 0.98f)
+            .clip(RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = group.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Soft bottom gradient scrim (no heavy solid block, no play button badge)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(84.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.75f)
+                            )
+                        )
+                    )
+            )
+
+            // Clean typography directly over scrim
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = group.title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${group.formattedDate} • ${group.items.size} photos",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

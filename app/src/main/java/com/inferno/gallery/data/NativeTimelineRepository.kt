@@ -103,6 +103,22 @@ class NativeTimelineRepository(
     private val _albumMediaFilter = MutableStateFlow(AlbumMediaFilter.ALL)
     val albumMediaFilter: StateFlow<AlbumMediaFilter> = _albumMediaFilter.asStateFlow()
 
+    data class TimelineSnapshot(
+        val bucket: String?,
+        val items: List<NativeTimelineItem>,
+        val isLoaded: Boolean = false
+    )
+
+    private val bucketCache = java.util.concurrent.ConcurrentHashMap<String, List<NativeTimelineItem>>()
+    private fun cacheKey(bucket: String?): String = bucket ?: "__ALL_PHOTOS__"
+
+    fun getCachedItems(bucket: String?): List<NativeTimelineItem> {
+        return bucketCache[cacheKey(bucket)] ?: emptyList()
+    }
+
+    private val _timelineSnapshot = MutableStateFlow(TimelineSnapshot(bucket = null, items = emptyList(), isLoaded = false))
+    val timelineSnapshot: StateFlow<TimelineSnapshot> = _timelineSnapshot.asStateFlow()
+
     private val _timelineItems = MutableStateFlow<List<NativeTimelineItem>>(emptyList())
     val timelineItems: StateFlow<List<NativeTimelineItem>> = _timelineItems.asStateFlow()
 
@@ -150,6 +166,7 @@ class NativeTimelineRepository(
 
     fun setSortOrder(order: SortOrder) {
         if (_sortOrder.value != order) {
+            bucketCache.clear()
             _sortOrder.value = order
             reloadJob?.cancel()
             reloadJob = scope.launch(ioDispatcher) {
@@ -160,6 +177,9 @@ class NativeTimelineRepository(
 
     fun updateFilter(bucket: String?, order: SortOrder) {
         if (_currentBucket.value != bucket || _sortOrder.value != order) {
+            if (_sortOrder.value != order) {
+                bucketCache.clear()
+            }
             _currentBucket.value = bucket
             _sortOrder.value = order
             reloadJob?.cancel()
@@ -190,6 +210,12 @@ class NativeTimelineRepository(
             _smartIds.value == smartIds &&
             _albumMediaFilter.value == albumMediaFilter) {
             return
+        }
+        if (_filterIndex.value != filterIndex ||
+            _sortOrder.value != sortOrder ||
+            _viewMode.value != viewMode ||
+            _excludedFolders.value != excluded) {
+            bucketCache.clear()
         }
         _currentBucket.value = bucket
         _filterIndex.value = filterIndex
@@ -411,8 +437,9 @@ class NativeTimelineRepository(
     private suspend fun reload() {
         _isLoading.value = true
         try {
+            val targetBucket = _currentBucket.value
             val items = fetchTimelineItemsDirect(
-                bucket = _currentBucket.value,
+                bucket = targetBucket,
                 sortOrder = _sortOrder.value,
                 filterIndex = _filterIndex.value,
                 viewMode = _viewMode.value,
@@ -421,6 +448,8 @@ class NativeTimelineRepository(
                 ftsIds = _ftsIds.value,
                 smartIds = _smartIds.value
             )
+            bucketCache[cacheKey(targetBucket)] = items
+            _timelineSnapshot.value = TimelineSnapshot(bucket = targetBucket, items = items, isLoaded = true)
             _timelineItems.value = items
         } finally {
             _isLoading.value = false

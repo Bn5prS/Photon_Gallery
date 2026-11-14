@@ -456,7 +456,7 @@ fun PersonDetailScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = {
@@ -660,7 +660,7 @@ fun PersonDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         }
@@ -697,7 +697,9 @@ fun PersonDetailScreen(
                     }
                 )
         ) {
+            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Fixed(gridCols),
                 contentPadding = PaddingValues(
                     start = SpacingTokens.XS,
@@ -833,6 +835,17 @@ fun PersonDetailScreen(
                 )
             }
         }
+
+        com.inferno.gallery.ui.components.ExpressiveScrollBar(
+            gridState = gridState,
+            totalItemsCount = mediaList.size + 1,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + (if (isSelectionMode) 72.dp else 0.dp)
+                )
+        )
 
         AnimatedVisibility(
             visible = isPinching,

@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +46,7 @@ import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.SpacingTokens
+import com.inferno.gallery.ui.utils.pressScale
 import java.util.Locale
 
 data class SupportedLanguage(
@@ -137,11 +139,15 @@ fun OnboardingLanguagePill(
     val activeLang = getActiveLanguage(context, currentLanguageTag)
     val pillName = if (activeLang.tag == "pt-BR") "Português" else activeLang.displayName
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val pillContainerColor = if (isDark) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer
+    val pillContentColor = if (isDark) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
+
     Surface(
         onClick = onClick,
         shape = ShapeFull,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        color = pillContainerColor,
+        border = null,
         modifier = modifier
     ) {
         Row(
@@ -155,14 +161,66 @@ fun OnboardingLanguagePill(
             )
             Text(
                 text = pillName,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = pillContentColor
             )
             Icon(
                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_keyboard_arrow_down),
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = pillContentColor
+            )
+        }
+    }
+}
+
+/**
+ * Expressive big pill-shaped language selector badge for the onboarding intro screen.
+ * Solid pastel tonal container with high-contrast text and zero outline.
+ */
+@Composable
+fun BigOnboardingLanguagePill(
+    currentLanguageTag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val activeLang = getActiveLanguage(context, currentLanguageTag)
+    val pillName = if (activeLang.tag == "pt-BR") "Português" else activeLang.displayName
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val pillContainerColor = if (isDark) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer
+    val pillContentColor = if (isDark) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
+
+    Surface(
+        onClick = onClick,
+        shape = ShapeFull,
+        color = pillContainerColor,
+        border = null,
+        modifier = modifier.pressScale()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = SpacingTokens.XL, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+        ) {
+            Text(
+                text = "🌐",
+                fontSize = 18.sp
+            )
+            Text(
+                text = pillName,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.2.sp
+                ),
+                color = pillContentColor
+            )
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_keyboard_arrow_down),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = pillContentColor
             )
         }
     }

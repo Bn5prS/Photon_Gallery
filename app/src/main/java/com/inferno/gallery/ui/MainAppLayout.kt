@@ -1099,31 +1099,31 @@ fun MainAppLayout(
             composable(
                 route = "albums",
                 enterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums") {
-                        subScreenPopEnterTransition()
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
+                    when {
+                        initialState.destination.route?.startsWith("album/") == true -> albumClosePopEnterTransition()
+                        initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums" -> subScreenPopEnterTransition()
+                        else -> getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 exitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums") {
-                        subScreenExitTransition()
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
+                    when {
+                        targetState.destination.route?.startsWith("album/") == true -> albumOpenExitTransition()
+                        targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums" -> subScreenExitTransition()
+                        else -> getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popEnterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums") {
-                        subScreenPopEnterTransition()
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
+                    when {
+                        initialState.destination.route?.startsWith("album/") == true -> albumClosePopEnterTransition()
+                        initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums" -> subScreenPopEnterTransition()
+                        else -> getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popExitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums") {
-                        subScreenExitTransition()
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
+                    when {
+                        targetState.destination.route?.startsWith("album/") == true -> albumOpenExitTransition()
+                        targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums" -> subScreenExitTransition()
+                        else -> getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 }
             ) {
@@ -1340,10 +1340,10 @@ fun MainAppLayout(
 
             composable(
                 route = "album/{bucketName}",
-                enterTransition = { subScreenEnterTransition() },
-                exitTransition = { subScreenExitTransition() },
-                popEnterTransition = { subScreenPopEnterTransition() },
-                popExitTransition = { subScreenPopExitTransition() }
+                enterTransition = { albumOpenEnterTransition() },
+                exitTransition = { albumOpenExitTransition() },
+                popEnterTransition = { albumClosePopEnterTransition() },
+                popExitTransition = { albumClosePopExitTransition() }
             ) { backStackEntry ->
                 val rawBucketName = backStackEntry.arguments?.getString("bucketName") ?: ""
                 val bucketName = try { android.net.Uri.decode(rawBucketName) } catch (e: Exception) { rawBucketName }
@@ -1417,8 +1417,14 @@ fun MainAppLayout(
             composable(
                 route = "all_albums",
                 enterTransition = { subScreenEnterTransition() },
-                exitTransition = { subScreenExitTransition() },
-                popEnterTransition = { subScreenPopEnterTransition() },
+                exitTransition = {
+                    if (targetState.destination.route?.startsWith("album/") == true) albumOpenExitTransition()
+                    else subScreenExitTransition()
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route?.startsWith("album/") == true) albumClosePopEnterTransition()
+                    else subScreenPopEnterTransition()
+                },
                 popExitTransition = { subScreenPopExitTransition() }
             ) {
                 var pendingCoverAlbumName by remember { mutableStateOf<String?>(null) }
@@ -1458,8 +1464,14 @@ fun MainAppLayout(
             composable(
                 route = "pinned_albums",
                 enterTransition = { subScreenEnterTransition() },
-                exitTransition = { subScreenExitTransition() },
-                popEnterTransition = { subScreenPopEnterTransition() },
+                exitTransition = {
+                    if (targetState.destination.route?.startsWith("album/") == true) albumOpenExitTransition()
+                    else subScreenExitTransition()
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route?.startsWith("album/") == true) albumClosePopEnterTransition()
+                    else subScreenPopEnterTransition()
+                },
                 popExitTransition = { subScreenPopExitTransition() }
             ) {
                 var pendingCoverAlbumName by remember { mutableStateOf<String?>(null) }

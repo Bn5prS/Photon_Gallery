@@ -29,6 +29,20 @@ enum class MemoriesCarouselStyle(val id: String) {
     }
 }
 
+enum class PinnedAlbumsStyle(val id: String) {
+    DEFAULT("default"),
+    PORTRAIT("portrait"),
+    SPOTLIGHT("spotlight");
+
+    companion object {
+        fun fromId(id: String?): PinnedAlbumsStyle = when (id) {
+            "portrait", "vertical" -> PORTRAIT
+            "spotlight", "horizontal" -> SPOTLIGHT
+            else -> DEFAULT
+        }
+    }
+}
+
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
 class SettingsRepository private constructor(private val context: Context) {
@@ -48,6 +62,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val ALBUM_SORT_ORDER = stringPreferencesKey("album_sort_order")
         val ALBUM_LAYOUT_MODE = stringPreferencesKey("album_layout_mode")
+        val PINNED_ALBUMS_STYLE = stringPreferencesKey("pinned_albums_style")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
         val VIEWER_TOOLBAR_ACTIONS = stringPreferencesKey("viewer_toolbar_actions")
@@ -265,7 +280,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val showVideosInDockFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[SHOW_VIDEOS_IN_DOCK] ?: false
+            preferences[SHOW_VIDEOS_IN_DOCK] ?: true
         }
 
     val viewerToolbarActionsFlow: Flow<List<String>> = context.dataStore.data
@@ -412,6 +427,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateMemoriesCarouselStyle(style: MemoriesCarouselStyle) {
         context.dataStore.edit { preferences ->
             preferences[MEMORIES_CAROUSEL_STYLE] = style.id
+        }
+    }
+
+    val pinnedAlbumsStyleFlow: Flow<PinnedAlbumsStyle> = context.dataStore.data
+        .map { preferences ->
+            PinnedAlbumsStyle.fromId(preferences[PINNED_ALBUMS_STYLE])
+        }
+
+    suspend fun updatePinnedAlbumsStyle(style: PinnedAlbumsStyle) {
+        context.dataStore.edit { preferences ->
+            preferences[PINNED_ALBUMS_STYLE] = style.id
         }
     }
 

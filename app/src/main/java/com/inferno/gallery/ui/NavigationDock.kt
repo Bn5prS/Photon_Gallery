@@ -94,8 +94,9 @@ fun FloatingNavigationPill(
 ) {
     val selectedIndex = when {
         currentRoute == "photos" -> 0
-        currentRoute?.startsWith("album") == true || currentRoute == "albums" -> 1
-        currentRoute == "collections" -> 2
+        showVideosTab && currentRoute == "videos" -> 1
+        currentRoute?.startsWith("album") == true || currentRoute == "albums" -> if (showVideosTab) 2 else 1
+        currentRoute == "collections" -> if (showVideosTab) 3 else 2
         else -> -1
     }
 
@@ -103,15 +104,16 @@ fun FloatingNavigationPill(
 
     Row(
         modifier = modifier
+            .padding(horizontal = 8.dp)
             .wrapContentWidth()
             .pointerInput(Unit) {},
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ── Main Capsule (Photos, Albums, Collections) ──
+        // ── Main Capsule (Photos, Videos, Albums, Collections) ──
         Surface(
-            modifier = Modifier.height(56.dp),
-            shape = ShapeFull,
+            modifier = Modifier.height(58.dp),
+            shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
             shadowElevation = 2.dp
@@ -119,51 +121,101 @@ fun FloatingNavigationPill(
             Row(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(8.dp)
+                    .padding(6.dp)
                     .animateContentSize(
                         animationSpec = MotionTokens.snappySpring()
                     ),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DynamicPillTabItem(
-                    icon = {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                            contentDescription = stringResource(R.string.nav_photos),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    label = stringResource(R.string.nav_photos),
-                    isSelected = selectedIndex == 0,
-                    onClick = onNavigateToPhotos
-                )
+                if (showVideosTab) {
+                    IconPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                contentDescription = stringResource(R.string.nav_photos),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        isSelected = selectedIndex == 0,
+                        onClick = onNavigateToPhotos
+                    )
 
-                DynamicPillTabItem(
-                    icon = {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                            contentDescription = stringResource(R.string.nav_albums),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    label = stringResource(R.string.nav_albums),
-                    isSelected = selectedIndex == 1,
-                    onClick = onNavigateToAlbums
-                )
+                    IconPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                contentDescription = stringResource(R.string.album_videos),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        isSelected = selectedIndex == 1,
+                        onClick = onNavigateToVideos
+                    )
 
-                DynamicPillTabItem(
-                    icon = {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                            contentDescription = stringResource(R.string.nav_collections),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    label = stringResource(R.string.nav_collections),
-                    isSelected = selectedIndex == 2,
-                    onClick = onNavigateToCollections
-                )
+                    IconPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                contentDescription = stringResource(R.string.nav_albums),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        isSelected = selectedIndex == 2,
+                        onClick = onNavigateToAlbums
+                    )
+
+                    IconPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                                contentDescription = stringResource(R.string.nav_collections),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        isSelected = selectedIndex == 3,
+                        onClick = onNavigateToCollections
+                    )
+                } else {
+                    DynamicPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                contentDescription = stringResource(R.string.nav_photos),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        label = stringResource(R.string.nav_photos),
+                        isSelected = selectedIndex == 0,
+                        onClick = onNavigateToPhotos
+                    )
+
+                    DynamicPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                contentDescription = stringResource(R.string.nav_albums),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        label = stringResource(R.string.nav_albums),
+                        isSelected = selectedIndex == 1,
+                        onClick = onNavigateToAlbums
+                    )
+
+                    DynamicPillTabItem(
+                        icon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                                contentDescription = stringResource(R.string.nav_collections),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        label = stringResource(R.string.nav_collections),
+                        isSelected = selectedIndex == 2,
+                        onClick = onNavigateToCollections
+                    )
+                }
             }
         }
 
@@ -180,8 +232,8 @@ fun FloatingNavigationPill(
         )
 
         Surface(
-            modifier = Modifier.size(56.dp),
-            shape = ShapeFull,
+            modifier = Modifier.size(58.dp),
+            shape = CircleShape,
             color = searchContainerColor,
             tonalElevation = 0.dp,
             shadowElevation = 2.dp
@@ -202,7 +254,7 @@ fun FloatingNavigationPill(
                         scaleX = searchTouchScale
                         scaleY = searchTouchScale
                     }
-                    .clip(ShapeFull)
+                    .clip(CircleShape)
                     .clickable(
                         interactionSource = searchInteractionSource,
                         indication = ripple(
@@ -426,12 +478,93 @@ private fun RowScope.FullWidthNavItem(
 }
 
 @Composable
+fun IconPillTabItem(
+    icon: @Composable () -> Unit,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val view = LocalView.current
+
+    val touchScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = MotionTokens.bouncySpring(),
+        label = "iconTabTouchScale"
+    )
+
+    val iconScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.08f else 1f,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "iconTabIconScale"
+    )
+
+    val pillColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            Color.Transparent
+        },
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "iconTabPillColor"
+    )
+
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "iconTabContentColor"
+    )
+
+    Box(
+        modifier = modifier
+            .size(46.dp)
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
+            }
+            .clip(CircleShape)
+            .background(pillColor, CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                onClick = {
+                    view.tick()
+                    onClick()
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
+        }
+    }
+}
+
+@Composable
 fun DynamicPillTabItem(
     icon: @Composable () -> Unit,
     label: String,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
-    unselectedHorizontalPadding: Dp = 13.dp,
+    unselectedHorizontalPadding: Dp = 12.dp,
+    selectedHorizontalPadding: Dp = 16.dp,
+    fontSize: androidx.compose.ui.unit.TextUnit = 13.sp,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -465,7 +598,7 @@ fun DynamicPillTabItem(
     )
 
     val horizontalPadding by animateDpAsState(
-        targetValue = if (isSelected) 16.dp else unselectedHorizontalPadding,
+        targetValue = if (isSelected) selectedHorizontalPadding else unselectedHorizontalPadding,
         animationSpec = MotionTokens.snappySpring(),
         label = "tabItemHorizontalPadding"
     )
@@ -519,7 +652,7 @@ fun DynamicPillTabItem(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         icon()
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                     }
                 }
 
@@ -527,9 +660,10 @@ fun DynamicPillTabItem(
                     text = label,
                     style = NavDockLabelStyle.copy(
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        fontSize = 13.sp
+                        fontSize = fontSize
                     ),
-                    maxLines = 1
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -814,4 +948,44 @@ fun subScreenPopExitTransition(): ExitTransition {
         animationSpec = MotionTokens.snappySpring(),
         targetScale = 0.94f
     ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+}
+
+/**
+ * Material 3 Shared Axis (Z-axis) / Container-Transform style transitions for opening
+ * and closing an album folder, zooming cleanly into and out of the album grid.
+ */
+fun albumOpenEnterTransition(): EnterTransition {
+    return scaleIn(
+        animationSpec = MotionTokens.gentleSpring(),
+        initialScale = 0.86f
+    ) + fadeIn(
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220, easing = MotionTokens.EmphasizedDecelerateEasing)
+    )
+}
+
+fun albumOpenExitTransition(): ExitTransition {
+    return scaleOut(
+        animationSpec = MotionTokens.gentleSpring(),
+        targetScale = 1.06f
+    ) + fadeOut(
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150, easing = MotionTokens.EmphasizedAccelerateEasing)
+    )
+}
+
+fun albumClosePopEnterTransition(): EnterTransition {
+    return scaleIn(
+        animationSpec = MotionTokens.gentleSpring(),
+        initialScale = 1.06f
+    ) + fadeIn(
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220, easing = MotionTokens.EmphasizedDecelerateEasing)
+    )
+}
+
+fun albumClosePopExitTransition(): ExitTransition {
+    return scaleOut(
+        animationSpec = MotionTokens.gentleSpring(),
+        targetScale = 0.86f
+    ) + fadeOut(
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180, easing = MotionTokens.EmphasizedAccelerateEasing)
+    )
 }

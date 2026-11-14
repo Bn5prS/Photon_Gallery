@@ -340,7 +340,7 @@ fun PeopleScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -497,26 +497,6 @@ fun PeopleScreen(
                                     )
                                 }
                                 DropdownMenuItem(
-                                    text = { Text(if (isModelDownloaded) "Rescan all faces" else "Download face model") },
-                                    onClick = {
-                                        showMenu = false
-                                        if (isModelDownloaded) {
-                                            onStartScan()
-                                        } else {
-                                            viewModel.startFaceModelDownload()
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(
-                                                if (isModelDownloaded) R.drawable.ic_ms_refresh else R.drawable.ic_ms_download
-                                            ),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                )
-                                DropdownMenuItem(
                                     text = { Text(stringResource(R.string.people_filter_count)) },
                                     onClick = {
                                         showMenu = false
@@ -549,7 +529,7 @@ fun PeopleScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         }
@@ -1110,7 +1090,9 @@ fun PeopleScreen(
                             }
                         )
                 ) {
+                    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(gridCols),
                         contentPadding = PaddingValues(SpacingTokens.L),
                         horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
@@ -1153,6 +1135,13 @@ fun PeopleScreen(
                         }
                     }
 
+                    com.inferno.gallery.ui.components.ExpressiveScrollBar(
+                        gridState = gridState,
+                        totalItemsCount = displayPeople.size,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(vertical = SpacingTokens.S)
+                    )
                 }
             }
         }
@@ -1262,7 +1251,7 @@ private fun PersonGridCard(
                 Surface(
                     shape = ShapeFull,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surfaceContainerLow),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.surface),
                     modifier = Modifier
                         .size(24.dp)
                         .align(Alignment.BottomEnd)

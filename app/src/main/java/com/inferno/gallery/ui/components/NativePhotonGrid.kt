@@ -320,7 +320,7 @@ fun NativePhotonGrid(
                     itemAnimator = null // Maximum scroll throughput without layout animator hitches
                     setRecycledViewPool(recycledViewPool)
 
-                    val gridLayoutManager = GridLayoutManager(ctx, safeSpanCount).apply {
+                    val gridLayoutManager = SafeGridLayoutManager(ctx, safeSpanCount).apply {
                         isItemPrefetchEnabled = true
                         initialPrefetchItemCount = safeSpanCount * 2
                     }
@@ -561,9 +561,15 @@ fun NativePhotonGrid(
                     }
                 }
 
-                // Update padding
-                recyclerView.setPadding(leftPaddingPx, topPaddingPx, rightPaddingPx, bottomPaddingPx)
-                scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
+                // Update padding only when changed to avoid redundant layout passes
+                if (recyclerView.paddingLeft != leftPaddingPx ||
+                    recyclerView.paddingTop != topPaddingPx ||
+                    recyclerView.paddingRight != rightPaddingPx ||
+                    recyclerView.paddingBottom != bottomPaddingPx
+                ) {
+                    recyclerView.setPadding(leftPaddingPx, topPaddingPx, rightPaddingPx, bottomPaddingPx)
+                    scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
+                }
             },
             onRelease = { scroller ->
                 dragSelectHelper.detach()
@@ -671,6 +677,20 @@ fun NativePhotonGrid(
 )
 
 /**
+ * Defensive GridLayoutManager that intercepts RecyclerView inconsistency exceptions
+ * during rapid dataset swaps or tab transitions.
+ */
+private class SafeGridLayoutManager(context: Context, spanCount: Int) : GridLayoutManager(context, spanCount) {
+    override fun onLayoutChildren(recycler: RecyclerView.Recycler?, state: RecyclerView.State?) {
+        try {
+            super.onLayoutChildren(recycler, state)
+        } catch (e: IndexOutOfBoundsException) {
+            android.util.Log.e("SafeGridLayoutManager", "Inconsistency caught in onLayoutChildren: ${e.message}")
+        }
+    }
+}
+
+/**
  * High-performance RecyclerView Adapter for Photon Gallery timeline.
  */
 private class NativePhotonAdapter(
@@ -725,12 +745,13 @@ private class NativePhotonAdapter(
     })
 
     fun submitList(list: List<NativeTimelineItem>, isFullReset: Boolean = false, commitCallback: (() -> Unit)? = null) {
-        currentDataset = list
         if (isFullReset) {
+            currentDataset = list
             differ.submitList(null)
             notifyDataSetChanged()
             commitCallback?.invoke()
         } else {
+            currentDataset = emptyList()
             differ.submitList(list, commitCallback)
         }
     }

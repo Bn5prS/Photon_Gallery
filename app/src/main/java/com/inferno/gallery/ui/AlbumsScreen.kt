@@ -173,6 +173,7 @@ fun AlbumsScreen(
     val haptic = LocalHapticFeedback.current
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
     val albumsGridCellsCount by viewModel.albumsGridCellsCount.collectAsState()
+    val pinnedAlbumsStyle by viewModel.pinnedAlbumsStyle.collectAsState()
     var isPinching by remember { mutableStateOf(false) }
     val livePinchScaleAnim = remember { Animatable(1f) }
     val pinchScaleScope = rememberCoroutineScope()
@@ -299,6 +300,7 @@ fun AlbumsScreen(
                             customCovers = customCovers,
                             showAlbumSize = showAlbumSize,
                             gridCellsCount = albumsGridCellsCount,
+                            style = pinnedAlbumsStyle,
                             onAlbumClick = onAlbumClick,
                             onSeeAllClick = onNavigateToPinnedAlbums,
                             onTogglePin = { bucketName ->
@@ -450,6 +452,17 @@ fun AlbumsScreen(
                     }
                 }
             }
+
+            com.inferno.gallery.ui.components.ExpressiveScrollBar(
+                gridState = lazyGridState,
+                totalItemsCount = unpinnedAlbums.size + 2,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(
+                        top = contentPadding.calculateTopPadding(),
+                        bottom = contentPadding.calculateBottomPadding()
+                    )
+            )
         }
     }
 }
@@ -1130,6 +1143,7 @@ fun PinnedAlbumsShelf(
     customCovers: Map<String, String>,
     showAlbumSize: Boolean = false,
     gridCellsCount: Int = 3,
+    style: com.inferno.gallery.data.PinnedAlbumsStyle = com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT,
     onAlbumClick: (String) -> Unit,
     onSeeAllClick: () -> Unit,
     onTogglePin: (String) -> Unit,
@@ -1205,8 +1219,96 @@ fun PinnedAlbumsShelf(
             }
         }
 
-        // Horizontal Scrolling Shelf
-        LazyRow(
+        when (style) {
+            com.inferno.gallery.data.PinnedAlbumsStyle.PORTRAIT -> {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
+                    contentPadding = PaddingValues(horizontal = 0.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(
+                        items = pinnedAlbums,
+                        key = { "shelf_portrait_${it.bucketName}" }
+                    ) { bucket ->
+                        PinnedAlbumOverlayCard(
+                            bucket = bucket,
+                            showAlbumSize = showAlbumSize,
+                            customCovers = customCovers,
+                            customShapes = customShapes,
+                            isPortrait = true,
+                            onAlbumClick = onAlbumClick,
+                            onTogglePin = onTogglePin,
+                            onChangeCover = onChangeCover,
+                            onDeleteCover = onDeleteCover,
+                            onChangeShape = onChangeShape,
+                            onResetShape = onResetShape,
+                            onRename = onRename,
+                            modifier = Modifier
+                                .width(116.dp)
+                                .height(160.dp)
+                        )
+                    }
+                }
+            }
+
+            com.inferno.gallery.data.PinnedAlbumsStyle.SPOTLIGHT -> {
+                val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pinnedAlbums.size })
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    androidx.compose.foundation.pager.HorizontalPager(
+                        state = pagerState,
+                        contentPadding = PaddingValues(horizontal = 24.dp),
+                        pageSpacing = 12.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(188.dp)
+                    ) { page ->
+                        val bucket = pinnedAlbums.getOrNull(page) ?: return@HorizontalPager
+                        PinnedAlbumOverlayCard(
+                            bucket = bucket,
+                            showAlbumSize = showAlbumSize,
+                            customCovers = customCovers,
+                            customShapes = customShapes,
+                            isPortrait = false,
+                            onAlbumClick = onAlbumClick,
+                            onTogglePin = onTogglePin,
+                            onChangeCover = onChangeCover,
+                            onDeleteCover = onDeleteCover,
+                            onChangeShape = onChangeShape,
+                            onResetShape = onResetShape,
+                            onRename = onRename,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    if (pinnedAlbums.size > 1) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            pinnedAlbums.forEachIndexed { index, _ ->
+                                val isSelected = pagerState.currentPage == index
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    tonalElevation = 0.dp,
+                                    shadowElevation = 0.dp,
+                                    modifier = Modifier
+                                        .padding(horizontal = 3.dp)
+                                        .size(width = if (isSelected) 18.dp else 6.dp, height = 6.dp)
+                                ) {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT -> {
+                // Horizontal Scrolling Shelf
+                LazyRow(
             horizontalArrangement = Arrangement.spacedBy(shelfSpacing),
             contentPadding = PaddingValues(horizontal = 0.dp),
             modifier = Modifier.fillMaxWidth()
@@ -1252,6 +1354,135 @@ fun PinnedAlbumsShelf(
                 }
             }
         }
+        }
+        }
+    }
+}
+
+@Composable
+private fun PinnedAlbumOverlayCard(
+    bucket: AlbumBucket,
+    showAlbumSize: Boolean,
+    customCovers: Map<String, String>,
+    customShapes: Map<String, String>,
+    isPortrait: Boolean,
+    onAlbumClick: (String) -> Unit,
+    onTogglePin: (String) -> Unit,
+    onChangeCover: (String) -> Unit,
+    onDeleteCover: (String) -> Unit,
+    onChangeShape: (AlbumBucket) -> Unit,
+    onResetShape: (String) -> Unit,
+    onRename: ((String) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    var showCardMenu by remember { mutableStateOf(false) }
+
+    val displayBucketName = when (bucket.bucketName) {
+        "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
+        else -> bucket.bucketName
+    }
+
+    val cornerRadius = if (isPortrait) 22.dp else 26.dp
+    val imageRequest = remember<ImageRequest>(bucket.coverUri, isPortrait) {
+        ImageRequest.Builder(context)
+            .data(bucket.coverUri)
+            .size(if (isPortrait) 400 else 800, 600)
+            .crossfade(true)
+            .build()
+    }
+
+    Box(modifier = modifier) {
+        Surface(
+            shape = RoundedCornerShape(cornerRadius),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(cornerRadius))
+                .combinedClickable(
+                    onClick = { onAlbumClick(bucket.bucketName) },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showCardMenu = true
+                    }
+                )
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = displayBucketName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (isPortrait) 68.dp else 84.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    androidx.compose.ui.graphics.Color.Transparent,
+                                    androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.75f)
+                                )
+                            )
+                        )
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomStart)
+                        .padding(
+                            horizontal = if (isPortrait) 10.dp else 16.dp,
+                            vertical = if (isPortrait) 10.dp else 14.dp
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = displayBucketName,
+                        style = (if (isPortrait) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium)
+                            .copy(fontWeight = FontWeight.Bold),
+                        color = androidx.compose.ui.graphics.Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val subtitle = buildString {
+                        append(if (bucket.itemCount == 1) "1 item" else "${bucket.itemCount} items")
+                        if (showAlbumSize && bucket.totalSizeBytes > 0L) {
+                            append(" • ")
+                            append(Formatter.formatShortFileSize(context, bucket.totalSizeBytes))
+                        }
+                    }
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        AlbumDropdownMenu(
+            expanded = showCardMenu,
+            onDismissRequest = { showCardMenu = false },
+            bucketName = bucket.bucketName,
+            isUserPinned = true,
+            hasCustomCover = customCovers.containsKey(bucket.bucketName),
+            hasCustomShape = customShapes.containsKey(bucket.bucketName),
+            onTogglePin = { onTogglePin(bucket.bucketName) },
+            onChangeCover = { onChangeCover(bucket.bucketName) },
+            onDeleteCover = { onDeleteCover(bucket.bucketName) },
+            onChangeShape = { onChangeShape(bucket) },
+            onResetShape = { onResetShape(bucket.bucketName) },
+            onRename = onRename?.let { cb -> { cb(bucket.bucketName) } }
+        )
     }
 }
 

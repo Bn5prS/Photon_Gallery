@@ -332,6 +332,17 @@ fun AllAlbumsScreen(
                 }
             }
         }
+
+            com.inferno.gallery.ui.components.ExpressiveScrollBar(
+                gridState = gridState,
+                totalItemsCount = allDisplayAlbums.size,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(
+                        top = paddingValues.calculateTopPadding(),
+                        bottom = paddingValues.calculateBottomPadding()
+                    )
+            )
         }
         }
     }

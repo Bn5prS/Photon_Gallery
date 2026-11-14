@@ -219,7 +219,20 @@ fun GalleryScreen(
     }
 
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
-    val nativeTimelineItems by viewModel.nativeTimelineItems.collectAsState()
+    val timelineSnapshot by viewModel.nativeTimelineSnapshot.collectAsState()
+    val scopedTimelineItems = remember(bucketName) {
+        mutableStateOf(
+            if (timelineSnapshot.isLoaded && timelineSnapshot.bucket == bucketName) {
+                timelineSnapshot.items
+            } else {
+                viewModel.getCachedTimelineItems(bucketName)
+            }
+        )
+    }
+    if (timelineSnapshot.isLoaded && timelineSnapshot.bucket == bucketName) {
+        scopedTimelineItems.value = timelineSnapshot.items
+    }
+    val nativeTimelineItems = scopedTimelineItems.value
     val viewMode by viewModel.viewMode.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val albumMediaFilter by viewModel.albumMediaFilter.collectAsState()
@@ -548,64 +561,66 @@ fun GalleryScreen(
                 }
             )
         } else {
-            val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
-            com.inferno.gallery.ui.components.NativePhotonGrid(
-                items = nativeTimelineItems,
-                initialFirstVisibleItemIndex = savedIndex,
-                initialFirstVisibleItemScrollOffset = savedOffset,
-                gridCellsCount = gridCellsCount,
-                onGridCountChange = onGridCountChange,
-                isSelectionMode = isSelectionMode,
-                selectedUris = selectedUris,
-                favoriteIds = favoriteIds,
-                onMediaClick = onMediaClick,
-                onToggleSelection = { media -> viewModel.toggleSelection(media.uriString) },
-                onMediaLongClick = { media -> viewModel.toggleSelection(media.uriString) },
-                onStartDragSelection = { uri, isSelecting ->
-                    viewModel.startDragSelection(uri, isSelecting)
-                },
-                onUpdateDragSelection = { uris ->
-                    viewModel.updateDragSelection(uris)
-                },
-                onEndDragSelection = {
-                    viewModel.endDragSelection()
-                },
-                thumbnailCornerRadius = thumbnailCornerRadius,
-                contentPadding = contentPadding,
-                dateHeaderAlignment = dateHeaderAlignment,
-                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed, memoriesCarouselStyle) {
-                    if (shouldShowMemoriesHeader) {
-                        {
-                            MemoriesSpotlightCard(
-                                memoryGroups = onThisDayMemories,
-                                isDismissed = isMemoriesDismissed,
-                                style = memoriesCarouselStyle,
-                                onOpenMemory = { group ->
-                                    activeMemoryReelGroup = group
-                                },
-                                onDismiss = {
-                                    viewModel.dismissMemories()
-                                },
-                                onRestore = {
-                                    viewModel.uncollapseMemories()
-                                }
-                            )
-                        }
-                    } else null
-                },
-                scrollToTopTrigger = if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
-                    viewModel.videosScrollToTopTrigger
-                } else {
-                    viewModel.photosScrollToTopTrigger
-                },
-                scrollToTopKey = Triple(selectedFilterIndex, bucketName, sortOrder to viewMode),
-                onScrolledAwayFromTop = { isScrolled ->
-                    viewModel.setTopBarCollapsed(isScrolled)
-                },
-                onSaveScrollPosition = { index, offset ->
-                    viewModel.saveGridScrollPosition(bucketName, index, offset)
-                }
-            )
+            androidx.compose.runtime.key(bucketName) {
+                val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
+                com.inferno.gallery.ui.components.NativePhotonGrid(
+                    items = nativeTimelineItems,
+                    initialFirstVisibleItemIndex = savedIndex,
+                    initialFirstVisibleItemScrollOffset = savedOffset,
+                    gridCellsCount = gridCellsCount,
+                    onGridCountChange = onGridCountChange,
+                    isSelectionMode = isSelectionMode,
+                    selectedUris = selectedUris,
+                    favoriteIds = favoriteIds,
+                    onMediaClick = onMediaClick,
+                    onToggleSelection = { media -> viewModel.toggleSelection(media.uriString) },
+                    onMediaLongClick = { media -> viewModel.toggleSelection(media.uriString) },
+                    onStartDragSelection = { uri, isSelecting ->
+                        viewModel.startDragSelection(uri, isSelecting)
+                    },
+                    onUpdateDragSelection = { uris ->
+                        viewModel.updateDragSelection(uris)
+                    },
+                    onEndDragSelection = {
+                        viewModel.endDragSelection()
+                    },
+                    thumbnailCornerRadius = thumbnailCornerRadius,
+                    contentPadding = contentPadding,
+                    dateHeaderAlignment = dateHeaderAlignment,
+                    headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed, memoriesCarouselStyle) {
+                        if (shouldShowMemoriesHeader) {
+                            {
+                                MemoriesSpotlightCard(
+                                    memoryGroups = onThisDayMemories,
+                                    isDismissed = isMemoriesDismissed,
+                                    style = memoriesCarouselStyle,
+                                    onOpenMemory = { group ->
+                                        activeMemoryReelGroup = group
+                                    },
+                                    onDismiss = {
+                                        viewModel.dismissMemories()
+                                    },
+                                    onRestore = {
+                                        viewModel.uncollapseMemories()
+                                    }
+                                )
+                            }
+                        } else null
+                    },
+                    scrollToTopTrigger = if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
+                        viewModel.videosScrollToTopTrigger
+                    } else {
+                        viewModel.photosScrollToTopTrigger
+                    },
+                    scrollToTopKey = Triple(selectedFilterIndex, bucketName, sortOrder to viewMode),
+                    onScrolledAwayFromTop = { isScrolled ->
+                        viewModel.setTopBarCollapsed(isScrolled)
+                    },
+                    onSaveScrollPosition = { index, offset ->
+                        viewModel.saveGridScrollPosition(bucketName, index, offset)
+                    }
+                )
+            }
         }
 
         // ── Initial sync loading ────────────────────────────────────────────
