@@ -178,7 +178,7 @@
     <string name="setting_face_clustering">Riconoscimento facciale e persone</string>
     <string name="setting_face_clustering_desc">Raggruppa volti simili in album privati delle persone sul dispositivo</string>
     <string name="setting_ocr_search">Ricerca testo OCR sul dispositivo</string>
-    <string name="setting_ocr_search_desc">Cerca testo all\'interno di screenshot, cartelli, documenti e ricevute</string>
+    <string name="setting_ocr_search_desc">Cerca testo all'interno di screenshot, cartelli, documenti e ricevute</string>
     <string name="setting_download_models">Scarica modelli IA</string>
     <string name="setting_model_status_ready">Pronto e installato</string>
     <string name="setting_rescan_faces">Scansiona nuovamente tutti i volti</string>
@@ -195,7 +195,7 @@
     <string name="setting_github_repo">Repository GitHub</string>
     <string name="setting_github_repo_sub">Visualizza il codice sorgente, aggiungi una stella al progetto o contribuisci</string>
     <string name="setting_report_bug">Segnala bug o invia feedback</string>
-    <string name="setting_report_bug_sub">Apri una segnalazione sull\'issue tracker di GitHub</string>
+    <string name="setting_report_bug_sub">Apri una segnalazione sull'issue tracker di GitHub</string>
     <string name="setting_update_log">Registro modifiche e aggiornamenti</string>
     <string name="detail_share">Condividi</string>
     <string name="detail_edit">Modifica</string>
@@ -278,7 +278,7 @@
     <string name="utility_clean_up">Pulizia</string>
     <string name="doc_books_magazines">Libri e riviste</string>
     <string name="doc_events">Eventi</string>
-    <string name="doc_ids">Documenti d\'identità</string>
+    <string name="doc_ids">Documenti d'identità</string>
     <string name="doc_notes">Note</string>
     <string name="doc_payments">Pagamenti e carte</string>
     <string name="doc_receipts">Ricevute</string>
@@ -302,7 +302,7 @@
     <string name="days_count">%1$d giorni</string>
     <string name="setting_recents_security_title">Sicurezza schermo e app recenti</string>
     <string name="setting_hide_recents">Nascondi contenuti nelle app recenti</string>
-    <string name="setting_hide_recents_sub">Impedisci la visualizzazione dei contenuti dell\'app nella schermata delle app recenti (disattiva anche gli screenshot)</string>
+    <string name="setting_hide_recents_sub">Impedisci la visualizzazione dei contenuti dell'app nella schermata delle app recenti (disattiva anche gli screenshot)</string>
     <string name="setting_metadata_privacy_title">Privacy dei metadati</string>
     <string name="setting_strip_metadata_title">Rimuovi metadati prima di condividere</string>
     <string name="setting_strip_metadata_sub">Rimuovi GPS, specifiche della fotocamera, data e ora, fuso orario e dettagli sull\'autore durante la condivisione</string>
@@ -317,7 +317,7 @@
     <string name="about_update_log">Registro aggiornamenti</string>
     <string name="about_update_log_sub">Cronologia di ogni versione: date, build e modifiche</string>
     <string name="about_auto_check">Controllo automatico aggiornamenti</string>
-    <string name="about_auto_check_sub">Notifica la disponibilità di aggiornamenti all\'avvio dell\'app e in background</string>
+    <string name="about_auto_check_sub">Notifica la disponibilità di aggiornamenti all'avvio dell'app e in background</string>
     <string name="about_community_support">Community e supporto</string>
     <string name="about_privacy_opensource">Privacy e open source</string>
     <string name="about_project_opensource">Progetto e open source</string>
@@ -327,7 +327,7 @@
     <string name="update_status_checking">Controllo aggiornamenti in corso…</string>
     <string name="update_status_available">v%1$s disponibile! Tocca per aggiornare</string>
     <string name="update_status_uptodate">Installata: v%1$s (Aggiornata)</string>
-    <string name="update_status_downloaded">v%1$s scaricata. Pronta per l\'installazione</string>
+    <string name="update_status_downloaded">v%1$s scaricata. Pronta per l'installazione</string>
     <string name="update_status_build">Installata: v%1$s (Build %2$d)</string>
     <string name="setting_display_preferences_title">Preferenze di visualizzazione</string>
     <string name="setting_media_viewer_title">Visualizzatore multimediale</string>
@@ -345,7 +345,7 @@
     <string name="setting_blur_viewer_bg_title">Sfoca sfondo visualizzatore</string>
     <string name="setting_blur_viewer_bg_sub">Mostra una versione sfocata della foto sullo sfondo nel visualizzatore a schermo intero</string>
     <string name="setting_zoom_navigator_title">Navigatore riquadro zoom</string>
-    <string name="setting_zoom_navigator_sub">Mostra una miniatura nell\'angolo per orientarti quando ingrandisci l\'immagine</string>
+    <string name="setting_zoom_navigator_sub">Mostra una miniatura nell'angolo per orientarti quando ingrandisci l'immagine</string>
     <string name="setting_max_brightness_title">Massimizza luminosità a schermo intero</string>
     <string name="setting_max_brightness_sub">Aumenta temporaneamente al massimo la luminosità dello schermo quando visualizzi contenuti a schermo intero</string>
     <string name="setting_use_system_font_title">Usa carattere di sistema</string>
@@ -361,7 +361,7 @@
     <string name="setting_restore_spotlight_title">Ripristina banner Ricordi in evidenza</string>
     <string name="setting_restore_spotlight_sub">Mostra nuovamente il banner dei ricordi nascosto nella schermata principale</string>
     <string name="setting_font_scale_title">Dimensione carattere</string>
-    <string name="setting_font_scale_sub">Regola la flessibilità delle dimensioni del testo nell\'app</string>
+    <string name="setting_font_scale_sub">Regola la flessibilità delle dimensioni del testo nell'app</string>
     <string name="setting_live_typography_preview">Anteprima tipografia dal vivo</string>
     <string name="setting_live_typography_desc">Il testo si ridistribuisce dinamicamente con una gerarchia di layout espressiva e interlinee proporzionali.</string>
     <string name="setting_live_layout_preview">Anteprima layout dal vivo</string>
@@ -391,8 +391,8 @@
     <string name="dialog_folder_name_label">Nome cartella</string>
     <string name="dialog_discard_edits_title">Scartare le modifiche?</string>
     <string name="dialog_discard_edits_msg">Se torni indietro ora, tutte le modifiche apportate in questa sessione andranno perse.</string>
-    <string name="sheet_copy_to_album">Copia nell\'album</string>
-    <string name="sheet_move_to_album">Sposta nell\'album</string>
+    <string name="sheet_copy_to_album">Copia nell'album</string>
+    <string name="sheet_move_to_album">Sposta nell'album</string>
     <string name="sheet_copy_here">Copia qui</string>
     <string name="sheet_move_here">Sposta qui</string>
     <string name="menu_view_mode">Modalità di visualizzazione</string>
@@ -457,7 +457,7 @@
     <string name="dialog_clear_face_msg">Questa operazione eliminerà tutti i volti raggruppati, le persone riconosciute e i nomi personalizzati. Vuoi procedere?</string>
     <string name="dialog_clear_all_faces_confirm">Cancella tutti i volti</string>
     <string name="dialog_clear_smart_search_title">Cancella indice ricerca intelligente</string>
-    <string name="dialog_clear_smart_search_msg">Questa operazione eliminerà tutti gli embedding delle immagini calcolati per la ricerca semantica. Dovrai eseguire nuovamente l\'indicizzazione per usare la ricerca intelligente. Vuoi procedere?</string>
+    <string name="dialog_clear_smart_search_msg">Questa operazione eliminerà tutti gli embedding delle immagini calcolati per la ricerca semantica. Dovrai eseguire nuovamente l'indicizzazione per usare la ricerca intelligente. Vuoi procedere?</string>
     <string name="dialog_delete_ai_models_title">Elimina file dei modelli IA</string>
     <string name="dialog_delete_ai_models_msg">Questa operazione eliminerà i file locali del modello ONNX (circa 150 MB). Non potrai usare la ricerca semantica né indicizzare nuove immagini finché non li scaricherai di nuovo. Confermi?</string>
     <string name="dialog_delete_files_confirm">Elimina file</string>
