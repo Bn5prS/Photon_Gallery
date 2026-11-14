@@ -215,7 +215,7 @@ class SmartSearchIndexWorker(
             }
 
             safeSetForeground("Loading AI model…")
-            searchEngine.loadModel()
+            searchEngine.loadVisionModel()
 
             val db = DatabaseProvider.getDatabase(applicationContext)
 
@@ -430,6 +430,7 @@ class SmartSearchIndexWorker(
             Log.e(TAG, "SmartSearchIndexWorker failed fatally: ${e.message}", e)
             return Result.retry()
         } finally {
+            searchEngine.unloadVisionModel()
             val db = DatabaseProvider.getDatabase(applicationContext)
             val total = runCatching { db.mediaDao().getTotalImageCount() }.getOrDefault(0)
             val unindexed = runCatching { db.embeddingDao().getUnindexedMediaIds().size }.getOrDefault(0)

@@ -247,6 +247,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = com.inferno.gallery.data.MemoriesCarouselStyle.SPOTLIGHT
     )
 
+    val pinnedAlbumsStyle: StateFlow<com.inferno.gallery.data.PinnedAlbumsStyle> = settingsRepository.pinnedAlbumsStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT
+    )
+
     fun dismissMemories() {
         _isMemoriesDismissed.value = true
         viewModelScope.launch(Dispatchers.IO) {
@@ -731,7 +737,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val showVideosInDock: StateFlow<Boolean> = settingsRepository.showVideosInDockFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
+        initialValue = true
     )
 
     fun setShowVideosInDock(show: Boolean) {
@@ -801,6 +807,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     )
     val nativeTimelineItems: StateFlow<List<com.inferno.gallery.data.NativeTimelineItem>> =
         nativeTimelineRepository.timelineItems
+
+    val nativeTimelineSnapshot: StateFlow<com.inferno.gallery.data.NativeTimelineRepository.TimelineSnapshot> =
+        nativeTimelineRepository.timelineSnapshot
+
+    fun getCachedTimelineItems(bucket: String?): List<com.inferno.gallery.data.NativeTimelineItem> =
+        nativeTimelineRepository.getCachedItems(bucket)
 
     val isNativeTimelineLoading: StateFlow<Boolean> =
         nativeTimelineRepository.isLoading
@@ -1491,12 +1503,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(application)
                 if (searchEngine.isModelDownloaded()) {
-                    Log.d("GalleryViewModel", "Pre-warming Smart Search Engine...")
-                    searchEngine.loadModel()
-                    Log.d("GalleryViewModel", "Smart Search Engine pre-warmed successfully.")
+                    Log.d("GalleryViewModel", "Pre-warming Smart Search tokenizer...")
+                    searchEngine.prewarmTokenizer()
                 }
             } catch (e: Exception) {
-                Log.w("GalleryViewModel", "Failed to pre-warm Smart Search Engine: ${e.message}")
+                Log.w("GalleryViewModel", "Failed to pre-warm Smart Search tokenizer: ${e.message}")
             }
         }
     }
@@ -2375,14 +2386,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         try {
                             val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication())
                             if (searchEngine.isModelDownloaded()) {
-                                if (!searchEngine.isLoaded()) {
-                                    searchEngine.loadModel()
-                                }
+                                searchEngine.loadTextModel()
                                 val queryVector = searchEngine.encodeText(query)
                                 val allEmbeddings = database.embeddingDao().getAllEmbeddings()
                                 if (allEmbeddings.isEmpty()) return@async emptyList()
 
-                                val minConfidence = 0.235f
+                                val minConfidence = 0.145f
                                 android.util.Log.i(
                                     "GalleryViewModel",
                                     "Smart search for: '$query'. Query vector sample: [${queryVector.take(3).joinToString(", ")}], Total DB embeddings: ${allEmbeddings.size}, MinConfidence: $minConfidence"
@@ -2401,9 +2410,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
                                 val tokenCount = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.size
                                 val adaptiveGap = when {
-                                    tokenCount <= 1 -> 0.070f // Broad query: increase recall for single words (e.g. "car", "dog", "sunset")
-                                    tokenCount == 2 -> 0.058f
-                                    else -> 0.045f            // Specific query (e.g. "red sports car in rain")
+                                    tokenCount <= 1 -> 0.030f // Broad query: increase recall for single words (e.g. "car", "dog", "sunset")
+                                    tokenCount == 2 -> 0.022f
+                                    else -> 0.016f            // Specific query (e.g. "red sports car in rain")
                                 }
                                 val adaptiveThreshold = maxOf(minConfidence, topScore - adaptiveGap)
                                 val maxResults = 200
@@ -2426,7 +2435,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                             val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                                             val score = scoreMap[entity.id]
                                             val snippet = score?.let {
-                                                val pct = (((it - 0.235f) / (0.330f - 0.235f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
+                                                val pct = (((it - 0.145f) / (0.260f - 0.145f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
                                                 "$pct% match"
                                             }
                                             GalleryItem(
@@ -2471,7 +2480,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val smartScoreMap = smartResults.associate { it.id to (it.searchScore ?: 0f) }
                     ftsResults.sortByDescending { item ->
                         val semanticScore = smartScoreMap[item.id] ?: 0f
-                        if (semanticScore > 0.235f) 10f + semanticScore else 1f
+                        if (semanticScore > 0.145f) 10f + semanticScore else 1f
                     }
 
                     val cleanQ = query.trim()

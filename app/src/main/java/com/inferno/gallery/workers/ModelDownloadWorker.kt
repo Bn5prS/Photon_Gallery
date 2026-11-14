@@ -35,23 +35,32 @@ class ModelDownloadWorker(
         private const val NOTIFICATION_ID = 55
         private const val CHANNEL_ID = "model_download_channel"
 
-        const val TEXT_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v2/text_model_quantized.onnx"
-        const val VISION_MODEL_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v2/vision_model_quantized.onnx"
-        const val TOKENIZER_URL = "https://github.com/Bn5prS/Photon_Gallery/releases/download/models-v2/tokenizer.json"
+        const val BASE_MODEL_URL = "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX/resolve/main"
+        const val TEXT_MODEL_URL = "$BASE_MODEL_URL/text.onnx"
+        const val TEXT_DATA_URL = "$BASE_MODEL_URL/text.onnx.data"
+        const val VISION_MODEL_URL = "$BASE_MODEL_URL/visual.onnx"
+        const val VISION_DATA_URL = "$BASE_MODEL_URL/visual.onnx.data"
+        const val TOKENIZER_URL = "$BASE_MODEL_URL/tokenizer.json"
 
-        const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
-        const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
+        const val TEXT_MODEL_NAME = "text.onnx"
+        const val TEXT_DATA_NAME = "text.onnx.data"
+        const val VISION_MODEL_NAME = "visual.onnx"
+        const val VISION_DATA_NAME = "visual.onnx.data"
         const val TOKENIZER_NAME = "tokenizer.json"
 
-        const val VISION_MODEL_SIZE = 36_735_889L
-        const val TEXT_MODEL_SIZE = 64_117_260L
-        const val TOKENIZER_SIZE = 2_224_081L
+        const val VISION_MODEL_SIZE = 2_310_022L
+        const val VISION_DATA_SIZE = 143_589_376L
+        const val TEXT_MODEL_SIZE = 1_517_435L
+        const val TEXT_DATA_SIZE = 253_755_392L
+        const val TOKENIZER_SIZE = 3_642_035L
 
-        const val TEXT_MODEL_SHA256 = "f8aaa97cf17fbadd78b0bd6d5f6a1c57f712402cacc3055ea92c1a3331357dfe"
-        const val VISION_MODEL_SHA256 = "16e40c4f6be7111ebc8230d0ae8dce6314a1e5e3ac010584e9c256e7acb7262d"
-        const val TOKENIZER_SHA256 = "72ed5c96db5729294468543e4bc75fce14ca63f58e37300290189ba1c1e52b85"
-        const val MODEL_DIR = "smart_search_model_v4"
-        const val SEMANTIC_MODEL_VERSION = 4
+        const val TEXT_MODEL_SHA256 = "c7046e2a3c4078fd0b10865f3063bfa8e89c0808de3bd2fcaf89ba0d0a2fe90f"
+        const val TEXT_DATA_SHA256 = "b0e6225b1a9e8b15b1abedcc430ebb369c9695831c9b0922acf9e83906e03e47"
+        const val VISION_MODEL_SHA256 = "8bb691c4085f8767c8237e324816a430f8264b5c2d4542ec2d9f88d701faa823"
+        const val VISION_DATA_SHA256 = "365f1b95476a0852aaf5b136432383ff9405eedc3deb5347c2b8398a3838f50c"
+        const val TOKENIZER_SHA256 = "43d4281659ce30b6aca2c7485944b3d73925bb7f87c7234daf3b6b094a6d618c"
+        const val MODEL_DIR = "smart_search_model_v7"
+        const val SEMANTIC_MODEL_VERSION = 7
     }
 
     private data class DownloadTarget(
@@ -113,7 +122,7 @@ class ModelDownloadWorker(
         (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         try {
             // Clean up any legacy model directories from previous versions
-            listOf("smart_search_model_v1", "smart_search_model_v2", "smart_search_model_v3").forEach { legacyDirName ->
+            listOf("smart_search_model_v1", "smart_search_model_v2", "smart_search_model_v3", "smart_search_model_v4", "smart_search_model_v5", "smart_search_model_v6").forEach { legacyDirName ->
                 val legacyDir = File(applicationContext.filesDir, legacyDirName)
                 if (legacyDir.exists()) {
                     try { legacyDir.deleteRecursively() } catch (_: Exception) {}
@@ -136,7 +145,9 @@ class ModelDownloadWorker(
             val downloadTargets = listOf(
                 DownloadTarget(TOKENIZER_URL, TOKENIZER_NAME, TOKENIZER_SIZE, TOKENIZER_SHA256),
                 DownloadTarget(TEXT_MODEL_URL, TEXT_MODEL_NAME, TEXT_MODEL_SIZE, TEXT_MODEL_SHA256),
-                DownloadTarget(VISION_MODEL_URL, VISION_MODEL_NAME, VISION_MODEL_SIZE, VISION_MODEL_SHA256)
+                DownloadTarget(TEXT_DATA_URL, TEXT_DATA_NAME, TEXT_DATA_SIZE, TEXT_DATA_SHA256),
+                DownloadTarget(VISION_MODEL_URL, VISION_MODEL_NAME, VISION_MODEL_SIZE, VISION_MODEL_SHA256),
+                DownloadTarget(VISION_DATA_URL, VISION_DATA_NAME, VISION_DATA_SIZE, VISION_DATA_SHA256)
             )
 
             val totalBytesExpected = downloadTargets.sumOf { it.expectedSize }

@@ -59,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Fotos, Orte, Daten, Texte suchen...</string>
     <string name="smart_search">Intelligente Suche</string>
-    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by MobileCLIP-S2</string>
+    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by SigLIP 2 Base</string>
     <string name="recent_searches">Letzte Suchanfragen</string>
     <string name="clear_search_history">Suchverlauf löschen</string>
     <string name="no_search_results">Keine Ergebnisse gefunden</string>
@@ -103,7 +103,10 @@
 
     <!-- Onboarding &amp; Language -->
     <string name="onboarding_welcome_to">Willkommen bei</string>
-    <string name="onboarding_welcome_tagline">Ein privater, schöner Ort für all deine Erinnerungen.</string>
+    <string name="onboarding_welcome_tagline">Eine Open-Source-Galerie zum Durchsuchen, Organisieren und Finden Ihrer Medienbibliothek.</string>
+    <string name="onboarding_action_get_started">Loslegen</string>
+    <string name="onboarding_permissions_header">Medienzugriff</string>
+    <string name="onboarding_permissions_subtitle">Photon Gallery benötigt Zugriff auf Ihren Speicher, um Ihre Fotos und Videos anzuzeigen und zu organisieren. Ihre Daten bleiben vollständig auf Ihrem Gerät.</string>
     <string name="onboarding_required_permissions">Erforderliche Berechtigungen</string>
     <string name="onboarding_perm_photos_videos_title">Zugriff auf Fotos und Videos</string>
     <string name="onboarding_perm_photos_videos_desc">Erforderlich zum Anzeigen, Verwalten und Organisieren deiner Foto- und Videogalerie</string>
@@ -175,7 +178,7 @@
     <string name="setting_memories">Erinnerungs-Highlights</string>
     <string name="setting_memories_sub">Karten mit Erinnerungen an diesen Tag oben in der Galerie anzeigen</string>
     <string name="setting_smart_search_title">Semantische KI-Suche</string>
-    <string name="setting_smart_search_desc">Lokale MobileCLIP-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
+    <string name="setting_smart_search_desc">Lokale SigLIP 2-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
     <string name="setting_face_clustering">Gesichtserkennung &amp; Personen</string>
     <string name="setting_face_clustering_desc">Ähnliche Gesichter in privaten Personenalben auf dem Gerät gruppieren</string>
     <string name="setting_ocr_search">Lokale OCR-Textsuche</string>

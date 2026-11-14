@@ -7,8 +7,8 @@ import org.junit.Test
 class SemanticSearchScoringTest {
 
     companion object {
-        const val MIN_CONFIDENCE = 0.235f
-        const val MARGIN = 0.055f
+        const val MIN_CONFIDENCE = 0.040f
+        const val MARGIN = 0.015f
 
         fun filterMatches(scored: List<Pair<Long, Float>>): List<Pair<Long, Float>> {
             val topScore = scored.firstOrNull()?.second ?: return emptyList()
@@ -19,33 +19,33 @@ class SemanticSearchScoringTest {
         }
 
         fun calculateDisplayPercentage(score: Float): Int {
-            return (((score - 0.235f) / (0.330f - 0.235f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
+            return (((score - 0.040f) / (0.100f - 0.040f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
         }
     }
 
     @Test
     fun testRejectsNoiseWhenConceptAbsent() {
-        // When searching for an absent concept in a gallery,
-        // background noise sits around ~0.15-0.22. Top score 0.225 must be rejected cleanly.
+        // When searching for an absent concept in a gallery with MobileCLIP-S2,
+        // background noise sits below ~0.038. Top score 0.038 must be rejected cleanly.
         val noiseScores = listOf(
-            1L to 0.225f,
-            2L to 0.210f,
-            3L to 0.190f,
-            4L to 0.170f
+            1L to 0.038f,
+            2L to 0.030f,
+            3L to 0.020f,
+            4L to 0.010f
         )
         val result = filterMatches(noiseScores)
-        assertTrue("Must return empty list when top score is below 0.235 noise floor", result.isEmpty())
+        assertTrue("Must return empty list when top score is below 0.040 noise floor", result.isEmpty())
     }
 
     @Test
     fun testRetainsHighConfidenceMatchesWithinMargin() {
-        // When a real concept exists, e.g. topScore = 0.295 ("dog"), adaptiveThreshold = maxOf(0.235, 0.295 - 0.055) = 0.240
+        // When a real concept exists, e.g. topScore = 0.080 ("dog"), adaptiveThreshold = maxOf(0.040, 0.080 - 0.015) = 0.065
         val matches = listOf(
-            1L to 0.295f,
-            2L to 0.275f,
-            3L to 0.255f,
-            4L to 0.242f,
-            5L to 0.220f  // Below 0.240 threshold -> rejected
+            1L to 0.080f,
+            2L to 0.075f,
+            3L to 0.070f,
+            4L to 0.066f,
+            5L to 0.050f  // Below 0.065 threshold -> rejected
         )
         val result = filterMatches(matches)
         assertEquals(4, result.size)
@@ -57,12 +57,12 @@ class SemanticSearchScoringTest {
 
     @Test
     fun testCalibratedDisplayPercentage() {
-        // 0.235 threshold starts at 60%
-        assertEquals(60, calculateDisplayPercentage(0.235f))
-        // 0.278 score maps to ~75%
-        assertEquals(75, calculateDisplayPercentage(0.278f))
-        // 0.330+ hero score maps to 95%+
-        assertEquals(95, calculateDisplayPercentage(0.330f))
-        assertEquals(99, calculateDisplayPercentage(0.350f))
+        // 0.040 threshold starts at 60%
+        assertEquals(60, calculateDisplayPercentage(0.040f))
+        // 0.065 score maps to ~74%
+        assertEquals(74, calculateDisplayPercentage(0.065f))
+        // 0.100+ hero score maps to 95%+
+        assertEquals(95, calculateDisplayPercentage(0.100f))
+        assertEquals(99, calculateDisplayPercentage(0.120f))
     }
 }

@@ -186,6 +186,7 @@ fun SettingsScreen(
     val showMemories by viewModel.showMemories.collectAsState()
     val memoriesDismissed by viewModel.memoriesDismissed.collectAsState()
     val memoriesCarouselStyle by viewModel.memoriesCarouselStyle.collectAsState()
+    val pinnedAlbumsStyle by viewModel.pinnedAlbumsStyle.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
@@ -1335,6 +1336,91 @@ fun SettingsScreen(
                                             )
                                         }
                                     }
+                                    add {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.M),
+                                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.setting_pinned_albums_style_title),
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+
+                                            Surface(
+                                                shape = ShapeFull,
+                                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 0.dp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(44.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(4.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    val styles = com.inferno.gallery.data.PinnedAlbumsStyle.entries
+                                                    styles.forEachIndexed { index, style ->
+                                                        val isSelected = style == pinnedAlbumsStyle
+                                                        val shape = com.inferno.gallery.ui.theme.getSegmentShape(
+                                                            index = index,
+                                                            total = styles.size,
+                                                            outerCorner = 20.dp,
+                                                            innerCorner = 6.dp
+                                                        )
+                                                        Surface(
+                                                            shape = shape,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                            tonalElevation = 0.dp,
+                                                            shadowElevation = 0.dp,
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .fillMaxHeight()
+                                                                .clip(shape)
+                                                                .clickable { viewModel.setPinnedAlbumsStyle(style) }
+                                                        ) {
+                                                            Box(
+                                                                contentAlignment = Alignment.Center,
+                                                                modifier = Modifier.fillMaxSize()
+                                                            ) {
+                                                                val label = when (style) {
+                                                                    com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT -> stringResource(R.string.setting_pinned_albums_style_default)
+                                                                    com.inferno.gallery.data.PinnedAlbumsStyle.PORTRAIT -> stringResource(R.string.setting_pinned_albums_style_portrait)
+                                                                    com.inferno.gallery.data.PinnedAlbumsStyle.SPOTLIGHT -> stringResource(R.string.setting_pinned_albums_style_spotlight)
+                                                                }
+                                                                Text(
+                                                                    text = label,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                                    ),
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            val desc = when (pinnedAlbumsStyle) {
+                                                com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT -> stringResource(R.string.setting_pinned_albums_style_default_desc)
+                                                com.inferno.gallery.data.PinnedAlbumsStyle.PORTRAIT -> stringResource(R.string.setting_pinned_albums_style_portrait_desc)
+                                                com.inferno.gallery.data.PinnedAlbumsStyle.SPOTLIGHT -> stringResource(R.string.setting_pinned_albums_style_spotlight_desc)
+                                            }
+                                            Text(
+                                                text = desc,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
                             )
 
@@ -1736,7 +1822,7 @@ fun SettingsScreen(
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "MobileCLIP-S2 (FastViT)",
+                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
                                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
@@ -1796,20 +1882,20 @@ fun SettingsScreen(
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text("Download AI Model (~103 MB)")
+                                                Text("Download AI Model (~386 MB)")
                                             }
                                         }
 
                                         ModelSpecificationsDrawer(
                                             specs = listOf(
-                                                "Architecture" to "Apple MobileCLIP FastViT",
-                                                "Quantization" to "ONNX INT8 Quantized",
-                                                "Inference" to "CPU (Arm Neon / NPU)",
-                                                "Model Footprint" to "~103 MB"
+                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
+                                                "Quantization" to "ONNX FP32 (Full Precision)",
+                                                "Inference" to "CPU (Arm Neon)",
+                                                "Model Footprint" to "~386 MB"
                                             ),
                                             links = listOf(
-                                                ModelLinkItem("Hugging Face Weights ↗", "https://huggingface.co/Xenova/mobileclip_s2"),
-                                                ModelLinkItem("GitHub Release ↗", "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v2")
+                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
+                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
                                             )
                                         )
                                     }
@@ -1864,7 +1950,7 @@ fun SettingsScreen(
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "MobileCLIP-S2 (FastViT)",
+                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
                                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
@@ -1982,14 +2068,14 @@ fun SettingsScreen(
 
                                         ModelSpecificationsDrawer(
                                             specs = listOf(
-                                                "Architecture" to "Apple MobileCLIP FastViT",
-                                                "Quantization" to "ONNX INT8 Quantized",
-                                                "Inference" to "CPU (Arm Neon / NPU)",
-                                                "Model Footprint" to "~103 MB"
+                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
+                                                "Quantization" to "ONNX FP32 (Full Precision)",
+                                                "Inference" to "CPU (Arm Neon)",
+                                                "Model Footprint" to "~386 MB"
                                             ),
                                             links = listOf(
-                                                ModelLinkItem("Hugging Face Weights ↗", "https://huggingface.co/Xenova/mobileclip_s2"),
-                                                ModelLinkItem("GitHub Release ↗", "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v2")
+                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
+                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
                                             )
                                         )
                                     }
@@ -3457,7 +3543,7 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
         "Coil 3 Image Loading" to "Apache License 2.0 • Coil Contributors",
         "Room Database" to "Apache License 2.0 • Google LLC",
         "ONNX Runtime" to "MIT License • Microsoft Corp.",
-        "Apple MobileCLIP-S2" to "MIT License • Apple / Xenova",
+        "Apple MobileCLIP2-S2" to "MIT License • Apple / RuteNL",
         "MobileFaceNet" to "MIT License • InsightFace",
         "Roboto Flex & Google Sans Flex" to "SIL Open Font License 1.1 • Google LLC",
         "AndroidX WorkManager" to "Apache License 2.0 • Google LLC",

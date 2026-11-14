@@ -59,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Rechercher photos, lieux, dates, texte...</string>
     <string name="smart_search">Recherche intelligente</string>
-    <string name="smart_search_description">Recherche en langage naturel sur l’appareil optimisée par MobileCLIP-S2</string>
+    <string name="smart_search_description">Recherche en langage naturel sur l’appareil optimisée par SigLIP 2 Base</string>
     <string name="recent_searches">Recherches récentes</string>
     <string name="clear_search_history">Effacer l’historique de recherche</string>
     <string name="no_search_results">Aucun résultat trouvé</string>
@@ -103,7 +103,10 @@
 
     <!-- Onboarding &amp; Language -->
     <string name="onboarding_welcome_to">Bienvenue sur</string>
-    <string name="onboarding_welcome_tagline">Un espace privé et élégant pour tous vos souvenirs.</string>
+    <string name="onboarding_welcome_tagline">Une galerie open-source pour parcourir, organiser et rechercher votre médiathèque.</string>
+    <string name="onboarding_action_get_started">Commencer</string>
+    <string name="onboarding_permissions_header">Accès aux médias</string>
+    <string name="onboarding_permissions_subtitle">Photon Gallery a besoin de l\'accès au stockage pour afficher et organiser vos photos et vidéos. Vos médias restent strictement sur votre appareil.</string>
     <string name="onboarding_required_permissions">Autorisations requises</string>
     <string name="onboarding_perm_photos_videos_title">Accès aux photos et vidéos</string>
     <string name="onboarding_perm_photos_videos_desc">Nécessaire pour afficher, organiser et gérer votre bibliothèque de photos et vidéos</string>
@@ -175,7 +178,7 @@
     <string name="setting_memories">Souvenirs en vedette</string>
     <string name="setting_memories_sub">Afficher les cartes souvenirs \'Ce jour-là\' en haut de la galerie</string>
     <string name="setting_smart_search_title">Recherche sémantique IA</string>
-    <string name="setting_smart_search_desc">Recherche visuelle MobileCLIP sur l\'appareil avec description en langage naturel</string>
+    <string name="setting_smart_search_desc">Recherche visuelle SigLIP 2 sur l\'appareil avec description en langage naturel</string>
     <string name="setting_face_clustering">Reconnaissance faciale et personnes</string>
     <string name="setting_face_clustering_desc">Regrouper les visages similaires dans des albums de personnes hors ligne</string>
     <string name="setting_ocr_search">Recherche de texte OCR sur l\'appareil</string>
