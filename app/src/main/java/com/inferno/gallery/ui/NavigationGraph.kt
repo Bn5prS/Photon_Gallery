@@ -173,10 +173,25 @@ fun NavigationGraph(
 
             composable(
                 route = "gallery",
-                enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
-                exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
-                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
-                popExitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) }
+                enterTransition = { fadeIn(animationSpec = MotionTokens.snappySpring()) },
+                exitTransition = {
+                    scaleOut(
+                        targetScale = 0.93f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                },
+                popEnterTransition = {
+                    scaleIn(
+                        initialScale = 0.93f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+                },
+                popExitTransition = {
+                    scaleOut(
+                        targetScale = 0.93f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                }
             ) {
                 MainAppLayout(
                     sharedTransitionScope = this@SharedTransitionLayout,
@@ -227,19 +242,29 @@ fun NavigationGraph(
                     navArgument("bucketName") { type = NavType.StringType; nullable = true; defaultValue = null },
                     navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null }
                 ),
-                enterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
-                exitTransition = { fadeOut(MotionTokens.fastEffectsSpec()) },
-                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
-                popExitTransition = {
+                enterTransition = {
+                    scaleIn(
+                        initialScale = 0.88f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+                },
+                exitTransition = {
                     slideOutHorizontally(
-                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                        targetOffsetX = { (it * 0.25f).toInt() }
-                    ) + scaleOut(
-                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedAccelerateEasing),
-                        targetScale = 0.88f
-                    ) + fadeOut(
-                        animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
-                    )
+                        animationSpec = MotionTokens.snappySpring(),
+                        targetOffsetX = { -(it * 0.15f).toInt() }
+                    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                },
+                popEnterTransition = {
+                    slideInHorizontally(
+                        animationSpec = MotionTokens.snappySpring(),
+                        initialOffsetX = { -(it * 0.15f).toInt() }
+                    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+                },
+                popExitTransition = {
+                    scaleOut(
+                        targetScale = 0.88f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
                 }
             ) { backStackEntry ->
                 val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
