@@ -1,0 +1,13 @@
+Photon Gallery es una galería de Android de código abierto y totalmente sin conexión, diseñada en torno a la privacidad, un rendimiento fluido y una estética Material 3 Expressive cuidada.
+
+Funciones principales:
+• Navegación fluida por los archivos: cuadrícula adaptable con transiciones suaves de pellizco para ampliar, número de columnas configurable y carga instantánea de fotos y vídeos.
+• Interfaz Material 3 Expressive: superficies con cinco niveles de elevación, animaciones de transformación de formas, física de muelles, temas dinámicos con el fondo de pantalla (Material You) y tipografía seleccionada.
+• Personas y agrupación de rostros: reconocimiento facial 100 % en el dispositivo, agrupación automática y sugerencias inteligentes de combinación, con privacidad total y sin subir nada a la nube.
+• Búsqueda inteligente y OCR en el dispositivo: búsqueda semántica por IA (CLIP) y reconocimiento óptico de caracteres totalmente sin conexión, sin seguimiento en la nube.
+• Editor de fotos y anotaciones: juego completo de dibujo (rotulador, subrayador, pincel neón, censura por desenfoque, formas y texto interactivo), filtros y creación de collages.
+• Limpieza de metadatos: eliminación a nivel de byte de los metadatos de todos los formatos (JPEG, PNG, WebP, GIF animados y vídeos MP4/MOV), con rotación automática a la orientación correcta.
+• Visor a pantalla completa y reproductor de vídeo: zoom profundo, fondo desenfocado, tira de miniaturas por gestos, inspector completo de EXIF y reproducción de fotos en movimiento.
+• Álbumes y colecciones: agrupaciones automáticas por fecha, álbumes fijados, exclusión de carpetas y portadas personalizadas.
+• Caja fuerte (espacio privado): caja fuerte aislada y protegida con biometría y cifrado del propio dispositivo.
+• Buscador de duplicados y papelera: detección de duplicados por hash perceptual y papelera con borrado diferido y limpieza automática.

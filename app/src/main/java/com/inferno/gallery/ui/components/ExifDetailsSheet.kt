@@ -1499,7 +1499,7 @@ private fun DeepMetadataInspectorSheet(
                         IconButton(onClick = { searchQuery = "" }) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                contentDescription = "Clear",
+                                contentDescription = stringResource(R.string.cd_clear_search),
                                 modifier = Modifier.size(16.dp)
                             )
                         }
