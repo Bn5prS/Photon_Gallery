@@ -96,7 +96,11 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val noMediaCache = HashMap<String, Boolean>()
 
                 for (dbItem in dbList) {
-                    if (dbItem.bucketName == "Trash") continue
+                    if (dbItem.bucketName == "Trash") {
+                        // Trash items are reconciled authoritatively via MediaStore trashedMediaIds below
+                        // because Android renames trashed files on disk to .trashed-<ts>-<name>.
+                        continue
+                    }
                     if (dbItem.filePath.isNotBlank()) {
                         val file = File(dbItem.filePath)
                         val fileExists = file.exists()
@@ -162,12 +166,12 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     if (vaultUris.contains(media.uri.toString()) || vaultPaths.contains(media.path)) {
                         continue
                     }
-                    if (media.bucketName != "Trash" && media.path.isNotBlank()) {
+                    if (media.path.isNotBlank()) {
                         val file = File(media.path)
                         if (!file.exists()) {
                             continue
                         }
-                        if (!showHiddenAlbums && NoMediaUtils.isPathHiddenByNoMedia(media.path, noMediaCache)) {
+                        if (media.bucketName != "Trash" && !showHiddenAlbums && NoMediaUtils.isPathHiddenByNoMedia(media.path, noMediaCache)) {
                             continue
                         }
                     }
@@ -215,6 +219,12 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 if (missingTrashIds.isNotEmpty()) {
                     val trashedItems = mediaRepository.getImagesListForSync("Trash", null)
                     for (media in trashedItems) {
+                        if (vaultUris.contains(media.uri.toString()) || vaultPaths.contains(media.path)) {
+                            continue
+                        }
+                        if (media.path.isNotBlank() && !File(media.path).exists()) {
+                            continue
+                        }
                         if (!dbMap.containsKey(media.id)) {
                             toInsert.add(
                                 CoreMediaEntity(
@@ -246,8 +256,11 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val restoredByBucket = mutableMapOf<String, MutableList<Long>>()
                 for (dbItem in dbList) {
                     if (dbItem.bucketName == "Trash") {
-                        if (trashedMediaIds.contains(dbItem.id)) {
-                            // Still confirmed in MediaStore trash -> retain in Room SSOT
+                        if (deadIds.contains(dbItem.id)) {
+                            // File no longer exists on disk -> permanently deleted
+                            toDelete.add(dbItem.id)
+                        } else if (trashedMediaIds.contains(dbItem.id)) {
+                            // Still confirmed in MediaStore trash and on disk -> retain in Room SSOT
                             continue
                         } else if (allMediaStoreIds.contains(dbItem.id)) {
                             // Restored in MediaStore! Restore to original parent bucket

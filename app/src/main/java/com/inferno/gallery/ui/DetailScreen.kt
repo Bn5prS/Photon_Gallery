@@ -447,24 +447,42 @@ fun DetailScreen(
     }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
+    val isTrashItemExists: suspend (GalleryItem) -> Boolean = { item ->
+        if (bucketName == "Trash" || item.bucketName == "Trash") {
+            try {
+                context.contentResolver.openFileDescriptor(item.uri, "r")?.use { true } ?: false
+            } catch (_: java.io.FileNotFoundException) {
+                false
+            } catch (_: Exception) {
+                true
+            }
+        } else if (item.path.isNotBlank()) {
+            val file = java.io.File(item.path)
+            val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
+            val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
+            file.exists() && !isHidden
+        } else {
+            true
+        }
+    }
+
     DisposableEffect(lifecycleOwner, currentItem) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 val item = currentItem
-                if (item != null && item.path.isNotBlank()) {
+                if (item != null) {
                     coroutineScope.launch(Dispatchers.IO) {
-                        val file = java.io.File(item.path)
-                        val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
-                        val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
-                        if (!file.exists() || isHidden) {
-                            try {
-                                android.media.MediaScannerConnection.scanFile(
-                                    context.applicationContext,
-                                    arrayOf(item.path),
-                                    null,
-                                    null
-                                )
-                            } catch (_: Exception) {}
+                        if (!isTrashItemExists(item)) {
+                            if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash") {
+                                try {
+                                    android.media.MediaScannerConnection.scanFile(
+                                        context.applicationContext,
+                                        arrayOf(item.path),
+                                        null,
+                                        null
+                                    )
+                                } catch (_: Exception) {}
+                            }
                             withContext(Dispatchers.Main) {
                                 viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
                                 if (galleryItems.size <= 1) {
@@ -483,22 +501,22 @@ fun DetailScreen(
     }
 
     LaunchedEffect(currentItem) {
-        if (currentItem != null && currentItem.path.isNotBlank()) {
+        val item = currentItem
+        if (item != null) {
             withContext(Dispatchers.IO) {
-                val file = java.io.File(currentItem.path)
-                val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
-                val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(currentItem.path)
-                if (!file.exists() || isHidden) {
-                    try {
-                        android.media.MediaScannerConnection.scanFile(
-                            context.applicationContext,
-                            arrayOf(currentItem.path),
-                            null,
-                            null
-                        )
-                    } catch (_: Exception) {}
+                if (!isTrashItemExists(item)) {
+                    if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash") {
+                        try {
+                            android.media.MediaScannerConnection.scanFile(
+                                context.applicationContext,
+                                arrayOf(item.path),
+                                null,
+                                null
+                            )
+                        } catch (_: Exception) {}
+                    }
                     withContext(Dispatchers.Main) {
-                        viewModel.notifyExternalMediaModifiedOrDeleted(currentItem.uri.toString())
+                        viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
                         if (galleryItems.size <= 1) {
                             safeOnBack()
                         }
@@ -637,6 +655,7 @@ fun DetailScreen(
     var currentScale by remember { mutableStateOf(1f) }
     var pendingDeleteItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingDeletePage by remember { mutableStateOf<Int?>(null) }
+    var pendingDeleteWasPermanent by remember { mutableStateOf(false) }
     
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -645,7 +664,7 @@ fun DetailScreen(
             val itemToDelete = pendingDeleteItem
             val deletedUri = itemToDelete?.uri?.toString()
             if (deletedUri != null) {
-                if (bucketName == "Trash" || itemToDelete?.bucketName == "Trash") {
+                if (pendingDeleteWasPermanent || bucketName == "Trash" || itemToDelete?.bucketName == "Trash") {
                     viewModel.deleteMediaPermanentlyOptimistically(deletedUri)
                 } else {
                     viewModel.removeMediaOptimistically(deletedUri)
@@ -654,6 +673,7 @@ fun DetailScreen(
         }
         pendingDeletePage = null
         pendingDeleteItem = null
+        pendingDeleteWasPermanent = false
     }
 
     val restoreLauncher = rememberLauncherForActivityResult(
@@ -764,6 +784,7 @@ fun DetailScreen(
             isDanger = isPermanent,
             onConfirm = {
                 showDeleteConfirmDialog = false
+                pendingDeleteWasPermanent = isPermanent
                 viewModel.setTrashSessionOptions(dialogSkipConfirm, dialogSkipRecycleBin)
                 if (dialogSkipConfirm) {
                     android.widget.Toast.makeText(
@@ -1812,6 +1833,7 @@ fun DetailScreen(
                 if (isMediaStoreUri) {
                     pendingDeleteItem = currentItem
                     pendingDeletePage = pagerState.currentPage
+                    pendingDeleteWasPermanent = true
                     coroutineScope.launch(Dispatchers.IO) {
                         try {
                             val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
@@ -1880,6 +1902,7 @@ fun DetailScreen(
                 } else {
                     pendingDeleteItem = currentItem
                     pendingDeletePage = pagerState.currentPage
+                    pendingDeleteWasPermanent = false
                     val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
                     val isSessionPermanent = viewModel.sessionSkipRecycleBin
 
