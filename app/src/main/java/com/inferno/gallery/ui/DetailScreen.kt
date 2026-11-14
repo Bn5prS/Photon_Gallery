@@ -177,6 +177,7 @@ import com.inferno.gallery.data.MotionPhotoHelper
 import com.inferno.gallery.data.MotionPhotoInfo
 import com.inferno.gallery.ui.components.MotionPhotoPlayerOverlay
 import com.inferno.gallery.ui.components.FloatingTipCard
+import com.inferno.gallery.ui.utils.resolveDisplayDateSeconds
 import androidx.activity.compose.BackHandler
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
@@ -2039,7 +2040,7 @@ fun DetailScreen(
                     // Center Island: Floating metadata pill
                     if (currentItem != null) {
                         val timestamp = remember(currentItem) {
-                            val raw = if (currentItem.dateAdded > 0) currentItem.dateAdded else currentItem.dateModified
+                            val raw = resolveDisplayDateSeconds(currentItem.dateAdded, currentItem.dateModified)
                             if (raw > 1_000_000_000_000L) raw else raw * 1000L
                         }
                         val formattedDate = remember(timestamp) {
