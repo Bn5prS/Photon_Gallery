@@ -769,3 +769,49 @@ fun getExitTransition(initialRoute: String?, targetRoute: String?): ExitTransiti
         }
     }
 }
+
+/**
+ * Standard Material 3 Expressive transitions for sub-destinations (e.g., Album Detail,
+ * Settings, People, Map, Cleaner tools).
+ * Provides a tactile forward slide with subtle scale elevation on enter, and a matching
+ * symmetric spring retreat on pop back.
+ */
+fun subScreenEnterTransition(): EnterTransition {
+    return slideInHorizontally(
+        animationSpec = MotionTokens.snappySpring(),
+        initialOffsetX = { (it * 0.25f).toInt() }
+    ) + scaleIn(
+        animationSpec = MotionTokens.snappySpring(),
+        initialScale = 0.94f
+    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+}
+
+fun subScreenExitTransition(): ExitTransition {
+    return slideOutHorizontally(
+        animationSpec = MotionTokens.snappySpring(),
+        targetOffsetX = { -(it * 0.12f).toInt() }
+    ) + scaleOut(
+        animationSpec = MotionTokens.snappySpring(),
+        targetScale = 0.96f
+    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+}
+
+fun subScreenPopEnterTransition(): EnterTransition {
+    return slideInHorizontally(
+        animationSpec = MotionTokens.snappySpring(),
+        initialOffsetX = { -(it * 0.12f).toInt() }
+    ) + scaleIn(
+        animationSpec = MotionTokens.snappySpring(),
+        initialScale = 0.96f
+    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+}
+
+fun subScreenPopExitTransition(): ExitTransition {
+    return slideOutHorizontally(
+        animationSpec = MotionTokens.snappySpring(),
+        targetOffsetX = { (it * 0.25f).toInt() }
+    ) + scaleOut(
+        animationSpec = MotionTokens.snappySpring(),
+        targetScale = 0.94f
+    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+}

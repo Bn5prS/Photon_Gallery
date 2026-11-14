@@ -32,5 +32,15 @@ class MotionTransitionsTest {
         assertNotNull(backwardExit)
         assertNotNull(sameTabEnter)
         assertNotNull(sameTabExit)
+
+        val subEnter = subScreenEnterTransition()
+        val subExit = subScreenExitTransition()
+        val subPopEnter = subScreenPopEnterTransition()
+        val subPopExit = subScreenPopExitTransition()
+
+        assertNotNull(subEnter)
+        assertNotNull(subExit)
+        assertNotNull(subPopEnter)
+        assertNotNull(subPopExit)
     }
 }

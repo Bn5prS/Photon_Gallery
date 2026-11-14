@@ -67,9 +67,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalFloatingToolbar
@@ -941,6 +938,58 @@ fun MainAppLayout(
                 enter = slideInVertically(initialOffsetY = { it }),
                 exit = slideOutVertically(targetOffsetY = { it })
             ) {
+                val onNavigateToPhotos = {
+                    if (nestedNavController.currentDestination?.route == "photos") {
+                        viewModel.triggerPhotosScrollToTop()
+                    } else {
+                        nestedNavController.navigate("photos") {
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                }
+                val onNavigateToVideos = {
+                    if (nestedNavController.currentDestination?.route == "videos") {
+                        viewModel.triggerVideosScrollToTop()
+                    } else {
+                        nestedNavController.navigate("videos") {
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                }
+                val onNavigateToAlbums = {
+                    if (nestedNavController.currentDestination?.route == "albums") {
+                        viewModel.triggerAlbumsScrollToTop()
+                    } else {
+                        nestedNavController.navigate("albums") {
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                }
+                val onNavigateToCollections = {
+                    if (nestedNavController.currentDestination?.route == "collections") {
+                        viewModel.triggerCollectionsScrollToTop()
+                    } else {
+                        nestedNavController.navigate("collections") {
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                }
+                val onNavigateToSearch = {
+                    nestedNavController.navigate("search") {
+                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+
                 if (dockStyle == DockStyle.PILL) {
                     Box(
                         modifier = Modifier
@@ -952,235 +1001,23 @@ fun MainAppLayout(
                         FloatingNavigationPill(
                             currentRoute = currentRoute,
                             showVideosTab = showVideosInDock,
-                            onNavigateToPhotos = {
-                                if (nestedNavController.currentDestination?.route == "photos") {
-                                    viewModel.triggerPhotosScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("photos") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            onNavigateToVideos = {
-                                if (nestedNavController.currentDestination?.route == "videos") {
-                                    viewModel.triggerVideosScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("videos") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            onNavigateToAlbums = {
-                                if (nestedNavController.currentDestination?.route == "albums") {
-                                    viewModel.triggerAlbumsScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("albums") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            onNavigateToCollections = {
-                                if (nestedNavController.currentDestination?.route == "collections") {
-                                    viewModel.triggerCollectionsScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("collections") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            onNavigateToSearch = {
-                                nestedNavController.navigate("search") {
-                                    popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
+                            onNavigateToPhotos = onNavigateToPhotos,
+                            onNavigateToVideos = onNavigateToVideos,
+                            onNavigateToAlbums = onNavigateToAlbums,
+                            onNavigateToCollections = onNavigateToCollections,
+                            onNavigateToSearch = onNavigateToSearch
                         )
                     }
                 } else {
-                    NavigationBar(
-                        modifier = Modifier.fillMaxWidth(),
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets.navigationBars
-                    ) {
-                        NavigationBarItem(
-                            selected = currentRoute == "photos",
-                            onClick = {
-                                if (nestedNavController.currentDestination?.route == "photos") {
-                                    viewModel.triggerPhotosScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("photos") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                    contentDescription = stringResource(R.string.nav_photos)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = stringResource(R.string.nav_photos),
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        if (showVideosInDock) {
-                            NavigationBarItem(
-                                selected = currentRoute == "videos",
-                                onClick = {
-                                    if (nestedNavController.currentDestination?.route == "videos") {
-                                        viewModel.triggerVideosScrollToTop()
-                                    } else {
-                                        nestedNavController.navigate("videos") {
-                                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-                                        contentDescription = stringResource(R.string.album_videos)
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = stringResource(R.string.album_videos),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                        }
-                        NavigationBarItem(
-                            selected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
-                            onClick = {
-                                if (nestedNavController.currentDestination?.route == "albums") {
-                                    viewModel.triggerAlbumsScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("albums") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                                    contentDescription = stringResource(R.string.nav_albums)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = stringResource(R.string.nav_albums),
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        NavigationBarItem(
-                            selected = currentRoute == "collections",
-                            onClick = {
-                                if (nestedNavController.currentDestination?.route == "collections") {
-                                    viewModel.triggerCollectionsScrollToTop()
-                                } else {
-                                    nestedNavController.navigate("collections") {
-                                        popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                                    contentDescription = stringResource(R.string.nav_collections)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = stringResource(R.string.nav_collections),
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        NavigationBarItem(
-                            selected = currentRoute == "search",
-                            onClick = {
-                                nestedNavController.navigate("search") {
-                                    popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                    contentDescription = stringResource(R.string.nav_search)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = stringResource(R.string.nav_search),
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                    }
+                    FullWidthNavigationBar(
+                        currentRoute = currentRoute,
+                        showVideosTab = showVideosInDock,
+                        onNavigateToPhotos = onNavigateToPhotos,
+                        onNavigateToVideos = onNavigateToVideos,
+                        onNavigateToAlbums = onNavigateToAlbums,
+                        onNavigateToCollections = onNavigateToCollections,
+                        onNavigateToSearch = onNavigateToSearch
+                    )
                 }
             }
         }
@@ -1263,28 +1100,28 @@ fun MainAppLayout(
                 route = "albums",
                 enterTransition = {
                     if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums") {
-                        fadeIn(MotionTokens.fastEffectsSpec())
+                        subScreenPopEnterTransition()
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 exitTransition = {
                     if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums") {
-                        fadeOut(MotionTokens.fastEffectsSpec())
+                        subScreenExitTransition()
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popEnterTransition = {
                     if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums") {
-                        fadeIn(MotionTokens.fastEffectsSpec())
+                        subScreenPopEnterTransition()
                     } else {
                         getEnterTransition(initialState.destination.route, targetState.destination.route)
                     }
                 },
                 popExitTransition = {
                     if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums") {
-                        fadeOut(MotionTokens.fastEffectsSpec())
+                        subScreenExitTransition()
                     } else {
                         getExitTransition(initialState.destination.route, targetState.destination.route)
                     }
@@ -1339,10 +1176,34 @@ fun MainAppLayout(
 
             composable(
                 route = "collections",
-                enterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
-                exitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) },
-                popEnterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
-                popExitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) }
+                enterTransition = {
+                    if (initialState.destination.route in listOf("places_list", "photo_map", "duplicate_cleaner", "people_list", "people") || initialState.destination.route?.startsWith("person") == true) {
+                        subScreenPopEnterTransition()
+                    } else {
+                        getEnterTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route in listOf("places_list", "photo_map", "duplicate_cleaner", "people_list", "people") || targetState.destination.route?.startsWith("person") == true) {
+                        subScreenExitTransition()
+                    } else {
+                        getExitTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route in listOf("places_list", "photo_map", "duplicate_cleaner", "people_list", "people") || initialState.destination.route?.startsWith("person") == true) {
+                        subScreenPopEnterTransition()
+                    } else {
+                        getEnterTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                },
+                popExitTransition = {
+                    if (targetState.destination.route in listOf("places_list", "photo_map", "duplicate_cleaner", "people_list", "people") || targetState.destination.route?.startsWith("person") == true) {
+                        subScreenExitTransition()
+                    } else {
+                        getExitTransition(initialState.destination.route, targetState.destination.route)
+                    }
+                }
             ) {
                 CollectionsScreen(
                     sharedTransitionScope = sharedTransitionScope,
@@ -1369,18 +1230,10 @@ fun MainAppLayout(
             
             composable(
                 route = "places_list",
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) {
                 PlacesListScreen(
                     viewModel = viewModel,
@@ -1396,18 +1249,10 @@ fun MainAppLayout(
 
             composable(
                 route = "duplicate_cleaner",
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) {
                 DuplicateCleanerScreen(
                     viewModel = viewModel,
@@ -1417,18 +1262,10 @@ fun MainAppLayout(
 
             composable(
                 route = "people_list",
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) {
                 com.inferno.gallery.ui.people.PeopleScreen(
                     onBack = { nestedNavController.popBackStackSafely() },
@@ -1444,18 +1281,10 @@ fun MainAppLayout(
 
             composable(
                 route = "people",
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) {
                 com.inferno.gallery.ui.people.PeopleScreen(
                     onBack = { nestedNavController.popBackStackSafely() },
@@ -1474,18 +1303,10 @@ fun MainAppLayout(
                 arguments = listOf(
                     androidx.navigation.navArgument("personId") { type = androidx.navigation.NavType.LongType }
                 ),
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) { backStackEntry ->
                 val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
                 com.inferno.gallery.ui.people.PersonDetailScreen(
@@ -1502,18 +1323,10 @@ fun MainAppLayout(
                 arguments = listOf(
                     androidx.navigation.navArgument("personId") { type = androidx.navigation.NavType.LongType }
                 ),
-                enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(MotionTokens.snappySpring())
-                },
-                exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(MotionTokens.snappySpring())
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) { backStackEntry ->
                 val personId = backStackEntry.arguments?.getLong("personId") ?: return@composable
                 com.inferno.gallery.ui.people.PersonDetailScreen(
@@ -1527,34 +1340,10 @@ fun MainAppLayout(
 
             composable(
                 route = "album/{bucketName}",
-                enterTransition = {
-                    if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums" || initialState.destination.route == "search") {
-                        fadeIn(MotionTokens.fastEffectsSpec())
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                exitTransition = {
-                    if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums" || targetState.destination.route == "search") {
-                        fadeOut(MotionTokens.fastEffectsSpec())
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                popEnterTransition = {
-                    if (initialState.destination.route == "albums" || initialState.destination.route == "all_albums" || initialState.destination.route == "pinned_albums" || initialState.destination.route == "search") {
-                        fadeIn(MotionTokens.fastEffectsSpec())
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                popExitTransition = {
-                    if (targetState.destination.route == "albums" || targetState.destination.route == "all_albums" || targetState.destination.route == "pinned_albums" || targetState.destination.route == "search") {
-                        fadeOut(MotionTokens.fastEffectsSpec())
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) { backStackEntry ->
                 val rawBucketName = backStackEntry.arguments?.getString("bucketName") ?: ""
                 val bucketName = try { android.net.Uri.decode(rawBucketName) } catch (e: Exception) { rawBucketName }
@@ -1594,7 +1383,13 @@ fun MainAppLayout(
                     }
                 )
             }
-            composable("settings") {
+            composable(
+                route = "settings",
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
+            ) {
                 SettingsScreen(
                     contentPadding = effectivePadding,
                     galleryViewModel = viewModel,
@@ -1606,7 +1401,13 @@ fun MainAppLayout(
             }
 
 
-            composable("photo_map") {
+            composable(
+                route = "photo_map",
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
+            ) {
                 PhotoMapScreen(
                     galleryViewModel = viewModel,
                     onPhotoClick = onPhotoClick,
@@ -1615,34 +1416,10 @@ fun MainAppLayout(
             }
             composable(
                 route = "all_albums",
-                enterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "albums") {
-                        fadeIn(MotionTokens.snappySpring())
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                exitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "albums") {
-                        fadeOut(MotionTokens.snappySpring())
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                popEnterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "albums") {
-                        fadeIn(MotionTokens.snappySpring())
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                popExitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "albums") {
-                        fadeOut(MotionTokens.snappySpring())
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) {
                 var pendingCoverAlbumName by remember { mutableStateOf<String?>(null) }
                 val pickCoverLauncher = rememberLauncherForActivityResult(
@@ -1680,34 +1457,10 @@ fun MainAppLayout(
             }
             composable(
                 route = "pinned_albums",
-                enterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "albums") {
-                        fadeIn(MotionTokens.snappySpring())
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                exitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "albums") {
-                        fadeOut(MotionTokens.snappySpring())
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                popEnterTransition = {
-                    if (initialState.destination.route?.startsWith("album/") == true || initialState.destination.route == "albums") {
-                        fadeIn(MotionTokens.snappySpring())
-                    } else {
-                        getEnterTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                },
-                popExitTransition = {
-                    if (targetState.destination.route?.startsWith("album/") == true || targetState.destination.route == "albums") {
-                        fadeOut(MotionTokens.snappySpring())
-                    } else {
-                        getExitTransition(initialState.destination.route, targetState.destination.route)
-                    }
-                }
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
             ) {
                 var pendingCoverAlbumName by remember { mutableStateOf<String?>(null) }
                 val pickCoverLauncher = rememberLauncherForActivityResult(
