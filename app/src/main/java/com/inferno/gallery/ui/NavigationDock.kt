@@ -7,9 +7,13 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -24,17 +28,23 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +67,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.inferno.gallery.ui.theme.MotionTokens
@@ -216,12 +227,211 @@ fun FloatingNavigationPill(
     }
 }
 
+/**
+ * Sleek, compact full-width navigation dock (DockStyle.FULL_WIDTH / DockStyle.BAR).
+ * Provides a refined 64.dp profile (down from the bulky 80.dp M3 default)
+ * with proper navigationBars window insets, centered icons & labels without clipping,
+ * responsive capsule selection indicator, and tactile haptic feedback.
+ */
+@Composable
+fun FullWidthNavigationBar(
+    currentRoute: String?,
+    onNavigateToPhotos: () -> Unit,
+    onNavigateToAlbums: () -> Unit,
+    onNavigateToCollections: () -> Unit,
+    onNavigateToSearch: () -> Unit,
+    showVideosTab: Boolean = false,
+    onNavigateToVideos: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    barHeight: Dp = 60.dp
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(barHeight)
+                    .selectableGroup(),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+            FullWidthNavItem(
+                selected = currentRoute == "photos",
+                onClick = onNavigateToPhotos,
+                icon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                        contentDescription = stringResource(R.string.nav_photos),
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+                label = stringResource(R.string.nav_photos)
+            )
+
+            if (showVideosTab) {
+                FullWidthNavItem(
+                    selected = currentRoute == "videos",
+                    onClick = onNavigateToVideos,
+                    icon = {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                            contentDescription = stringResource(R.string.album_videos),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    },
+                    label = stringResource(R.string.album_videos)
+                )
+            }
+
+            FullWidthNavItem(
+                selected = currentRoute?.startsWith("album") == true || currentRoute == "albums",
+                onClick = onNavigateToAlbums,
+                icon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                        contentDescription = stringResource(R.string.nav_albums),
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+                label = stringResource(R.string.nav_albums)
+            )
+
+            FullWidthNavItem(
+                selected = currentRoute == "collections",
+                onClick = onNavigateToCollections,
+                icon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
+                        contentDescription = stringResource(R.string.nav_collections),
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+                label = stringResource(R.string.nav_collections)
+            )
+
+            FullWidthNavItem(
+                selected = currentRoute == "search",
+                onClick = onNavigateToSearch,
+                icon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
+                        contentDescription = stringResource(R.string.nav_search),
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+                label = stringResource(R.string.nav_search)
+            )
+        }
+    }
+}
+}
+
+@Composable
+private fun RowScope.FullWidthNavItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val view = LocalView.current
+
+    val touchScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = MotionTokens.bouncySpring(),
+        label = "fullWidthNavItemScale"
+    )
+
+    val indicatorColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "fullWidthNavItemIndicatorColor"
+    )
+
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "fullWidthNavItemIconColor"
+    )
+
+    val textColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "fullWidthNavItemTextColor"
+    )
+
+    Box(
+        modifier = modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
+            }
+            .clip(ShapeFull)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ),
+                onClick = {
+                    view.tick()
+                    onClick()
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(30.dp)
+                    .clip(ShapeFull)
+                    .background(indicatorColor),
+                contentAlignment = Alignment.Center
+            ) {
+                CompositionLocalProvider(LocalContentColor provides iconColor) {
+                    icon()
+                }
+            }
+
+            Spacer(modifier = Modifier.height(3.dp))
+
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    fontSize = 11.sp
+                ),
+                color = textColor,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 @Composable
 fun DynamicPillTabItem(
     icon: @Composable () -> Unit,
     label: String,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
+    unselectedHorizontalPadding: Dp = 13.dp,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -255,7 +465,7 @@ fun DynamicPillTabItem(
     )
 
     val horizontalPadding by animateDpAsState(
-        targetValue = if (isSelected) 16.dp else 13.dp,
+        targetValue = if (isSelected) 16.dp else unselectedHorizontalPadding,
         animationSpec = MotionTokens.snappySpring(),
         label = "tabItemHorizontalPadding"
     )
@@ -475,21 +685,87 @@ fun getTabRouteIndex(route: String?): Int {
     }
 }
 
-// Fast, fluid tab crossfade transitions: eliminates heavy full-screen grid slide bottleneck
-fun getEnterTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.EnterTransition {
-    return fadeIn(
-        animationSpec = androidx.compose.animation.core.tween(
-            durationMillis = MotionTokens.Durations.Short,
-            easing = MotionTokens.EmphasizedDecelerateEasing
-        )
-    )
+fun getMainTabRouteIndex(route: String?): Int {
+    if (route == null) return -1
+    val base = route.substringBefore('?').substringBefore('/')
+    return when (base) {
+        "photos" -> 0
+        "videos" -> 1
+        "albums" -> 2
+        "collections" -> 3
+        "search" -> 4
+        else -> -1
+    }
 }
 
-fun getExitTransition(initialRoute: String?, targetRoute: String?): androidx.compose.animation.ExitTransition {
-    return fadeOut(
-        animationSpec = androidx.compose.animation.core.tween(
-            durationMillis = MotionTokens.Durations.Short,
-            easing = MotionTokens.EmphasizedAccelerateEasing
-        )
-    )
+/**
+ * Directional Shared-Axis Motion for main bottom-dock navigation.
+ * Uses a subtle 12% horizontal slide + scale (0.98f) + spring fade to preserve spatial continuity
+ * without the heavy GPU/layout cost of a 100% full-screen slide.
+ */
+fun getEnterTransition(initialRoute: String?, targetRoute: String?): EnterTransition {
+    val fromIdx = getMainTabRouteIndex(initialRoute)
+    val toIdx = getMainTabRouteIndex(targetRoute)
+    return when {
+        fromIdx != -1 && toIdx != -1 && toIdx > fromIdx -> {
+            // Forward (e.g. photos -> albums): enter from right with subtle scale & spring fade
+            slideInHorizontally(
+                animationSpec = MotionTokens.snappySpring(),
+                initialOffsetX = { (it * 0.12f).toInt() }
+            ) + scaleIn(
+                animationSpec = MotionTokens.snappySpring(),
+                initialScale = 0.98f
+            ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+        }
+        fromIdx != -1 && toIdx != -1 && toIdx < fromIdx -> {
+            // Backward (e.g. albums -> photos): enter from left with subtle scale & spring fade
+            slideInHorizontally(
+                animationSpec = MotionTokens.snappySpring(),
+                initialOffsetX = { -(it * 0.12f).toInt() }
+            ) + scaleIn(
+                animationSpec = MotionTokens.snappySpring(),
+                initialScale = 0.98f
+            ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+        }
+        else -> {
+            // Non-tab or same tab: smooth spring fade and gentle scale
+            fadeIn(animationSpec = MotionTokens.snappySpring()) + scaleIn(
+                animationSpec = MotionTokens.snappySpring(),
+                initialScale = 0.98f
+            )
+        }
+    }
+}
+
+fun getExitTransition(initialRoute: String?, targetRoute: String?): ExitTransition {
+    val fromIdx = getMainTabRouteIndex(initialRoute)
+    val toIdx = getMainTabRouteIndex(targetRoute)
+    return when {
+        fromIdx != -1 && toIdx != -1 && toIdx > fromIdx -> {
+            // Forward (e.g. photos -> albums): exit to left
+            slideOutHorizontally(
+                animationSpec = MotionTokens.snappySpring(),
+                targetOffsetX = { -(it * 0.12f).toInt() }
+            ) + scaleOut(
+                animationSpec = MotionTokens.snappySpring(),
+                targetScale = 0.98f
+            ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+        }
+        fromIdx != -1 && toIdx != -1 && toIdx < fromIdx -> {
+            // Backward (e.g. albums -> photos): exit to right
+            slideOutHorizontally(
+                animationSpec = MotionTokens.snappySpring(),
+                targetOffsetX = { (it * 0.12f).toInt() }
+            ) + scaleOut(
+                animationSpec = MotionTokens.snappySpring(),
+                targetScale = 0.98f
+            ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+        }
+        else -> {
+            fadeOut(animationSpec = MotionTokens.snappySpring()) + scaleOut(
+                animationSpec = MotionTokens.snappySpring(),
+                targetScale = 0.98f
+            )
+        }
+    }
 }
