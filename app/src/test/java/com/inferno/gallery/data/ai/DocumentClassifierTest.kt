@@ -91,4 +91,38 @@ class DocumentClassifierTest {
         val tags = DocumentClassifier.classify(text, "/storage/emulated/0/DCIM/Camera/sunset.jpg", "Camera")
         assertTrue(tags.isEmpty())
     }
+
+    @Test
+    fun testStrayRandUDoNotTriggerSocial() {
+        val text = "Section R and U formula: r = 5, u = 0"
+        val tags = DocumentClassifier.classify(text, "/storage/emulated/0/Pictures/Screenshots/math.png", "Screenshots")
+        assertFalse("Stray letters r/u must not trigger Social", tags.contains(BucketNames.DOC_SOCIAL))
+    }
+
+    @Test
+    fun testRedditHandleTriggersSocial() {
+        val text = "Posted in r/androiddev by u/photon_dev • 42 upvotes"
+        val tags = DocumentClassifier.classify(text, "/storage/emulated/0/Pictures/Screenshots/reddit.png", "Screenshots")
+        assertEquals(setOf(BucketNames.DOC_SOCIAL), tags)
+    }
+
+    @Test
+    fun testTerminalAndFooterDoNotMisclassify() {
+        val text = "Ubuntu Terminal\nAll rights reserved\nPay with Google Pay"
+        val tags = DocumentClassifier.classify(text, "/storage/emulated/0/Pictures/Screenshots/screen.png", "Screenshots")
+        assertTrue("Generic footer/terminal/brand words must not misclassify", tags.isEmpty())
+    }
+
+    @Test
+    fun testBlankPhotoInSocialFolderIsNotClassified() {
+        val tags = DocumentClassifier.classify("", "/storage/emulated/0/Pictures/Instagram/IMG_999.jpg", "Instagram")
+        assertTrue("Empty OCR photo in social folder must not be classified as a document", tags.isEmpty())
+    }
+
+    @Test
+    fun testBookWithDefinitionGoesOnlyToBooks() {
+        val text = "Chapter 2\nTable of Contents\nPublished by MIT Press\nDefinition of entropy"
+        val tags = DocumentClassifier.classify(text, "/storage/emulated/0/Books/physics.jpg", "Books")
+        assertEquals(setOf(BucketNames.DOC_BOOKS_MAGAZINES), tags)
+    }
 }
