@@ -2,25 +2,22 @@ package com.inferno.gallery.ui.components
 
 import android.graphics.RuntimeShader
 import android.os.Build
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -44,36 +41,45 @@ vec4 main(float2 fragCoord) {
     float2 p = uv;
     p.x *= aspect;
 
-    // Meditative, calming liquid flow rate
-    float t = iTime * 0.12;
+    // Natural, clearly visible liquid & wind flow rate
+    float t = iTime * 0.70;
+    float2 adv = p + float2(-t * 0.28, t * 0.14);
 
-    // --- Multi-Octave Domain Warping (Simulates Fluid Advection & Eddies) ---
-    // Octave 1: broad slow liquid current
+    // --- Multi-Octave Domain Warping (Simulates Fluid Advection & Wind Eddies) ---
+    // Octave 1: broad sweeping liquid/wind current
     float2 q = float2(
-        sin(p.x * 1.4 + t * 0.35) + cos(p.y * 1.6 - t * 0.28),
-        cos(p.x * 1.5 - t * 0.30) + sin(p.y * 1.3 + t * 0.40)
+        sin(adv.y * 2.1 + t * 0.72) + cos(adv.x * 1.6 - t * 0.52),
+        cos(adv.x * 1.9 - t * 0.60) + sin(adv.y * 1.7 + t * 0.78)
     );
 
     // Octave 2: recursive coordinate curl (fluid shear)
     float2 r = float2(
-        sin(p.x * 1.6 + q.x * 0.75 + t * 0.20),
-        cos(p.y * 1.6 + q.y * 0.75 - t * 0.25)
+        sin(adv.x * 2.3 + q.x * 1.10 + t * 0.55),
+        cos(adv.y * 2.2 + q.y * 1.10 - t * 0.62)
     );
 
-    // Continuous wave interference fields creating organic liquid silk
-    float f1 = sin(p.y * 1.4 + r.x * 1.5 + t * 0.30) * 0.5 + 0.5;
-    float f2 = cos(p.x * 1.5 + r.y * 1.4 - t * 0.25) * 0.5 + 0.5;
-    float f3 = sin((p.x + p.y) * 1.2 + (q.x - q.y) * 0.85 + t * 0.18) * 0.5 + 0.5;
+    // Traveling silk/wind bands that sweep smoothly across the viewport
+    float w1 = sin(adv.x * 1.8 - adv.y * 1.1 + r.x * 1.4 + t * 0.65) * 0.5 + 0.5;
+    float w2 = cos(adv.y * 1.7 + adv.x * 0.9 + r.y * 1.5 - t * 0.55) * 0.5 + 0.5;
+    float w3 = sin((adv.x - adv.y) * 2.2 + (q.x + q.y) * 1.0 + t * 0.48) * 0.5 + 0.5;
+
+    float f1 = smoothstep(0.15, 0.85, w1);
+    float f2 = smoothstep(0.18, 0.82, w2);
+    float f3 = smoothstep(0.20, 0.80, w3);
 
     // Organic continuous blending across the fluid field (zero hard edges, zero blobs)
     vec4 col = color1;
-    col = mix(col, color2, smoothstep(0.12, 0.88, f1) * 0.75);
-    col = mix(col, color3, smoothstep(0.18, 0.82, f2) * 0.55);
-    col = mix(col, color4, smoothstep(0.22, 0.78, f3) * 0.35);
+    col = mix(col, color2, f1 * 0.88);
+    col = mix(col, color3, f2 * 0.72);
+    col = mix(col, color4, f3 * 0.55);
 
     // Soft global radial falloff to keep edges calm and anchored
-    float vignette = smoothstep(1.35, 0.40, length((uv - 0.5) * float2(aspect * 0.8, 1.0)));
-    col = mix(color1, col, 0.75 + 0.25 * vignette);
+    float vignette = smoothstep(1.45, 0.30, length((uv - 0.5) * float2(aspect * 0.75, 1.0)));
+    col = mix(color1, col, 0.88 + 0.12 * vignette);
+
+    // Subtle 2.5% procedural film grain for tactile photo-paper depth & zero gradient banding
+    float grain = fract(sin(dot(fragCoord, float2(12.9898, 78.233))) * 43758.5453);
+    col.rgb += (grain - 0.5) * 0.025;
 
     return col;
 }
@@ -87,11 +93,13 @@ vec4 main(float2 fragCoord) {
 fun FloatingGalleryBackground(
     modifier: Modifier = Modifier,
     baseColor: Color = MaterialTheme.colorScheme.surfaceContainerLowest,
+    primaryContainer: Color = MaterialTheme.colorScheme.primaryContainer,
+    secondaryContainer: Color = MaterialTheme.colorScheme.secondaryContainer,
+    tertiaryContainer: Color = MaterialTheme.colorScheme.tertiaryContainer,
     primaryGlow: Color = MaterialTheme.colorScheme.primary,
-    tertiaryGlow: Color = MaterialTheme.colorScheme.tertiary,
-    secondaryGlow: Color = MaterialTheme.colorScheme.secondary,
     content: (@Composable () -> Unit)? = null
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     // AGSL RuntimeShader for API 33+ (Android 13+)
     val runtimeShader = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -108,76 +116,52 @@ fun FloatingGalleryBackground(
         }
     }
 
-    // Meditative, smooth continuous clock ticker
-    val transition = rememberInfiniteTransition(label = "SoothingFluidTransition")
-    val timeSeconds by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 300f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 300_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "SoothingFluidSeconds"
-    )
+    val timeState = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var lastNanos = 0L
+        while (true) {
+            withFrameNanos { frameNanos ->
+                if (lastNanos != 0L) {
+                    val dt = ((frameNanos - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    timeState.floatValue += dt
+                }
+                lastNanos = frameNanos
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val canvasWidth = size.width
             val canvasHeight = size.height
             if (canvasWidth <= 0f || canvasHeight <= 0f) return@Canvas
+            val elapsed = timeState.floatValue
 
-            val t = timeSeconds
-
-            // Soothing, non-jarring tonal color palette:
-            // Lerping with baseColor softens neon saturation and ensures calm visual harmony
+            // Calm Material 3 wallpaper-extracted tonal sweep anchored on surfaceContainerLowest:
+            // keeps chrome and cards legible while preserving subtle editorial warmth/depth.
             val c1 = baseColor
-            val c2 = lerp(baseColor, primaryGlow, 0.26f)
-            val c3 = lerp(baseColor, tertiaryGlow, 0.20f)
-            val c4 = lerp(baseColor, secondaryGlow, 0.16f)
+            val c2 = lerp(baseColor, primaryContainer, if (isDark) 0.82f else 0.78f)
+            val c3 = lerp(baseColor, tertiaryContainer, if (isDark) 0.72f else 0.68f)
+            val c4 = lerp(baseColor, secondaryContainer, if (isDark) 0.64f else 0.60f)
 
-            // Hardware AGSL Shader Rendering
+            // Hardware AGSL Shader Rendering (smooth continuous liquid/wind flow + 2.5% film grain)
             if (runtimeShader != null && shaderBrush != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 runtimeShader.setFloatUniform("iResolution", canvasWidth, canvasHeight)
-                runtimeShader.setFloatUniform("iTime", t)
+                runtimeShader.setFloatUniform("iTime", elapsed)
                 runtimeShader.setFloatUniform("color1", c1.red, c1.green, c1.blue, c1.alpha)
                 runtimeShader.setFloatUniform("color2", c2.red, c2.green, c2.blue, c2.alpha)
                 runtimeShader.setFloatUniform("color3", c3.red, c3.green, c3.blue, c3.alpha)
                 runtimeShader.setFloatUniform("color4", c4.red, c4.green, c4.blue, c4.alpha)
                 drawRect(brush = shaderBrush)
             } else {
-                // Compose 2D Canvas Fallback (API < 33): Soft ambient fluid mesh
-                drawRect(color = c1)
-
-                val flowT = t * 0.15f
-                val radius = maxOf(canvasWidth, canvasHeight) * 1.5f
-
-                val cx1 = canvasWidth * 0.5f + (canvasWidth * 0.35f) * cos(flowT * 0.5f)
-                val cy1 = canvasHeight * 0.4f + (canvasHeight * 0.30f) * sin(flowT * 0.4f)
+                // Compose 2D Canvas Fallback (API < 33): Gentle drifting tonal sweep
+                val driftX = sin(elapsed * 0.35f) * canvasWidth * 0.2f
+                val driftY = cos(elapsed * 0.28f) * canvasHeight * 0.2f
                 drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(c2.copy(alpha = 0.50f), Color.Transparent),
-                        center = Offset(cx1, cy1),
-                        radius = radius
-                    )
-                )
-
-                val cx2 = canvasWidth * 0.5f + (canvasWidth * 0.30f) * sin(flowT * 0.45f + 2.0f)
-                val cy2 = canvasHeight * 0.6f + (canvasHeight * 0.25f) * cos(flowT * 0.35f)
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(c3.copy(alpha = 0.40f), Color.Transparent),
-                        center = Offset(cx2, cy2),
-                        radius = radius * 1.2f
-                    )
-                )
-
-                val cx3 = canvasWidth * 0.5f + (canvasWidth * 0.25f) * cos(flowT * 0.35f + 4.0f)
-                val cy3 = canvasHeight * 0.5f + (canvasHeight * 0.25f) * sin(flowT * 0.30f)
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(c4.copy(alpha = 0.30f), Color.Transparent),
-                        center = Offset(cx3, cy3),
-                        radius = radius * 1.3f
+                    brush = Brush.linearGradient(
+                        colors = listOf(c1, c2, c3),
+                        start = Offset(driftX, driftY),
+                        end = Offset(canvasWidth - driftX, canvasHeight - driftY)
                     )
                 )
             }

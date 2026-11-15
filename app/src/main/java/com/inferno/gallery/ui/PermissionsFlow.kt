@@ -26,16 +26,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -61,15 +60,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -81,17 +76,33 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -210,8 +221,8 @@ private fun OnboardingStepIndicator(
             val color by animateColorAsState(
                 targetValue = when {
                     isSelected -> MaterialTheme.colorScheme.primary
-                    isPast -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                    isPast -> MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                    else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                 },
                 animationSpec = MotionTokens.fastEffectsSpec(),
                 label = "StepIndicatorColor_$i"
@@ -274,6 +285,20 @@ fun PermissionOnboardingScreen(
         photosGranted
     }
 
+    val waveTimeState = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var lastNanos = 0L
+        while (true) {
+            withFrameNanos { frameNanos ->
+                if (lastNanos != 0L) {
+                    val dt = ((frameNanos - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    waveTimeState.floatValue += dt
+                }
+                lastNanos = frameNanos
+            }
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = Color.Transparent,
@@ -282,13 +307,18 @@ fun PermissionOnboardingScreen(
         FloatingGalleryBackground(
             modifier = Modifier.fillMaxSize()
         ) {
-            val isForward = currentStep >= previousStep
+            CompositionLocalProvider(LocalOnboardingWaveTime provides waveTimeState) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                OnboardingCornerWatermark(
+                    currentStep = currentStep,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                )
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
                 // Pinned 4-Step Stadium Progress Indicator
                 Box(
                     modifier = Modifier
@@ -302,26 +332,44 @@ fun PermissionOnboardingScreen(
                 AnimatedContent(
                     targetState = currentStep,
                     transitionSpec = {
-                        if (isForward) {
+                        val forward = targetState > initialState
+                        val slideSpec = tween<androidx.compose.ui.unit.IntOffset>(
+                            durationMillis = MotionTokens.Durations.Long,
+                            easing = MotionTokens.EmphasizedEasing
+                        )
+                        val fadeInSpec = tween<Float>(
+                            durationMillis = MotionTokens.Durations.Medium,
+                            delayMillis = MotionTokens.Durations.Short,
+                            easing = MotionTokens.EmphasizedDecelerateEasing
+                        )
+                        val fadeOutSpec = tween<Float>(
+                            durationMillis = MotionTokens.Durations.Short,
+                            easing = MotionTokens.EmphasizedAccelerateEasing
+                        )
+                        if (forward) {
                             (slideInHorizontally(
-                                animationSpec = MotionTokens.gentleSpring(),
-                                initialOffsetX = { fullWidth -> fullWidth }
-                            ) + fadeIn(animationSpec = MotionTokens.fastEffectsSpec())).togetherWith(
+                                animationSpec = slideSpec,
+                                initialOffsetX = { fullWidth -> (fullWidth * 0.28f).toInt() }
+                            ) + fadeIn(animationSpec = fadeInSpec)).togetherWith(
                                 slideOutHorizontally(
-                                    animationSpec = MotionTokens.gentleSpring(),
-                                    targetOffsetX = { fullWidth -> -fullWidth }
-                                ) + fadeOut(animationSpec = MotionTokens.fastEffectsSpec())
-                            )
+                                    animationSpec = slideSpec,
+                                    targetOffsetX = { fullWidth -> -(fullWidth * 0.28f).toInt() }
+                                ) + fadeOut(animationSpec = fadeOutSpec)
+                            ).apply {
+                                targetContentZIndex = 1f
+                            }
                         } else {
                             (slideInHorizontally(
-                                animationSpec = MotionTokens.gentleSpring(),
-                                initialOffsetX = { fullWidth -> -fullWidth }
-                            ) + fadeIn(animationSpec = MotionTokens.fastEffectsSpec())).togetherWith(
+                                animationSpec = slideSpec,
+                                initialOffsetX = { fullWidth -> -(fullWidth * 0.28f).toInt() }
+                            ) + fadeIn(animationSpec = fadeInSpec)).togetherWith(
                                 slideOutHorizontally(
-                                    animationSpec = MotionTokens.gentleSpring(),
-                                    targetOffsetX = { fullWidth -> fullWidth }
-                                ) + fadeOut(animationSpec = MotionTokens.fastEffectsSpec())
-                            )
+                                    animationSpec = slideSpec,
+                                    targetOffsetX = { fullWidth -> (fullWidth * 0.28f).toInt() }
+                                ) + fadeOut(animationSpec = fadeOutSpec)
+                            ).apply {
+                                targetContentZIndex = 0f
+                            }
                         }
                     },
                     label = "OnboardingStepTransition",
@@ -375,7 +423,201 @@ fun PermissionOnboardingScreen(
             }
         }
     }
+    }
+    }
 }
+}
+
+/**
+ * Half-cropped, softly fading Material Symbol watermark in the top-right corner for Steps 1–3.
+ * Step 0 stays clean so the centered app emblem owns the welcome screen.
+ */
+@Composable
+private fun OnboardingCornerWatermark(
+    currentStep: Int,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "CornerWatermarkFloat")
+    val driftY by infiniteTransition.animateFloat(
+        initialValue = -5f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "WatermarkDriftY"
+    )
+    val swayDeg by infiniteTransition.animateFloat(
+        initialValue = -14f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 8200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "WatermarkSway"
+    )
+    val watermarkTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.085f)
+
+    AnimatedContent(
+        targetState = currentStep,
+        transitionSpec = {
+            val forward = targetState > initialState
+            (slideInHorizontally(
+                animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                initialOffsetX = { fullWidth -> (fullWidth * if (forward) 0.18f else -0.18f).toInt() }
+            ) + fadeIn(
+                animationSpec = tween(MotionTokens.Durations.Medium, delayMillis = MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedDecelerateEasing)
+            )).togetherWith(
+                slideOutHorizontally(
+                    animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
+                    targetOffsetX = { fullWidth -> (fullWidth * if (forward) -0.18f else 0.18f).toInt() }
+                ) + fadeOut(
+                    animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedAccelerateEasing)
+                )
+            )
+        },
+        label = "CornerWatermarkTransition",
+        modifier = modifier
+    ) { step ->
+        val iconRes: Int? = when (step) {
+            1 -> R.drawable.ic_ms_shield_lock
+            2 -> R.drawable.ic_ms_palette
+            3 -> R.drawable.ic_ms_search_sparkle
+            else -> null
+        }
+        if (iconRes != null) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                tint = watermarkTint,
+                modifier = Modifier
+                    .size(240.dp)
+                    .offset(x = 64.dp, y = (-32 + driftY).dp)
+                    .graphicsLayer {
+                        rotationZ = swayDeg
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colors = listOf(Color.Black, Color.Transparent),
+                                center = androidx.compose.ui.geometry.Offset(
+                                    size.width * 0.72f,
+                                    size.height * 0.28f
+                                ),
+                                radius = size.minDimension * 0.78f
+                            ),
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
+            )
+        } else {
+            Spacer(modifier = Modifier.size(1.dp))
+        }
+    }
+}
+
+/**
+ * Segmented corner shape matching the full-screen viewer toolbar pill:
+ * large outer corners (20.dp) on first/last items, tight 8.dp inner corners between adjacent tiles.
+ */
+private fun onboardingSegmentedTileShape(
+    index: Int,
+    total: Int,
+    outerRadius: Dp = 20.dp,
+    innerRadius: Dp = 8.dp
+): RoundedCornerShape = when {
+    total <= 1 -> RoundedCornerShape(outerRadius)
+    index == 0 -> RoundedCornerShape(
+        topStart = outerRadius,
+        topEnd = outerRadius,
+        bottomStart = innerRadius,
+        bottomEnd = innerRadius
+    )
+    index == total - 1 -> RoundedCornerShape(
+        topStart = innerRadius,
+        topEnd = innerRadius,
+        bottomStart = outerRadius,
+        bottomEnd = outerRadius
+    )
+    else -> RoundedCornerShape(innerRadius)
+}
+
+private val LocalOnboardingWaveTime = compositionLocalOf<State<Float>> { mutableFloatStateOf(0f) }
+
+/**
+ * Translucent outer tray surface for two-layer onboarding cards so the animated
+ * liquid background waves subtly shine through without muddying the inner tiles.
+ */
+@Composable
+private fun onboardingOuterTrayColor(): Color {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (isDark) {
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.52f)
+    } else {
+        lerp(Color.White, MaterialTheme.colorScheme.surfaceContainerHigh, 0.42f).copy(alpha = 0.50f)
+    }
+}
+
+/**
+ * Two-layer onboarding card tray with an organic "Caustic Pool" color drift
+ * synced to the background wave clock, visible through the translucent tray & tile gaps.
+ */
+@Composable
+private fun OnboardingCausticTray(
+    modifier: Modifier = Modifier,
+    trayColor: Color = onboardingOuterTrayColor(),
+    phaseOffset: Float = 0f,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val waveTime = LocalOnboardingWaveTime.current
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val primaryTint = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.28f else 0.42f)
+    val tertiaryTint = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = if (isDark) 0.14f else 0.24f)
+
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = trayColor,
+        shadowElevation = 0.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    val t = waveTime.value * 0.55f + phaseOffset
+                    val cx = size.width * (0.5f + 0.42f * sin(t * 1.31f + cos(t * 0.63f)))
+                    val cy = size.height * (0.5f + 0.38f * cos(t * 0.97f + 0.9f))
+                    val radius = max(size.width, size.height) * 0.68f
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(primaryTint, tertiaryTint, Color.Transparent),
+                            center = androidx.compose.ui.geometry.Offset(cx, cy),
+                            radius = radius
+                        )
+                    )
+                }
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            content = content
+        )
+    }
+}
+
+/**
+ * Soft, eye-pleasing translucent inner tile surface for the two-layer onboarding card tray.
+ * Uses soft porcelain white (white softened with a subtle surface tint) in light mode,
+ * and lifted surfaceContainerHighest in dark mode.
+ */
+@Composable
+private fun onboardingInnerTileColor(): Color {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (isDark) {
+        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.74f)
+    } else {
+        lerp(Color.White, MaterialTheme.colorScheme.surfaceContainer, 0.18f).copy(alpha = 0.90f)
+    }
 }
 
 /**
@@ -386,14 +628,14 @@ private fun OnboardingNavigationDock(
     onNext: () -> Unit,
     nextText: String,
     onBack: (() -> Unit)? = null,
-    nextIconRes: Int? = R.drawable.ic_ms_chevron_right,
+    @Suppress("UNUSED_PARAMETER") nextIconRes: Int? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
 
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (onBack != null) {
@@ -404,28 +646,21 @@ private fun OnboardingNavigationDock(
                 },
                 shape = ShapeFull,
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 ),
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(76.dp)
                     .pressScale()
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
-                        contentDescription = "Back",
-                        modifier = Modifier.size(IconSizeTokens.M)
+                Text(
+                    text = "Back",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium
                     )
-                    Text(
-                        text = "Back",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                }
+                )
             }
         }
 
@@ -440,26 +675,17 @@ private fun OnboardingNavigationDock(
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ),
             modifier = Modifier
-                .weight(if (onBack != null) 1.5f else 1f)
-                .height(56.dp)
+                .weight(1f)
+                .height(76.dp)
                 .pressScale()
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-            ) {
-                Text(
-                    text = nextText,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            Text(
+                text = nextText,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                if (nextIconRes != null) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(nextIconRes),
-                        contentDescription = null,
-                        modifier = Modifier.size(IconSizeTokens.M)
-                    )
-                }
-            }
+            )
         }
     }
 }
@@ -506,15 +732,72 @@ private fun SetupIntroPage(
                 verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Top balancing spacer
-                Spacer(modifier = Modifier.height(SpacingTokens.XS))
-
-                // Center: Dynamic Themed Circular App Icon + App Name + Tagline (elevated slightly)
-                ExpressiveOnboardingHero(
+                // Top: Hero + Minimal Feature List
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 40.dp)
-                )
+                        .padding(top = SpacingTokens.M),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ExpressiveOnboardingHero(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(SpacingTokens.XL))
+
+                    val introHighlights = listOf(
+                        R.drawable.ic_ms_check_circle to "Open-source & ad-free",
+                        R.drawable.ic_ms_shield_lock to "Zero cloud uploads",
+                        R.drawable.ic_ms_search to "Smart on-device search & sorting",
+                        R.drawable.ic_ms_auto_fix_high to "Built-in editor & collage tools"
+                    )
+
+                    val innerTileColor = onboardingInnerTileColor()
+                    OnboardingCausticTray(
+                        phaseOffset = 0.0f,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        introHighlights.forEachIndexed { index, (iconRes, label) ->
+                            Surface(
+                                shape = onboardingSegmentedTileShape(index, introHighlights.size),
+                                color = innerTileColor,
+                                shadowElevation = 0.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(iconRes),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(SpacingTokens.L))
 
                 // Bottom: Big Pill Language Badge + "Get Started" Primary Action Button
                 Column(
@@ -544,23 +827,16 @@ private fun SetupIntroPage(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(60.dp)
+                            .height(76.dp)
                             .pressScale()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.onboarding_action_get_started),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        Text(
+                            text = stringResource(R.string.onboarding_action_get_started),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.M)
-                            )
-                        }
+                        )
                     }
                 }
             }
@@ -595,86 +871,102 @@ private fun SetupPermissionsPage(
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
-                .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .weight(1f)
+                .fillMaxWidth()
         ) {
-            Spacer(modifier = Modifier.height(SpacingTokens.S))
-
-            // Header Icon Badge
-            Surface(
-                shape = OfficialM3Shapes.Ghostish,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(64.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
-                        contentDescription = "Permissions",
-                        modifier = Modifier.size(IconSizeTokens.XL)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.M))
-
-            Text(
-                text = stringResource(R.string.onboarding_permissions_header),
-                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(SpacingTokens.XS))
-
-            Text(
-                text = stringResource(R.string.onboarding_permissions_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = SpacingTokens.S)
-            )
-
-            Spacer(modifier = Modifier.height(SpacingTokens.L))
-
-            // Elevated Permission Cards
+            val contentMinHeight = maxHeight
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                PermissionBlockCard(
-                    title = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        stringResource(R.string.onboarding_perm_photos_videos_title)
-                    } else {
-                        stringResource(R.string.onboarding_perm_storage_title)
-                    },
-                    subtitle = stringResource(R.string.onboarding_perm_photos_videos_desc),
-                    isGranted = mediaGranted,
-                    icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                    iconShape = OfficialM3Shapes.Cookie12Sided,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = onGrantMediaClick
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = contentMinHeight),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Spacer(modifier = Modifier.height(SpacingTokens.M))
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    PermissionBlockCard(
-                        title = stringResource(R.string.onboarding_perm_all_files_title),
-                        subtitle = stringResource(R.string.onboarding_perm_all_files_desc),
-                        isGranted = allFilesGranted,
-                        icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
-                        iconShape = OfficialM3Shapes.Sunny,
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        onClick = onGrantAllFilesClick
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
+                                contentDescription = "Permissions",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(SpacingTokens.M))
+
+                    Text(
+                        text = stringResource(R.string.onboarding_permissions_header),
+                        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+
+                    Spacer(modifier = Modifier.height(SpacingTokens.XS))
+
+                    Text(
+                        text = stringResource(R.string.onboarding_permissions_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(SpacingTokens.XL))
+
+                    // Two-layer segmented tonal Permission Tray (matches viewer toolbar pill)
+                    val showAllFilesCard = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                    val permTotal = if (showAllFilesCard) 2 else 1
+                    val permTileColor = onboardingInnerTileColor()
+                    OnboardingCausticTray(
+                        phaseOffset = 1.4f,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        PermissionBlockCard(
+                                title = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    stringResource(R.string.onboarding_perm_photos_videos_title)
+                                } else {
+                                    stringResource(R.string.onboarding_perm_storage_title)
+                                },
+                                subtitle = stringResource(R.string.onboarding_perm_photos_videos_desc),
+                                isGranted = mediaGranted,
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
+                                iconShape = RoundedCornerShape(14.dp),
+                                containerColor = permTileColor,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                cardShape = onboardingSegmentedTileShape(0, permTotal),
+                                onClick = onGrantMediaClick
+                            )
+
+                            if (showAllFilesCard) {
+                                PermissionBlockCard(
+                                    title = stringResource(R.string.onboarding_perm_all_files_title),
+                                    subtitle = stringResource(R.string.onboarding_perm_all_files_desc),
+                                    isGranted = allFilesGranted,
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                    iconShape = RoundedCornerShape(14.dp),
+                                    containerColor = permTileColor,
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                    cardShape = onboardingSegmentedTileShape(1, permTotal),
+                                    onClick = onGrantAllFilesClick
+                                )
+                            }
+                    }
+
+                    Spacer(modifier = Modifier.height(SpacingTokens.M))
                 }
             }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.XL))
         }
 
         // Bottom Action Dock: Back & (Grant or Next) Buttons
@@ -710,12 +1002,12 @@ private fun ExpressiveOnboardingHero(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Dynamic Themed Circular App Icon (large, bold Google-scale shape)
+        // Single clean M3 Expressive app icon (no layered/rotated card stack)
         Surface(
-            shape = CircleShape,
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.size(128.dp),
-            shadowElevation = 0.dp
+            shadowElevation = 0.dp,
+            modifier = Modifier.size(104.dp)
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -725,12 +1017,12 @@ private fun ExpressiveOnboardingHero(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_launcher_monochrome),
                     contentDescription = "Photon Gallery",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(168.dp)
+                    modifier = Modifier.size(128.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
             text = stringResource(R.string.onboarding_welcome_to).uppercase(Locale.getDefault()),
@@ -749,7 +1041,7 @@ private fun ExpressiveOnboardingHero(
             style = MaterialTheme.typography.displaySmall.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 38.sp,
-                letterSpacing = 0.5.sp
+                letterSpacing = (-0.5).sp
             ),
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
@@ -906,22 +1198,21 @@ private fun SetupLooksFeelPage(
             modifier = Modifier
                 .weight(1f, fill = false)
                 .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.Start
         ) {
-            Spacer(modifier = Modifier.height(SpacingTokens.S))
+            Spacer(modifier = Modifier.height(SpacingTokens.M))
 
-            // Header Icon
             Surface(
-                shape = OfficialM3Shapes.Clover4Leaf,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(64.dp)
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(44.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
                         contentDescription = "Look & Feel",
-                        modifier = Modifier.size(IconSizeTokens.XL)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -931,8 +1222,7 @@ private fun SetupLooksFeelPage(
             Text(
                 text = "Look & Feel",
                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(SpacingTokens.XS))
@@ -940,9 +1230,7 @@ private fun SetupLooksFeelPage(
             Text(
                 text = "Personalize theme modes, deep AMOLED blacks, and vibrant accent colors in real time.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = SpacingTokens.S)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(SpacingTokens.L))
@@ -955,187 +1243,218 @@ private fun SetupLooksFeelPage(
 
             Spacer(modifier = Modifier.height(SpacingTokens.L))
 
-            // Theme Mode Segmented Button (System, Light, Dark)
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-            ) {
-                Text(
-                    text = "Theme Mode",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    SegmentedButton(
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            settingsViewModel?.setThemeMode(ThemeMode.SYSTEM)
-                        },
-                        selected = currentThemeMode == ThemeMode.SYSTEM,
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_wb_twilight),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.S)
-                            )
-                        },
-                        label = { Text(stringResource(R.string.theme_mode_system), style = MaterialTheme.typography.labelMedium) }
-                    )
-
-                    SegmentedButton(
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            settingsViewModel?.setThemeMode(ThemeMode.LIGHT)
-                        },
-                        selected = currentThemeMode == ThemeMode.LIGHT,
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.S)
-                            )
-                        },
-                        label = { Text(stringResource(R.string.theme_mode_light), style = MaterialTheme.typography.labelMedium) }
-                    )
-
-                    SegmentedButton(
-                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            settingsViewModel?.setThemeMode(ThemeMode.DARK)
-                        },
-                        selected = currentThemeMode == ThemeMode.DARK,
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dark_mode),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.S)
-                            )
-                        },
-                        label = { Text(stringResource(R.string.theme_mode_dark), style = MaterialTheme.typography.labelMedium) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.L))
-
-            // Pure AMOLED Black Switch
-            Surface(
-                shape = ShapeLargeIncreased,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = isCurrentlyDark) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            settingsViewModel?.setUseAmoledBlack(!useAmoledBlack)
-                        }
-                        .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.M),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // Two-layer segmented tonal Look & Feel Tray (Theme Mode + AMOLED + Accent Palette)
+            val lookTileColor = onboardingInnerTileColor()
+            OnboardingCausticTray(phaseOffset = 2.7f) {
+                    // Segment 0: Theme Mode Selector (System, Light, Dark)
                     Surface(
-                        shape = ShapeMedium,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(46.dp)
+                        shape = onboardingSegmentedTileShape(0, 3),
+                        color = lookTileColor,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_contrast),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.L)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            Text(
+                                text = "Theme Mode",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.width(SpacingTokens.M))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Pure AMOLED Black",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (isCurrentlyDark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isCurrentlyDark) "Pitch-black canvas for OLED efficiency" else "Active when Dark theme mode is selected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                    Switch(
-                        checked = useAmoledBlack,
-                        onCheckedChange = { checked ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            settingsViewModel?.setUseAmoledBlack(checked)
-                        },
-                        enabled = isCurrentlyDark,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.L))
-
-            // Color Palette Selector
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-            ) {
-                Text(
-                    text = "Accent Color Palette",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-                ) {
-                    // Dynamic Material You Swatch (Android 12+)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        item {
-                            ColorSwatchItem(
-                                title = stringResource(R.string.material_you),
-                                color = MaterialTheme.colorScheme.primary,
-                                isSelected = useMaterialYou || colorPresetName == "dynamic",
-                                isDynamic = true,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    settingsViewModel?.setUseMaterialYou(true)
-                                    settingsViewModel?.setColorPresetName("dynamic")
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shadowElevation = 0.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val themeOptions = listOf(
+                                        Triple(ThemeMode.SYSTEM, R.drawable.ic_ms_wb_twilight, stringResource(R.string.theme_mode_system)),
+                                        Triple(ThemeMode.LIGHT, R.drawable.ic_ms_light_mode, stringResource(R.string.theme_mode_light)),
+                                        Triple(ThemeMode.DARK, R.drawable.ic_ms_dark_mode, stringResource(R.string.theme_mode_dark))
+                                    )
+                                    themeOptions.forEach { (mode, iconRes, label) ->
+                                        val selected = currentThemeMode == mode
+                                        Surface(
+                                            onClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                settingsViewModel?.setThemeMode(mode)
+                                            },
+                                            shape = ShapeFull,
+                                            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            shadowElevation = 0.dp,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(42.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxSize(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(iconRes),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.labelMedium.copy(
+                                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                                    ),
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
+                            }
+                        }
+                    }
+
+                    // Segment 1: Pure AMOLED Black Switch
+                    Surface(
+                        shape = onboardingSegmentedTileShape(1, 3),
+                        color = lookTileColor,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = isCurrentlyDark) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    settingsViewModel?.setUseAmoledBlack(!useAmoledBlack)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (useAmoledBlack && isCurrentlyDark) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                },
+                                contentColor = if (useAmoledBlack && isCurrentlyDark) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_contrast),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(SpacingTokens.M))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Pure AMOLED Black",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isCurrentlyDark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isCurrentlyDark) "Pitch-black canvas for OLED efficiency" else "Active when Dark theme mode is selected",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(SpacingTokens.S))
+
+                            Switch(
+                                checked = useAmoledBlack,
+                                onCheckedChange = { checked ->
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    settingsViewModel?.setUseAmoledBlack(checked)
+                                },
+                                enabled = isCurrentlyDark,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    uncheckedBorderColor = Color.Transparent,
+                                    disabledUncheckedBorderColor = Color.Transparent
+                                )
                             )
                         }
                     }
 
-                    // Curated 4-Color Preset Palettes
-                    items(ThemePalettes.allPalettes) { palette ->
-                        FourQuadrantColorSwatch(
-                            palette = palette,
-                            isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id),
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setUseMaterialYou(false)
-                                settingsViewModel?.setColorPresetName(palette.id)
+                    // Segment 2: Color Palette Selector
+                    Surface(
+                        shape = onboardingSegmentedTileShape(2, 3),
+                        color = lookTileColor,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            Text(
+                                text = "Accent Color Palette",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Dynamic Material You Swatch (Android 12+)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    item {
+                                        ColorSwatchItem(
+                                            title = stringResource(R.string.material_you),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            isSelected = useMaterialYou || colorPresetName == "dynamic",
+                                            isDynamic = true,
+                                            onClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                settingsViewModel?.setUseMaterialYou(true)
+                                                settingsViewModel?.setColorPresetName("dynamic")
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // Curated 4-Color Preset Palettes
+                                items(ThemePalettes.allPalettes) { palette ->
+                                    FourQuadrantColorSwatch(
+                                        palette = palette,
+                                        isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id),
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            settingsViewModel?.setUseMaterialYou(false)
+                                            settingsViewModel?.setColorPresetName(palette.id)
+                                        }
+                                    )
+                                }
                             }
-                        )
+                        }
                     }
-                }
             }
 
             Spacer(modifier = Modifier.height(SpacingTokens.XL))
@@ -1151,14 +1470,6 @@ private fun SetupLooksFeelPage(
     }
 }
 
-private data class SimulatedAiResult(
-    val title: String,
-    val subtitle: String,
-    @DrawableRes val iconRes: Int,
-    val gradientColors: List<Color>,
-    val confidence: String
-)
-
 /**
  * Step 3: Semantic AI Smart Search Setup with Live Speed & Model Size Metrics.
  */
@@ -1168,14 +1479,12 @@ private fun SetupAiPage(
     onBack: () -> Unit,
     onFinish: () -> Unit
 ) {
-    val haptic = LocalHapticFeedback.current
-
     val isModelDownloaded = settingsViewModel?.smartSearchModelDownloaded?.collectAsState()?.value ?: false
     val modelDownloadWorkInfo = settingsViewModel?.modelDownloadWorkInfo?.collectAsState(initial = null)?.value
     val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING
     val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
     val bytesDownloaded = modelDownloadWorkInfo?.progress?.getLong("bytesDownloaded", 0L) ?: 0L
-    val totalBytes = modelDownloadWorkInfo?.progress?.getLong("totalBytes", 103_077_230L) ?: 103_077_230L
+    val totalBytes = modelDownloadWorkInfo?.progress?.getLong("totalBytes", 404_814_260L) ?: 404_814_260L
     val speedBytesPerSec = modelDownloadWorkInfo?.progress?.getLong("speedBytesPerSec", 0L) ?: 0L
     val autoIndexEnabled = settingsViewModel?.smartSearchAutoIndex?.collectAsState()?.value ?: true
     val ocrIndexingEnabled = settingsViewModel?.ocrIndexingEnabled?.collectAsState()?.value ?: true
@@ -1191,36 +1500,6 @@ private fun SetupAiPage(
     val faceSpeedBytesPerSec = faceModelDownloadWorkInfo?.progress?.getLong("speedBytesPerSec", 0L) ?: 0L
     val faceAutoIndex = settingsViewModel?.faceAutoIndex?.collectAsState()?.value ?: true
 
-    // Interactive query simulation playground state
-    val sampleQueries = listOf("sunset beach", "latte coffee", "happy puppy", "receipts")
-    var selectedQueryIndex by rememberSaveable { mutableIntStateOf(0) }
-    val currentSampleQuery = sampleQueries[selectedQueryIndex]
-
-    val simulatedAiResults = remember {
-        mapOf(
-            0 to listOf(
-                SimulatedAiResult("Golden Hour", "Malibu Coast", R.drawable.ic_ms_wb_twilight, listOf(Color(0xFFE65100), Color(0xFFAD1457)), "99% Match"),
-                SimulatedAiResult("Pacific Surf", "Beach & Waves", R.drawable.ic_ms_image, listOf(Color(0xFF00695C), Color(0xFF0277BD)), "96% Match"),
-                SimulatedAiResult("Dusk Palms", "Shoreline Walk", R.drawable.ic_ms_filter_vintage, listOf(Color(0xFF4A148C), Color(0xFFD84315)), "92% Match")
-            ),
-            1 to listOf(
-                SimulatedAiResult("Artisan Pour", "Cafe Latte Art", R.drawable.ic_ms_star, listOf(Color(0xFF5D4037), Color(0xFF8D6E63)), "98% Match"),
-                SimulatedAiResult("Morning Brew", "Espresso Cup", R.drawable.ic_ms_image, listOf(Color(0xFF3E2723), Color(0xFF6D4C41)), "95% Match"),
-                SimulatedAiResult("Bakery Table", "Breakfast Roasts", R.drawable.ic_ms_favorite, listOf(Color(0xFF795548), Color(0xFFA1887F)), "91% Match")
-            ),
-            2 to listOf(
-                SimulatedAiResult("Golden Pup", "Park Playtime", R.drawable.ic_ms_favorite, listOf(Color(0xFFE65100), Color(0xFFFFB300)), "99% Match"),
-                SimulatedAiResult("Grass Fetch", "Backyard Lawn", R.drawable.ic_ms_image, listOf(Color(0xFF2E7D32), Color(0xFF558B2F)), "97% Match"),
-                SimulatedAiResult("Puppy Snooze", "Cozy Blanket", R.drawable.ic_ms_star, listOf(Color(0xFF00695C), Color(0xFFAD1457)), "94% Match")
-            ),
-            3 to listOf(
-                SimulatedAiResult("Supermarket", "Receipt • \$42.50", R.drawable.ic_ms_receipt_long, listOf(Color(0xFF37474F), Color(0xFF455A64)), "OCR 100%"),
-                SimulatedAiResult("Flight Ticket", "Boarding Pass", R.drawable.ic_ms_confirmation_number, listOf(Color(0xFF1565C0), Color(0xFF0277BD)), "OCR 98%"),
-                SimulatedAiResult("Fuel Station", "Payment Slip", R.drawable.ic_ms_description, listOf(Color(0xFF263238), Color(0xFF00695C)), "OCR 97%")
-            )
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1231,26 +1510,26 @@ private fun SetupAiPage(
         Column(
             modifier = Modifier
                 .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = SpacingTokens.S),
+            horizontalAlignment = Alignment.Start
         ) {
-            Spacer(modifier = Modifier.height(SpacingTokens.S))
+            Spacer(modifier = Modifier.height(SpacingTokens.M))
 
-            // AI Hub Icon
             Surface(
-                shape = OfficialM3Shapes.Cookie9Sided,
+                shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(64.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search_sparkle),
                         contentDescription = "On-Device AI",
-                        modifier = Modifier.size(IconSizeTokens.XL)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -1258,980 +1537,141 @@ private fun SetupAiPage(
             Spacer(modifier = Modifier.height(SpacingTokens.M))
 
             Text(
-                text = "On-Device AI",
+                text = "Smart Search",
                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(SpacingTokens.XS))
 
             Text(
-                text = "Supercharge your gallery with private, on-device semantic search and facial recognition — your photos never leave your device.",
+                text = "Search by scene, people, or text — processed privately on your device.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = SpacingTokens.S)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(SpacingTokens.L))
 
-            // Interactive Playground Card: Tap sample concept chips to see results update live
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(SpacingTokens.L),
-                    verticalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-                ) {
-                    // Simulated Search Input Pill
-                    Surface(
-                        shape = ShapeFull,
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(IconSizeTokens.S)
-                            )
-                            Text(
-                                text = currentSampleQuery,
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+            SmartSearchLoopPreviewCard()
 
-                    // Sample Concept Suggestion Chips (Horizontally scrollable so queries never truncate)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                    ) {
-                        sampleQueries.forEachIndexed { index, query ->
-                            val isChipSelected = index == selectedQueryIndex
-                            Surface(
-                                shape = ShapeFull,
-                                color = if (isChipSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                contentColor = if (isChipSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        selectedQueryIndex = index
-                                    }
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
-                                ) {
-                                    Text(
-                                        text = query,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = if (isChipSelected) FontWeight.Bold else FontWeight.Medium
-                                        ),
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Simulated 3 Live Photo Match Cards cross-fading smoothly with query selection
-                    AnimatedContent(
-                        targetState = selectedQueryIndex,
-                        transitionSpec = {
-                            fadeIn(animationSpec = MotionTokens.gentleSpring()) togetherWith fadeOut(animationSpec = MotionTokens.fastEffectsSpec())
-                        },
-                        label = "SimulatedResultsCrossFade"
-                    ) { targetIndex ->
-                        val results = simulatedAiResults[targetIndex] ?: emptyList()
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            results.forEach { result ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(86.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(Brush.verticalGradient(result.gradientColors))
-                                        .padding(SpacingTokens.S)
-                                ) {
-                                    // Top row: mini icon badge + confidence pill
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clip(CircleShape)
-                                                .background(Color.Black.copy(alpha = 0.32f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(result.iconRes),
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(11.dp)
-                                            )
-                                        }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(ShapeFull)
-                                                .background(Color.Black.copy(alpha = 0.38f))
-                                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = result.confidence,
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = Color.White,
-                                                fontSize = 8.sp,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-
-                                    // Bottom: Title & Subtitle with crisp contrast
-                                    Column(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomStart)
-                                            .fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = result.title,
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = result.subtitle,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color.White.copy(alpha = 0.85f),
-                                            fontSize = 8.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Live Simulation indicator caption
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = "Simulated results • Tap chips to test natural query matching",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            fontSize = 10.sp
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.L))
+            Spacer(modifier = Modifier.height(SpacingTokens.M))
 
             // 1. Text (OCR) Indexing Card (Built into Android, 0 MB)
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = OfficialM3Shapes.ClamShell,
-                            color = MaterialTheme.colorScheme.secondary,
-                            contentColor = MaterialTheme.colorScheme.onSecondary,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondary,
-                                    modifier = Modifier.size(IconSizeTokens.L)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Text (OCR) Indexing",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Google ML Kit • Built into Android",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondary,
-                            contentColor = MaterialTheme.colorScheme.onSecondary,
-                            shape = ShapeFull
-                        ) {
-                            Text(
-                                text = "Built-in",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Extract and search text inside screenshots, receipts, and documents 100% on-device without cloud sync.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            OnboardingAiModelCard(
+                title = "Text (OCR) Indexing",
+                subtitle = "Google ML Kit • Built into Android",
+                statusText = "Built-in",
+                isStatusActive = true,
+                isDownloading = false,
+                iconRes = R.drawable.ic_ms_text_fields,
+                iconShape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                accentColor = MaterialTheme.colorScheme.primaryContainer,
+                onAccentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                toggles = listOf(
+                    AiModelToggle(
+                        title = "Auto-Index OCR Text",
+                        subtitle = "Scan new screenshots and photos locally",
+                        checked = ocrIndexingEnabled,
+                        onCheckedChange = { settingsViewModel?.setOcrIndexingEnabled(it) }
                     )
+                )
+            )
 
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        thickness = 0.5.dp
-                    )
-
-                    // OCR Toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setOcrIndexingEnabled(!ocrIndexingEnabled)
-                            }
-                            .padding(vertical = SpacingTokens.XS),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = OfficialM3Shapes.Bun,
-                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
-                            contentColor = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(IconSizeTokens.M)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Auto-Index OCR Text",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Automatically scan new screenshots and photos for text",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                        Switch(
-                            checked = ocrIndexingEnabled,
-                            onCheckedChange = { checked ->
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setOcrIndexingEnabled(checked)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                                checkedTrackColor = MaterialTheme.colorScheme.secondary
-                            )
-                        )
-                    }
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        thickness = 0.5.dp
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(IconSizeTokens.M)
-                            )
-                            Text(
-                                text = "Built into Android • Zero download required",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.L))
+            Spacer(modifier = Modifier.height(SpacingTokens.M))
 
             // 2. Face Recognition & People Grouping Card
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = OfficialM3Shapes.Cookie12Sided,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            contentColor = MaterialTheme.colorScheme.onTertiary,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiary,
-                                    modifier = Modifier.size(IconSizeTokens.L)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "People & Face Grouping",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "MobileFaceNet • InsightFace (w600k)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Surface(
-                            color = if (faceModelDownloaded) {
-                                MaterialTheme.colorScheme.tertiary
-                            } else if (isFaceDownloading) {
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest
-                            },
-                            contentColor = if (faceModelDownloaded) {
-                                MaterialTheme.colorScheme.onTertiary
-                            } else if (isFaceDownloading) {
-                                MaterialTheme.colorScheme.onTertiaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            shape = ShapeFull
-                        ) {
-                            Text(
-                                text = if (faceModelDownloaded) "Ready • 13 MB" else if (isFaceDownloading) "$faceDownloadProgress%" else "~13 MB",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Detect and cluster faces locally to organize photos into private People albums.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            val faceToggles = buildList {
+                add(
+                    AiModelToggle(
+                        title = "Enable Face Grouping",
+                        subtitle = "Organize photos into private People albums",
+                        checked = faceRecognitionEnabled,
+                        onCheckedChange = { settingsViewModel?.setFaceRecognitionEnabled(it) }
                     )
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        thickness = 0.5.dp
+                )
+                if (faceRecognitionEnabled) {
+                    add(
+                        AiModelToggle(
+                            title = "Auto-Index New Faces",
+                            subtitle = "Detect faces when new photos arrive",
+                            checked = faceAutoIndex,
+                            onCheckedChange = { settingsViewModel?.setFaceAutoIndex(it) }
+                        )
                     )
-
-                    // Face Recognition Toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setFaceRecognitionEnabled(!faceRecognitionEnabled)
-                            }
-                            .padding(vertical = SpacingTokens.XS),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = OfficialM3Shapes.Flower,
-                            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
-                            contentColor = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.size(IconSizeTokens.M)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Enable Face Grouping",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Cluster and organize individuals across your gallery",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                        Switch(
-                            checked = faceRecognitionEnabled,
-                            onCheckedChange = { checked ->
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setFaceRecognitionEnabled(checked)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onTertiary,
-                                checkedTrackColor = MaterialTheme.colorScheme.tertiary
-                            )
-                        )
-                    }
-
-                    if (faceRecognitionEnabled) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            thickness = 0.5.dp
-                        )
-
-                        // Auto-Index Faces Toggle
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    settingsViewModel?.setFaceAutoIndex(!faceAutoIndex)
-                                }
-                                .padding(vertical = SpacingTokens.XS),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = OfficialM3Shapes.Sunny,
-                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
-                                contentColor = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(IconSizeTokens.M)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Auto-Index New Faces",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Automatically detect and cluster faces when new photos arrive",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                            Switch(
-                                checked = faceAutoIndex,
-                                onCheckedChange = { checked ->
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    settingsViewModel?.setFaceAutoIndex(checked)
-                                },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onTertiary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.tertiary
-                                )
-                            )
-                        }
-
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            thickness = 0.5.dp
-                        )
-
-                        // Download Face Model Action / Progress Area
-                        if (isFaceDownloading) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Downloading: $faceDownloadProgress%",
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.tertiary
-                                    )
-                                    Text(
-                                        text = if (faceBytesDownloaded > 0L) "${formatBytes(faceBytesDownloaded)} / ${formatBytes(faceTotalBytes)}" else "${formatBytes(faceTotalBytes)}",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                LinearWavyProgressIndicator(
-                                    progress = { faceDownloadProgress / 100f },
-                                    wavelength = WavyProgressTokens.LinearWavelength,
-                                    waveSpeed = WavyProgressTokens.CalmWaveSpeed,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(10.dp)
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-                                    ) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
-                                            contentDescription = "Speed",
-                                            tint = MaterialTheme.colorScheme.tertiary,
-                                            modifier = Modifier.size(IconSizeTokens.S)
-                                        )
-                                        Text(
-                                            text = "Speed: ${formatSpeed(faceSpeedBytesPerSec)}",
-                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    TextButton(
-                                        onClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            settingsViewModel?.cancelFaceModelDownload()
-                                        },
-                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                    ) {
-                                        Text(stringResource(R.string.action_cancel))
-                                    }
-                                }
-                            }
-                        } else if (faceModelDownloaded) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.65f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(IconSizeTokens.M)
-                                    )
-                                    Text(
-                                        text = "Model ready (13 MB) • Face grouping enabled",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                }
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    settingsViewModel?.startFaceModelDownload()
-                                },
-                                shape = ShapeFull,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiary,
-                                    contentColor = MaterialTheme.colorScheme.onTertiary
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .pressScale()
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(IconSizeTokens.S)
-                                    )
-                                    Text(
-                                        text = "Download Face Model (13 MB)",
-                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
+            OnboardingAiModelCard(
+                title = "People & Face Grouping",
+                subtitle = "MobileFaceNet • InsightFace (w600k)",
+                statusText = if (faceModelDownloaded) "Ready • 13 MB" else if (isFaceDownloading) "$faceDownloadProgress%" else "~13 MB",
+                isStatusActive = faceModelDownloaded,
+                isDownloading = isFaceDownloading,
+                iconRes = R.drawable.ic_ms_person,
+                iconShape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                accentColor = MaterialTheme.colorScheme.primaryContainer,
+                onAccentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                toggles = faceToggles,
+                downloadArea = if (faceRecognitionEnabled && !faceModelDownloaded) {
+                    {
+                        AiModelDownloadArea(
+                            isDownloading = isFaceDownloading,
+                            progress = faceDownloadProgress,
+                            bytesDownloaded = faceBytesDownloaded,
+                            totalBytes = faceTotalBytes,
+                            speedBytesPerSec = faceSpeedBytesPerSec,
+                            downloadButtonText = "Download Face Model (13 MB)",
+                            accentColor = MaterialTheme.colorScheme.primary,
+                            onAccentColor = MaterialTheme.colorScheme.onPrimary,
+                            onStartDownload = { settingsViewModel?.startFaceModelDownload() },
+                            onCancelDownload = { settingsViewModel?.cancelFaceModelDownload() }
+                        )
+                    }
+                } else null
+            )
 
-            Spacer(modifier = Modifier.height(SpacingTokens.L))
+            Spacer(modifier = Modifier.height(SpacingTokens.M))
 
             // 3. Smart Search (Semantic AI) Card
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = OfficialM3Shapes.Clover4Leaf,
-                            color = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(IconSizeTokens.L)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Smart Search (Semantic AI)",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Apple MobileCLIP2-S2 • ONNX FP32",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Surface(
-                            color = if (isModelDownloaded) {
-                                MaterialTheme.colorScheme.primary
-                            } else if (isDownloading) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest
-                            },
-                            contentColor = if (isModelDownloaded) {
-                                MaterialTheme.colorScheme.onPrimary
-                            } else if (isDownloading) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            shape = ShapeFull
-                        ) {
-                            Text(
-                                text = if (isModelDownloaded) "Ready • ~386 MB" else if (isDownloading) "$downloadProgress%" else "~386 MB",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Search photos with natural descriptions (e.g. 'sunset at beach', 'latte coffee') entirely on-device.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            OnboardingAiModelCard(
+                title = "Smart Search (Semantic AI)",
+                subtitle = "Apple MobileCLIP2-S2 • ONNX FP32",
+                statusText = if (isModelDownloaded) "Ready • ~386 MB" else if (isDownloading) "$downloadProgress%" else "~386 MB",
+                isStatusActive = isModelDownloaded,
+                isDownloading = isDownloading,
+                iconRes = R.drawable.ic_ms_auto_fix_high,
+                iconShape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                accentColor = MaterialTheme.colorScheme.primaryContainer,
+                onAccentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                toggles = listOf(
+                    AiModelToggle(
+                        title = "Auto-Index New Photos",
+                        subtitle = "Generate search vectors in background",
+                        checked = autoIndexEnabled,
+                        onCheckedChange = { settingsViewModel?.setSmartSearchAutoIndex(it) }
                     )
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        thickness = 0.5.dp
-                    )
-
-                    // Smart Search Auto-Index Toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setSmartSearchAutoIndex(!autoIndexEnabled)
-                            }
-                            .padding(vertical = SpacingTokens.XS),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = OfficialM3Shapes.PuffyDiamond,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            contentColor = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(IconSizeTokens.M)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Auto-Index New Photos",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Generate semantic search vectors automatically in background",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(SpacingTokens.S))
-
-                        Switch(
-                            checked = autoIndexEnabled,
-                            onCheckedChange = { checked ->
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.setSmartSearchAutoIndex(checked)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
-                            )
+                ),
+                downloadArea = if (!isModelDownloaded) {
+                    {
+                        AiModelDownloadArea(
+                            isDownloading = isDownloading,
+                            progress = downloadProgress,
+                            bytesDownloaded = bytesDownloaded,
+                            totalBytes = totalBytes,
+                            speedBytesPerSec = speedBytesPerSec,
+                            downloadButtonText = "Download Model (~386 MB)",
+                            accentColor = MaterialTheme.colorScheme.primary,
+                            onAccentColor = MaterialTheme.colorScheme.onPrimary,
+                            onStartDownload = { settingsViewModel?.startModelDownload() },
+                            onCancelDownload = { settingsViewModel?.cancelModelDownload() }
                         )
                     }
+                } else null
+            )
 
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        thickness = 0.5.dp
-                    )
-
-                    // Download Model Status / Action Area
-                    if (isDownloading) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Downloading: $downloadProgress%",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = "${formatBytes(bytesDownloaded)} / ${formatBytes(totalBytes)}",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            LinearWavyProgressIndicator(
-                                progress = { downloadProgress / 100f },
-                                wavelength = WavyProgressTokens.LinearWavelength,
-                                waveSpeed = WavyProgressTokens.CalmWaveSpeed,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(10.dp)
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
-                                        contentDescription = "Speed",
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(IconSizeTokens.S)
-                                    )
-                                    Text(
-                                        text = "Speed: ${formatSpeed(speedBytesPerSec)}",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                TextButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        settingsViewModel?.cancelModelDownload()
-                                    },
-                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                ) {
-                                    Text(stringResource(R.string.action_cancel))
-                                }
-                            }
-                        }
-                    } else if (isModelDownloaded) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(IconSizeTokens.M)
-                                )
-                                Text(
-                                    text = "Model ready (103 MB) • Natural search enabled",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                settingsViewModel?.startModelDownload()
-                            },
-                            shape = ShapeFull,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .pressScale()
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(IconSizeTokens.S)
-                                )
-                                Text(
-                                    text = "Download Model (103 MB)",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(SpacingTokens.XL))
+            Spacer(modifier = Modifier.height(SpacingTokens.S))
         }
 
         // Bottom Navigation Dock: Back & Finish Setup / Start Exploring
@@ -2244,8 +1684,8 @@ private fun SetupAiPage(
             OnboardingNavigationDock(
                 onBack = onBack,
                 onNext = onFinish,
-                nextText = if (canExplore) "Launch Photon" else "Enter Gallery",
-                nextIconRes = if (canExplore) R.drawable.ic_ms_auto_fix_high else R.drawable.ic_ms_chevron_right
+                nextText = "Finish",
+                nextIconRes = R.drawable.ic_ms_check
             )
 
             if (!canExplore && !isDownloading && !isFaceDownloading) {
@@ -2258,6 +1698,273 @@ private fun SetupAiPage(
                 )
             }
         }
+    }
+}
+
+/**
+ * Auto-looping animated demo card illustrating Photon Gallery's 3 offline AI search modes:
+ * People (face grouping), Text inside photos (OCR), and Scenes (semantic search).
+ */
+@Composable
+private fun SmartSearchLoopPreviewCard(
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val modes = remember {
+        listOf(
+            Triple("People", "Sarah", R.drawable.ic_ms_person),
+            Triple("Text (OCR)", "wifi password", R.drawable.ic_ms_text_fields),
+            Triple("Scenes", "sunset beach", R.drawable.ic_ms_search_sparkle)
+        )
+    }
+
+    var activeMode by remember { mutableIntStateOf(0) }
+    var typedLength by remember { mutableIntStateOf(0) }
+    var showResults by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeMode) {
+        val fullQuery = modes[activeMode].second
+        typedLength = 0
+        showResults = false
+        delay(180)
+        for (i in 1..fullQuery.length) {
+            typedLength = i
+            delay(50)
+        }
+        delay(220)
+        showResults = true
+        delay(2400)
+        showResults = false
+        delay(220)
+        activeMode = (activeMode + 1) % modes.size
+    }
+
+    val currentQuery = modes[activeMode].second.take(typedLength)
+    val currentIcon = modes[activeMode].third
+    val innerTileColor = onboardingInnerTileColor()
+
+    OnboardingCausticTray(
+        modifier = modifier.fillMaxWidth(),
+        phaseOffset = 3.9f
+    ) {
+        // Segment 0: Mode pills + Animated typing search bar
+            Surface(
+                shape = onboardingSegmentedTileShape(0, 2),
+                color = innerTileColor,
+                shadowElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                    ) {
+                        modes.forEachIndexed { idx, (label, _, iconRes) ->
+                            val selected = idx == activeMode
+                            Surface(
+                                shape = ShapeFull,
+                                color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    activeMode = idx
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(iconRes),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                                        ),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Animated typing search bar
+                    Surface(
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(currentIcon),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(IconSizeTokens.S)
+                            )
+                            Text(
+                                text = if (currentQuery.isEmpty()) "Search..." else currentQuery,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = if (currentQuery.isEmpty()) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Segment 1: Animated visual result cards tailored to the active mode
+            Surface(
+                shape = onboardingSegmentedTileShape(1, 2),
+                color = innerTileColor,
+                shadowElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(modifier = Modifier.padding(12.dp)) {
+                    AnimatedContent(
+                        targetState = if (showResults) activeMode else -1,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedDecelerateEasing)) +
+                                slideInHorizontally(
+                                    animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
+                                    initialOffsetX = { (it * 0.08f).toInt() }
+                                )).togetherWith(
+                                fadeOut(animationSpec = tween(MotionTokens.Durations.Short, easing = MotionTokens.EmphasizedAccelerateEasing))
+                            )
+                        },
+                        label = "SmartSearchLoopResults"
+                    ) { state ->
+                        if (state < 0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                            ) {
+                                repeat(3) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(64.dp)
+                                    ) {}
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                            ) {
+                                repeat(3) { idx ->
+                                    val isHighlight = idx == 0
+                                    val bgColor = if (isHighlight) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainer
+                                    }
+                                    val fgColor = if (isHighlight) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = bgColor,
+                                        contentColor = fgColor,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(64.dp)
+                                    ) {
+                                        when (state) {
+                                            0 -> {
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = fgColor.copy(alpha = 0.14f),
+                                                        modifier = Modifier.size(34.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(
+                                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            1 -> {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(10.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth(0.75f)
+                                                            .height(5.dp)
+                                                            .clip(ShapeFull)
+                                                            .background(fgColor.copy(alpha = 0.22f))
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth(if (isHighlight) 0.9f else 0.7f)
+                                                            .height(7.dp)
+                                                            .clip(ShapeFull)
+                                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (isHighlight) 0.85f else 0.55f))
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth(0.55f)
+                                                            .height(5.dp)
+                                                            .clip(ShapeFull)
+                                                            .background(fgColor.copy(alpha = 0.22f))
+                                                    )
+                                                }
+                                            }
+                                            else -> {
+                                                val sceneIcon = when (idx) {
+                                                    0 -> R.drawable.ic_ms_wb_twilight
+                                                    1 -> R.drawable.ic_ms_photo_camera
+                                                    else -> R.drawable.ic_ms_image
+                                                }
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(sceneIcon),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
     }
 }
 
@@ -2287,307 +1994,226 @@ private fun OnboardingLiveThemePreview(
     )
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         color = animatedCardBg,
-        border = if (useAmoledBlack && isCurrentlyDark) {
-            BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        } else {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-        },
-        shadowElevation = if (isCurrentlyDark) 0.dp else 4.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(172.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. Top Mini Status Bar + Centered Punch-Hole Camera
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "9:41",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                    fontSize = 10.sp
-                )
-
-                // Miniature Camera Punch-Hole Pill
-                Box(
-                    modifier = Modifier
-                        .size(width = 36.dp, height = 7.dp)
-                        .clip(ShapeFull)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.8f))
-                )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
-                        contentDescription = null,
-                        modifier = Modifier.size(10.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                    )
-                }
-            }
-
-            // 2. Mini Top App Bar: "Photon" + Search Capsule
+            // 1. Real Photon Top Header ("Photos" + tonal action pills)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-                ) {
+                Text(
+                    text = "Photos",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(18.dp)
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.size(22.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_launcher_monochrome),
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(12.dp)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(11.dp)
                             )
                         }
                     }
-                    Text(
-                        text = "Photon",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Surface(
-                    shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.size(22.dp)
                     ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                            contentDescription = null,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Text(
-                            text = "Search…",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 9.sp
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // 3. Mini Filter Pills (All Photos, Favorites, Videos)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
-            ) {
-                Surface(
-                    shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Text(
-                        text = "All Photos",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        fontSize = 9.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
+            // 2. Clean Solid-Tone Gallery Grid Preview
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Today",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp
+                )
 
-                Surface(
-                    shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ) {
-                    Text(
-                        text = "Favorites",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 9.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-
-                Surface(
-                    shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ) {
-                    Text(
-                        text = "Videos",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 9.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            // 4. Realistic 3-Tile Gallery Grid Simulation
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp),
-                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-            ) {
-                // Tile 1: Hero Photo with Sunset Gradient & Heart icon
-                Box(
+                Row(
                     modifier = Modifier
-                        .weight(1.3f)
-                        .fillMaxSize()
-                        .clip(ShapeMedium)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                                )
-                            )
-                        )
+                        .fillMaxWidth()
+                        .height(64.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
+                    // Tile 1: Primary Tonal Photo Card
+                    Surface(
+                        shape = ShapeMedium,
+                        color = MaterialTheme.colorScheme.primaryContainer,
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            .weight(1.25f)
+                            .fillMaxSize()
                     ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Text(
-                            text = "Today",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontSize = 8.sp
-                        )
+                        Box(modifier = Modifier.fillMaxSize().padding(6.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .size(18.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Tile 2: Secondary Tonal Video Card
+                    Surface(
+                        shape = ShapeMedium,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(6.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(22.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "0:42",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                fontSize = 8.sp,
+                                modifier = Modifier.align(Alignment.BottomEnd)
+                            )
+                        }
+                    }
+
+                    // Tile 3: Tertiary Tonal Highlight Card
+                    Surface(
+                        shape = ShapeMedium,
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Surface(
+                                shape = OfficialM3Shapes.Clover4Leaf,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_star),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
-
-                // Tile 2: Video Tile with Play icon & Duration badge
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        .clip(ShapeMedium)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.85f)
-                                )
-                            )
-                        )
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(14.dp)
-                    )
-                    Text(
-                        text = "0:42",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontSize = 8.sp,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(3.dp)
-                    )
-                }
-
-                // Tile 3: Star Highlight Tile
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        .clip(ShapeMedium)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.tertiaryContainer,
-                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f)
-                                )
-                            )
-                        )
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_star),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(12.dp)
-                    )
-                }
             }
 
-            // 5. Mini Bottom Floating Navigation Dock
-            Box(
+            // 3. Real Photon Expressive Floating Navigation Dock
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
                     shape = ShapeFull,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    shadowElevation = 1.dp
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shadowElevation = 0.dp
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = 3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Tab 1 (Active: Photos)
                         Surface(
                             shape = ShapeFull,
-                            color = MaterialTheme.colorScheme.primaryContainer
+                            color = MaterialTheme.colorScheme.primary
                         ) {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    .size(10.dp)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    .size(11.dp)
                             )
                         }
-
-                        // Tab 2 (Albums)
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(11.dp)
+                        )
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(10.dp)
+                            modifier = Modifier.size(11.dp)
                         )
+                    }
+                }
 
-                        // Tab 3 (Search)
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(10.dp)
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(11.dp)
                         )
                     }
                 }
@@ -2611,50 +2237,56 @@ private fun ColorSwatchItem(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(vertical = SpacingTokens.XS)
+        modifier = Modifier
+            .width(78.dp)
+            .padding(vertical = SpacingTokens.XS)
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(54.dp)
-                .clip(ShapeMedium)
-                .background(color)
+                .size(56.dp)
                 .clickable {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onClick()
                 }
-                .then(
-                    if (isSelected) {
-                        Modifier.border(
-                            width = 2.5.dp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            shape = ShapeMedium
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
         ) {
-            if (isDynamic) {
-                Icon(
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(IconSizeTokens.M)
-                )
-            } else if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
+            if (isSelected) {
+                Surface(
+                    modifier = Modifier.size(56.dp),
+                    shape = ShapeMedium,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 0.dp
+                ) {}
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(if (isSelected) 46.dp else 48.dp)
+                    .clip(ShapeMedium)
+                    .background(color)
+            ) {
+                if (isDynamic) {
                     Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(IconSizeTokens.S)
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(IconSizeTokens.M)
                     )
+                } else if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .background(MaterialTheme.colorScheme.surface, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(IconSizeTokens.S)
+                        )
+                    }
                 }
             }
         }
@@ -2664,9 +2296,12 @@ private fun ColorSwatchItem(
         Text(
             text = title,
             style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.5.sp,
+                letterSpacing = (-0.2).sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
             ),
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -2685,17 +2320,31 @@ private fun PermissionBlockCard(
     iconShape: Shape,
     containerColor: Color,
     contentColor: Color,
+    cardShape: Shape = ShapeLarge,
     onClick: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val badgeColor = if (isGranted) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val badgeContentColor = if (isGranted) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val cardColor by animateColorAsState(
+        targetValue = containerColor,
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "PermissionCardColor"
+    )
 
     Surface(
-        shape = ShapeLarge,
-        color = if (isGranted) containerColor.copy(alpha = 0.35f) else containerColor.copy(alpha = 0.18f),
-        border = BorderStroke(
-            1.dp,
-            if (isGranted) containerColor.copy(alpha = 0.65f) else containerColor.copy(alpha = 0.35f)
-        ),
+        shape = cardShape,
+        color = cardColor,
+        shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !isGranted) {
@@ -2706,14 +2355,14 @@ private fun PermissionBlockCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.M),
+                .padding(horizontal = 14.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 shape = iconShape,
-                color = containerColor,
-                contentColor = contentColor,
-                modifier = Modifier.size(46.dp)
+                color = badgeColor,
+                contentColor = badgeContentColor,
+                modifier = Modifier.size(42.dp)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -2727,12 +2376,16 @@ private fun PermissionBlockCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(SpacingTokens.M))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        letterSpacing = (-0.2).sp
+                    ),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -2743,23 +2396,23 @@ private fun PermissionBlockCard(
                 )
             }
 
-            Spacer(modifier = Modifier.width(SpacingTokens.M))
+            Spacer(modifier = Modifier.width(8.dp))
 
             if (isGranted) {
                 Surface(
                     shape = ShapeFull,
-                    color = containerColor,
-                    contentColor = contentColor
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
                     ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
                             contentDescription = null,
-                            modifier = Modifier.size(IconSizeTokens.S)
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "Allowed",
@@ -2767,7 +2420,7 @@ private fun PermissionBlockCard(
                         )
                     }
                 }
-            } else {
+                } else {
                 FilledTonalButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -2785,6 +2438,290 @@ private fun PermissionBlockCard(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
+            }
+        }
+    }
+}
+
+private data class AiModelToggle(
+    val title: String,
+    val subtitle: String,
+    val checked: Boolean,
+    val onCheckedChange: (Boolean) -> Unit
+)
+
+/**
+ * Clean, minimal M3 Expressive AI model card for Step 3 onboarding.
+ * Replaces multi-layered boxes with one header row and one unified tonal control surface.
+ */
+@Composable
+private fun OnboardingAiModelCard(
+    title: String,
+    subtitle: String,
+    statusText: String,
+    isStatusActive: Boolean,
+    isDownloading: Boolean,
+    @DrawableRes iconRes: Int,
+    iconShape: Shape,
+    containerColor: Color,
+    accentColor: Color,
+    onAccentColor: Color,
+    toggles: List<AiModelToggle>,
+    downloadArea: (@Composable () -> Unit)? = null
+) {
+    val haptic = LocalHapticFeedback.current
+    val innerTileColor = onboardingInnerTileColor()
+    val totalSegments = 1 + toggles.size + (if (downloadArea != null) 1 else 0)
+
+    OnboardingCausticTray(
+        trayColor = containerColor,
+        phaseOffset = title.length * 0.43f
+    ) {
+            // Segment 0: Header (Icon + Title/Subtitle + Status Pill)
+            Surface(
+                shape = onboardingSegmentedTileShape(0, totalSegments),
+                color = innerTileColor,
+                shadowElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = iconShape,
+                        color = accentColor,
+                        contentColor = onAccentColor,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(iconRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Surface(
+                        color = when {
+                            isStatusActive -> accentColor
+                            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        contentColor = when {
+                            isStatusActive -> onAccentColor
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        shape = ShapeFull
+                    ) {
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+            }
+
+            // Segments 1..N: Individual toggle tiles
+            toggles.forEachIndexed { idx, toggle ->
+                Surface(
+                    shape = onboardingSegmentedTileShape(1 + idx, totalSegments),
+                    color = innerTileColor,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                toggle.onCheckedChange(!toggle.checked)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = toggle.title,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = toggle.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Switch(
+                            checked = toggle.checked,
+                            onCheckedChange = { checked ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                toggle.onCheckedChange(checked)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                uncheckedBorderColor = Color.Transparent
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Optional bottom download segment
+            if (downloadArea != null) {
+                Surface(
+                    shape = onboardingSegmentedTileShape(totalSegments - 1, totalSegments),
+                    color = innerTileColor,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    ) {
+                        downloadArea()
+                    }
+                }
+            }
+    }
+}
+
+@Composable
+private fun AiModelDownloadArea(
+    isDownloading: Boolean,
+    progress: Int,
+    bytesDownloaded: Long,
+    totalBytes: Long,
+    speedBytesPerSec: Long,
+    downloadButtonText: String,
+    accentColor: Color,
+    onAccentColor: Color,
+    onStartDownload: () -> Unit,
+    onCancelDownload: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    if (isDownloading) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Downloading: $progress%",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = accentColor
+                )
+                Text(
+                    text = if (bytesDownloaded > 0L) "${formatBytes(bytesDownloaded)} / ${formatBytes(totalBytes)}" else formatBytes(totalBytes),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            LinearWavyProgressIndicator(
+                progress = { progress / 100f },
+                wavelength = WavyProgressTokens.LinearWavelength,
+                waveSpeed = WavyProgressTokens.CalmWaveSpeed,
+                color = accentColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_bolt),
+                        contentDescription = "Speed",
+                        tint = accentColor,
+                        modifier = Modifier.size(IconSizeTokens.S)
+                    )
+                    Text(
+                        text = "Speed: ${formatSpeed(speedBytesPerSec)}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                TextButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onCancelDownload()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        }
+    } else {
+        Button(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onStartDownload()
+            },
+            shape = ShapeFull,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = accentColor,
+                contentColor = onAccentColor
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .pressScale()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                    contentDescription = null,
+                    modifier = Modifier.size(IconSizeTokens.S)
+                )
+                Text(
+                    text = downloadButtonText,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                )
             }
         }
     }
