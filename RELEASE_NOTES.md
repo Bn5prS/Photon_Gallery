@@ -1,35 +1,35 @@
-# Release Notes — v3.0.0
+# Release Notes — v4.0.0
 
-### ⚠️ Important Notice for v2.x Users
-* **In-app update not supported from v2.x**: Due to migrating to a permanent official release signing key, updating directly from within the v2.x app will fail with a signature mismatch error.
-* **How to upgrade**: Please uninstall your existing v2.x app from your device, then download and install the v3.0.0 package directly from GitHub Releases.
-* **Future updates**: All future releases from v3.0.0 onward use this permanent key and will update seamlessly inside the app with 1 tap.
-
----
-
-### Features
-* **People & Face Grouping**: On-device facial recognition and clustering running 100% locally. Automatically organizes recurring faces into individual identities with support for custom names, favorites, hidden profiles, and smart merge suggestions.
-* **Document Smart Classification**: Automated on-device OCR categorization that sorts photos into 7 document types (Receipts, Invoices, IDs & Cards, Notes, Forms, Whiteboards, and Documents) via a collapsible carousel in the Albums tab.
+### New Features
+* **Customizable Toolbars**: Reorder and choose actions for the photo viewer bar and the multi-select bar in Settings.
+* **Collections Tab**: Moved Collections to its own tab with pinned albums at the top, a 2–4 column pinch gesture on Albums, and collapsible Utilities & Tools.
+* **Ultra HDR & Motion Photos**: Added Ultra HDR display support in the viewer (with a Settings toggle) and Motion Photo playback/extraction.
+* **Viewer Actions**: Added quick rotate with EXIF saving, copy image to clipboard, print, and an option to strip EXIF on copy or overwrite.
+* **Memories Views**: Added Stories and Spotlight views for Memories.
+* **Trash Options**: Added session toggles in the delete dialog to skip confirmation or delete permanently without moving to Trash.
 
 ---
 
 ### Improvements
-* **Adaptive App Icon**: Redesigned borderless launcher icon with dynamic Material You themed icon support on Android 13+.
-* **Edge-to-Edge Photo Grid**: Reduced thumbnail spacing to 1dp for a cleaner, high-density browsing layout.
-* **Album Sorting**: Added "Date Added" sorting alongside Date Taken, with new album overflow management controls.
-* **Onboarding Setup**: Integrated the offline face model download into the initial setup wizard with real-time transfer speed and byte progress.
-* **Search & OCR Precision**: Upgraded OCR decode resolution to 2560px for improved text detection, paired with refined CLIP semantic search matching thresholds.
-* **Viewer Controls**: Added a Settings toggle to show or hide the floating zoom minimap tracker in the full-screen photo viewer.
+* **Photo Editor**: Expanded with markup drawing, text tools, blur redaction, mirror, overwrite-save, and hold-to-compare.
+* **Theme Picker**: Replaced the horizontal palette scroll row with a 4×4 color picker card and narrowed palette styles to 4 options.
+* **Timeline Grid & Scrolling**: Reworked the main photo grid for smoother scrolling, drag-to-select, better fast-scroller behavior, and preserved scroll position when returning from a photo.
+* **Transitions & Navigation**: Updated the bottom navigation bar with a separate Search button, moved sort/view options into a compact bottom sheet, and added screen/photo open transitions.
+* **Dialogs & Settings Screens**: Cleaned up the delete dialog, About screen, Update dialog, EXIF details sheet, onboarding background, and Smart Search model cards (with Face Recognition moved to second place).
+* **Smart Search & Document Sorting**: Switched Smart Search to MobileCLIP2-S2 FP32, improved document category accuracy (receipts, IDs, notes, etc.), and added a 50-image cooldown during background indexing so the phone stays cool.
+* **Fresh-Install Defaults**: Center-aligned date headers, Videos tab off by default, and 4-column grid (existing saved settings, pinned albums, and face names stay intact).
 
 ---
 
 ### Bug Fixes
-* **OCR Search Query Syntax**: Resolved query parsing errors to ensure multi-word text searches return accurate matches.
-* **Social Media Routing**: Fixed a category precedence issue where Facebook downloads failed to map into the Social album.
-* **Viewer Face Highlights**: Removed automatic face bounding box overlays from displaying unexpectedly upon opening photos.
-* **Large Group Merges**: Resolved a SQLite `CursorWindow` memory allocation failure when merging large person clusters.
-* **Background Indexing Stability**: Fixed coroutine lifecycle management during background face indexing to prevent interrupted scans and ensure accurate photo reassignments.
-* **Timeline Header Spacing**: Corrected vertical padding and alignment around date headers in the primary timeline grid.
+* **Trash Bin**: Excluded non-media trashed files (like PDFs or APKs), fixed trashed videos being treated as images, and prevented trashed items from disappearing on tap or sync.
+* **Viewer & Editor**: Show capture date instead of file modified date, keep controls visible while menus are open, and fix crop gestures, bitmap decoding, and HSL sliders in the editor.
+* **Sync & Stability**: Added pull-to-refresh, removed blank thumbnails during sync, fixed background face-scan crashes, and silenced noisy background indexing notifications.
+
+---
+
+### Translations
+* Added **Italian** and **Spanish (es-ES)** translations, plus updates and fixes for **French**, **German**, and **Portuguese (BR)**.
 
 ---
 
