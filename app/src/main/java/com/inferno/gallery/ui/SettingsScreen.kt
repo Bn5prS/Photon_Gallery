@@ -190,6 +190,7 @@ fun SettingsScreen(
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
+    val showPillLabels by viewModel.showPillLabels.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
@@ -1223,6 +1224,17 @@ fun SettingsScreen(
                                             }
                                         )
                                     }
+                                    if (dockStyle == com.inferno.gallery.data.DockStyle.PILL) {
+                                        add {
+                                            SwitchSettingItem(
+                                                title = stringResource(R.string.setting_dock_pill_labels),
+                                                subtitle = stringResource(R.string.setting_dock_pill_labels_sub),
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
+                                                checked = showPillLabels,
+                                                onCheckedChange = { viewModel.setShowPillLabels(it) }
+                                            )
+                                        }
+                                    }
                                     add {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_dock_videos),
@@ -1796,297 +1808,6 @@ fun SettingsScreen(
                                 items = ocrItems
                             )
 
-                            val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING || modelDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
-                            val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
-                            val isClipIndexing = clipProgressState.isIndexing
-                            val unindexedClip = unindexedSmartSearchCount
-                            val indexedClip = maxOf(0, totalImagesCount - unindexedClip)
-                            val displayClipIndexed = if (isClipIndexing) clipProgressState.progress else indexedClip
-                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalImagesCount
-                            val smartCurrentImageName = clipProgressState.currentImageName
-
-                            val smartSearchItems = mutableListOf<@Composable () -> Unit>()
-
-                            if (!smartSearchModelDownloaded) {
-                                smartSearchItems.add {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.Top
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
-                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = "Search natural queries like 'beach sunset with friends'",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            val smartModelBadgeText = if (isDownloading) "Downloading" else "Needs Setup"
-                                            ModelStatusBadge(
-                                                isActive = isDownloading,
-                                                text = smartModelBadgeText
-                                            )
-                                        }
-
-                                        if (isDownloading) {
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                LinearProgressIndicator(
-                                                    progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    strokeCap = StrokeCap.Round,
-                                                    modifier = Modifier.fillMaxWidth().height(6.dp)
-                                                )
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = "Downloading model: $downloadProgress%",
-                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    TextButton(
-                                                        onClick = { viewModel.cancelModelDownload() },
-                                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                                    ) {
-                                                        Text(stringResource(R.string.action_cancel))
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            Button(
-                                                onClick = { viewModel.startModelDownload() },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                shape = RoundedCornerShape(12.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text("Download AI Model (~386 MB)")
-                                            }
-                                        }
-
-                                        ModelSpecificationsDrawer(
-                                            specs = listOf(
-                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
-                                                "Quantization" to "ONNX FP32 (Full Precision)",
-                                                "Inference" to "CPU (Arm Neon)",
-                                                "Model Footprint" to "~386 MB"
-                                            ),
-                                            links = listOf(
-                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
-                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
-                                            )
-                                        )
-                                    }
-                                }
-                            } else {
-                                smartSearchItems.add {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { viewModel.setSmartSearchAutoIndex(!smartSearchAutoIndex) }
-                                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Auto index new images",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "Compute AI embeddings for new photos in background",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Switch(
-                                            checked = smartSearchAutoIndex,
-                                            onCheckedChange = null,
-                                            thumbContent = {
-                                                Icon(
-                                                    imageVector = if (smartSearchAutoIndex) ImageVector.vectorResource(R.drawable.ic_ms_check) else ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(SwitchDefaults.IconSize)
-                                                )
-                                            }
-                                        )
-                                    }
-                                }
-
-                                smartSearchItems.add {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.Top
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
-                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = "Search natural queries like 'beach sunset with friends'",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            val smartBadgeText = if (isClipIndexing) "Indexing" else if (displayClipTotal > 0 && displayClipIndexed == displayClipTotal) "Indexed" else "Ready"
-                                            ModelStatusBadge(
-                                                isActive = isClipIndexing,
-                                                text = smartBadgeText
-                                            )
-                                        }
-
-                                        val clipProgressFloat = if (displayClipTotal > 0) (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f) else 0f
-                                        val statusText = when {
-                                            isClipIndexing && !smartCurrentImageName.isNullOrBlank() -> "Scanning: $smartCurrentImageName"
-                                            isClipIndexing -> "Indexing photos with AI…"
-                                            displayClipTotal > 0 && displayClipIndexed == displayClipTotal -> "AI indexing complete"
-                                            else -> "Index coverage"
-                                        }
-                                        val pctInt = (clipProgressFloat * 100).toInt()
-                                        val progressText = if (displayClipIndexed == displayClipTotal && displayClipTotal > 0) "100%"
-                                            else if (displayClipIndexed > 0 && pctInt == 0) "<1%"
-                                            else if (displayClipTotal > 0) "$displayClipIndexed / $displayClipTotal ($pctInt%)"
-                                            else "$pctInt%"
-
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = statusText,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.weight(1f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = progressText,
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-
-                                            LinearProgressIndicator(
-                                                progress = { clipProgressFloat },
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(6.dp),
-                                                color = MaterialTheme.colorScheme.primary,
-                                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                strokeCap = StrokeCap.Round
-                                            )
-                                        }
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            if (isClipIndexing) {
-                                                FilledTonalButton(
-                                                    onClick = { viewModel.stopSmartSearchIndexing() },
-                                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                    ),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(stringResource(R.string.btn_stop_indexing))
-                                                }
-                                            } else {
-                                                FilledTonalButton(
-                                                    onClick = { viewModel.startSmartSearchIndexing() },
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(stringResource(R.string.btn_start_indexing))
-                                                }
-                                                OutlinedButton(
-                                                    onClick = { showClearIndexConfirm = true },
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(stringResource(R.string.btn_clear_index))
-                                                }
-                                            }
-                                        }
-
-                                        if (!isClipIndexing) {
-                                            OutlinedButton(
-                                                onClick = { showDeleteModelConfirm = true },
-                                                colors = ButtonDefaults.outlinedButtonColors(
-                                                    contentColor = MaterialTheme.colorScheme.error
-                                                ),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(stringResource(R.string.setting_delete_models))
-                                            }
-                                        }
-
-                                        ModelSpecificationsDrawer(
-                                            specs = listOf(
-                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
-                                                "Quantization" to "ONNX FP32 (Full Precision)",
-                                                "Inference" to "CPU (Arm Neon)",
-                                                "Model Footprint" to "~386 MB"
-                                            ),
-                                            links = listOf(
-                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
-                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-
-                            SettingsGroupCard(
-                                title = "Semantic AI Search",
-                                items = smartSearchItems
-                            )
-
                             // ── Face Recognition & Clustering Group Card ──
                             val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
                                     faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
@@ -2442,6 +2163,297 @@ fun SettingsScreen(
                             SettingsGroupCard(
                                 title = "People & Face Recognition",
                                 items = faceItems
+                            )
+
+                            val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING || modelDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+                            val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+                            val isClipIndexing = clipProgressState.isIndexing
+                            val unindexedClip = unindexedSmartSearchCount
+                            val indexedClip = maxOf(0, totalImagesCount - unindexedClip)
+                            val displayClipIndexed = if (isClipIndexing) clipProgressState.progress else indexedClip
+                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalImagesCount
+                            val smartCurrentImageName = clipProgressState.currentImageName
+
+                            val smartSearchItems = mutableListOf<@Composable () -> Unit>()
+
+                            if (!smartSearchModelDownloaded) {
+                                smartSearchItems.add {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Search natural queries like 'beach sunset with friends'",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            val smartModelBadgeText = if (isDownloading) "Downloading" else "Needs Setup"
+                                            ModelStatusBadge(
+                                                isActive = isDownloading,
+                                                text = smartModelBadgeText
+                                            )
+                                        }
+
+                                        if (isDownloading) {
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                LinearProgressIndicator(
+                                                    progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    strokeCap = StrokeCap.Round,
+                                                    modifier = Modifier.fillMaxWidth().height(6.dp)
+                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Downloading model: $downloadProgress%",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    TextButton(
+                                                        onClick = { viewModel.cancelModelDownload() },
+                                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                                    ) {
+                                                        Text(stringResource(R.string.action_cancel))
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            Button(
+                                                onClick = { viewModel.startModelDownload() },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Download AI Model (~386 MB)")
+                                            }
+                                        }
+
+                                        ModelSpecificationsDrawer(
+                                            specs = listOf(
+                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
+                                                "Quantization" to "ONNX FP32 (Full Precision)",
+                                                "Inference" to "CPU (Arm Neon)",
+                                                "Model Footprint" to "~386 MB"
+                                            ),
+                                            links = listOf(
+                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
+                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
+                                            )
+                                        )
+                                    }
+                                }
+                            } else {
+                                smartSearchItems.add {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.setSmartSearchAutoIndex(!smartSearchAutoIndex) }
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Auto index new images",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Compute AI embeddings for new photos in background",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Switch(
+                                            checked = smartSearchAutoIndex,
+                                            onCheckedChange = null,
+                                            thumbContent = {
+                                                Icon(
+                                                    imageVector = if (smartSearchAutoIndex) ImageVector.vectorResource(R.drawable.ic_ms_check) else ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+
+                                smartSearchItems.add {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Search natural queries like 'beach sunset with friends'",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            val smartBadgeText = if (isClipIndexing) "Indexing" else if (displayClipTotal > 0 && displayClipIndexed == displayClipTotal) "Indexed" else "Ready"
+                                            ModelStatusBadge(
+                                                isActive = isClipIndexing,
+                                                text = smartBadgeText
+                                            )
+                                        }
+
+                                        val clipProgressFloat = if (displayClipTotal > 0) (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f) else 0f
+                                        val statusText = when {
+                                            isClipIndexing && !smartCurrentImageName.isNullOrBlank() -> "Scanning: $smartCurrentImageName"
+                                            isClipIndexing -> "Indexing photos with AI…"
+                                            displayClipTotal > 0 && displayClipIndexed == displayClipTotal -> "AI indexing complete"
+                                            else -> "Index coverage"
+                                        }
+                                        val pctInt = (clipProgressFloat * 100).toInt()
+                                        val progressText = if (displayClipIndexed == displayClipTotal && displayClipTotal > 0) "100%"
+                                            else if (displayClipIndexed > 0 && pctInt == 0) "<1%"
+                                            else if (displayClipTotal > 0) "$displayClipIndexed / $displayClipTotal ($pctInt%)"
+                                            else "$pctInt%"
+
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = statusText,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = progressText,
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+
+                                            LinearProgressIndicator(
+                                                progress = { clipProgressFloat },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(6.dp),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                strokeCap = StrokeCap.Round
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (isClipIndexing) {
+                                                FilledTonalButton(
+                                                    onClick = { viewModel.stopSmartSearchIndexing() },
+                                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(stringResource(R.string.btn_stop_indexing))
+                                                }
+                                            } else {
+                                                FilledTonalButton(
+                                                    onClick = { viewModel.startSmartSearchIndexing() },
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(stringResource(R.string.btn_start_indexing))
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { showClearIndexConfirm = true },
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(stringResource(R.string.btn_clear_index))
+                                                }
+                                            }
+                                        }
+
+                                        if (!isClipIndexing) {
+                                            OutlinedButton(
+                                                onClick = { showDeleteModelConfirm = true },
+                                                colors = ButtonDefaults.outlinedButtonColors(
+                                                    contentColor = MaterialTheme.colorScheme.error
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(stringResource(R.string.setting_delete_models))
+                                            }
+                                        }
+
+                                        ModelSpecificationsDrawer(
+                                            specs = listOf(
+                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
+                                                "Quantization" to "ONNX FP32 (Full Precision)",
+                                                "Inference" to "CPU (Arm Neon)",
+                                                "Model Footprint" to "~386 MB"
+                                            ),
+                                            links = listOf(
+                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
+                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "Semantic AI Search",
+                                items = smartSearchItems
                             )
                         }
 

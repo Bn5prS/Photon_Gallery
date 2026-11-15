@@ -65,6 +65,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val PINNED_ALBUMS_STYLE = stringPreferencesKey("pinned_albums_style")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
+        val SHOW_PILL_LABELS = booleanPreferencesKey("show_pill_labels")
         val VIEWER_TOOLBAR_ACTIONS = stringPreferencesKey("viewer_toolbar_actions")
         val SELECTION_DOCK_ACTIONS = stringPreferencesKey("selection_dock_actions")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
@@ -280,7 +281,12 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val showVideosInDockFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[SHOW_VIDEOS_IN_DOCK] ?: true
+            preferences[SHOW_VIDEOS_IN_DOCK] ?: false
+        }
+
+    val showPillLabelsFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[SHOW_PILL_LABELS] ?: false
         }
 
     val viewerToolbarActionsFlow: Flow<List<String>> = context.dataStore.data
@@ -573,6 +579,12 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateShowVideosInDock(show: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_VIDEOS_IN_DOCK] = show
+        }
+    }
+
+    suspend fun updateShowPillLabels(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_PILL_LABELS] = show
         }
     }
 
@@ -1154,15 +1166,6 @@ class SettingsRepository private constructor(private val context: Context) {
             }
         }
 
-        context.dataStore.edit { preferences ->
-            val dateHeaderMigrated = preferences[DATE_HEADER_DEFAULT_MIGRATED_V210] ?: false
-            if (!dateHeaderMigrated) {
-                if (preferences[DATE_HEADER_ALIGNMENT] == "CENTER") {
-                    preferences[DATE_HEADER_ALIGNMENT] = "LEFT"
-                }
-                preferences[DATE_HEADER_DEFAULT_MIGRATED_V210] = true
-            }
-        }
     }
 
     suspend fun updateSecondaryColorOverride(color: Int) {
@@ -1200,7 +1203,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
 
     val dateHeaderAlignmentFlow: Flow<String> = context.dataStore.data
-        .map { it[DATE_HEADER_ALIGNMENT] ?: "LEFT" }
+        .map { it[DATE_HEADER_ALIGNMENT] ?: "CENTER" }
 
     suspend fun updateDateHeaderAlignment(alignment: String) {
         context.dataStore.edit { it[DATE_HEADER_ALIGNMENT] = alignment }

@@ -268,7 +268,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val dateHeaderAlignment: StateFlow<String> = repository.dateHeaderAlignmentFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = "LEFT"
+        initialValue = "CENTER"
     )
 
     fun setDateHeaderAlignment(alignment: String) {
@@ -443,12 +443,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val showVideosInDock: StateFlow<Boolean> = repository.showVideosInDockFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = false
     )
 
     fun setShowVideosInDock(show: Boolean) {
         viewModelScope.launch {
             repository.updateShowVideosInDock(show)
+        }
+    }
+
+    val showPillLabels: StateFlow<Boolean> = repository.showPillLabelsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setShowPillLabels(show: Boolean) {
+        viewModelScope.launch {
+            repository.updateShowPillLabels(show)
         }
     }
 
