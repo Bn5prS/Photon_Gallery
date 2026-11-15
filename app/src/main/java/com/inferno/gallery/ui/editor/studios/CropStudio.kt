@@ -316,7 +316,7 @@ private fun CropCarouselView(
                     cropState.cropRect != androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)
             CropToolTile(
                 label = cropState.aspectOption.label,
-                iconRes = R.drawable.ic_ms_crop,
+                iconRes = R.drawable.ic_ms_thin_crop,
                 isActive = hasCustomAspect,
                 hasActiveDot = hasCustomAspect,
                 onClick = onOpenAspect
@@ -326,7 +326,7 @@ private fun CropCarouselView(
             val hasStraighten = cropState.straightenAngle != 0f
             CropToolTile(
                 label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else stringResource(R.string.editor_crop_straighten),
-                iconRes = R.drawable.ic_ms_straighten,
+                iconRes = R.drawable.ic_ms_thin_straighten,
                 isActive = hasStraighten,
                 hasActiveDot = hasStraighten,
                 onClick = onOpenStraighten
@@ -336,7 +336,7 @@ private fun CropCarouselView(
             val hasRotation = cropState.rotation != 0
             CropToolTile(
                 label = if (hasRotation) "${cropState.rotation}°" else stringResource(R.string.editor_crop_rotate),
-                iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
+                iconRes = R.drawable.ic_ms_thin_rotate_90_degrees_ccw,
                 isActive = hasRotation,
                 hasActiveDot = hasRotation,
                 onClick = onRotate90
@@ -346,7 +346,7 @@ private fun CropCarouselView(
             val hasMirror = cropState.flipH
             CropToolTile(
                 label = stringResource(R.string.editor_crop_mirror),
-                iconRes = R.drawable.ic_ms_flip,
+                iconRes = R.drawable.ic_ms_thin_flip,
                 isActive = hasMirror,
                 hasActiveDot = hasMirror,
                 onClick = onMirror
@@ -356,7 +356,7 @@ private fun CropCarouselView(
             val hasPerspective = cropState.verticalTilt != 0f || cropState.horizontalTilt != 0f
             CropToolTile(
                 label = "Perspective",
-                iconRes = R.drawable.ic_ms_perspective,
+                iconRes = R.drawable.ic_ms_thin_perspective,
                 isActive = hasPerspective,
                 hasActiveDot = hasPerspective,
                 onClick = onOpenPerspective
@@ -365,7 +365,7 @@ private fun CropCarouselView(
             // 6. Reset
             CropToolTile(
                 label = stringResource(R.string.editor_action_reset),
-                iconRes = R.drawable.ic_ms_refresh,
+                iconRes = R.drawable.ic_ms_thin_refresh,
                 isActive = false,
                 isEnabled = cropState.isModified,
                 hasActiveDot = false,
@@ -396,7 +396,7 @@ private fun CropCarouselView(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_close),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_close),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -434,7 +434,7 @@ private fun CropCarouselView(
                     contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_check),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_check),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -571,7 +571,7 @@ private fun FramingSubModeView(
             range = -45f..45f,
             step = 1f,
             defaultValue = 0f,
-            iconRes = R.drawable.ic_ms_straighten,
+            iconRes = R.drawable.ic_ms_thin_straighten,
             valueFormatter = { "${it.toInt()}°" },
             onReset = { onStraightenChange(0f) },
             showDoneButton = false
@@ -642,7 +642,7 @@ private fun PerspectiveSubModeView(
             range = -30f..30f,
             step = 1f,
             defaultValue = 0f,
-            iconRes = R.drawable.ic_ms_perspective,
+            iconRes = R.drawable.ic_ms_thin_perspective,
             valueFormatter = { "${it.toInt()}°" },
             onReset = { onTiltChange(0f) },
             showDoneButton = false
@@ -779,7 +779,7 @@ private fun SubModeActionButtons(
             )
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_ms_close),
+                painter = painterResource(id = R.drawable.ic_ms_thin_close),
                 contentDescription = "Cancel",
                 modifier = Modifier.size(22.dp)
             )
@@ -796,7 +796,7 @@ private fun SubModeActionButtons(
             )
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_ms_check),
+                painter = painterResource(id = R.drawable.ic_ms_thin_check),
                 contentDescription = "Apply",
                 modifier = Modifier.size(22.dp)
             )
@@ -920,7 +920,7 @@ fun AspectRatioPickerSheet(
                         // Checkmark indicator
                         if (isSelected) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_ms_check),
+                                painter = painterResource(id = R.drawable.ic_ms_thin_check),
                                 contentDescription = "Selected",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(22.dp)

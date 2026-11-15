@@ -94,7 +94,7 @@ fun EditorQuickActionBar(
                 modifier = Modifier.size(38.dp)
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_straighten),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_straighten),
                     contentDescription = "Straighten",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
@@ -111,7 +111,7 @@ fun EditorQuickActionBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_aspect_ratio),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_aspect_ratio),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(16.dp)
@@ -124,7 +124,7 @@ fun EditorQuickActionBar(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_keyboard_arrow_down),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_keyboard_arrow_down),
                     contentDescription = "Select aspect ratio",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
@@ -151,7 +151,7 @@ fun EditorQuickActionBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_compare),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_compare),
                     contentDescription = "Hold to compare with original",
                     tint = if (isComparing) MaterialTheme.colorScheme.onPrimaryContainer
                            else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -165,7 +165,7 @@ fun EditorQuickActionBar(
                 modifier = Modifier.size(38.dp)
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_rotate_90_degrees_ccw),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_rotate_90_degrees_ccw),
                     contentDescription = "Rotate 90 degrees",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)

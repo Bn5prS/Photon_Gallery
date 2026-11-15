@@ -132,7 +132,7 @@ fun MarkupTextEditorDialog(
                             }
                         ) {
                             Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_delete),
                                 contentDescription = "Delete",
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(22.dp)
@@ -273,9 +273,9 @@ fun MarkupTextEditorDialog(
                             Icon(
                                 imageVector = ImageVector.vectorResource(
                                     when (textAlign) {
-                                        TextAlign.Left -> R.drawable.ic_ms_format_align_left
-                                        TextAlign.Right -> R.drawable.ic_ms_format_align_right
-                                        else -> R.drawable.ic_ms_format_align_center
+                                        TextAlign.Left -> R.drawable.ic_ms_thin_format_align_left
+                                        TextAlign.Right -> R.drawable.ic_ms_thin_format_align_right
+                                        else -> R.drawable.ic_ms_thin_format_align_center
                                     }
                                 ),
                                 contentDescription = "Text Alignment",
@@ -310,7 +310,7 @@ fun MarkupTextEditorDialog(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_border_all),
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_border_all),
                                 contentDescription = "Background Box",
                                 modifier = Modifier.size(18.dp)
                             )
@@ -353,7 +353,7 @@ fun MarkupTextEditorDialog(
                             if (isSelected) {
                                 val checkTint = if (color == Color.White || color == Color(0xFFFFD600)) Color.Black else Color.White
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_check),
                                     contentDescription = null,
                                     tint = checkTint,
                                     modifier = Modifier.size(16.dp)

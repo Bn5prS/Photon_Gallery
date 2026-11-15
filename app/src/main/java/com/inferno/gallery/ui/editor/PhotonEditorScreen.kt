@@ -10,7 +10,9 @@ import android.net.Uri
 import android.widget.Toast
 import java.io.InputStream
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -149,7 +151,10 @@ data class EditorSnapshot(
  * @param onBack Invoked when user exits the editor.
  * @param onSaved Invoked with the newly created copy URI when export succeeds.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 @Composable
 fun PhotonEditorScreen(
     imageUri: Uri,
@@ -329,6 +334,7 @@ fun PhotonEditorScreen(
                     )
                 }
             }
+
         }
     }
 
@@ -428,13 +434,18 @@ fun PhotonEditorScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // ── CENTER CANVAS VIEWPORT ───────────────────────────────────
-            BoxWithConstraints(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clipToBounds(),
-                contentAlignment = Alignment.TopStart
             ) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .clipToBounds(),
+                    contentAlignment = Alignment.TopStart
+                ) {
                 val bmp = originalBitmap
                 val imgBmp = imageBitmap
 
@@ -756,58 +767,7 @@ fun PhotonEditorScreen(
                         }
                     }
 
-                    // 6. Floating View Original / Compare button in top-right corner
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 12.dp, end = 12.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                                    shape = CircleShape
-                                ),
-                            shape = CircleShape,
-                            color = if (isComparingOriginal) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
-                            },
-                            tonalElevation = 4.dp,
-                            shadowElevation = 2.dp
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(Unit) {
-                                        awaitEachGesture {
-                                            awaitFirstDown(requireUnconsumed = false)
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            isComparingOriginal = true
-                                            waitForUpOrCancellation()
-                                            isComparingOriginal = false
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_ms_compare),
-                                    contentDescription = stringResource(R.string.editor_action_original),
-                                    tint = if (isComparingOriginal) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // 7. Floating Markup Zoom Reset Pill (top-start corner)
+                    // 6. Floating Markup Zoom Reset Pill (top-start corner)
                     androidx.compose.animation.AnimatedVisibility(
                         visible = selectedTab == EditorTab.MARKUP && markupZoom > 1.05f,
                         enter = fadeIn(tween(150)),
@@ -833,7 +793,7 @@ fun PhotonEditorScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.ic_ms_refresh),
+                                    painter = painterResource(id = R.drawable.ic_ms_thin_refresh),
                                     contentDescription = "Reset zoom",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
@@ -865,13 +825,79 @@ fun PhotonEditorScreen(
                 }
             }
 
+            // Floating View Original / Compare button aligned directly beneath the 3-dot menu
+            if (originalBitmap != null && imageBitmap != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 4.dp, end = 8.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                shape = CircleShape
+                            ),
+                        shape = CircleShape,
+                        color = if (isComparingOriginal) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                        },
+                        tonalElevation = 4.dp,
+                        shadowElevation = 2.dp
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isComparingOriginal = true
+                                        waitForUpOrCancellation()
+                                        isComparingOriginal = false
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_ms_thin_compare),
+                                contentDescription = stringResource(R.string.editor_action_original),
+                                tint = if (isComparingOriginal) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
             // ── BOTTOM STUDIOS CONTAINER ──────────────────────────────────
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                )
             ) {
-                when (selectedTab) {
+                val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        fadeIn(animationSpec = effectsSpec) togetherWith fadeOut(animationSpec = effectsSpec)
+                    },
+                    label = "editorStudioSwitch"
+                ) { activeTab ->
+                    when (activeTab) {
                     EditorTab.AUTO -> {
                         AutoStudio(
                             previewBitmap = originalBitmap,
@@ -969,11 +995,13 @@ fun PhotonEditorScreen(
                         )
                     }
 
-                    EditorTab.MORE -> {
-                        MoreStudio(imageUri = imageUri)
+                        EditorTab.MORE -> {
+                            MoreStudio(imageUri = imageUri)
+                        }
                     }
                 }
             }
+
         }
     }
 
@@ -1087,7 +1115,8 @@ fun PhotonEditorScreen(
                         // Tab switch suffices
                     }
                 }
-            },
+            }
+,
             onDismiss = { isSearchOpen = false }
         )
     }
@@ -1147,12 +1176,14 @@ fun PhotonEditorScreen(
                 ) {
                     Text(text = stringResource(R.string.action_discard), color = MaterialTheme.colorScheme.error)
                 }
-            },
+            }
+,
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
                     Text(text = stringResource(R.string.action_keep_editing))
                 }
             }
+
         )
     }
 
@@ -1184,6 +1215,7 @@ fun PhotonEditorScreen(
                     )
                 }
             }
+
         }
     }
 }

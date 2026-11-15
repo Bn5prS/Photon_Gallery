@@ -65,7 +65,7 @@ fun EditorOverflowSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_history),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_history),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
