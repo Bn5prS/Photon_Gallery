@@ -52,7 +52,7 @@ During visual brainstorming, three tonal design directions were evaluated in `di
 ## 4. Technical Architecture: `PhotonDialog.kt`
 
 A new reusable composable file will be created at:  
-[`app/src/main/java/com/inferno/gallery/ui/components/PhotonDialog.kt`](file:///c:/Users/Deepak/Desktop/Projects/Photon%20Gallery/app/src/main/java/com/inferno/gallery/ui/components/PhotonDialog.kt)
+[`app/src/main/java/com/inferno/gallery/ui/components/PhotonDialog.kt`](../../../app/src/main/java/com/inferno/gallery/ui/components/PhotonDialog.kt)
 
 ### Composable Signature
 ```kotlin

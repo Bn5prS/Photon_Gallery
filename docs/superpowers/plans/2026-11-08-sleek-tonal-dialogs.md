@@ -8,7 +8,7 @@
 
 **Tech Stack:** Jetpack Compose, Material 3, Material You Dynamic Color Scheme, Kotlin Coroutines, MediaStore Scoped Storage.
 
-**Spec:** [`docs/superpowers/specs/2026-11-08-sleek-tonal-dialogs-design.md`](file:///c:/Users/Deepak/Desktop/Projects/Photon%20Gallery/docs/superpowers/specs/2026-11-08-sleek-tonal-dialogs-design.md)
+**Spec:** [`docs/superpowers/specs/2026-11-08-sleek-tonal-dialogs-design.md`](../specs/2026-11-08-sleek-tonal-dialogs-design.md)
 
 ## Global Constraints
 - Pure wallpaper dynamic accent color palette (`MaterialTheme.colorScheme.primary`, `primaryContainer`, `onPrimaryContainer`, `surfaceContainer`, `surfaceContainerHighest`).
