@@ -649,7 +649,10 @@ fun CollectionsScreen(
                 val vaultTitle = stringResource(R.string.album_vault)
                 val vaultProtected = stringResource(R.string.vault_status_protected)
 
-                val utilities = remember(favoriteItems.size, screenshotsCount, videoCount, vaultItemCount, favTitle, screenTitle, vidTitle, vaultTitle, vaultProtected) {
+                val utilities = remember(
+                    favoriteItems.size, screenshotsCount, videoCount, vaultItemCount,
+                    favTitle, screenTitle, vidTitle, vaultTitle, vaultProtected
+                ) {
                     listOf(
                         UtilityItem(
                             title = favTitle,
@@ -712,7 +715,10 @@ fun CollectionsScreen(
                 val adjustSub = stringResource(R.string.tool_sub_adjust)
                 val duplicatesSub = stringResource(R.string.tool_sub_duplicates)
 
-                val tools = remember(collageTitle, stitchTitle, editorTitle, cleanUpTitle, layoutsSub, mergeSub, adjustSub, duplicatesSub) {
+                val tools = remember(
+                    collageTitle, stitchTitle, editorTitle, cleanUpTitle,
+                    layoutsSub, mergeSub, adjustSub, duplicatesSub
+                ) {
                     listOf(
                         UtilityItem(
                             title = collageTitle,
@@ -764,11 +770,104 @@ fun CollectionsScreen(
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        UtilityGrid(items = allUtilitiesAndTools)
+                        CollectionsSegmentedUtilityGrid(items = allUtilitiesAndTools)
                         TrashRow(trashCount = trashCount, onAlbumClick = onAlbumClick)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionsSegmentedUtilityGrid(
+    items: List<UtilityItem>,
+    modifier: Modifier = Modifier
+) {
+    val rows = items.chunked(2)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        rows.forEachIndexed { rowIndex, rowItems ->
+            val isFirstRow = rowIndex == 0
+            val isLastRow = rowIndex == rows.lastIndex
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                rowItems.forEachIndexed { colIndex, item ->
+                    val outerRadius = 20.dp
+                    val innerRadius = 8.dp
+                    val tileShape = RoundedCornerShape(
+                        topStart = if (isFirstRow && colIndex == 0) outerRadius else innerRadius,
+                        topEnd = if (isFirstRow && colIndex == 1) outerRadius else innerRadius,
+                        bottomStart = if (isLastRow && colIndex == 0) outerRadius else innerRadius,
+                        bottomEnd = if (isLastRow && colIndex == 1) outerRadius else innerRadius
+                    )
+                    Surface(
+                        onClick = item.onClick,
+                        shape = tileShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(62.dp)
+                            .pressScale(pressedScale = 0.96f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = ShapeFull,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(item.iconRes),
+                                        contentDescription = item.title,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(1.dp)
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.5.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (!item.subtitle.isNullOrBlank()) {
+                                    Text(
+                                        text = item.subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (rowItems.size < 2) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }

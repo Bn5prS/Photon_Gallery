@@ -59,10 +59,13 @@ fun BoxScope.PhotonGridThumbnail(
     gridCellsCount: Int,
     videoIconVector: ImageVector?,
     contentScale: ContentScale = ContentScale.Crop,
-    isFavorite: Boolean = false
+    isFavorite: Boolean = false,
+    targetPxOverride: Int? = null
 ) {
     val context = LocalContext.current
-    val targetDimensionPx = remember(gridCellsCount) { thumbnailTargetPx(gridCellsCount) }
+    val targetDimensionPx = remember(gridCellsCount, targetPxOverride) {
+        targetPxOverride ?: thumbnailTargetPx(gridCellsCount)
+    }
 
     // Prefer the system MediaStore content URI for all media items so MediaStoreThumbnailFetcher
     // uses ContentResolver.loadThumbnail (system-cached, hardware-accelerated, cancellable IPC).

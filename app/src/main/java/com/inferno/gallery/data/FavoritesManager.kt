@@ -15,11 +15,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 
 val Context.favoritesDataStore: DataStore<Preferences> by preferencesDataStore(name = "gallery_preferences")
@@ -66,10 +72,11 @@ class FavoritesManager(private val context: Context) {
      * Observes MediaStore external storage changes so that whenever another external app
      * favorites or unfavorites an item, Photon Gallery immediately reacts in real time.
      */
+    @OptIn(FlowPreview::class)
     private val mediaStoreFavoritesFlow: Flow<Set<String>> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                trySend(queryMediaStoreFavorites())
+                trySend(Unit)
             }
         }
 
@@ -81,13 +88,16 @@ class FavoritesManager(private val context: Context) {
         contentResolver.registerContentObserver(imageUri, true, observer)
         contentResolver.registerContentObserver(videoUri, true, observer)
 
-        // Initial emission
-        trySend(queryMediaStoreFavorites())
-
         awaitClose {
             contentResolver.unregisterContentObserver(observer)
         }
-    }.flowOn(Dispatchers.IO)
+    }
+        .conflate()
+        .debounce(400L)
+        .onStart { emit(Unit) }
+        .map { queryMediaStoreFavorites() }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.IO)
 
     /**
      * Unified favorites flow:
@@ -101,7 +111,7 @@ class FavoritesManager(private val context: Context) {
         val localFavs = preferences[FAVORITES_KEY] ?: emptySet()
         val localUnfavs = preferences[UNFAVORITES_KEY] ?: emptySet()
         (mediaStoreFavs + localFavs) - localUnfavs
-    }.flowOn(Dispatchers.IO)
+    }.distinctUntilChanged().flowOn(Dispatchers.IO)
 
     suspend fun toggleFavorite(id: String) {
         val mediaStoreFavs = withContext(Dispatchers.IO) { queryMediaStoreFavorites() }

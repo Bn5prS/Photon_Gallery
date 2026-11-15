@@ -229,6 +229,7 @@ fun AllAlbumsScreen(
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             bucket = bucket.copy(bucketName = displayBucketName),
+                            sharedKey = "album_container_${bucket.bucketName}",
                             showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                             customShape = albumShape,
                             isCompact = albumsGridCellsCount >= 3,

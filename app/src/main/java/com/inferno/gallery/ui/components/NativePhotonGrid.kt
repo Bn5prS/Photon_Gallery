@@ -188,7 +188,8 @@ fun NativePhotonGrid(
     onScrolledAwayFromTop: ((Boolean) -> Unit)? = null,
     initialFirstVisibleItemIndex: Int = 0,
     initialFirstVisibleItemScrollOffset: Int = 0,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    onScrollDateStateChanged: ((visible: Boolean, dateText: String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val imageLoader = remember(context) { context.imageLoader }
@@ -281,15 +282,6 @@ fun NativePhotonGrid(
             targetRecyclerView?.scrollToPosition(0)
             currentOnSaveScrollPosition?.invoke(0, 0)
         }
-    }
-
-    var showHudPill by remember { mutableStateOf(false) }
-    var hudSpanCount by remember { mutableIntStateOf(safeSpanCount) }
-    LaunchedEffect(safeSpanCount) {
-        hudSpanCount = safeSpanCount
-        showHudPill = true
-        delay(650)
-        showHudPill = false
     }
 
     DisposableEffect(Unit) {
@@ -386,9 +378,47 @@ fun NativePhotonGrid(
                     addItemDecoration(GridSpacingItemDecoration(spacingPx) { gridLayoutManager.spanCount })
 
                     // Scroll state and position tracking
+                    var lastEmittedDate = ""
+                    var lastEmittedVisible = false
+                    var hideDatePillRunnable: Runnable? = null
+                    fun updateDatePill(rv: RecyclerView, visible: Boolean) {
+                        val callback = onScrollDateStateChanged ?: return
+                        if (!visible) {
+                            if (lastEmittedVisible) {
+                                lastEmittedVisible = false
+                                callback(false, lastEmittedDate)
+                            }
+                            return
+                        }
+                        val lm = rv.layoutManager as? GridLayoutManager ?: return
+                        val adapterRef = rv.adapter as? NativePhotonAdapter ?: return
+                        val firstPos = lm.findFirstVisibleItemPosition()
+                        if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                            val date = when (val item = adapterRef.getItem(firstPos)) {
+                                is NativeTimelineItem.Header -> item.title
+                                is NativeTimelineItem.Media -> com.inferno.gallery.ui.GalleryViewModel.formatGroupHeader(item.dateAdded)
+                                null -> ""
+                            }
+                            if (date.isNotEmpty() && (!lastEmittedVisible || date != lastEmittedDate)) {
+                                lastEmittedVisible = true
+                                lastEmittedDate = date
+                                callback(true, date)
+                            }
+                        }
+                    }
+
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
                         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                             super.onScrollStateChanged(recyclerView, newState)
+                            if (newState == RecyclerView.SCROLL_STATE_DRAGGING || newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                                hideDatePillRunnable?.let { recyclerView.removeCallbacks(it) }
+                                updateDatePill(recyclerView, true)
+                            } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                                hideDatePillRunnable?.let { recyclerView.removeCallbacks(it) }
+                                val r = Runnable { updateDatePill(recyclerView, false) }
+                                hideDatePillRunnable = r
+                                recyclerView.postDelayed(r, 900L)
+                            }
                             if (hasRestoredScroll && (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING)) {
                                 val lm = recyclerView.layoutManager as? GridLayoutManager
                                 if (lm != null) {
@@ -407,6 +437,9 @@ fun NativePhotonGrid(
                             val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
                             val isScrolled = lm.findFirstVisibleItemPosition() > 0 || recyclerView.computeVerticalScrollOffset() > 32
                             currentOnScrolledAwayFromTop?.invoke(isScrolled)
+                            if (recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
+                                updateDatePill(recyclerView, true)
+                            }
                             if (hasRestoredScroll && recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
                                 val firstPos = lm.findFirstVisibleItemPosition()
                                 if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
@@ -593,32 +626,37 @@ fun NativePhotonGrid(
             }
         )
 
-        // Floating Material 3 Expressive Column Count HUD Badge
-        AnimatedVisibility(
-            visible = showHudPill,
-            enter = fadeIn(MotionTokens.snappySpring()) + scaleIn(MotionTokens.bouncySpring()),
-            exit = fadeOut(MotionTokens.snappySpring()) + scaleOut(MotionTokens.snappySpring()),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-        ) {
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
-                tonalElevation = 6.dp,
-                shadowElevation = 4.dp
-            ) {
-                Text(
-                    text = "$hudSpanCount columns",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+        androidx.compose.runtime.DisposableEffect(targetRecyclerView) {
+            val rv = targetRecyclerView
+            if (rv != null) {
+                val resolver: (String) -> androidx.compose.ui.geometry.Rect? = { mediaKey ->
+                    var found: androidx.compose.ui.geometry.Rect? = null
+                    for (i in 0 until rv.childCount) {
+                        val child = rv.getChildAt(i) ?: continue
+                        val holder = rv.getChildViewHolder(child) as? MediaViewHolder
+                        if (holder?.boundMediaKey == mediaKey && child.width > 0 && child.height > 0) {
+                            val loc = IntArray(2)
+                            child.getLocationInWindow(loc)
+                            found = androidx.compose.ui.geometry.Rect(
+                                loc[0].toFloat(),
+                                loc[1].toFloat(),
+                                (loc[0] + child.width).toFloat(),
+                                (loc[1] + child.height).toFloat()
+                            )
+                            break
+                        }
+                    }
+                    found
+                }
+                MediaTransitionRegistry.registerResolver(resolver)
+                onDispose {
+                    MediaTransitionRegistry.unregisterResolver(resolver)
+                }
+            } else {
+                onDispose {}
             }
         }
+
     }
 }
 
@@ -649,7 +687,8 @@ fun NativePhotonGrid(
     onScrolledAwayFromTop: ((Boolean) -> Unit)? = null,
     initialFirstVisibleItemIndex: Int = 0,
     initialFirstVisibleItemScrollOffset: Int = 0,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    onScrollDateStateChanged: ((visible: Boolean, dateText: String) -> Unit)? = null
 ) = NativePhotonGrid(
     items = items,
     modifier = modifier,
@@ -673,7 +712,8 @@ fun NativePhotonGrid(
     onScrolledAwayFromTop = onScrolledAwayFromTop,
     initialFirstVisibleItemIndex = initialFirstVisibleItemIndex,
     initialFirstVisibleItemScrollOffset = initialFirstVisibleItemScrollOffset,
-    onSaveScrollPosition = onSaveScrollPosition
+    onSaveScrollPosition = onSaveScrollPosition,
+    onScrollDateStateChanged = onScrollDateStateChanged
 )
 
 /**
@@ -853,7 +893,7 @@ private class NativePhotonAdapter(
                     components = components,
                     imageLoader = imageLoader,
                     colorSchemeProvider = colorSchemeProvider,
-                    onItemClick = { position ->
+                    onItemClick = { position, rect, cornerRadiusDp ->
                         val actualPos = if (hasHeader) position - 1 else position
                         if (actualPos in 0 until differ.currentList.size) {
                             val item = differ.currentList[actualPos] as? NativeTimelineItem.Media
@@ -861,6 +901,13 @@ private class NativePhotonAdapter(
                                 if (isSelectionMode) {
                                     onToggleSelection(item)
                                 } else {
+                                    if (rect != null) {
+                                        MediaTransitionRegistry.setLaunchBounds(
+                                            mediaKey = item.uriString,
+                                            rect = rect,
+                                            cornerRadiusDp = cornerRadiusDp
+                                        )
+                                    }
                                     onMediaClick(item)
                                 }
                             }
@@ -996,18 +1043,31 @@ private class MediaViewHolder(
     private val components: MediaViewComponents,
     private val imageLoader: ImageLoader,
     private val colorSchemeProvider: () -> GridColorScheme,
-    private val onItemClick: (Int) -> Unit,
+    private val onItemClick: (Int, androidx.compose.ui.geometry.Rect?, Float) -> Unit,
     private val onItemLongClick: (Int) -> Unit
 ) : RecyclerView.ViewHolder(components.container) {
 
     private var currentDisposable: Disposable? = null
     private var loadedUri: Uri? = null
+    var boundMediaKey: String? = null
+        private set
+    private var boundCornerRadiusDp: Float = 0f
 
     init {
         itemView.setOnClickListener {
             val pos = bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION) {
-                onItemClick(pos)
+                val rect = if (itemView.width > 0 && itemView.height > 0) {
+                    val loc = IntArray(2)
+                    itemView.getLocationInWindow(loc)
+                    androidx.compose.ui.geometry.Rect(
+                        loc[0].toFloat(),
+                        loc[1].toFloat(),
+                        (loc[0] + itemView.width).toFloat(),
+                        (loc[1] + itemView.height).toFloat()
+                    )
+                } else null
+                onItemClick(pos, rect, boundCornerRadiusDp)
             }
         }
         itemView.setOnLongClickListener {
@@ -1029,6 +1089,8 @@ private class MediaViewHolder(
         spanCount: Int,
         thumbnailCornerRadius: Float
     ) {
+        boundMediaKey = item.uriString
+        boundCornerRadiusDp = thumbnailCornerRadius
         updateColors()
         applyCornerRadius(thumbnailCornerRadius)
         updateSpan(spanCount)

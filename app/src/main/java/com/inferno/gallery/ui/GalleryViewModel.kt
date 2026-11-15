@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -395,22 +396,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private var mediaStoreObserverJob: kotlinx.coroutines.Job? = null
+    private val mediaStoreChangeChannel = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val observerThread = android.os.HandlerThread("MediaStoreObserver").apply { start() }
     private val observerHandler = android.os.Handler(observerThread.looper)
 
     private val mediaStoreObserver = object : android.database.ContentObserver(observerHandler) {
         override fun onChange(selfChange: Boolean) {
-            mediaStoreObserverJob?.cancel()
-            mediaStoreObserverJob = viewModelScope.launch(Dispatchers.IO) {
-                kotlinx.coroutines.delay(150) // Fast 150ms debounce for rapid bursts
-                try {
-                    Log.d("GalleryViewModel", "MediaStore change detected, executing fast incremental sync...")
-                    com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
-                } catch (e: Exception) {
-                    Log.e("GalleryViewModel", "Fast incremental sync failed: ${e.message}")
-                }
-            }
+            mediaStoreChangeChannel.trySend(Unit)
         }
     }
 
@@ -457,6 +449,37 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             mediaStoreObserver
         )
 
+        // Coalesce MediaStore change bursts on IO without cancelling an active sync mid-flight.
+        // During large PC-to-phone imports, cancelling sync() prevents last_generation from saving
+        // and starves Room/Paging3; instead, let each sync finish and throttle consecutive runs.
+        viewModelScope.launch(Dispatchers.IO) {
+            var lastSyncFinishedAt = 0L
+            for (signal in mediaStoreChangeChannel) {
+                // Coalesce rapid bursts before starting a sync
+                kotlinx.coroutines.delay(500)
+                while (mediaStoreChangeChannel.tryReceive().isSuccess) {
+                    kotlinx.coroutines.delay(250)
+                }
+                val sinceLast = android.os.SystemClock.elapsedRealtime() - lastSyncFinishedAt
+                if (sinceLast in 0 until 1500L) {
+                    kotlinx.coroutines.delay(1500L - sinceLast)
+                    while (mediaStoreChangeChannel.tryReceive().isSuccess) {
+                        // Drain any events accumulated during cooldown
+                    }
+                }
+                try {
+                    Log.d("GalleryViewModel", "MediaStore change detected, executing coalesced incremental sync...")
+                    com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("GalleryViewModel", "Fast incremental sync failed: ${e.message}")
+                } finally {
+                    lastSyncFinishedAt = android.os.SystemClock.elapsedRealtime()
+                }
+            }
+        }
+
         // Silently scan for duplicates and photo spheres in the background on startup
         scanForDuplicates()
         scanPhotoSpheres()
@@ -472,13 +495,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
         // Collect & observe memories whenever excluded folders, favorites, or media count changes
         viewModelScope.launch(Dispatchers.IO) {
+            @OptIn(kotlinx.coroutines.FlowPreview::class)
             combine(
                 settingsRepository.excludedFoldersFlow,
                 favoritesManager.favoritesFlow,
                 database.mediaDao().observeTotalImageCount()
             ) { excluded, favs, _ ->
                 excluded to favs
-            }.collectLatest { (excluded, favs) ->
+            }.debounce(500L).collectLatest { (excluded, favs) ->
                 try {
                     val groups = com.inferno.gallery.data.MemoriesManager.loadOnThisDayMemories(
                         mediaDao = database.mediaDao(),
@@ -503,6 +527,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         super.onCleared()
         getApplication<Application>().contentResolver.unregisterContentObserver(mediaStoreObserver)
+        mediaStoreChangeChannel.close()
         observerThread.quitSafely()
     }
 
@@ -737,7 +762,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val showVideosInDock: StateFlow<Boolean> = settingsRepository.showVideosInDockFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = false
     )
 
     fun setShowVideosInDock(show: Boolean) {
@@ -745,6 +770,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             settingsRepository.updateShowVideosInDock(show)
         }
     }
+
+    val showPillLabels: StateFlow<Boolean> = settingsRepository.showPillLabelsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
 
     val timelineLayoutMode: StateFlow<com.inferno.gallery.data.TimelineLayoutMode> = settingsRepository.timelineLayoutModeFlow.stateIn(
         scope = viewModelScope,
@@ -761,7 +792,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val dateHeaderAlignment: StateFlow<String> = settingsRepository.dateHeaderAlignmentFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "LEFT"
+        initialValue = "CENTER"
     )
 
     fun setDateHeaderAlignment(alignment: String) {

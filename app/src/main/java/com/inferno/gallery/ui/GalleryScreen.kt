@@ -256,6 +256,9 @@ fun GalleryScreen(
         }
     }
 
+    var showNativeDateBadge by remember { mutableStateOf(false) }
+    var activeNativeDateBadge by remember { mutableStateOf("") }
+
     LaunchedEffect(viewModel, bucketName) {
         if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
             viewModel.videosScrollToTopTrigger.collect {
@@ -618,6 +621,12 @@ fun GalleryScreen(
                     },
                     onSaveScrollPosition = { index, offset ->
                         viewModel.saveGridScrollPosition(bucketName, index, offset)
+                    },
+                    onScrollDateStateChanged = { visible, dateText ->
+                        showNativeDateBadge = visible
+                        if (dateText.isNotEmpty()) {
+                            activeNativeDateBadge = dateText
+                        }
                     }
                 )
             }
@@ -726,18 +735,21 @@ fun GalleryScreen(
             }
         }
 
-        if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
-            val isCenterAlignment = dateHeaderAlignment == "CENTER"
-            DynamicDateBadge(
-                // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
-                // composition subscribed the whole GalleryScreen to state that is written every
-                // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
-                // happen inside DynamicDateBadge's own (small) restart scope.
-                visible = { showDateBadge },
-                dateText = { activeDateBadge },
-                isCenter = isCenterAlignment,
-                modifier = Modifier
-                    .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
+        val isCenterAlignment = dateHeaderAlignment == "CENTER"
+        DynamicDateBadge(
+            // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
+            // composition subscribed the whole GalleryScreen to state that is written every
+            // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
+            // happen inside DynamicDateBadge's own (small) restart scope.
+            visible = {
+                if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) showDateBadge else showNativeDateBadge
+            },
+            dateText = {
+                if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) activeDateBadge else activeNativeDateBadge
+            },
+            isCenter = isCenterAlignment,
+            modifier = Modifier
+                .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
                     .padding(
                         top = topBarContentPadding + 12.dp,
                         start = if (isCenterAlignment) 0.dp else 4.dp
@@ -747,6 +759,7 @@ fun GalleryScreen(
                     }
             )
 
+        if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
             FastScroller(
                 lazyGridState = lazyGridState,
                 pagedMedia = pagedMedia,

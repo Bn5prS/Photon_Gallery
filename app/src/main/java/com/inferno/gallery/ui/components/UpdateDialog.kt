@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
@@ -58,6 +59,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -473,31 +476,42 @@ fun UpdateDialog() {
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         val isUpdateAvailable = updateState is UpdateState.UpdateAvailable
+        val isLightTheme = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+        val innerTileColor = if (isLightTheme) {
+            lerp(Color.White, MaterialTheme.colorScheme.surfaceContainerLow, 0.16f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+
         Surface(
             modifier = if (isUpdateAvailable) {
                 Modifier
-                    .fillMaxWidth(0.95f)
-                    .fillMaxHeight(0.90f)
-                    .widthIn(max = 560.dp)
-                    .clip(ShapeExtraLargeIncreased)
+                    .fillMaxWidth(0.92f)
+                    .widthIn(max = 460.dp)
+                    .clip(RoundedCornerShape(28.dp))
             } else {
                 Modifier
                     .fillMaxWidth(0.92f)
                     .widthIn(max = 440.dp)
                     .clip(ShapeExtraLarge)
             },
-            shape = if (isUpdateAvailable) ShapeExtraLargeIncreased else ShapeExtraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
-            tonalElevation = 6.dp
+            shape = if (isUpdateAvailable) RoundedCornerShape(28.dp) else ShapeExtraLarge,
+            color = if (isUpdateAvailable) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+            border = if (isUpdateAvailable) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+            tonalElevation = if (isUpdateAvailable) 4.dp else 6.dp
         ) {
             Column(
-                modifier = (if (isUpdateAvailable) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
-                    .padding(
-                        horizontal = if (isUpdateAvailable) SpacingTokens.L else SpacingTokens.XL,
-                        vertical = if (isUpdateAvailable) SpacingTokens.L else SpacingTokens.XL
-                    ),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = if (isUpdateAvailable) {
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(6.dp)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.XL, vertical = SpacingTokens.XL)
+                },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = if (isUpdateAvailable) Arrangement.spacedBy(6.dp) else Arrangement.Top
             ) {
                 when (val state = updateState) {
                     is UpdateState.Checking -> {
@@ -529,171 +543,204 @@ fun UpdateDialog() {
 
                     is UpdateState.UpdateAvailable -> {
                         val info = state.info
+                        val sections = remember(info.changelog) { parseChangelog(info.changelog) }
+                        val changelogItems = remember(sections) { sections.flatMap { it.items } }
+                        val hasChangelog = changelogItems.isNotEmpty()
+
+                        // Top Segment: Title, version transition, size badge & GitHub release link
                         Surface(
-                            shape = OfficialM3Shapes.Cookie9Sided,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(56.dp)
+                            shape = RoundedCornerShape(
+                                topStart = 22.dp,
+                                topEnd = 22.dp,
+                                bottomStart = 10.dp,
+                                bottomEnd = 10.dp
+                            ),
+                            color = innerTileColor,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(IconSizeTokens.L)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(SpacingTokens.M))
-                        Text(
-                            text = "Update Available",
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(SpacingTokens.S))
-
-                        // Version transition pill & size badge row
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.XS),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
                                 ) {
                                     Text(
-                                        text = info.currentVersion,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = "Update Available",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(IconSizeTokens.S)
-                                    )
-                                    Text(
-                                        text = info.latestVersion,
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-
-                            if (info.apkSizeBytes > 0) {
-                                Surface(
-                                    shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = SpacingTokens.XS),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(12.dp)
+                                        Text(
+                                            text = info.currentVersion,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
-                                            text = Formatter.formatShortFileSize(context, info.apkSizeBytes),
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                                            text = "→",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        Text(
+                                            text = info.latestVersion,
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (info.apkSizeBytes > 0) {
+                                        Surface(
+                                            shape = ShapeFull,
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ) {
+                                            Text(
+                                                text = Formatter.formatShortFileSize(context, info.apkSizeBytes),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                            )
+                                        }
+                                    }
+                                    if (info.releasePageUrl.isNotBlank()) {
+                                        Surface(
+                                            onClick = { uriHandler.openUri(info.releasePageUrl) },
+                                            shape = ShapeFull,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .pressScale()
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                                    contentDescription = "Open GitHub release",
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(SpacingTokens.M))
-
-                        // Features & Fixes Categorized Changelog
-                        if (info.changelog.isNotBlank()) {
-                            ChangelogCard(
-                                changelog = info.changelog,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                            )
-                            Spacer(modifier = Modifier.height(SpacingTokens.M))
+                        // Middle Segment: Scrollable "What's New" bulleted changelog
+                        if (hasChangelog) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = innerTileColor,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 280.dp)
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "What's New",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    changelogItems.forEach { item ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Text(
+                                                text = "•",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = item,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
 
-                        // Action Buttons Dock
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        // Bottom Segment: Split pill actions
+                        Surface(
+                            shape = RoundedCornerShape(
+                                topStart = 10.dp,
+                                topEnd = 10.dp,
+                                bottomStart = 22.dp,
+                                bottomEnd = 22.dp
+                            ),
+                            color = innerTileColor,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Button(
-                                onClick = {
-                                    UpdateManager.downloadAndInstall(context, info, coroutineScope)
-                                },
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(52.dp)
-                                    .pressScale(),
-                                shape = ShapeFull,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(IconSizeTokens.M)
-                                )
-                                Spacer(modifier = Modifier.width(SpacingTokens.S))
-                                Text(
-                                    text = "Download & Install",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 FilledTonalButton(
-                                    onClick = { uriHandler.openUri(info.releasePageUrl) },
+                                    onClick = { UpdateManager.dismiss() },
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
+                                        .weight(0.85f)
+                                        .height(46.dp)
                                         .pressScale(),
                                     shape = ShapeFull,
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Later",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                }
+
+                                Button(
+                                    onClick = {
+                                        UpdateManager.downloadAndInstall(context, info, coroutineScope)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1.6f)
+                                        .height(46.dp)
+                                        .pressScale(),
+                                    shape = ShapeFull,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
                                     )
                                 ) {
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
                                         contentDescription = null,
                                         modifier = Modifier.size(IconSizeTokens.S)
                                     )
                                     Spacer(modifier = Modifier.width(SpacingTokens.XS))
                                     Text(
-                                        text = "GitHub Notes",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
-                                    )
-                                }
-
-                                TextButton(
-                                    onClick = { UpdateManager.dismiss() },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .pressScale(),
-                                    shape = ShapeFull
-                                ) {
-                                    Text(
-                                        text = "Later",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                                        text = "Update Now",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                                     )
                                 }
                             }

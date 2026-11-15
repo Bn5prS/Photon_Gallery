@@ -17,6 +17,7 @@
     <string name="action_share">Share</string>
     <string name="action_rotate">Rotate</string>
     <string name="action_rename">Rename</string>
+    <string name="action_print">Print</string>
     <string name="action_rename_album">Rename album</string>
     <string name="action_filter_album">Filter album</string>
     <string name="filter_all_media">All media</string>
@@ -29,6 +30,10 @@
     <string name="action_details">Details</string>
     <string name="action_save">Save</string>
     <string name="action_copy">Copy</string>
+    <string name="action_copy_to_album">Copy to album</string>
+    <string name="action_copy_to_clipboard">Copy to clipboard</string>
+    <string name="toast_copied_to_clipboard">Copied to clipboard</string>
+    <string name="toast_copy_clipboard_failed">Unable to copy image</string>
     <string name="action_move">Move</string>
     <string name="action_select_all">Select All</string>
     <string name="action_deselect_all">Deselect All</string>
@@ -169,6 +174,8 @@
     <string name="setting_dock_classic_sub">Extend the navigation bar across the full screen width instead of a floating pill</string>
     <string name="setting_dock_videos">Show Videos Tab</string>
     <string name="setting_dock_videos_sub">Display a dedicated shortcut for videos in the dock</string>
+    <string name="setting_dock_pill_labels">Show Text in Pill</string>
+    <string name="setting_dock_pill_labels_sub">Display compact labels beneath icons in the floating navigation pill</string>
     <string name="setting_grid_columns">Grid Density</string>
     <string name="setting_timeline_layout">Timeline Layout</string>
     <string name="setting_timeline_mosaic">Expressive Mosaic</string>

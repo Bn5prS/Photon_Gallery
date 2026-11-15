@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.inferno.gallery.R
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.PresetThemePalette
@@ -63,7 +63,7 @@ fun FourQuadrantColorSwatch(
     palette: PresetThemePalette,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier.width(72.dp),
+    modifier: Modifier = Modifier.width(78.dp),
 ) {
     val haptic = LocalHapticFeedback.current
     val quadrantColors = palette.quadrantColors
@@ -99,17 +99,14 @@ fun FourQuadrantColorSwatch(
                 .scale(scale),
             contentAlignment = Alignment.Center
         ) {
-            // Animated outer selection ring
+            // Borderless tonal selection backdrop
             if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .border(
-                            width = 2.5.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        )
-                )
+                Surface(
+                    modifier = Modifier.size(56.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 0.dp
+                ) {}
             }
 
             // 4-Quadrant circular canvas
@@ -160,7 +157,7 @@ fun FourQuadrantColorSwatch(
                         modifier = Modifier.size(20.dp),
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.primary,
-                        shadowElevation = 2.dp
+                        shadowElevation = 0.dp
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
@@ -178,7 +175,10 @@ fun FourQuadrantColorSwatch(
         // Palette Name Label
         Text(
             text = palette.name,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.5.sp,
+                letterSpacing = (-0.2).sp
+            ),
             color = if (isSelected) {
                 MaterialTheme.colorScheme.primary
             } else {

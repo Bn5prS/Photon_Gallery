@@ -21,8 +21,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalContentColor
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.utils.pressScale
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,8 +55,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -67,9 +72,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.delay
 import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.NavDockLabelStyle
 import com.inferno.gallery.ui.utils.tick
@@ -78,8 +88,9 @@ import androidx.compose.ui.res.stringResource
 import com.inferno.gallery.R
 
 /**
- * Expressive floating navigation dock with dynamic intrinsic content-sized tabs,
- * smooth pushing transitions, and satellite circular search pill.
+ * Expressive floating navigation dock with auto-widening stadium slots,
+ * a smooth sliding capsule indicator, optional compact stacked labels,
+ * and a round satellite circular search pill.
  */
 @Composable
 fun FloatingNavigationPill(
@@ -89,6 +100,7 @@ fun FloatingNavigationPill(
     onNavigateToCollections: () -> Unit,
     onNavigateToSearch: () -> Unit,
     showVideosTab: Boolean = false,
+    showLabels: Boolean = false,
     onNavigateToVideos: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -102,6 +114,42 @@ fun FloatingNavigationPill(
 
     val isSearchSelected = currentRoute == "search"
 
+    val dockHeight by animateDpAsState(
+        targetValue = if (showLabels) 62.dp else 60.dp,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "pillDockHeight"
+    )
+    val slotHeight by animateDpAsState(
+        targetValue = if (showLabels) 50.dp else 48.dp,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "pillSlotHeight"
+    )
+    val slotGap by animateDpAsState(
+        targetValue = if (showLabels) 4.dp else 5.dp,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "pillSlotGap"
+    )
+    val slotWidth by animateDpAsState(
+        targetValue = when {
+            showLabels && showVideosTab -> 60.dp
+            showLabels -> 70.dp
+            showVideosTab -> 56.dp
+            else -> 70.dp
+        },
+        animationSpec = MotionTokens.snappySpring(),
+        label = "pillSlotWidth"
+    )
+    val indicatorOffsetX by animateDpAsState(
+        targetValue = if (selectedIndex >= 0) (slotWidth + slotGap) * selectedIndex else 0.dp,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "pillIndicatorOffsetX"
+    )
+    val indicatorAlpha by animateFloatAsState(
+        targetValue = if (selectedIndex >= 0) 1f else 0f,
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "pillIndicatorAlpha"
+    )
+
     Row(
         modifier = modifier
             .padding(horizontal = 8.dp)
@@ -112,107 +160,106 @@ fun FloatingNavigationPill(
     ) {
         // ── Main Capsule (Photos, Videos, Albums, Collections) ──
         Surface(
-            modifier = Modifier.height(58.dp),
+            modifier = Modifier.height(dockHeight),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
             shadowElevation = 2.dp
         ) {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(6.dp)
                     .animateContentSize(
                         animationSpec = MotionTokens.snappySpring()
                     ),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                contentAlignment = Alignment.CenterStart
             ) {
-                if (showVideosTab) {
-                    IconPillTabItem(
+                // Sliding full-pill active indicator
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(indicatorOffsetX.roundToPx(), 0) }
+                        .size(width = slotWidth, height = slotHeight)
+                        .graphicsLayer { alpha = indicatorAlpha }
+                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(slotGap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val iconSize = if (showLabels) 19.dp else 23.dp
+
+                    val photosLabel = stringResource(R.string.nav_photos)
+                    PillDockSlotItem(
                         icon = {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                contentDescription = stringResource(R.string.nav_photos),
-                                modifier = Modifier.size(24.dp)
+                                contentDescription = photosLabel,
+                                modifier = Modifier.size(iconSize)
                             )
                         },
+                        label = photosLabel,
                         isSelected = selectedIndex == 0,
+                        showLabel = showLabels,
+                        slotWidth = slotWidth,
+                        slotHeight = slotHeight,
                         onClick = onNavigateToPhotos
                     )
 
-                    IconPillTabItem(
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-                                contentDescription = stringResource(R.string.album_videos),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        },
-                        isSelected = selectedIndex == 1,
-                        onClick = onNavigateToVideos
-                    )
+                    if (showVideosTab) {
+                        val videosLabel = stringResource(R.string.album_videos)
+                        PillDockSlotItem(
+                            icon = {
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                    contentDescription = videosLabel,
+                                    modifier = Modifier.size(iconSize)
+                                )
+                            },
+                            label = videosLabel,
+                            isSelected = selectedIndex == 1,
+                            showLabel = showLabels,
+                            slotWidth = slotWidth,
+                            slotHeight = slotHeight,
+                            onClick = onNavigateToVideos
+                        )
+                    }
 
-                    IconPillTabItem(
+                    val albumsLabel = stringResource(R.string.nav_albums)
+                    PillDockSlotItem(
                         icon = {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                                contentDescription = stringResource(R.string.nav_albums),
-                                modifier = Modifier.size(24.dp)
+                                contentDescription = albumsLabel,
+                                modifier = Modifier.size(iconSize)
                             )
                         },
-                        isSelected = selectedIndex == 2,
+                        label = albumsLabel,
+                        isSelected = selectedIndex == if (showVideosTab) 2 else 1,
+                        showLabel = showLabels,
+                        slotWidth = slotWidth,
+                        slotHeight = slotHeight,
                         onClick = onNavigateToAlbums
                     )
 
-                    IconPillTabItem(
+                    val collectionsLabel = stringResource(R.string.nav_collections)
+                    PillDockSlotItem(
                         icon = {
                             Icon(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                                contentDescription = stringResource(R.string.nav_collections),
-                                modifier = Modifier.size(24.dp)
+                                contentDescription = collectionsLabel,
+                                modifier = Modifier.size(iconSize)
                             )
                         },
-                        isSelected = selectedIndex == 3,
-                        onClick = onNavigateToCollections
-                    )
-                } else {
-                    DynamicPillTabItem(
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                contentDescription = stringResource(R.string.nav_photos),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        label = stringResource(R.string.nav_photos),
-                        isSelected = selectedIndex == 0,
-                        onClick = onNavigateToPhotos
-                    )
-
-                    DynamicPillTabItem(
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_album),
-                                contentDescription = stringResource(R.string.nav_albums),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        label = stringResource(R.string.nav_albums),
-                        isSelected = selectedIndex == 1,
-                        onClick = onNavigateToAlbums
-                    )
-
-                    DynamicPillTabItem(
-                        icon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_dashboard),
-                                contentDescription = stringResource(R.string.nav_collections),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        label = stringResource(R.string.nav_collections),
-                        isSelected = selectedIndex == 2,
+                        label = collectionsLabel,
+                        isSelected = selectedIndex == if (showVideosTab) 3 else 2,
+                        showLabel = showLabels,
+                        slotWidth = slotWidth,
+                        slotHeight = slotHeight,
                         onClick = onNavigateToCollections
                     )
                 }
@@ -232,7 +279,7 @@ fun FloatingNavigationPill(
         )
 
         Surface(
-            modifier = Modifier.size(58.dp),
+            modifier = Modifier.size(dockHeight),
             shape = CircleShape,
             color = searchContainerColor,
             tonalElevation = 0.dp,
@@ -246,7 +293,10 @@ fun FloatingNavigationPill(
                 label = "searchTouchScale"
             )
             val view = LocalView.current
+            val searchLabel = stringResource(R.string.nav_search)
+            var showSearchTooltip by remember { mutableStateOf(false) }
 
+            @OptIn(ExperimentalFoundationApi::class)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -255,24 +305,34 @@ fun FloatingNavigationPill(
                         scaleY = searchTouchScale
                     }
                     .clip(CircleShape)
-                    .clickable(
+                    .combinedClickable(
                         interactionSource = searchInteractionSource,
                         indication = ripple(
                             bounded = true,
                             color = searchContentColor
                         ),
                         onClick = {
+                            showSearchTooltip = false
                             view.tick()
                             onNavigateToSearch()
+                        },
+                        onLongClick = {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                            showSearchTooltip = true
                         }
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                    contentDescription = stringResource(R.string.nav_search),
+                    contentDescription = searchLabel,
                     tint = searchContentColor,
                     modifier = Modifier.size(24.dp)
+                )
+                DockTabTooltipPopup(
+                    visible = showSearchTooltip,
+                    label = searchLabel,
+                    onDismiss = { showSearchTooltip = false }
                 )
             }
         }
@@ -478,15 +538,171 @@ private fun RowScope.FullWidthNavItem(
 }
 
 @Composable
-fun IconPillTabItem(
+private fun DockTabTooltipPopup(
+    visible: Boolean,
+    label: String,
+    onDismiss: () -> Unit
+) {
+    LaunchedEffect(visible) {
+        if (visible) {
+            delay(1800L)
+            onDismiss()
+        }
+    }
+
+    if (visible && label.isNotEmpty()) {
+        val offsetPx = with(LocalDensity.current) { 46.dp.roundToPx() }
+        Popup(
+            alignment = Alignment.TopCenter,
+            offset = IntOffset(0, -offsetPx),
+            onDismissRequest = onDismiss,
+            properties = PopupProperties(focusable = false)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                shadowElevation = 4.dp
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PillDockSlotItem(
     icon: @Composable () -> Unit,
+    label: String,
     isSelected: Boolean,
+    showLabel: Boolean,
+    slotWidth: Dp,
+    slotHeight: Dp,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val view = LocalView.current
+    var showTooltip by remember { mutableStateOf(false) }
+
+    val touchScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1f,
+        animationSpec = MotionTokens.bouncySpring(),
+        label = "pillSlotTouchScale"
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (isSelected) (if (showLabel) 1.04f else 1.08f) else 1f,
+        animationSpec = MotionTokens.snappySpring(),
+        label = "pillSlotIconScale"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = MotionTokens.fastEffectsSpec(),
+        label = "pillSlotContentColor"
+    )
+
+    Box(
+        modifier = modifier
+            .size(width = slotWidth, height = slotHeight)
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
+            }
+            .clip(CircleShape)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                onClick = {
+                    showTooltip = false
+                    view.tick()
+                    onClick()
+                },
+                onLongClick = {
+                    if (!showLabel && label.isNotEmpty()) {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        showTooltip = true
+                    }
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            if (showLabel) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        icon()
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            lineHeight = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    icon()
+                }
+            }
+        }
+        DockTabTooltipPopup(
+            visible = showTooltip,
+            label = label,
+            onDismiss = { showTooltip = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun IconPillTabItem(
+    icon: @Composable () -> Unit,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    label: String = "",
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val view = LocalView.current
+    var showTooltip by remember { mutableStateOf(false) }
 
     val touchScale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
@@ -529,15 +745,22 @@ fun IconPillTabItem(
             }
             .clip(CircleShape)
             .background(pillColor, CircleShape)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = ripple(
                     bounded = true,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 onClick = {
+                    showTooltip = false
                     view.tick()
                     onClick()
+                },
+                onLongClick = {
+                    if (label.isNotEmpty()) {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        showTooltip = true
+                    }
                 }
             ),
         contentAlignment = Alignment.Center
@@ -553,6 +776,11 @@ fun IconPillTabItem(
                 icon()
             }
         }
+        DockTabTooltipPopup(
+            visible = showTooltip,
+            label = label,
+            onDismiss = { showTooltip = false }
+        )
     }
 }
 
@@ -955,37 +1183,31 @@ fun subScreenPopExitTransition(): ExitTransition {
  * and closing an album folder, zooming cleanly into and out of the album grid.
  */
 fun albumOpenEnterTransition(): EnterTransition {
-    return scaleIn(
-        animationSpec = MotionTokens.gentleSpring(),
-        initialScale = 0.86f
-    ) + fadeIn(
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220, easing = MotionTokens.EmphasizedDecelerateEasing)
+    return fadeIn(
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150, easing = MotionTokens.EmphasizedDecelerateEasing)
     )
 }
 
 fun albumOpenExitTransition(): ExitTransition {
     return scaleOut(
-        animationSpec = MotionTokens.gentleSpring(),
-        targetScale = 1.06f
+        animationSpec = MotionTokens.sharedElementSpring(),
+        targetScale = 0.94f
     ) + fadeOut(
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150, easing = MotionTokens.EmphasizedAccelerateEasing)
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180, easing = MotionTokens.EmphasizedAccelerateEasing)
     )
 }
 
 fun albumClosePopEnterTransition(): EnterTransition {
     return scaleIn(
-        animationSpec = MotionTokens.gentleSpring(),
-        initialScale = 1.06f
+        animationSpec = MotionTokens.sharedElementSpring(),
+        initialScale = 0.94f
     ) + fadeIn(
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220, easing = MotionTokens.EmphasizedDecelerateEasing)
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180, easing = MotionTokens.EmphasizedDecelerateEasing)
     )
 }
 
 fun albumClosePopExitTransition(): ExitTransition {
-    return scaleOut(
-        animationSpec = MotionTokens.gentleSpring(),
-        targetScale = 0.86f
-    ) + fadeOut(
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180, easing = MotionTokens.EmphasizedAccelerateEasing)
+    return fadeOut(
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150, easing = MotionTokens.EmphasizedAccelerateEasing)
     )
 }

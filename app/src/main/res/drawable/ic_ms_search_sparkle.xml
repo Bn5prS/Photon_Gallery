@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Chipped search ring (top-right arc gap) -->
+    <path
+        android:pathData="M16.78,8.82 A6.5,6.5 0 1,1 13.25,4.61"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.85"
+        android:strokeLineCap="round" />
+    <!-- Search handle -->
+    <path
+        android:pathData="M15.35,15.35 L20.2,20.2"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.85"
+        android:strokeLineCap="round" />
+    <!-- 4-point sparkle nestled in the chipped top-right gap (25% slider = 0.90x scale) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M15.55,3.865 Q15.55,6.25 17.935,6.25 Q15.55,6.25 15.55,8.635 Q15.55,6.25 13.165,6.25 Q15.55,6.25 15.55,3.865 Z" />
+</vector>

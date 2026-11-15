@@ -1,5 +1,7 @@
 package com.inferno.gallery.ui
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -47,6 +50,12 @@ import com.inferno.gallery.ui.utils.popBackStackSafely
  * into each screen composable, enabling [Modifier.sharedElement()] to
  * coordinate the cross-destination animation.
  */
+private data class DetailOverlayArgs(
+    val mediaId: String,
+    val bucketName: String?,
+    val highlightText: String?
+)
+
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun NavigationGraph(
@@ -84,6 +93,9 @@ fun NavigationGraph(
     }
 
     SharedTransitionLayout(modifier = modifier) {
+        var detailOverlay by androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf<DetailOverlayArgs?>(null)
+        }
         NavHost(
             navController = navController,
             startDestination = startDest,
@@ -175,16 +187,24 @@ fun NavigationGraph(
                 route = "gallery",
                 enterTransition = { fadeIn(animationSpec = MotionTokens.snappySpring()) },
                 exitTransition = {
-                    scaleOut(
-                        targetScale = 0.93f,
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                    if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds != null) {
+                        ExitTransition.None
+                    } else {
+                        scaleOut(
+                            targetScale = 0.93f,
+                            animationSpec = MotionTokens.snappySpring()
+                        ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                    }
                 },
                 popEnterTransition = {
-                    scaleIn(
-                        initialScale = 0.93f,
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+                    if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds != null) {
+                        EnterTransition.None
+                    } else {
+                        scaleIn(
+                            initialScale = 0.93f,
+                            animationSpec = MotionTokens.snappySpring()
+                        ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+                    }
                 },
                 popExitTransition = {
                     scaleOut(
@@ -197,17 +217,12 @@ fun NavigationGraph(
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
                     onPhotoClick = { mediaId, bucket, query ->
-                        val encodedMediaId = android.net.Uri.encode(mediaId)
-                        var route = "detail/$encodedMediaId"
-                        val params = mutableListOf<String>()
-                        if (bucket != null) params.add("bucket=${android.net.Uri.encode(bucket)}")
-                        if (query != null && (bucket == "search_text" || bucket == "search_smart")) {
-                            params.add("highlight=${android.net.Uri.encode(query)}")
-                        }
-                        if (params.isNotEmpty()) {
-                            route += "?" + params.joinToString("&")
-                        }
-                        navController.navigate(route)
+                        val highlight = if (bucket == "search_text" || bucket == "search_smart") query else null
+                        detailOverlay = DetailOverlayArgs(
+                            mediaId = mediaId,
+                            bucketName = bucket,
+                            highlightText = highlight
+                        )
                     },
                     onCreateCollage = { uriStrings ->
                         val joined = uriStrings.joinToString("|")
@@ -243,10 +258,16 @@ fun NavigationGraph(
                     navArgument("highlightText") { type = NavType.StringType; nullable = true; defaultValue = null }
                 ),
                 enterTransition = {
-                    scaleIn(
-                        initialScale = 0.88f,
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeIn(animationSpec = MotionTokens.snappySpring())
+                    if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds != null) {
+                        EnterTransition.None
+                    } else {
+                        fadeIn(
+                            animationSpec = tween(
+                                durationMillis = MotionTokens.Durations.Short,
+                                easing = MotionTokens.EmphasizedDecelerateEasing
+                            )
+                        )
+                    }
                 },
                 exitTransition = {
                     slideOutHorizontally(
@@ -261,10 +282,16 @@ fun NavigationGraph(
                     ) + fadeIn(animationSpec = MotionTokens.snappySpring())
                 },
                 popExitTransition = {
-                    scaleOut(
-                        targetScale = 0.88f,
-                        animationSpec = MotionTokens.snappySpring()
-                    ) + fadeOut(animationSpec = MotionTokens.snappySpring())
+                    if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds != null) {
+                        ExitTransition.None
+                    } else {
+                        fadeOut(
+                            animationSpec = tween(
+                                durationMillis = MotionTokens.Durations.Short,
+                                easing = MotionTokens.EmphasizedAccelerateEasing
+                            )
+                        )
+                    }
                 }
             ) { backStackEntry ->
                 val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
@@ -483,6 +510,68 @@ fun NavigationGraph(
                 )
             }
 
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = detailOverlay != null,
+            enter = if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds != null) {
+                EnterTransition.None
+            } else {
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = MotionTokens.Durations.Short,
+                        easing = MotionTokens.EmphasizedDecelerateEasing
+                    )
+                )
+            },
+            exit = if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds != null) {
+                ExitTransition.None
+            } else {
+                fadeOut(
+                    animationSpec = tween(
+                        durationMillis = MotionTokens.Durations.Short,
+                        easing = MotionTokens.EmphasizedAccelerateEasing
+                    )
+                )
+            }
+        ) {
+            val args = detailOverlay
+            if (args != null) {
+                androidx.compose.runtime.key(args.mediaId, args.bucketName) {
+                    LaunchedEffect(args.mediaId, args.bucketName) {
+                        galleryViewModel.loadDetailMedia(args.mediaId, args.bucketName)
+                    }
+                    val useFullScreen by settingsViewModel.useFullScreen.collectAsState()
+                    DetailScreen(
+                        mediaId = args.mediaId,
+                        bucketName = args.bucketName,
+                        highlightText = args.highlightText,
+                        useFullScreenGlobal = useFullScreen,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedVisibilityScope = this@AnimatedVisibility,
+                        onBack = { detailOverlay = null },
+                        onNavigateToEditor = { editUri ->
+                            detailOverlay = null
+                            val encoded = android.net.Uri.encode(editUri.toString())
+                            navController.navigate("editor?uri=$encoded")
+                        },
+                        onNavigateToFrameExtractor = { videoUri ->
+                            detailOverlay = null
+                            val encoded = android.net.Uri.encode(videoUri.toString())
+                            navController.navigate("frame_extractor?uri=$encoded")
+                        },
+                        onNavigateToPerson = { personId ->
+                            detailOverlay = null
+                            navController.navigate("person/$personId")
+                        },
+                        onNavigateToCustomizeToolbars = {
+                            detailOverlay = null
+                            navController.navigate("customize_toolbars?target=viewer")
+                        },
+                        viewModel = galleryViewModel
+                    )
+                }
+            }
         }
     }
 }

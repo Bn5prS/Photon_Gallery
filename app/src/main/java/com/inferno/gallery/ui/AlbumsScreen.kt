@@ -417,6 +417,7 @@ fun AlbumsScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 bucket = bucket.copy(bucketName = displayBucketName),
+                                sharedKey = "album_container_${bucket.bucketName}",
                                 showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                                 customShape = albumShape,
                                 isCompact = albumsGridCellsCount >= 3,
@@ -795,6 +796,7 @@ fun AlbumCard(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
     bucket: AlbumBucket,
     modifier: Modifier = Modifier,
+    sharedKey: String? = null,
     showAlbumSize: Boolean = false,
     customShape: Shape? = null,
     isCompact: Boolean = false,
@@ -826,11 +828,31 @@ fun AlbumCard(
             .build()
     }
 
+    val resolvedSharedKey = sharedKey ?: "album_container_${bucket.bucketName}"
+    val albumSharedModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = resolvedSharedKey),
+                animatedVisibilityScope = animatedVisibilityScope,
+                enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                exit = fadeOut(MotionTokens.fastEffectsSpec()),
+                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    alignment = Alignment.TopCenter
+                ),
+                clipInOverlayDuringTransition = OverlayClip(cardShape),
+                boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
+            )
+        }
+    } else {
+        Modifier
+    }
+
     // Outer Card Container (Enclosed card — clean tonal, no outlines)
     Surface(
         modifier = modifier
+            .then(albumSharedModifier)
             .fillMaxWidth()
-            .pressScale(pressedScale = 0.96f)
             .clip(cardShape)
             .combinedClickable(
                 onClick = onClick,
@@ -843,6 +865,7 @@ fun AlbumCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .pressScale(pressedScale = 0.96f)
                 .padding(
                     start = if (isCompact) 6.dp else 8.dp,
                     top = if (isCompact) 6.dp else 8.dp,

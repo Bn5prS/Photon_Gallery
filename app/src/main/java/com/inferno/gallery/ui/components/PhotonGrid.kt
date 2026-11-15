@@ -9,6 +9,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.composed
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -50,6 +52,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -178,14 +181,17 @@ fun PhotonGrid(
             },
             onPinchEnd = {
                 pinchScaleScope.launch {
-                    livePinchScaleAnim.animateTo(
-                        targetValue = 1f,
-                        animationSpec = spring(
-                            dampingRatio = 0.80f,
-                            stiffness = Spring.StiffnessMediumLow
+                    try {
+                        livePinchScaleAnim.animateTo(
+                            targetValue = 1f,
+                            animationSpec = spring(
+                                dampingRatio = 0.80f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
                         )
-                    )
-                    isPinching = false
+                    } finally {
+                        isPinching = false
+                    }
                 }
             }
         )
@@ -216,6 +222,7 @@ fun PhotonGrid(
 
     DisposableEffect(Unit) {
         onDispose {
+            isPinching = false
             com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = false
         }
     }
@@ -308,7 +315,8 @@ fun PhotonGrid(
                                         checkIconVector = checkIconVector,
                                         favoriteIconVector = favoriteIconVector,
                                         isFavorite = isFav,
-                                        showMatchBadge = showMatchBadge
+                                        showMatchBadge = showMatchBadge,
+                                        targetPxOverride = 720
                                     )
                                 }
                                 is MosaicDisplayItem.QuadTileItem -> {
@@ -450,7 +458,8 @@ fun PhotonGrid(
                                         checkIconVector = checkIconVector,
                                         favoriteIconVector = favoriteIconVector,
                                         isFavorite = isFav,
-                                        showMatchBadge = showMatchBadge
+                                        showMatchBadge = showMatchBadge,
+                                        targetPxOverride = 720
                                     )
                                 }
                             }
@@ -548,42 +557,6 @@ fun PhotonGrid(
         }
     }
 
-        // ── Floating Material 3 Expressive Column Count HUD Badge ─────────────
-        var showHudPill by remember { mutableStateOf(false) }
-        LaunchedEffect(isPinching, gridCellsCount) {
-            if (isPinching) {
-                showHudPill = true
-            } else {
-                kotlinx.coroutines.delay(650)
-                showHudPill = false
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showHudPill,
-            enter = fadeIn(MotionTokens.snappySpring()) + scaleIn(MotionTokens.bouncySpring()),
-            exit = fadeOut(MotionTokens.snappySpring()) + scaleOut(MotionTokens.snappySpring()),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-        ) {
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
-                tonalElevation = 6.dp,
-                shadowElevation = 4.dp
-            ) {
-                Text(
-                    text = "$gridCellsCount columns",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
-        }
     }
 }
 
@@ -641,15 +614,32 @@ fun OptimizedThumbnailCell(
     checkIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
     favoriteIconVector: ImageVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled),
     isFavorite: Boolean = false,
-    showMatchBadge: Boolean = false
+    showMatchBadge: Boolean = false,
+    targetPxOverride: Int? = null,
+    useContainerTransform: Boolean = false,
+    onBoundsChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var cellBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
     // Hoisted click handlers. PhotonGrid passes no onLongClick (long-press there is owned by
     // gridDragSelectGesture on the grid itself, so cells stay on plain clickable and don't add
     // a second long-press detector competing for the pointer stream). SearchScreen, which has
     // no grid-level drag-select, does supply one.
-    val clickHandler = remember(item, onClick) { { onClick(item) } }
+    val clickHandler = remember(item, onClick, useContainerTransform, thumbnailCornerRadius) {
+        {
+            if (useContainerTransform) {
+                cellBounds?.let { rect ->
+                    MediaTransitionRegistry.setLaunchBounds(
+                        mediaKey = item.uriString,
+                        rect = rect,
+                        cornerRadiusDp = thumbnailCornerRadius
+                    )
+                }
+            }
+            onClick(item)
+        }
+    }
     val longClickHandler = remember(item, onLongClick) {
         if (onLongClick != null) {
             {
@@ -664,8 +654,20 @@ fun OptimizedThumbnailCell(
     }
     val sharedContentKey = remember(item.uriString) { "photo_${item.uriString}" }
 
+    val boundsModifier = if (useContainerTransform) {
+        Modifier.onGloballyPositioned { coords ->
+            if (coords.isAttached) {
+                val rect = coords.boundsInWindow()
+                cellBounds = rect
+                onBoundsChanged?.invoke(item.uriString, rect)
+            }
+        }
+    } else {
+        Modifier
+    }
+
     // Shared bounds transition is active for standard grid densities (1-5 columns)
-    val sharedTransitionModifier = if (gridCellsCount <= 5) {
+    val sharedTransitionModifier = if (!useContainerTransform && gridCellsCount <= 5) {
         with(sharedTransitionScope) {
             val overlayClip = remember(cellShape) { OverlayClip(cellShape ?: ShapeNone) }
             Modifier.sharedBounds(
@@ -713,6 +715,7 @@ fun OptimizedThumbnailCell(
         modifier = modifier
             .aspectRatio(aspectRatio)
             .then(selectionModifier)
+            .then(boundsModifier)
             .then(sharedTransitionModifier)
             .run { if (cellShape != null) clip(cellShape) else this }
             .background(MaterialTheme.colorScheme.surfaceContainer)
@@ -722,7 +725,8 @@ fun OptimizedThumbnailCell(
             item = item,
             gridCellsCount = gridCellsCount,
             videoIconVector = videoIconVector,
-            isFavorite = isFavorite
+            isFavorite = isFavorite,
+            targetPxOverride = targetPxOverride
         )
 
         // ── Search Match Reason Badge & Snippet Overlay ───────────────────────

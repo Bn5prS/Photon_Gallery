@@ -214,6 +214,7 @@ fun MainAppLayout(
     val albumLayoutMode by viewModel.albumLayoutMode.collectAsState()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
+    val showPillLabels by viewModel.showPillLabels.collectAsState()
     val nestedNavController = rememberNavController()
 
     var showMenu by remember { mutableStateOf(false) }
@@ -1001,6 +1002,7 @@ fun MainAppLayout(
                         FloatingNavigationPill(
                             currentRoute = currentRoute,
                             showVideosTab = showVideosInDock,
+                            showLabels = showPillLabels,
                             onNavigateToPhotos = onNavigateToPhotos,
                             onNavigateToVideos = onNavigateToVideos,
                             onNavigateToAlbums = onNavigateToAlbums,
@@ -1348,7 +1350,26 @@ fun MainAppLayout(
                 val rawBucketName = backStackEntry.arguments?.getString("bucketName") ?: ""
                 val bucketName = try { android.net.Uri.decode(rawBucketName) } catch (e: Exception) { rawBucketName }
                 androidx.compose.runtime.key(bucketName) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    val albumContainerModifier = with(sharedTransitionScope) {
+                        Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "album_container_$bucketName"),
+                            animatedVisibilityScope = this@composable,
+                            enter = fadeIn(MotionTokens.fastEffectsSpec()),
+                            exit = fadeOut(MotionTokens.fastEffectsSpec()),
+                            resizeMode = androidx.compose.animation.SharedTransitionScope.ResizeMode.scaleToBounds(
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                alignment = Alignment.TopCenter
+                            ),
+                            clipInOverlayDuringTransition = OverlayClip(com.inferno.gallery.ui.theme.ShapeLargeIncreased),
+                            boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(albumContainerModifier)
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
                         GalleryScreen(
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -2188,16 +2209,25 @@ fun MainAppLayout(
                 var dialogSkipRecycleBin by remember { mutableStateOf(viewModel.sessionSkipRecycleBin) }
                 val isPermanent = dialogSkipRecycleBin
 
+                val count = selectedUris.size
                 com.inferno.gallery.ui.components.PhotonDialog(
                     onDismissRequest = { showMultiDeleteConfirmDialog = false },
-                    title = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_title),
-                    subtitle = if (isPermanent) {
-                        stringResource(R.string.dialog_delete_perm_msg, selectedUris.size)
+                    title = if (isPermanent) {
+                        if (count == 1) "Delete permanently?" else "Delete $count items?"
                     } else {
-                        stringResource(R.string.dialog_multi_trash_msg, selectedUris.size)
+                        if (count == 1) "Move to Trash?" else "Move $count items to Trash?"
+                    },
+                    subtitle = if (isPermanent) {
+                        if (count == 1) {
+                            "This file will be erased immediately and cannot be recovered."
+                        } else {
+                            "These $count items will be erased immediately and cannot be recovered."
+                        }
+                    } else {
+                        "Kept in Trash for 30 days before permanent removal."
                     },
                     icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                    confirmText = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_confirm),
+                    confirmText = if (isPermanent) "Delete Forever" else "Move to Trash",
                     isDanger = isPermanent,
                     onConfirm = {
                         showMultiDeleteConfirmDialog = false
@@ -2267,54 +2297,13 @@ fun MainAppLayout(
                     },
                     dismissText = stringResource(R.string.action_cancel),
                     content = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = if (isPermanent) {
-                                    "Selected items will be permanently removed from your device. This cannot be undone."
-                                } else {
-                                    stringResource(R.string.dialog_move_to_trash_msg)
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            com.inferno.gallery.ui.components.TrashSessionOptions(
-                                skipConfirm = dialogSkipConfirm,
-                                onSkipConfirmChange = { dialogSkipConfirm = it },
-                                skipRecycleBin = dialogSkipRecycleBin,
-                                onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
-                            )
-                        }
+                        com.inferno.gallery.ui.components.TrashSessionOptions(
+                            skipConfirm = dialogSkipConfirm,
+                            onSkipConfirmChange = { dialogSkipConfirm = it },
+                            skipRecycleBin = dialogSkipRecycleBin,
+                            onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
+                        )
                     }
-                )
-            }
-
-            if (showRenameAlbumDialog && albumNameArg != null) {
-                com.inferno.gallery.ui.components.RenameAlbumDialog(
-                    currentName = albumNameArg,
-                    onDismissRequest = { showRenameAlbumDialog = false },
-                    onConfirm = { newName ->
-                        viewModel.renameAlbum(albumNameArg, newName) { success, finalName ->
-                            if (success && finalName != null) {
-                                val encoded = android.net.Uri.encode(finalName)
-                                nestedNavController.popBackStack()
-                                nestedNavController.navigate("album/$encoded")
-                            }
-                        }
-                    }
-                )
-            }
-
-            if (showFilterAlbumSheet) {
-                com.inferno.gallery.ui.components.AlbumFilterBottomSheet(
-                    selectedFilter = albumMediaFilter,
-                    onFilterSelected = { filter ->
-                        viewModel.setAlbumMediaFilter(filter)
-                    },
-                    onDismissRequest = { showFilterAlbumSheet = false }
                 )
             }
             
@@ -2586,7 +2575,7 @@ fun MainAppLayout(
                                 }
                                 "copy" -> {
                                     IconButton(onClick = { showCopySheet = true }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = "Copy", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_folder_copy), contentDescription = stringResource(R.string.action_copy_to_album), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                                     }
                                 }
                                 "move" -> {
@@ -2669,8 +2658,8 @@ fun MainAppLayout(
                                 }
                                 if ("copy" !in selectionDockActions) {
                                     DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.action_copy)) },
-                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        text = { Text(stringResource(R.string.action_copy_to_album)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_folder_copy), contentDescription = null) },
                                         onClick = {
                                             moreMenuExpanded = false
                                             showCopySheet = true
@@ -2823,6 +2812,32 @@ fun MainAppLayout(
             albumSortOrder = albumSortOrder,
             onAlbumSortOrderChange = { viewModel.setAlbumSortOrder(it) },
             onDismissRequest = { showDisplaySortSheet = false }
+        )
+    }
+
+    if (showRenameAlbumDialog && albumNameArg != null) {
+        com.inferno.gallery.ui.components.RenameAlbumDialog(
+            currentName = albumNameArg,
+            onDismissRequest = { showRenameAlbumDialog = false },
+            onConfirm = { newName ->
+                viewModel.renameAlbum(albumNameArg, newName) { success, finalName ->
+                    if (success && finalName != null) {
+                        val encoded = android.net.Uri.encode(finalName)
+                        nestedNavController.popBackStack()
+                        nestedNavController.navigate("album/$encoded")
+                    }
+                }
+            }
+        )
+    }
+
+    if (showFilterAlbumSheet) {
+        com.inferno.gallery.ui.components.AlbumFilterBottomSheet(
+            selectedFilter = albumMediaFilter,
+            onFilterSelected = { filter ->
+                viewModel.setAlbumMediaFilter(filter)
+            },
+            onDismissRequest = { showFilterAlbumSheet = false }
         )
     }
 

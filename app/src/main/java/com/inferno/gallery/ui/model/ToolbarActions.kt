@@ -18,7 +18,7 @@ sealed class ViewerToolbarAction(
     object Vault : ViewerToolbarAction("vault", R.string.action_hide, R.drawable.ic_ms_visibility_off)
     object Wallpaper : ViewerToolbarAction("wallpaper", R.string.detail_set_wallpaper, R.drawable.ic_ms_image)
     object Rotate : ViewerToolbarAction("rotate", R.string.action_rotate, R.drawable.ic_ms_rotate_right)
-    object Copy : ViewerToolbarAction("copy", R.string.action_copy, R.drawable.ic_ms_content_copy)
+    object Copy : ViewerToolbarAction("copy", R.string.action_copy_to_album, R.drawable.ic_ms_folder_copy)
 
     companion object {
         val ALL: List<ViewerToolbarAction> = listOf(
@@ -46,7 +46,7 @@ sealed class SelectionDockAction(
     @param:DrawableRes val iconRes: Int
 ) {
     object Share : SelectionDockAction("share", R.string.detail_share, R.drawable.ic_ms_share)
-    object Copy : SelectionDockAction("copy", R.string.action_copy, R.drawable.ic_ms_content_copy)
+    object Copy : SelectionDockAction("copy", R.string.action_copy_to_album, R.drawable.ic_ms_folder_copy)
     object Move : SelectionDockAction("move", R.string.action_move, R.drawable.ic_ms_drive_file_move)
     object Create : SelectionDockAction("create", R.string.action_create, R.drawable.ic_ms_add)
     object Delete : SelectionDockAction("delete", R.string.detail_delete, R.drawable.ic_ms_delete)

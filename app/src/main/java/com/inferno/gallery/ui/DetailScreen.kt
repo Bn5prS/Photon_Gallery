@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.animation.core.Animatable
@@ -274,20 +275,25 @@ fun DetailScreen(
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
             flushPendingRotation()
+            com.inferno.gallery.ui.components.MediaTransitionRegistry.clear()
+        }
+    }
+
+    val launchBounds = remember { com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds }
+    val containerProgress = remember {
+        androidx.compose.animation.core.Animatable(if (launchBounds != null) 0f else 1f)
+    }
+    var closingTargetRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+
+    LaunchedEffect(launchBounds) {
+        if (launchBounds != null) {
+            containerProgress.animateTo(1f, MotionTokens.sharedElementSpring())
         }
     }
 
     var hasNavigatedBack by remember { mutableStateOf(false) }
-    val safeOnBack: () -> Unit = remember(onBack) {
-        {
-            if (!hasNavigatedBack) {
-                hasNavigatedBack = true
-                flushPendingRotation()
-                onBack()
-            }
-        }
-    }
-    
+    var safeOnBackDelegate: (() -> Unit)? = null
+    val safeOnBack: () -> Unit = { safeOnBackDelegate?.invoke() }
     val rawGalleryItems by viewModel.detailMedia.collectAsState()
     val initialDetailItem by viewModel.initialDetailItem.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
@@ -754,10 +760,11 @@ fun DetailScreen(
     }
 
     // Single-tap immersive mode: system bars follow the viewer chrome toggle.
-    // Skipped when the global full-screen setting already keeps system bars hidden.
-    LaunchedEffect(showUi, useFullScreenGlobal, isDarkTheme) {
+    // Skipped when the global full-screen setting already keeps system bars hidden,
+    // and never hide system bars while closing so underlying top/bottom bars don't jump/blink.
+    LaunchedEffect(showUi, useFullScreenGlobal, isDarkTheme, hasNavigatedBack) {
         if (insetsController != null && !useFullScreenGlobal) {
-            if (showUi) {
+            if (showUi || hasNavigatedBack) {
                 insetsController.isAppearanceLightStatusBars = !isDarkTheme
                 insetsController.isAppearanceLightNavigationBars = !isDarkTheme
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -777,10 +784,14 @@ fun DetailScreen(
 
         com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_title),
-            subtitle = item.name,
+            title = if (isPermanent) "Delete permanently?" else "Move to Trash?",
+            subtitle = if (isPermanent) {
+                "This file will be erased immediately and cannot be recovered."
+            } else {
+                "Kept in Trash for 30 days before permanent removal."
+            },
             icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
-            confirmText = if (isPermanent) stringResource(R.string.dialog_delete_perm_title) else stringResource(R.string.dialog_move_to_trash_confirm),
+            confirmText = if (isPermanent) "Delete Forever" else "Move to Trash",
             isDanger = isPermanent,
             onConfirm = {
                 showDeleteConfirmDialog = false
@@ -831,27 +842,12 @@ fun DetailScreen(
             dismissText = stringResource(R.string.action_cancel),
             onDismiss = { showDeleteConfirmDialog = false },
             content = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    androidx.compose.material3.Text(
-                        text = if (isPermanent) {
-                            "This item will be permanently removed from your device. This cannot be undone."
-                        } else {
-                            stringResource(R.string.dialog_move_to_trash_msg)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    com.inferno.gallery.ui.components.TrashSessionOptions(
-                        skipConfirm = dialogSkipConfirm,
-                        onSkipConfirmChange = { dialogSkipConfirm = it },
-                        skipRecycleBin = dialogSkipRecycleBin,
-                        onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
-                    )
-                }
+                com.inferno.gallery.ui.components.TrashSessionOptions(
+                    skipConfirm = dialogSkipConfirm,
+                    onSkipConfirmChange = { dialogSkipConfirm = it },
+                    skipRecycleBin = dialogSkipRecycleBin,
+                    onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
+                )
             }
         )
     }
@@ -1008,12 +1004,90 @@ fun DetailScreen(
     // 1× zoom, this translates the pager and fades the black scrim.
     val dismissOffsetY = remember { Animatable(0f) }
     val dismissProgress = (kotlin.math.abs(dismissOffsetY.value) / 600f).coerceIn(0f, 1f)
-    val bgAlpha = 1f - dismissProgress          // scrim fades out
+    val transitionProgress = containerProgress.value.coerceIn(0f, 1f)
+    val bgAlpha = (1f - dismissProgress) * transitionProgress          // scrim fades out
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
+
+    val latestActiveUri by androidx.compose.runtime.rememberUpdatedState(currentItem?.uri?.toString())
+
+    val safeOnBackImpl: () -> Unit = remember(onBack, launchBounds) {
+        {
+            if (!hasNavigatedBack) {
+                hasNavigatedBack = true
+                showUi = false
+                flushPendingRotation()
+                if (launchBounds != null) {
+                    coroutineScope.launch {
+                        val activeUri = latestActiveUri
+                        val resolved = activeUri?.let {
+                            com.inferno.gallery.ui.components.MediaTransitionRegistry.resolveBounds(it)
+                        } ?: launchBounds.rect
+                        closingTargetRect = resolved
+                        launch {
+                            if (dismissOffsetY.value != 0f) {
+                                dismissOffsetY.animateTo(0f, MotionTokens.sharedElementSpring())
+                            }
+                        }
+                        containerProgress.animateTo(0f, MotionTokens.sharedElementSpring())
+                        onBack()
+                    }
+                } else {
+                    onBack()
+                }
+            }
+        }
+    }
+    safeOnBackDelegate = safeOnBackImpl
+
+    val density = LocalDensity.current
+    val edgeNudgePx = with(density) { 48.dp.toPx() }
+    var isPredictiveBacking by remember { mutableStateOf(false) }
+    var predictiveOffsetX by remember { mutableFloatStateOf(0f) }
+
+    PredictiveBackHandler(enabled = !isFilmstripOverview && !hasNavigatedBack) { progressFlow ->
+        isPredictiveBacking = true
+        if (launchBounds != null) {
+            val activeUri = latestActiveUri
+            closingTargetRect = activeUri?.let {
+                com.inferno.gallery.ui.components.MediaTransitionRegistry.resolveBounds(it)
+            } ?: launchBounds.rect
+        }
+        try {
+            progressFlow.collect { backEvent ->
+                val p = backEvent.progress.coerceIn(0f, 1f)
+                if (launchBounds != null) {
+                    containerProgress.snapTo((1f - p * 0.48f).coerceIn(0.48f, 1f))
+                } else {
+                    val dir = if (backEvent.swipeEdge == androidx.activity.BackEventCompat.EDGE_LEFT) 1f else -1f
+                    predictiveOffsetX = dir * p * edgeNudgePx
+                    dismissOffsetY.snapTo(p * 120f)
+                }
+            }
+            isPredictiveBacking = false
+            predictiveOffsetX = 0f
+            safeOnBack()
+        } catch (e: CancellationException) {
+            closingTargetRect = null
+            // Launch on coroutineScope so the cancelled PredictiveBackHandler job does not abort animateTo.
+            coroutineScope.launch {
+                if (launchBounds != null) {
+                    containerProgress.animateTo(1f, MotionTokens.sharedElementSpring())
+                } else {
+                    dismissOffsetY.animateTo(0f, MotionTokens.snappySpring())
+                }
+            }
+        } finally {
+            isPredictiveBacking = false
+            predictiveOffsetX = 0f
+        }
+    }
+
+    var containerSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { containerSize = it }
             .background(baseCanvasColor.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center
     ) {
@@ -1047,16 +1121,79 @@ fun DetailScreen(
 
 
 
+        val isContainerMorphing = launchBounds != null &&
+            containerSize.width > 0 &&
+            containerSize.height > 0 &&
+            transitionProgress < 0.999f
+
+        val containerClipModifier = if (isContainerMorphing && launchBounds != null) {
+            val activeRect = closingTargetRect ?: launchBounds.rect
+            val w = containerSize.width.toFloat()
+            val h = containerSize.height.toFloat()
+            val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, transitionProgress)
+            val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, transitionProgress)
+            val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, transitionProgress)
+            val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, transitionProgress)
+            val curRadiusPx = androidx.compose.ui.util.lerp(
+                with(density) { launchBounds.cornerRadiusDp.dp.toPx() },
+                0f,
+                transitionProgress
+            )
+            val clipShape = androidx.compose.foundation.shape.GenericShape { _, _ ->
+                addRoundRect(
+                    androidx.compose.ui.geometry.RoundRect(
+                        left = curLeft,
+                        top = curTop,
+                        right = curRight,
+                        bottom = curBottom,
+                        radiusX = curRadiusPx,
+                        radiusY = curRadiusPx
+                    )
+                )
+            }
+            Modifier.graphicsLayer {
+                shape = clipShape
+                clip = true
+            }
+        } else {
+            Modifier
+        }
+
+        val pagerTransformModifier = if (isContainerMorphing && launchBounds != null) {
+            val activeRect = closingTargetRect ?: launchBounds.rect
+            val w = containerSize.width.toFloat()
+            val h = containerSize.height.toFloat()
+            val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, transitionProgress)
+            val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, transitionProgress)
+            val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, transitionProgress)
+            val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, transitionProgress)
+            val curCenterX = (curLeft + curRight) * 0.5f
+            val curCenterY = (curTop + curBottom) * 0.5f
+            val curW = (curRight - curLeft).coerceAtLeast(1f)
+            val curH = (curBottom - curTop).coerceAtLeast(1f)
+            val uniformScale = maxOf(curW / w, curH / h).coerceAtLeast(0.05f)
+            Modifier.graphicsLayer {
+                translationX = curCenterX - w * 0.5f
+                translationY = curCenterY - h * 0.5f + dismissOffsetY.value
+                scaleX = uniformScale * dismissScale
+                scaleY = uniformScale * dismissScale
+            }
+        } else {
+            Modifier.graphicsLayer {
+                translationX = predictiveOffsetX
+                translationY = dismissOffsetY.value
+                scaleX = dismissScale
+                scaleY = dismissScale
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().then(containerClipModifier)) {
         HorizontalPager(
             state = pagerState,
             userScrollEnabled = (currentScale <= 1.05f && dismissOffsetY.value == 0f) || isFilmstripOverview,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    translationY = dismissOffsetY.value
-                    scaleX = dismissScale
-                    scaleY = dismissScale
-                }
+                .then(pagerTransformModifier)
                 .pointerInput(currentScale) {
                     // Swipe-to-dismiss: only when not zoomed in.
                     if (currentScale > 1.05f) return@pointerInput
@@ -1799,6 +1936,7 @@ fun DetailScreen(
             } // end wrapper Box
         }
         }
+        } // end containerClipModifier Box
 
         val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
         val heartView = androidx.compose.ui.platform.LocalView.current
@@ -2016,14 +2154,15 @@ fun DetailScreen(
 
         // ── Floating Top Islands ──
         AnimatedVisibility(
-            visible = showUi,
+            visible = showUi && !hasNavigatedBack && !isPredictiveBacking && (launchBounds == null || transitionProgress > 0.65f),
             enter = fadeIn(MotionTokens.gentleSpring()) +
                     slideInVertically(MotionTokens.gentleSpring()) { -it },
-            exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    slideOutVertically(MotionTokens.gentleSpring()) { -it },
+            exit  = fadeOut(MotionTokens.fastEffectsSpec()) +
+                    slideOutVertically(MotionTokens.fastEffectsSpec()) { -it },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
+                .graphicsLayer { alpha = bgAlpha }
         ) {
             Box(
                 modifier = Modifier
@@ -2200,10 +2339,27 @@ fun DetailScreen(
                                         }
                                     )
                                 }
+                                if (currentItem != null && !currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_copy_to_clipboard)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            coroutineScope.launch {
+                                                com.inferno.gallery.ui.utils.ClipboardImageHelper.copyImageToClipboard(
+                                                    context = context,
+                                                    uri = uri
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
                                 if (currentItem != null && "copy" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.action_copy)) },
-                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        text = { Text(stringResource(R.string.action_copy_to_album)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_folder_copy), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
                                             showMoreMenu = false
@@ -2240,6 +2396,22 @@ fun DetailScreen(
                                         onClick = {
                                             showMoreMenu = false
                                             showRenameDialog = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && !currentItem.isVideo) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_print)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_print), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            com.inferno.gallery.ui.utils.PhotoPrintHelper.printPhoto(
+                                                context = context,
+                                                uri = uri,
+                                                jobName = currentItem.name
+                                            )
                                         }
                                     )
                                 }
@@ -2374,16 +2546,17 @@ fun DetailScreen(
 
         // ── Floating Action Dock & Motion Photo Control ──
         AnimatedVisibility(
-            visible = showUi,
+            visible = showUi && !hasNavigatedBack && !isPredictiveBacking && (launchBounds == null || transitionProgress > 0.65f),
             enter = fadeIn(MotionTokens.gentleSpring()) +
                     slideInVertically(MotionTokens.gentleSpring()) { it } +
                     scaleIn(MotionTokens.snappySpring()),
-            exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    slideOutVertically(MotionTokens.gentleSpring()) { it } +
-                    scaleOut(MotionTokens.gentleSpring()),
+            exit  = fadeOut(MotionTokens.fastEffectsSpec()) +
+                    slideOutVertically(MotionTokens.fastEffectsSpec()) { it } +
+                    scaleOut(MotionTokens.fastEffectsSpec()),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
+                .graphicsLayer { alpha = bgAlpha }
                 .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
         ) {
             Column(
@@ -2698,8 +2871,8 @@ private fun ViewerActionButtonsRow(
                             modifier = Modifier.weight(1f)
                         )
                         "copy" -> ViewerToolTile(
-                            icon = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
-                            contentDescription = stringResource(R.string.action_copy),
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_copy),
+                            contentDescription = stringResource(R.string.action_copy_to_album),
                             enabled = currentItem?.localExists == true,
                             onClick = onCopy,
                             tileShape = tileShape,

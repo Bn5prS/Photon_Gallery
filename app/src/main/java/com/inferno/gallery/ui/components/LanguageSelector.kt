@@ -155,9 +155,11 @@ fun OnboardingLanguagePill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SpacingTokens.XS)
         ) {
-            Text(
-                text = "🌐",
-                fontSize = 14.sp
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_language),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = pillContentColor
             )
             Text(
                 text = pillName,
@@ -204,9 +206,11 @@ fun BigOnboardingLanguagePill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
         ) {
-            Text(
-                text = "🌐",
-                fontSize = 18.sp
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_language),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = pillContentColor
             )
             Text(
                 text = pillName,

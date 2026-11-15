@@ -33,6 +33,7 @@ import coil3.request.crossfade
 import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.ui.theme.ShapeMedium
 import java.io.File
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -450,6 +451,20 @@ private fun SearchResultsList(
 
     var selectedFilter by remember(query) { mutableStateOf("ALL") }
 
+    val visibleCellBounds = remember { mutableMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    val onCellBoundsChanged = remember {
+        { key: String, rect: androidx.compose.ui.geometry.Rect ->
+            visibleCellBounds[key] = rect
+        }
+    }
+    DisposableEffect(Unit) {
+        val resolver: (String) -> androidx.compose.ui.geometry.Rect? = { key -> visibleCellBounds[key] }
+        com.inferno.gallery.ui.components.MediaTransitionRegistry.registerResolver(resolver)
+        onDispose {
+            com.inferno.gallery.ui.components.MediaTransitionRegistry.unregisterResolver(resolver)
+        }
+    }
+
     val onFtsClick = remember(onPhotoClick, query, viewModel, isSelectionMode) {
         { item: GalleryItem ->
             if (isSelectionMode) {
@@ -750,7 +765,9 @@ private fun SearchResultsList(
                             isSelected = isSelected,
                             favoriteIconVector = favoriteIconVector,
                             isFavorite = isFav,
-                            showMatchBadge = true
+                            showMatchBadge = true,
+                            useContainerTransform = true,
+                            onBoundsChanged = onCellBoundsChanged
                         )
                     }
                     if (ftsResults.size > 12) {
@@ -814,7 +831,9 @@ private fun SearchResultsList(
                             isSelected = isSelected,
                             favoriteIconVector = favoriteIconVector,
                             isFavorite = isFav,
-                            showMatchBadge = true
+                            showMatchBadge = true,
+                            useContainerTransform = true,
+                            onBoundsChanged = onCellBoundsChanged
                         )
                     }
                     if (smartResults.size > 12) {
@@ -883,7 +902,9 @@ private fun SearchResultsList(
                         isSelected = isSelected,
                         favoriteIconVector = favoriteIconVector,
                         isFavorite = isFav,
-                        showMatchBadge = true
+                        showMatchBadge = true,
+                        useContainerTransform = true,
+                        onBoundsChanged = onCellBoundsChanged
                     )
                 }
             }
@@ -903,7 +924,9 @@ private fun SearchResultsList(
                         isSelected = isSelected,
                         favoriteIconVector = favoriteIconVector,
                         isFavorite = isFav,
-                        showMatchBadge = true
+                        showMatchBadge = true,
+                        useContainerTransform = true,
+                        onBoundsChanged = onCellBoundsChanged
                     )
                 }
             }
@@ -923,7 +946,9 @@ private fun SearchResultsList(
                         isSelected = isSelected,
                         favoriteIconVector = favoriteIconVector,
                         isFavorite = isFav,
-                        showMatchBadge = true
+                        showMatchBadge = true,
+                        useContainerTransform = true,
+                        onBoundsChanged = onCellBoundsChanged
                     )
                 }
             }
@@ -943,7 +968,9 @@ private fun SearchResultsList(
                         isSelected = isSelected,
                         favoriteIconVector = favoriteIconVector,
                         isFavorite = isFav,
-                        showMatchBadge = true
+                        showMatchBadge = true,
+                        useContainerTransform = true,
+                        onBoundsChanged = onCellBoundsChanged
                     )
                 }
             }
@@ -989,7 +1016,9 @@ private fun SearchResultsList(
                             isSelected = isSelected,
                             favoriteIconVector = favoriteIconVector,
                             isFavorite = isFav,
-                            showMatchBadge = true
+                            showMatchBadge = true,
+                            useContainerTransform = true,
+                            onBoundsChanged = onCellBoundsChanged
                         )
                     }
                 }
@@ -1010,7 +1039,9 @@ private fun SearchResultsList(
                         isSelected = isSelected,
                         favoriteIconVector = favoriteIconVector,
                         isFavorite = isFav,
-                        showMatchBadge = true
+                        showMatchBadge = true,
+                        useContainerTransform = true,
+                        onBoundsChanged = onCellBoundsChanged
                     )
                 }
             }
@@ -1030,7 +1061,9 @@ private fun SearchResultsList(
                         isSelected = isSelected,
                         favoriteIconVector = favoriteIconVector,
                         isFavorite = isFav,
-                        showMatchBadge = true
+                        showMatchBadge = true,
+                        useContainerTransform = true,
+                        onBoundsChanged = onCellBoundsChanged
                     )
                 }
             }
