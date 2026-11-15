@@ -12,9 +12,12 @@ class SettingsRepositoryToolbarTest {
     @Test
     fun testViewerToolbarActionDefaultsAndAll() {
         assertEquals(listOf("share", "favorite", "edit", "info", "delete"), ViewerToolbarAction.DEFAULTS)
-        assertEquals(10, ViewerToolbarAction.ALL.size)
+        assertEquals(13, ViewerToolbarAction.ALL.size)
         assertNotNull(ViewerToolbarAction.fromId("share"))
         assertNotNull(ViewerToolbarAction.fromId("vault"))
+        assertNotNull(ViewerToolbarAction.fromId("copy_clipboard"))
+        assertNotNull(ViewerToolbarAction.fromId("rename"))
+        assertNotNull(ViewerToolbarAction.fromId("print"))
         assertNull(ViewerToolbarAction.fromId("unknown_action"))
     }
 
@@ -42,9 +45,11 @@ class SettingsRepositoryToolbarTest {
     @Test
     fun testSelectionDockActionDefaultsAndAll() {
         assertEquals(listOf("share", "copy", "move", "create", "delete"), SelectionDockAction.DEFAULTS)
-        assertEquals(7, SelectionDockAction.ALL.size)
+        assertEquals(9, SelectionDockAction.ALL.size)
         assertNotNull(SelectionDockAction.fromId("create"))
         assertNotNull(SelectionDockAction.fromId("selectAll"))
+        assertNotNull(SelectionDockAction.fromId("collage"))
+        assertNotNull(SelectionDockAction.fromId("stitch"))
         assertNull(SelectionDockAction.fromId("unknown"))
     }
 

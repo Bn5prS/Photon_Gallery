@@ -545,8 +545,19 @@ fun NativePhotonGrid(
                     adapter.notifyItemRangeChanged(0, adapter.itemCount)
                 }
 
-                // Update span count
+                // Update span count with smooth shuffle/resize transition
                 if (layoutManager.spanCount != safeSpanCount) {
+                    android.transition.TransitionManager.endTransitions(recyclerView)
+                    android.transition.TransitionManager.beginDelayedTransition(
+                        recyclerView,
+                        android.transition.TransitionSet().apply {
+                            ordering = android.transition.TransitionSet.ORDERING_TOGETHER
+                            addTransition(android.transition.ChangeBounds())
+                            addTransition(android.transition.Fade(android.transition.Fade.IN))
+                            duration = 280L
+                            interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
+                        }
+                    )
                     layoutManager.spanCount = safeSpanCount
                     adapter.currentSpanCount = safeSpanCount
                     recyclerView.invalidateItemDecorations()

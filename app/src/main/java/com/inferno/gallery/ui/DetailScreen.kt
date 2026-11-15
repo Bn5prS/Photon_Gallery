@@ -937,6 +937,7 @@ fun DetailScreen(
         )
     }
 
+    var pendingVaultHideAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     if (showMoveSheet && currentItem != null) {
         val allAlbumsList by viewModel.allAlbums.collectAsState()
         AlbumPickerSheet(
@@ -958,19 +959,36 @@ fun DetailScreen(
                 showMoveSheet = false
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 if (activity != null) {
+                    val hideAction: () -> Unit = {
+                        viewModel.hideMedia(listOf(currentItem.uri))
+                        viewModel.lockVault()
+                        safeOnBack()
+                    }
                     viewModel.vaultAuthManager.authenticate(
                         activity = activity,
-                        negativeButtonText = "Cancel",
+                        negativeButtonText = "Use PIN",
                         unlockSession = false,
-                        onSuccess = {
-                            viewModel.hideMedia(listOf(currentItem.uri))
-                            viewModel.vaultAuthManager.lock()
-                            safeOnBack()
+                        onSuccess = hideAction,
+                        onNegativeButton = {
+                            if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                pendingVaultHideAction = hideAction
+                            }
                         },
                         onFailure = {}
                     )
                 }
             }
+        )
+    }
+
+    pendingVaultHideAction?.let { action ->
+        com.inferno.gallery.ui.vault.VaultPinVerifyDialog(
+            vaultAuthManager = viewModel.vaultAuthManager,
+            onVerified = {
+                pendingVaultHideAction = null
+                action()
+            },
+            onDismiss = { pendingVaultHideAction = null }
         )
     }
 
@@ -2130,14 +2148,20 @@ fun DetailScreen(
             if (currentItem != null) {
                 val act = context as? androidx.fragment.app.FragmentActivity
                 if (act != null) {
+                    val hideAction: () -> Unit = {
+                        viewModel.hideMedia(listOf(currentItem.uri))
+                        viewModel.lockVault()
+                        safeOnBack()
+                    }
                     viewModel.vaultAuthManager.authenticate(
                         activity = act,
-                        negativeButtonText = "Cancel",
+                        negativeButtonText = "Use PIN",
                         unlockSession = false,
-                        onSuccess = {
-                            viewModel.hideMedia(listOf(currentItem.uri))
-                            viewModel.vaultAuthManager.lock()
-                            safeOnBack()
+                        onSuccess = hideAction,
+                        onNegativeButton = {
+                            if (viewModel.vaultAuthManager.isPinConfigured(act)) {
+                                pendingVaultHideAction = hideAction
+                            }
                         },
                         onFailure = {}
                     )
@@ -2339,7 +2363,7 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null && !currentItem.isVideo) {
+                                if (currentItem != null && !currentItem.isVideo && "copy_clipboard" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_copy_to_clipboard)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
@@ -2388,7 +2412,7 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null) {
+                                if (currentItem != null && "rename" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_rename)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
@@ -2399,7 +2423,7 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null && !currentItem.isVideo) {
+                                if (currentItem != null && !currentItem.isVideo && "print" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_print)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_print), contentDescription = null) },
@@ -2614,6 +2638,26 @@ fun DetailScreen(
                     onWallpaper = onWallpaperAction,
                     onRotate = onRotateAction,
                     onCopy = { showCopySheet = true },
+                    onCopyClipboard = {
+                        val item = currentItem ?: return@ViewerActionButtonsRow
+                        val uri = resolvedCurrentUri ?: item.uri
+                        coroutineScope.launch {
+                            com.inferno.gallery.ui.utils.ClipboardImageHelper.copyImageToClipboard(
+                                context = context,
+                                uri = uri
+                            )
+                        }
+                    },
+                    onRename = { showRenameDialog = true },
+                    onPrint = {
+                        val item = currentItem ?: return@ViewerActionButtonsRow
+                        val uri = resolvedCurrentUri ?: item.uri
+                        com.inferno.gallery.ui.utils.PhotoPrintHelper.printPhoto(
+                            context = context,
+                            uri = uri,
+                            jobName = item.name
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 380.dp)
@@ -2740,6 +2784,9 @@ private fun ViewerActionButtonsRow(
     onWallpaper: () -> Unit = {},
     onRotate: () -> Unit = {},
     onCopy: () -> Unit = {},
+    onCopyClipboard: () -> Unit = {},
+    onRename: () -> Unit = {},
+    onPrint: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Outer Pill container for bottom controls pill:
@@ -2875,6 +2922,30 @@ private fun ViewerActionButtonsRow(
                             contentDescription = stringResource(R.string.action_copy_to_album),
                             enabled = currentItem?.localExists == true,
                             onClick = onCopy,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "copy_clipboard" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
+                            contentDescription = stringResource(R.string.action_copy_to_clipboard),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onCopyClipboard,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "rename" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                            contentDescription = stringResource(R.string.action_rename),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onRename,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "print" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_print),
+                            contentDescription = stringResource(R.string.action_print),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onPrint,
                             tileShape = tileShape,
                             modifier = Modifier.weight(1f)
                         )

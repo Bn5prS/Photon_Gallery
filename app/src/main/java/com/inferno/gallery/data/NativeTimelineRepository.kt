@@ -9,6 +9,7 @@ import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.GalleryDatabase
 import com.inferno.gallery.ui.GalleryViewModel
 import com.inferno.gallery.ui.SortOrder
+import com.inferno.gallery.ui.TimelineGroupBy
 import com.inferno.gallery.ui.ViewMode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +88,9 @@ class NativeTimelineRepository(
 
     private val _viewMode = MutableStateFlow(ViewMode.Grouped)
     val viewMode: StateFlow<ViewMode> = _viewMode.asStateFlow()
+
+    private val _groupBy = MutableStateFlow(TimelineGroupBy.Day)
+    val groupBy: StateFlow<TimelineGroupBy> = _groupBy.asStateFlow()
 
     private val _excludedFolders = MutableStateFlow<Set<String>>(emptySet())
     val excludedFolders: StateFlow<Set<String>> = _excludedFolders.asStateFlow()
@@ -194,6 +198,7 @@ class NativeTimelineRepository(
         filterIndex: Int = _filterIndex.value,
         sortOrder: SortOrder = _sortOrder.value,
         viewMode: ViewMode = _viewMode.value,
+        groupBy: TimelineGroupBy = _groupBy.value,
         excluded: Set<String> = _excludedFolders.value,
         favIds: Set<String> = _favIds.value,
         ftsIds: List<String> = _ftsIds.value,
@@ -204,6 +209,7 @@ class NativeTimelineRepository(
             _filterIndex.value == filterIndex &&
             _sortOrder.value == sortOrder &&
             _viewMode.value == viewMode &&
+            _groupBy.value == groupBy &&
             _excludedFolders.value == excluded &&
             _favIds.value == favIds &&
             _ftsIds.value == ftsIds &&
@@ -214,6 +220,7 @@ class NativeTimelineRepository(
         if (_filterIndex.value != filterIndex ||
             _sortOrder.value != sortOrder ||
             _viewMode.value != viewMode ||
+            _groupBy.value != groupBy ||
             _excludedFolders.value != excluded) {
             bucketCache.clear()
         }
@@ -221,6 +228,7 @@ class NativeTimelineRepository(
         _filterIndex.value = filterIndex
         _sortOrder.value = sortOrder
         _viewMode.value = viewMode
+        _groupBy.value = groupBy
         _excludedFolders.value = excluded
         _favIds.value == favIds
         _ftsIds.value = ftsIds
@@ -308,9 +316,10 @@ class NativeTimelineRepository(
     fun transformToTimeline(
         stubs: List<MediaStub>,
         sortOrder: SortOrder = _sortOrder.value,
-        viewMode: ViewMode = _viewMode.value
+        viewMode: ViewMode = _viewMode.value,
+        groupBy: TimelineGroupBy = _groupBy.value
     ): List<NativeTimelineItem> {
-        return transformStubs(stubs, sortOrder, viewMode, uriResolver)
+        return transformStubs(stubs, sortOrder, viewMode, uriResolver, groupBy)
     }
 
     /**
@@ -326,7 +335,8 @@ class NativeTimelineRepository(
         favIds: Set<String> = _favIds.value,
         ftsIds: List<String> = _ftsIds.value,
         smartIds: List<String> = _smartIds.value,
-        albumMediaFilter: AlbumMediaFilter = _albumMediaFilter.value
+        albumMediaFilter: AlbumMediaFilter = _albumMediaFilter.value,
+        groupBy: TimelineGroupBy = _groupBy.value
     ): List<NativeTimelineItem> = withContext(ioDispatcher) {
         val db = database ?: return@withContext emptyList()
         val qc = MediaQueryBuilder.buildMediaConditions(
@@ -384,7 +394,7 @@ class NativeTimelineRepository(
                             lastHeaderTitle
                         } else {
                             lastDate = dateForHeader
-                            GalleryViewModel.formatGroupHeader(dateForHeader)
+                            GalleryViewModel.formatGroupHeader(dateForHeader, groupBy)
                         }
 
                         if (title != lastHeaderTitle) {
@@ -468,7 +478,8 @@ class NativeTimelineRepository(
             stubs: List<MediaStub>,
             sortOrder: SortOrder = SortOrder.NewToOld,
             viewMode: ViewMode = ViewMode.Grouped,
-            uriResolver: (String) -> Uri = { Uri.parse(it) }
+            uriResolver: (String) -> Uri = { Uri.parse(it) },
+            groupBy: TimelineGroupBy = TimelineGroupBy.Day
         ): List<NativeTimelineItem> {
             if (stubs.isEmpty()) return emptyList()
 
@@ -495,7 +506,7 @@ class NativeTimelineRepository(
                         lastHeaderTitle
                     } else {
                         lastDate = dateForHeader
-                        GalleryViewModel.formatGroupHeader(dateForHeader)
+                        GalleryViewModel.formatGroupHeader(dateForHeader, groupBy)
                     }
 
                     if (title != lastHeaderTitle) {

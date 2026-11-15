@@ -152,6 +152,18 @@ fun PersonDetailScreen(
     val confirmDeleteEnabled by viewModel.settingsRepository.confirmDeleteEnabledFlow.collectAsState(initial = true)
     var showCopySheet by remember { mutableStateOf(false) }
     var showMoveSheet by remember { mutableStateOf(false) }
+    var pendingVaultHideAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    pendingVaultHideAction?.let { action ->
+        com.inferno.gallery.ui.vault.VaultPinVerifyDialog(
+            vaultAuthManager = galleryViewModel.vaultAuthManager,
+            onVerified = {
+                pendingVaultHideAction = null
+                action()
+            },
+            onDismiss = { pendingVaultHideAction = null }
+        )
+    }
     var createMenuExpanded by remember { mutableStateOf(false) }
     var moreMenuExpanded by remember { mutableStateOf(false) }
 
@@ -437,14 +449,20 @@ fun PersonDetailScreen(
                 showMoveSheet = false
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 if (activity != null) {
+                    val hideAction: () -> Unit = {
+                        galleryViewModel.hideMedia(uris)
+                        galleryViewModel.lockVault()
+                        selectedMediaIds = emptySet()
+                    }
                     galleryViewModel.vaultAuthManager.authenticate(
                         activity = activity,
-                        negativeButtonText = "Cancel",
+                        negativeButtonText = "Use PIN",
                         unlockSession = false,
-                        onSuccess = {
-                            galleryViewModel.hideMedia(uris)
-                            galleryViewModel.vaultAuthManager.lock()
-                            selectedMediaIds = emptySet()
+                        onSuccess = hideAction,
+                        onNegativeButton = {
+                            if (galleryViewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                pendingVaultHideAction = hideAction
+                            }
                         },
                         onFailure = {}
                     )
@@ -1034,15 +1052,21 @@ fun PersonDetailScreen(
                                 moreMenuExpanded = false
                                 val activity = context as? androidx.fragment.app.FragmentActivity
                                 if (activity != null) {
+                                    val hideAction: () -> Unit = {
+                                        val uris = selectedMedia.map { Uri.parse(it.uriString) }
+                                        galleryViewModel.hideMedia(uris)
+                                        galleryViewModel.lockVault()
+                                        selectedMediaIds = emptySet()
+                                    }
                                     galleryViewModel.vaultAuthManager.authenticate(
                                         activity = activity,
-                                        negativeButtonText = "Cancel",
+                                        negativeButtonText = "Use PIN",
                                         unlockSession = false,
-                                        onSuccess = {
-                                            val uris = selectedMedia.map { Uri.parse(it.uriString) }
-                                            galleryViewModel.hideMedia(uris)
-                                            galleryViewModel.vaultAuthManager.lock()
-                                            selectedMediaIds = emptySet()
+                                        onSuccess = hideAction,
+                                        onNegativeButton = {
+                                            if (galleryViewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                                pendingVaultHideAction = hideAction
+                                            }
                                         },
                                         onFailure = {}
                                     )

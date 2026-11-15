@@ -142,6 +142,12 @@ enum class ViewMode {
     Grouped
 }
 
+enum class TimelineGroupBy {
+    Day,
+    Month,
+    Year
+}
+
 @Immutable
 data class AlbumBucket(
     val bucketName: String,
@@ -688,12 +694,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun lockVault() {
         vaultAuthManager.lock()
+        vaultRepository.clearPreviewCache()
     }
 
     fun hideMedia(uris: List<Uri>) {
         viewModelScope.launch(Dispatchers.IO) {
             val count = vaultRepository.hideMedia(uris).size
-            showToast("$count item${if (count != 1) "s" else ""} hidden")
+            if (count > 0) {
+                showToast("$count item${if (count != 1) "s" else ""} hidden")
+            } else {
+                showToast("Could not move item(s) to Private Space")
+            }
         }
     }
 
@@ -713,6 +724,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun getVaultFileUri(entity: com.inferno.gallery.data.db.VaultMediaEntity): Uri {
         return vaultRepository.getVaultFileUri(entity)
+    }
+
+    suspend fun getViewableVaultFile(entity: com.inferno.gallery.data.db.VaultMediaEntity): java.io.File? {
+        return vaultRepository.getViewableVaultFile(entity)
+    }
+
+    fun clearVaultPreviewCache() {
+        vaultRepository.clearPreviewCache()
     }
 
     private val _isScrollDockVisible = MutableStateFlow(true)
@@ -746,6 +765,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private val _viewMode = MutableStateFlow(ViewMode.Grouped)
     val viewMode: StateFlow<ViewMode> = _viewMode.asStateFlow()
+
+    private val _timelineGroupBy = MutableStateFlow(TimelineGroupBy.Day)
+    val timelineGroupBy: StateFlow<TimelineGroupBy> = _timelineGroupBy.asStateFlow()
 
     val dockStyle: StateFlow<DockStyle> = settingsRepository.dockStyleFlow.map {
         try {
@@ -890,19 +912,36 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         viewModelScope.launch {
+            settingsRepository.timelineGroupByFlow.collect { raw ->
+                val parsed = try { TimelineGroupBy.valueOf(raw) } catch (e: Exception) { TimelineGroupBy.Day }
+                if (_timelineGroupBy.value != parsed) {
+                    _timelineGroupBy.value = parsed
+                }
+            }
+        }
+        viewModelScope.launch {
             combine(
                 combine(_currentBucket, selectedFilterIndex, sortOrder, albumMediaFilter) { b, f, o, af ->
                     Triple(b, f, Pair(o, af))
                 },
-                combine(viewMode, excludedFolders, favoritesManager.favoritesFlow) { m, e, fav -> Triple(m, e, fav) },
+                combine(viewMode, timelineGroupBy, excludedFolders, favoritesManager.favoritesFlow) { m, g, e, fav ->
+                    listOf(m, g, e, fav)
+                },
                 combine(ftsSearchResults, smartSearchResults) { fts, smart -> Pair(fts, smart) }
-            ) { (b, f, orderAndFilter), (m, e, fav), (fts, smart) ->
+            ) { (b, f, orderAndFilter), viewConfig, (fts, smart) ->
                 val (o, af) = orderAndFilter
+                val m = viewConfig[0] as ViewMode
+                val g = viewConfig[1] as TimelineGroupBy
+                @Suppress("UNCHECKED_CAST")
+                val e = viewConfig[2] as Set<String>
+                @Suppress("UNCHECKED_CAST")
+                val fav = viewConfig[3] as Set<String>
                 nativeTimelineRepository.updatePipeline(
                     bucket = b,
                     filterIndex = f,
                     sortOrder = o,
                     viewMode = m,
+                    groupBy = g,
                     excluded = e,
                     favIds = fav,
                     ftsIds = fts.map { it.id },
@@ -2633,6 +2672,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private var saveGroupByJob: kotlinx.coroutines.Job? = null
+    fun setTimelineGroupBy(groupBy: TimelineGroupBy) {
+        if (_timelineGroupBy.value == groupBy) return
+        _timelineGroupBy.value = groupBy
+        saveGroupByJob?.cancel()
+        saveGroupByJob = viewModelScope.launch {
+            settingsRepository.updateTimelineGroupBy(groupBy.name)
+        }
+    }
+
 
 
     fun setFilter(index: Int) {
@@ -3539,30 +3588,51 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     companion object {
         private val headerFormatterWithYear = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy", java.util.Locale.getDefault())
+        private val monthHeaderFormatter = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.getDefault())
         private val headerCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
+        private val monthHeaderCache = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
-        fun formatGroupHeader(dateAddedSeconds: Long): String {
+        fun formatGroupHeader(
+            dateAddedSeconds: Long,
+            groupBy: TimelineGroupBy = TimelineGroupBy.Day
+        ): String {
             val timeMs = dateAddedSeconds * 1000L
             val offsetMs = java.util.TimeZone.getDefault().getOffset(timeMs).toLong()
             val localDay = (timeMs + offsetMs) / 86400000L
 
-            return headerCache.getOrPut(localDay) {
-                val itemDate = java.time.LocalDate.ofEpochDay(localDay)
-                val today = java.time.LocalDate.now()
-                val yesterday = today.minusDays(1)
+            return when (groupBy) {
+                TimelineGroupBy.Day -> headerCache.getOrPut(localDay) {
+                    val itemDate = java.time.LocalDate.ofEpochDay(localDay)
+                    val today = java.time.LocalDate.now()
+                    val yesterday = today.minusDays(1)
 
-                when (itemDate) {
-                    today -> "Today"
-                    yesterday -> "Yesterday"
-                    else -> itemDate.format(headerFormatterWithYear)
+                    when (itemDate) {
+                        today -> "Today"
+                        yesterday -> "Yesterday"
+                        else -> itemDate.format(headerFormatterWithYear)
+                    }
+                }
+                TimelineGroupBy.Month -> {
+                    val itemDate = java.time.LocalDate.ofEpochDay(localDay)
+                    val ymKey = itemDate.year * 12 + itemDate.monthValue
+                    monthHeaderCache.getOrPut(ymKey) {
+                        itemDate.format(monthHeaderFormatter)
+                    }
+                }
+                TimelineGroupBy.Year -> {
+                    java.time.LocalDate.ofEpochDay(localDay).year.toString()
                 }
             }
         }
     }
 
-    val pagedMedia: Flow<PagingData<GalleryListItem>> = combine(viewMode, sortOrder, _currentBucket) { mode, order, bucket ->
-        Triple(mode, order, bucket)
-    }.flatMapLatest { (mode, order, bucket) ->
+    val pagedMedia: Flow<PagingData<GalleryListItem>> = combine(viewMode, timelineGroupBy, sortOrder, _currentBucket) { mode, groupBy, order, bucket ->
+        listOf(mode, groupBy, order, bucket)
+    }.flatMapLatest { values ->
+        val mode = values[0] as ViewMode
+        val groupBy = values[1] as TimelineGroupBy
+        val order = values[2] as SortOrder
+        val bucket = values[3] as String?
         val isSmartSearch = bucket == BucketNames.SEARCH_SMART
         val isDateSort = (order == SortOrder.NewToOld || order == SortOrder.OldToNew ||
                          order == SortOrder.DateModifiedNewToOld || order == SortOrder.DateModifiedOldToNew) && !isSmartSearch
@@ -3579,7 +3649,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     } else {
                         after.dateAdded
                     }
-                    val afterTitle = formatGroupHeader(afterDate)
+                    val afterTitle = formatGroupHeader(afterDate, groupBy)
 
                     if (before == null) {
                         GalleryListItem.Header(title = afterTitle, id = after.id)
@@ -3589,7 +3659,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         } else {
                             before.dateAdded
                         }
-                        val beforeTitle = formatGroupHeader(beforeDate)
+                        val beforeTitle = formatGroupHeader(beforeDate, groupBy)
                         if (beforeTitle != afterTitle) {
                             GalleryListItem.Header(title = afterTitle, id = after.id)
                         } else {

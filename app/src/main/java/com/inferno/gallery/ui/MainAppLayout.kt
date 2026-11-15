@@ -209,6 +209,7 @@ fun MainAppLayout(
     val selectionDockActions by viewModel.selectionDockActions.collectAsState()
     val isDragSelecting by viewModel.isDragSelecting.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
+    val timelineGroupBy by viewModel.timelineGroupBy.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val albumSortOrder by viewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by viewModel.albumLayoutMode.collectAsState()
@@ -1542,6 +1543,18 @@ fun MainAppLayout(
             ) {
             var expanded by remember { mutableStateOf(false) }
             var showMoveSheet by remember { mutableStateOf(false) }
+            var pendingVaultHideAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+            pendingVaultHideAction?.let { action ->
+                com.inferno.gallery.ui.vault.VaultPinVerifyDialog(
+                    vaultAuthManager = viewModel.vaultAuthManager,
+                    onVerified = {
+                        pendingVaultHideAction = null
+                        action()
+                    },
+                    onDismiss = { pendingVaultHideAction = null }
+                )
+            }
             var showCopySheet by remember { mutableStateOf(false) }
 
             var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -1615,15 +1628,21 @@ fun MainAppLayout(
                                                 showMoveSheet = false
                                                 val activity = context as? androidx.fragment.app.FragmentActivity
                                                 if (activity != null) {
+                                                    val hideAction: () -> Unit = {
+                                                        val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
+                                                        viewModel.hideMedia(uris)
+                                                        viewModel.lockVault()
+                                                        viewModel.clearSelection()
+                                                    }
                                                     viewModel.vaultAuthManager.authenticate(
                                                         activity = activity,
-                                                        negativeButtonText = "Cancel",
+                                                        negativeButtonText = "Use PIN",
                                                         unlockSession = false,
-                                                        onSuccess = {
-                                                            val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
-                                                            viewModel.hideMedia(uris)
-                                                            viewModel.vaultAuthManager.lock()
-                                                            viewModel.clearSelection()
+                                                        onSuccess = hideAction,
+                                                        onNegativeButton = {
+                                                            if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                                                pendingVaultHideAction = hideAction
+                                                            }
                                                         },
                                                         onFailure = {}
                                                     )
@@ -2480,15 +2499,21 @@ fun MainAppLayout(
                 val onVaultSelectedAction = {
                     val activity = context as? androidx.fragment.app.FragmentActivity
                     if (activity != null) {
+                        val hideAction: () -> Unit = {
+                            val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
+                            viewModel.hideMedia(uris)
+                            viewModel.lockVault()
+                            viewModel.clearSelection()
+                        }
                         viewModel.vaultAuthManager.authenticate(
                             activity = activity,
-                            negativeButtonText = "Cancel",
+                            negativeButtonText = "Use PIN",
                             unlockSession = false,
-                            onSuccess = {
-                                val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
-                                viewModel.hideMedia(uris)
-                                viewModel.vaultAuthManager.lock()
-                                viewModel.clearSelection()
+                            onSuccess = hideAction,
+                            onNegativeButton = {
+                                if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                    pendingVaultHideAction = hideAction
+                                }
                             },
                             onFailure = {}
                         )
@@ -2632,6 +2657,28 @@ fun MainAppLayout(
                                 "selectAll" -> {
                                     IconButton(onClick = { viewModel.toggleSelectAll() }) {
                                         Icon(ImageVector.vectorResource(R.drawable.ic_ms_select_all), contentDescription = stringResource(R.string.action_select_all), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                    }
+                                }
+                                "collage" -> {
+                                    IconButton(onClick = {
+                                        if (isCreateEnabled) {
+                                            onCreateCollage(selectedUris.toList())
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = stringResource(R.string.action_collage), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                                    }
+                                }
+                                "stitch" -> {
+                                    IconButton(onClick = {
+                                        if (isStitchEnabled) {
+                                            onCreateStitch(selectedUris.toList())
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }) {
+                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = stringResource(R.string.action_stitch), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
                                     }
                                 }
                             }
@@ -2805,6 +2852,8 @@ fun MainAppLayout(
             isAlbumsScreen = (currentRoute == "albums" || currentRoute == "all_albums" || currentRoute == "pinned_albums"),
             viewMode = viewMode,
             onViewModeChange = { viewModel.setViewMode(it) },
+            groupBy = timelineGroupBy,
+            onGroupByChange = { viewModel.setTimelineGroupBy(it) },
             albumLayoutMode = albumLayoutMode,
             onAlbumLayoutModeChange = { viewModel.setAlbumLayoutMode(it) },
             sortOrder = sortOrder,

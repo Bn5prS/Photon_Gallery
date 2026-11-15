@@ -2,8 +2,13 @@
 
 package com.inferno.gallery.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.inferno.gallery.R
 import com.inferno.gallery.data.AlbumLayoutMode
 import com.inferno.gallery.ui.SortOrder
+import com.inferno.gallery.ui.TimelineGroupBy
 import com.inferno.gallery.ui.ViewMode
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import com.inferno.gallery.ui.theme.ShapeMedium
@@ -61,6 +68,8 @@ fun DisplayAndSortBottomSheet(
     isAlbumsScreen: Boolean,
     viewMode: ViewMode = ViewMode.Grouped,
     onViewModeChange: (ViewMode) -> Unit = {},
+    groupBy: TimelineGroupBy = TimelineGroupBy.Day,
+    onGroupByChange: (TimelineGroupBy) -> Unit = {},
     albumLayoutMode: AlbumLayoutMode = AlbumLayoutMode.GRID,
     onAlbumLayoutModeChange: (AlbumLayoutMode) -> Unit = {},
     sortOrder: SortOrder = SortOrder.NewToOld,
@@ -128,6 +137,12 @@ fun DisplayAndSortBottomSheet(
                 onViewModeChange(mode)
             }
 
+            var activeGroupBy by remember(groupBy) { mutableStateOf(groupBy) }
+            val onSelectGroupBy: (TimelineGroupBy) -> Unit = { selected ->
+                activeGroupBy = selected
+                onGroupByChange(selected)
+            }
+
             var activeAlbumLayout by remember(albumLayoutMode) { mutableStateOf(albumLayoutMode) }
             val onSelectAlbumLayout: (AlbumLayoutMode) -> Unit = { layout ->
                 activeAlbumLayout = layout
@@ -178,6 +193,72 @@ fun DisplayAndSortBottomSheet(
                             icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
                             isSelected = activeViewMode == ViewMode.Immersive,
                             onClick = { onSelectViewMode(ViewMode.Immersive) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            val isDateSortActive = activeSort == SortOrder.NewToOld ||
+                activeSort == SortOrder.OldToNew ||
+                activeSort == SortOrder.DateModifiedNewToOld ||
+                activeSort == SortOrder.DateModifiedOldToNew
+
+            AnimatedVisibility(
+                visible = !isAlbumsScreen && activeViewMode == ViewMode.Grouped,
+                enter = expandVertically(animationSpec = spring()) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring()) + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .alpha(if (isDateSortActive) 1f else 0.45f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "GROUP BY",
+                            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = when {
+                                !isDateSortActive -> "Date sorts only"
+                                activeGroupBy == TimelineGroupBy.Day -> "Daily headers"
+                                activeGroupBy == TimelineGroupBy.Month -> "Monthly sections"
+                                else -> "Yearly overview"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SortPill(
+                            label = "Day",
+                            isSelected = activeGroupBy == TimelineGroupBy.Day,
+                            onClick = { if (isDateSortActive) onSelectGroupBy(TimelineGroupBy.Day) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SortPill(
+                            label = "Month",
+                            isSelected = activeGroupBy == TimelineGroupBy.Month,
+                            onClick = { if (isDateSortActive) onSelectGroupBy(TimelineGroupBy.Month) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SortPill(
+                            label = "Year",
+                            isSelected = activeGroupBy == TimelineGroupBy.Year,
+                            onClick = { if (isDateSortActive) onSelectGroupBy(TimelineGroupBy.Year) },
                             modifier = Modifier.weight(1f)
                         )
                     }

@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 
 /**
  * Manages Master PIN and biometric authentication for Private Space.
@@ -19,30 +22,102 @@ class VaultAuthManager {
     private val _isAuthenticated = MutableStateFlow(false)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
 
-    private fun hashPin(pin: String): String {
+    companion object {
+        private const val PREFS_NAME = "photon_vault_prefs"
+        private const val KEY_PIN_HASH = "vault_pin_hash"
+        private const val KEY_PIN_SALT = "vault_pin_salt"
+        private const val KEY_FAILED_ATTEMPTS = "vault_failed_attempts"
+        private const val KEY_LOCKOUT_UNTIL_MS = "vault_lockout_until_ms"
+        private const val MAX_ATTEMPTS = 5
+        private const val LOCKOUT_DURATION_MS = 30_000L
+        private const val PBKDF2_ITERATIONS = 10_000
+    }
+
+    private fun hashPinLegacy(pin: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(pin.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
+    private fun hashPinPbkdf2(pin: String, saltHex: String): String {
+        val salt = saltHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val spec = PBEKeySpec(pin.toCharArray(), salt, PBKDF2_ITERATIONS, 256)
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val bytes = factory.generateSecret(spec).encoded
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun generateSaltHex(): String {
+        val salt = ByteArray(16)
+        SecureRandom().nextBytes(salt)
+        return salt.joinToString("") { "%02x".format(it) }
+    }
+
     fun isPinConfigured(context: Context): Boolean {
-        val prefs = context.getSharedPreferences("photon_vault_prefs", Context.MODE_PRIVATE)
-        return prefs.contains("vault_pin_hash")
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.contains(KEY_PIN_HASH)
     }
 
     fun savePin(context: Context, pin: String) {
-        val prefs = context.getSharedPreferences("photon_vault_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("vault_pin_hash", hashPin(pin)).apply()
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val saltHex = generateSaltHex()
+        val hash = hashPinPbkdf2(pin, saltHex)
+        prefs.edit()
+            .putString(KEY_PIN_SALT, saltHex)
+            .putString(KEY_PIN_HASH, hash)
+            .remove(KEY_FAILED_ATTEMPTS)
+            .remove(KEY_LOCKOUT_UNTIL_MS)
+            .apply()
+    }
+
+    fun getRemainingLockoutSeconds(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val until = prefs.getLong(KEY_LOCKOUT_UNTIL_MS, 0L)
+        val remainingMs = until - System.currentTimeMillis()
+        return if (remainingMs > 0L) ((remainingMs + 999L) / 1000L).toInt() else 0
     }
 
     fun verifyPin(context: Context, pin: String): Boolean {
-        val prefs = context.getSharedPreferences("photon_vault_prefs", Context.MODE_PRIVATE)
-        val storedHash = prefs.getString("vault_pin_hash", null) ?: return false
-        return hashPin(pin) == storedHash
+        if (getRemainingLockoutSeconds(context) > 0) return false
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val storedHash = prefs.getString(KEY_PIN_HASH, null) ?: return false
+        val saltHex = prefs.getString(KEY_PIN_SALT, null)
+
+        val matched = if (saltHex != null) {
+            hashPinPbkdf2(pin, saltHex) == storedHash
+        } else {
+            val legacyMatch = hashPinLegacy(pin) == storedHash
+            if (legacyMatch) {
+                // Transparently upgrade legacy unsalted SHA-256 PIN to salted PBKDF2
+                savePin(context, pin)
+            }
+            legacyMatch
+        }
+
+        if (matched) {
+            prefs.edit()
+                .remove(KEY_FAILED_ATTEMPTS)
+                .remove(KEY_LOCKOUT_UNTIL_MS)
+                .apply()
+        } else {
+            val attempts = prefs.getInt(KEY_FAILED_ATTEMPTS, 0) + 1
+            val editor = prefs.edit().putInt(KEY_FAILED_ATTEMPTS, attempts)
+            if (attempts >= MAX_ATTEMPTS) {
+                editor.putLong(KEY_LOCKOUT_UNTIL_MS, System.currentTimeMillis() + LOCKOUT_DURATION_MS)
+                editor.putInt(KEY_FAILED_ATTEMPTS, 0)
+            }
+            editor.apply()
+        }
+        return matched
     }
 
     fun resetPin(context: Context) {
-        val prefs = context.getSharedPreferences("photon_vault_prefs", Context.MODE_PRIVATE)
-        prefs.edit().remove("vault_pin_hash").apply()
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove(KEY_PIN_HASH)
+            .remove(KEY_PIN_SALT)
+            .remove(KEY_FAILED_ATTEMPTS)
+            .remove(KEY_LOCKOUT_UNTIL_MS)
+            .apply()
     }
 
     fun unlock() {

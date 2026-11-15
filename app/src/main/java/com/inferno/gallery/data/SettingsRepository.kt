@@ -58,6 +58,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val VIEW_MODE = stringPreferencesKey("view_mode")
+        val TIMELINE_GROUP_BY = stringPreferencesKey("timeline_group_by")
         val TIMELINE_LAYOUT_MODE = stringPreferencesKey("timeline_layout_mode")
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val ALBUM_SORT_ORDER = stringPreferencesKey("album_sort_order")
@@ -254,6 +255,11 @@ class SettingsRepository private constructor(private val context: Context) {
     val viewModeFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[VIEW_MODE] ?: "Grouped"
+        }
+
+    val timelineGroupByFlow: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[TIMELINE_GROUP_BY] ?: "Day"
         }
 
     val sortOrderFlow: Flow<String> = context.dataStore.data
@@ -535,6 +541,12 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateViewMode(mode: String) {
         context.dataStore.edit { preferences ->
             preferences[VIEW_MODE] = mode
+        }
+    }
+
+    suspend fun updateTimelineGroupBy(groupBy: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TIMELINE_GROUP_BY] = groupBy
         }
     }
 

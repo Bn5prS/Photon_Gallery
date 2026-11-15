@@ -19,10 +19,14 @@ sealed class ViewerToolbarAction(
     object Wallpaper : ViewerToolbarAction("wallpaper", R.string.detail_set_wallpaper, R.drawable.ic_ms_image)
     object Rotate : ViewerToolbarAction("rotate", R.string.action_rotate, R.drawable.ic_ms_rotate_right)
     object Copy : ViewerToolbarAction("copy", R.string.action_copy_to_album, R.drawable.ic_ms_folder_copy)
+    object CopyClipboard : ViewerToolbarAction("copy_clipboard", R.string.action_copy_to_clipboard, R.drawable.ic_ms_content_copy)
+    object Rename : ViewerToolbarAction("rename", R.string.action_rename, R.drawable.ic_ms_edit)
+    object Print : ViewerToolbarAction("print", R.string.action_print, R.drawable.ic_ms_print)
 
     companion object {
         val ALL: List<ViewerToolbarAction> = listOf(
-            Share, Favorite, Edit, Info, Delete, Move, Vault, Wallpaper, Rotate, Copy
+            Share, Favorite, Edit, Info, Delete, Move, Vault, Wallpaper, Rotate, Copy,
+            CopyClipboard, Rename, Print
         )
 
         val DEFAULTS: List<String> = listOf("share", "favorite", "edit", "info", "delete")
@@ -52,10 +56,12 @@ sealed class SelectionDockAction(
     object Delete : SelectionDockAction("delete", R.string.detail_delete, R.drawable.ic_ms_delete)
     object Vault : SelectionDockAction("vault", R.string.action_hide, R.drawable.ic_ms_visibility_off)
     object SelectAll : SelectionDockAction("selectAll", R.string.action_select_all, R.drawable.ic_ms_select_all)
+    object Collage : SelectionDockAction("collage", R.string.action_collage, R.drawable.ic_ms_grid_view)
+    object Stitch : SelectionDockAction("stitch", R.string.action_stitch, R.drawable.ic_ms_sort)
 
     companion object {
         val ALL: List<SelectionDockAction> = listOf(
-            Share, Copy, Move, Create, Delete, Vault, SelectAll
+            Share, Copy, Move, Create, Delete, Vault, SelectAll, Collage, Stitch
         )
 
         val DEFAULTS: List<String> = listOf("share", "copy", "move", "create", "delete")
