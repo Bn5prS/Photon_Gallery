@@ -78,17 +78,17 @@ fun PhotonDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // 44dp Squircle Icon Badge in Wallpaper Primary Container
+                    // 44dp Squircle Icon Badge
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
+                        color = if (isDanger) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                tint = if (isDanger) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -147,16 +147,16 @@ fun PhotonDialog(
                         )
                     }
 
-                    // Confirm Button: Wallpaper Accent Filled Pill
+                    // Confirm Button: Accent or Error Filled Pill
                     Button(
                         onClick = onConfirm,
                         enabled = isConfirmEnabled,
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-                            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f)
+                            containerColor = if (isDanger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            contentColor = if (isDanger) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = (if (isDanger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary).copy(alpha = 0.38f),
+                            disabledContentColor = (if (isDanger) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary).copy(alpha = 0.38f)
                         ),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
                     ) {

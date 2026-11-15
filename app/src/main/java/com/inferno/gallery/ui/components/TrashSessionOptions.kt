@@ -7,33 +7,29 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ripple
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.inferno.gallery.R
 
 /**
- * Sleek minimal tonal options inside the Trash confirmation card.
+ * M3 Expressive stitched tonal group inside the Trash confirmation card.
  * Allows users to suppress confirmation dialogs for the current session,
- * and/or permanently bypass the Recycle Bin.
+ * and/or bypass Trash to delete permanently.
  */
 @Composable
 fun TrashSessionOptions(
@@ -44,23 +40,27 @@ fun TrashSessionOptions(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Option 1: Don't ask again this session
         TrashOptionRow(
             checked = skipConfirm,
             onCheckedChange = onSkipConfirmChange,
-            title = "Don't ask confirmation in this session",
-            subtitle = "Deletes immediately on tapping delete"
+            title = "Quick delete this session",
+            subtitle = "Skip this prompt until app restarts",
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+            isDanger = false
         )
 
-        // Option 2: Skip Recycle Bin (delete permanently)
         TrashOptionRow(
             checked = skipRecycleBin,
             onCheckedChange = onSkipRecycleBinChange,
-            title = "Skip Recycle Bin (permanently delete)",
-            subtitle = "Files cannot be restored from Trash"
+            title = "Skip Trash (permanent)",
+            subtitle = "Bypass Trash and free storage now",
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+            isDanger = true
         )
     }
 }
@@ -71,18 +71,21 @@ private fun TrashOptionRow(
     onCheckedChange: (Boolean) -> Unit,
     title: String,
     subtitle: String,
+    shape: RoundedCornerShape,
+    isDanger: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(12.dp)
     val interactionSource = remember { MutableInteractionSource() }
+
+    val containerColor = when {
+        checked && isDanger -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+        checked -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+    }
 
     Surface(
         shape = shape,
-        color = if (checked) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f)
-        },
+        color = containerColor,
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
@@ -95,22 +98,9 @@ private fun TrashOptionRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                checked = checked,
-                onCheckedChange = null, // handled by parent row click
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    checkmarkColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                modifier = Modifier.size(20.dp)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -123,9 +113,25 @@ private fun TrashOptionRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                colors = if (isDanger) {
+                    SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onError,
+                        checkedTrackColor = MaterialTheme.colorScheme.error
+                    )
+                } else {
+                    SwitchDefaults.colors()
+                },
+                modifier = Modifier.scale(0.85f)
+            )
         }
     }
 }
