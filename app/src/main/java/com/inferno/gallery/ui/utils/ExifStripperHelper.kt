@@ -146,7 +146,7 @@ object ExifStripperHelper {
             // 3. Strip metadata
             val stripped = MetadataStripper.strip(tempRaw, tempClean, mimeType)
             if (!stripped || !tempClean.exists() || tempClean.length() == 0L) {
-                return@withContext StripResult.Error("Metadata stripping engine did not generate a cleaned file")
+                return@withContext StripResult.Error("Metadata stripping is not supported for this file format ($mimeType)")
             }
 
             // 4. Overwrite original file
@@ -209,10 +209,18 @@ object ExifStripperHelper {
         if (!resolverType.isNullOrBlank()) return resolverType
         val lowerName = item.name.lowercase()
         return when {
+            lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") -> "image/jpeg"
             lowerName.endsWith(".png") -> "image/png"
             lowerName.endsWith(".webp") -> "image/webp"
             lowerName.endsWith(".gif") -> "image/gif"
-            else -> "image/jpeg"
+            lowerName.endsWith(".heic") -> "image/heic"
+            lowerName.endsWith(".heif") -> "image/heif"
+            lowerName.endsWith(".dng") -> "image/x-adobe-dng"
+            lowerName.endsWith(".raw") || lowerName.endsWith(".cr2") || lowerName.endsWith(".nef") || lowerName.endsWith(".arw") -> "image/x-raw"
+            lowerName.endsWith(".mp4") || lowerName.endsWith(".m4v") -> "video/mp4"
+            lowerName.endsWith(".mov") -> "video/quicktime"
+            lowerName.endsWith(".3gp") -> "video/3gpp"
+            else -> "application/octet-stream"
         }
     }
 

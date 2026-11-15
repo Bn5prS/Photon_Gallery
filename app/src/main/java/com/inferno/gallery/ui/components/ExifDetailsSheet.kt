@@ -147,8 +147,20 @@ data class DetailedExifData(
     val bitrate: Long?,
 
     // All extracted raw tags
-    val allTags: List<DeepExifTag>
+    val allTags: List<DeepExifTag>,
+    val hasSensitiveMetadata: Boolean = true
 )
+
+private fun isSensitiveMetadataCategory(category: String): Boolean {
+    return category.startsWith("Exif", ignoreCase = true) ||
+        category.startsWith("GPS", ignoreCase = true) ||
+        category.startsWith("MakerNote", ignoreCase = true) ||
+        category.startsWith("XMP", ignoreCase = true) ||
+        category.startsWith("IPTC", ignoreCase = true) ||
+        category.startsWith("Photoshop", ignoreCase = true) ||
+        category.startsWith("Thumbnail", ignoreCase = true) ||
+        category.startsWith("Color & ICC", ignoreCase = true)
+}
 
 private fun mapDirectoryCategory(rawName: String): String {
     val lower = rawName.lowercase(Locale.ROOT)
@@ -429,6 +441,11 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
         it.value.contains("hdrgm", ignoreCase = true)
     }
 
+    val hasSensitive = allTagsList.any { isSensitiveMetadataCategory(it.category) } ||
+        make != null || model != null || lensModel != null || software != null ||
+        aperture != null || iso != null || shutterSpeed != null || focalLength != null ||
+        lat != null || lng != null || dateCreatedParsed != null
+
     DetailedExifData(
         fileName = item.name,
         fileSizeBytes = item.size,
@@ -466,7 +483,8 @@ suspend fun extractDetailedExif(context: Context, item: GalleryItem): DetailedEx
         isVideo = item.isVideo,
         durationMs = null,
         bitrate = null,
-        allTags = allTagsList
+        allTags = allTagsList,
+        hasSensitiveMetadata = hasSensitive
     )
 }
 
@@ -1151,6 +1169,35 @@ fun ExifDetailsSheet(
                 }
             }
 
+            // ── Privacy Clean Status Banner ──────────────────────────────────
+            if (localExifData?.hasSensitiveMetadata == false && !galleryItem.isVideo) {
+                item {
+                    Surface(
+                        shape = ShapeMedium,
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "No EXIF, GPS, or camera metadata — only file & codec headers remain",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                            )
+                        }
+                    }
+                }
+            }
+
             // ── Dual Action Buttons Row ──────────────────────────────────────
             item {
                 Row(
@@ -1161,6 +1208,7 @@ fun ExifDetailsSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val isImageOnly = !galleryItem.isVideo
+                    val canStrip = localExifData?.hasSensitiveMetadata != false
 
                     if (isImageOnly) {
                         FilledTonalButton(
@@ -1168,7 +1216,7 @@ fun ExifDetailsSheet(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onTriggerStrip()
                             },
-                            enabled = !isStripping,
+                            enabled = !isStripping && canStrip,
                             shape = ShapeFull,
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -1438,8 +1486,10 @@ private fun DeepMetadataInspectorSheet(
                         maxLines = 1,
                         softWrap = false
                     )
+                    val hasSensitiveTags = remember(allTags) { allTags.any { isSensitiveMetadataCategory(it.category) } }
                     Text(
-                        text = "${filteredTags.size} tags available",
+                        text = if (hasSensitiveTags) "${filteredTags.size} tags available"
+                               else "${filteredTags.size} tags • format & codec headers only",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
