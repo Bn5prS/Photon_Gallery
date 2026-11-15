@@ -453,17 +453,6 @@ fun AlbumsScreen(
                     }
                 }
             }
-
-            com.inferno.gallery.ui.components.ExpressiveScrollBar(
-                gridState = lazyGridState,
-                totalItemsCount = unpinnedAlbums.size + 2,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(
-                        top = contentPadding.calculateTopPadding(),
-                        bottom = contentPadding.calculateBottomPadding()
-                    )
-            )
         }
     }
 }
