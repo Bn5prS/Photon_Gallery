@@ -47,13 +47,17 @@
 
 <br/>
 
-| Home | Albums | Viewer | Video |
-|:---:|:---:|:---:|:---:|
-| <img src="screenshots/01-home-screen.jpg?v=4" width="180" /> | <img src="screenshots/02-album-screen.jpg" width="180" /> | <img src="screenshots/03-image-viewer.jpg" width="180" /> | <img src="screenshots/04-video-player.jpg" width="180" /> |
+| Onboarding | Home | Collections |
+|:---:|:---:|:---:|
+| <img src="screenshots/00-onboarding.jpg?v=5" width="220" /> | <img src="screenshots/01-home-screen.jpg?v=5" width="220" /> | <img src="screenshots/02-album-screen.jpg?v=5" width="220" /> |
 
-| Multi-Select | Photo Editor | Stitch Tool | Settings |
-|:---:|:---:|:---:|:---:|
-| <img src="screenshots/05-multi-select.jpg?v=4" width="180" /> | <img src="screenshots/06-photo-editor.jpg?v=4" width="180" /> | <img src="screenshots/07-stitch-tool.jpg?v=4" width="180" /> | <img src="screenshots/08-settings.jpg?v=4" width="180" /> |
+| Viewer | Video | Multi-Select |
+|:---:|:---:|:---:|
+| <img src="screenshots/03-image-viewer.jpg?v=5" width="220" /> | <img src="screenshots/04-video-player.jpg?v=5" width="220" /> | <img src="screenshots/05-multi-select.jpg?v=4" width="220" /> |
+
+| Photo Editor | Stitch Tool | Settings |
+|:---:|:---:|:---:|
+| <img src="screenshots/06-photo-editor.jpg?v=4" width="220" /> | <img src="screenshots/07-stitch-tool.jpg?v=4" width="220" /> | <img src="screenshots/08-settings.jpg?v=4" width="220" /> |
 
 ---
 
