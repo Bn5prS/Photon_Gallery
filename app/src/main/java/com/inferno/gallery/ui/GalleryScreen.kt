@@ -219,20 +219,45 @@ fun GalleryScreen(
     }
 
     val pagedMedia = viewModel.pagedMedia.collectAsLazyPagingItems()
-    val nativeTimelineItems by viewModel.nativeTimelineItems.collectAsState()
+    val timelineSnapshot by viewModel.nativeTimelineSnapshot.collectAsState()
+    val scopedTimelineItems = remember(bucketName) {
+        mutableStateOf(
+            if (timelineSnapshot.isLoaded && timelineSnapshot.bucket == bucketName) {
+                timelineSnapshot.items
+            } else {
+                viewModel.getCachedTimelineItems(bucketName)
+            }
+        )
+    }
+    if (timelineSnapshot.isLoaded && timelineSnapshot.bucket == bucketName) {
+        scopedTimelineItems.value = timelineSnapshot.items
+    }
+    val nativeTimelineItems = scopedTimelineItems.value
+    val viewMode by viewModel.viewMode.collectAsState()
+    val sortOrder by viewModel.sortOrder.collectAsState()
+    val albumMediaFilter by viewModel.albumMediaFilter.collectAsState()
 
     var previousFilter by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(selectedFilterIndex) }
     var previousBucket by rememberSaveable { mutableStateOf(bucketName) }
+    var previousSortOrder by rememberSaveable { mutableStateOf(sortOrder) }
+    var previousViewMode by rememberSaveable { mutableStateOf(viewMode) }
+    var previousAlbumFilter by rememberSaveable { mutableStateOf(albumMediaFilter) }
 
-    // Only scroll to top when filter or bucket ACTUALLY changes, NOT when returning from detail screen
-    LaunchedEffect(selectedFilterIndex, bucketName) {
-        if (previousFilter != selectedFilterIndex || previousBucket != bucketName) {
+    // Only scroll to top when filter, bucket, sortOrder, or viewMode ACTUALLY changes, NOT when returning from detail screen
+    LaunchedEffect(selectedFilterIndex, bucketName, sortOrder, viewMode, albumMediaFilter) {
+        if (previousFilter != selectedFilterIndex || previousBucket != bucketName || previousSortOrder != sortOrder || previousViewMode != viewMode || previousAlbumFilter != albumMediaFilter) {
             previousFilter = selectedFilterIndex
             previousBucket = bucketName
+            previousSortOrder = sortOrder
+            previousViewMode = viewMode
+            previousAlbumFilter = albumMediaFilter
             viewModel.resetGridScrollPosition(bucketName)
             lazyGridState.scrollToItem(0, 0)
         }
     }
+
+    var showNativeDateBadge by remember { mutableStateOf(false) }
+    var activeNativeDateBadge by remember { mutableStateOf("") }
 
     LaunchedEffect(viewModel, bucketName) {
         if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
@@ -270,7 +295,6 @@ fun GalleryScreen(
         }
     }
 
-    val viewMode by viewModel.viewMode.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUrisRaw by viewModel.selectedUris.collectAsState()
     // Re-wrap so the grid receives a stable, content-comparable type. See StableUriSet.
@@ -286,6 +310,7 @@ fun GalleryScreen(
     val onThisDayMemories by viewModel.onThisDayMemories.collectAsState()
     val isMemoriesDismissed by viewModel.isMemoriesDismissed.collectAsState()
     val showMemoriesSetting by viewModel.showMemoriesSetting.collectAsState()
+    val memoriesCarouselStyle by viewModel.memoriesCarouselStyle.collectAsState()
     var activeMemoryReelGroup by remember { mutableStateOf<MemoryDayGroup?>(null) }
 
     val shouldShowMemoriesHeader = bucketName == null &&
@@ -424,7 +449,7 @@ fun GalleryScreen(
                 for (i in start..end) {
                     val listItem = pagedMedia.peek(i) as? GalleryListItem.Item ?: continue
                     val galleryItem = listItem.galleryItem
-                    val cacheKey = thumbnailMemoryKey(galleryItem.id, thumbSizePx)
+                    val cacheKey = thumbnailMemoryKey(galleryItem.id, thumbSizePx, galleryItem.dateModified)
                     if (imageLoader.memoryCache?.get(coil3.memory.MemoryCache.Key(cacheKey)) != null) continue
 
                     val modelUri = if (galleryItem.uri != android.net.Uri.EMPTY && galleryItem.uri.scheme == "content") {
@@ -517,12 +542,13 @@ fun GalleryScreen(
                 timelineLayoutMode = timelineLayoutMode,
                 dateHeaderAlignment = dateHeaderAlignment,
                 showMatchBadge = (bucketName == "search_text" || bucketName == "search_smart"),
-                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
+                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed, memoriesCarouselStyle) {
                     if (shouldShowMemoriesHeader) {
                         {
                             MemoriesSpotlightCard(
                                 memoryGroups = onThisDayMemories,
                                 isDismissed = isMemoriesDismissed,
+                                style = memoriesCarouselStyle,
                                 onOpenMemory = { group ->
                                     activeMemoryReelGroup = group
                                 },
@@ -538,63 +564,72 @@ fun GalleryScreen(
                 }
             )
         } else {
-            val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
-            com.inferno.gallery.ui.components.NativePhotonGrid(
-                items = nativeTimelineItems,
-                initialFirstVisibleItemIndex = savedIndex,
-                initialFirstVisibleItemScrollOffset = savedOffset,
-                gridCellsCount = gridCellsCount,
-                onGridCountChange = onGridCountChange,
-                isSelectionMode = isSelectionMode,
-                selectedUris = selectedUris,
-                favoriteIds = favoriteIds,
-                onMediaClick = onMediaClick,
-                onToggleSelection = { media -> viewModel.toggleSelection(media.uriString) },
-                onMediaLongClick = { media -> viewModel.toggleSelection(media.uriString) },
-                onStartDragSelection = { uri, isSelecting ->
-                    viewModel.startDragSelection(uri, isSelecting)
-                },
-                onUpdateDragSelection = { uris ->
-                    viewModel.updateDragSelection(uris)
-                },
-                onEndDragSelection = {
-                    viewModel.endDragSelection()
-                },
-                thumbnailCornerRadius = thumbnailCornerRadius,
-                contentPadding = contentPadding,
-                dateHeaderAlignment = dateHeaderAlignment,
-                headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed) {
-                    if (shouldShowMemoriesHeader) {
-                        {
-                            MemoriesSpotlightCard(
-                                memoryGroups = onThisDayMemories,
-                                isDismissed = isMemoriesDismissed,
-                                onOpenMemory = { group ->
-                                    activeMemoryReelGroup = group
-                                },
-                                onDismiss = {
-                                    viewModel.dismissMemories()
-                                },
-                                onRestore = {
-                                    viewModel.uncollapseMemories()
-                                }
-                            )
+            androidx.compose.runtime.key(bucketName) {
+                val (savedIndex, savedOffset) = viewModel.getSavedGridScrollPosition(bucketName)
+                com.inferno.gallery.ui.components.NativePhotonGrid(
+                    items = nativeTimelineItems,
+                    initialFirstVisibleItemIndex = savedIndex,
+                    initialFirstVisibleItemScrollOffset = savedOffset,
+                    gridCellsCount = gridCellsCount,
+                    onGridCountChange = onGridCountChange,
+                    isSelectionMode = isSelectionMode,
+                    selectedUris = selectedUris,
+                    favoriteIds = favoriteIds,
+                    onMediaClick = onMediaClick,
+                    onToggleSelection = { media -> viewModel.toggleSelection(media.uriString) },
+                    onMediaLongClick = { media -> viewModel.toggleSelection(media.uriString) },
+                    onStartDragSelection = { uri, isSelecting ->
+                        viewModel.startDragSelection(uri, isSelecting)
+                    },
+                    onUpdateDragSelection = { uris ->
+                        viewModel.updateDragSelection(uris)
+                    },
+                    onEndDragSelection = {
+                        viewModel.endDragSelection()
+                    },
+                    thumbnailCornerRadius = thumbnailCornerRadius,
+                    contentPadding = contentPadding,
+                    dateHeaderAlignment = dateHeaderAlignment,
+                    headerContent = remember(shouldShowMemoriesHeader, onThisDayMemories, isMemoriesDismissed, memoriesCarouselStyle) {
+                        if (shouldShowMemoriesHeader) {
+                            {
+                                MemoriesSpotlightCard(
+                                    memoryGroups = onThisDayMemories,
+                                    isDismissed = isMemoriesDismissed,
+                                    style = memoriesCarouselStyle,
+                                    onOpenMemory = { group ->
+                                        activeMemoryReelGroup = group
+                                    },
+                                    onDismiss = {
+                                        viewModel.dismissMemories()
+                                    },
+                                    onRestore = {
+                                        viewModel.uncollapseMemories()
+                                    }
+                                )
+                            }
+                        } else null
+                    },
+                    scrollToTopTrigger = if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
+                        viewModel.videosScrollToTopTrigger
+                    } else {
+                        viewModel.photosScrollToTopTrigger
+                    },
+                    scrollToTopKey = Triple(selectedFilterIndex, bucketName, sortOrder to viewMode),
+                    onScrolledAwayFromTop = { isScrolled ->
+                        viewModel.setTopBarCollapsed(isScrolled)
+                    },
+                    onSaveScrollPosition = { index, offset ->
+                        viewModel.saveGridScrollPosition(bucketName, index, offset)
+                    },
+                    onScrollDateStateChanged = { visible, dateText ->
+                        showNativeDateBadge = visible
+                        if (dateText.isNotEmpty()) {
+                            activeNativeDateBadge = dateText
                         }
-                    } else null
-                },
-                scrollToTopTrigger = if (bucketName == com.inferno.gallery.data.BucketNames.VIDEOS) {
-                    viewModel.videosScrollToTopTrigger
-                } else {
-                    viewModel.photosScrollToTopTrigger
-                },
-                scrollToTopKey = selectedFilterIndex to bucketName,
-                onScrolledAwayFromTop = { isScrolled ->
-                    viewModel.setTopBarCollapsed(isScrolled)
-                },
-                onSaveScrollPosition = { index, offset ->
-                    viewModel.saveGridScrollPosition(bucketName, index, offset)
-                }
-            )
+                    }
+                )
+            }
         }
 
         // ── Initial sync loading ────────────────────────────────────────────
@@ -647,12 +682,14 @@ fun GalleryScreen(
             val emptyIcon = when (bucketName) {
                 "Trash" -> ImageVector.vectorResource(R.drawable.ic_ms_delete)
                 "Favorites" -> ImageVector.vectorResource(R.drawable.ic_ms_check_circle)
+                "search_text", "search_smart" -> ImageVector.vectorResource(R.drawable.ic_ms_search)
                 null -> ImageVector.vectorResource(R.drawable.ic_ms_image)
                 else -> ImageVector.vectorResource(R.drawable.ic_ms_image)
             }
             val (title, subtitle) = when (bucketName) {
                 "Trash" -> "Trash is empty" to "Deleted photos will appear here."
                 "Favorites" -> "No favorites yet" to "Tap ❤️ on any photo to save it here."
+                "search_text", "search_smart" -> "No results found" to "No matching photos or videos found."
                 null -> "No photos yet" to "Photos and videos on your device will appear here."
                 else -> "Album is empty" to "\"$bucketName\" has no photos or videos."
             }
@@ -698,18 +735,21 @@ fun GalleryScreen(
             }
         }
 
-        if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
-            val isCenterAlignment = dateHeaderAlignment == "CENTER"
-            DynamicDateBadge(
-                // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
-                // composition subscribed the whole GalleryScreen to state that is written every
-                // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
-                // happen inside DynamicDateBadge's own (small) restart scope.
-                visible = { showDateBadge },
-                dateText = { activeDateBadge },
-                isCenter = isCenterAlignment,
-                modifier = Modifier
-                    .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
+        val isCenterAlignment = dateHeaderAlignment == "CENTER"
+        DynamicDateBadge(
+            // Lambda, not a value: reading showDateBadge/activeDateBadge in the screen's
+            // composition subscribed the whole GalleryScreen to state that is written every
+            // ~60ms while scrolling, forcing a full-screen recompose mid-fling. The reads now
+            // happen inside DynamicDateBadge's own (small) restart scope.
+            visible = {
+                if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) showDateBadge else showNativeDateBadge
+            },
+            dateText = {
+                if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) activeDateBadge else activeNativeDateBadge
+            },
+            isCenter = isCenterAlignment,
+            modifier = Modifier
+                .align(if (isCenterAlignment) Alignment.TopCenter else Alignment.TopStart)
                     .padding(
                         top = topBarContentPadding + 12.dp,
                         start = if (isCenterAlignment) 0.dp else 4.dp
@@ -719,6 +759,7 @@ fun GalleryScreen(
                     }
             )
 
+        if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
             FastScroller(
                 lazyGridState = lazyGridState,
                 pagedMedia = pagedMedia,

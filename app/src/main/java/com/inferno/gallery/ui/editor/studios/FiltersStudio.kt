@@ -322,7 +322,7 @@ private fun FilterThumbnailItem(
                 ) {
                     if (preset == FilterPreset.ORIGINAL || filterStrength >= 99.5f) {
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_ms_check),
+                            painter = painterResource(id = R.drawable.ic_ms_thin_check),
                             contentDescription = "Selected",
                             tint = Color.White,
                             modifier = Modifier
@@ -391,7 +391,7 @@ private fun FilterScrubbingView(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_arrow_back),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_arrow_back),
                     contentDescription = "Collapse intensity slider",
                     tint = MaterialTheme.colorScheme.onSurface
                 )
@@ -418,7 +418,7 @@ private fun FilterScrubbingView(
             range = 0f..100f,
             step = 1f,
             defaultValue = 100f,
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             title = null,
             onReset = { onFilterStrengthChange(100f) },
             onDone = onDone

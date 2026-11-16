@@ -16,8 +16,8 @@ android {
         applicationId = "com.inferno.gallery"
         minSdk = 31
         targetSdk = 37
-        versionCode = 11
-        versionName = "3.0.0"
+        versionCode = 12
+        versionName = "4.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -159,6 +159,7 @@ dependencies {
 
     // ── EXIF ──
     implementation(libs.androidx.exifinterface)
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
 
     // ── Room — Database (stable 2.6.1, FTS5 support) ──
     implementation(libs.room.runtime)

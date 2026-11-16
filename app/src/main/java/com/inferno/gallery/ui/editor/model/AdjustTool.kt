@@ -21,7 +21,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_light_mode,
+        iconRes = R.drawable.ic_ms_thin_light_mode,
         description = "Adjust the overall lightness or darkness"
     ),
     CONTRAST(
@@ -29,7 +29,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_contrast,
+        iconRes = R.drawable.ic_ms_thin_contrast,
         description = "Adjust the difference between light and dark areas"
     ),
     TONE(
@@ -37,7 +37,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_auto_fix_high,
+        iconRes = R.drawable.ic_ms_thin_auto_fix_high,
         description = "Enhance dynamic range and local contrast"
     ),
     WHITE_POINT(
@@ -45,7 +45,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_circle,
+        iconRes = R.drawable.ic_ms_thin_circle,
         description = "Adjust the brightest parts of the image"
     ),
     HIGHLIGHTS(
@@ -53,7 +53,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_brightness_medium,
+        iconRes = R.drawable.ic_ms_thin_brightness_medium,
         description = "Recover or boost bright details"
     ),
     SHADOWS(
@@ -61,7 +61,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_brightness_low,
+        iconRes = R.drawable.ic_ms_thin_brightness_low,
         description = "Lighten or deepen dark details"
     ),
     BLACK_POINT(
@@ -69,7 +69,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_circle,
+        iconRes = R.drawable.ic_ms_thin_circle,
         description = "Adjust the darkest parts of the image"
     ),
     SATURATION(
@@ -77,7 +77,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_palette,
+        iconRes = R.drawable.ic_ms_thin_palette,
         description = "Make colors more or less vibrant"
     ),
     WARMTH(
@@ -85,7 +85,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_wb_twilight,
+        iconRes = R.drawable.ic_ms_thin_wb_twilight,
         description = "Make the image appear warmer or cooler"
     ),
     TINT(
@@ -93,7 +93,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_palette,
+        iconRes = R.drawable.ic_ms_thin_palette,
         description = "Adjust color balance between magenta and green"
     ),
     SKIN_TONE(
@@ -101,7 +101,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_person,
+        iconRes = R.drawable.ic_ms_thin_person,
         description = "Adjust warmth and exposure specifically for skin tones"
     ),
     BLUE_TONE(
@@ -109,7 +109,7 @@ enum class AdjustTool(
         minValue = -100f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_cloud,
+        iconRes = R.drawable.ic_ms_thin_cloud,
         description = "Make skies and blues more vivid or softened"
     ),
     VIGNETTE(
@@ -117,7 +117,7 @@ enum class AdjustTool(
         minValue = 0f,
         maxValue = 100f,
         defaultValue = 0f,
-        iconRes = R.drawable.ic_ms_center_focus_strong,
+        iconRes = R.drawable.ic_ms_thin_center_focus_strong,
         description = "Darken the edges of the image"
     );
 

@@ -242,6 +242,9 @@ object ImageExportWorker {
                     } catch (_: Exception) {}
                 }
 
+                // Evict memory and disk caches across Coil and notify MediaScanner
+                com.inferno.gallery.ui.utils.ImageCacheEvictor.evictMedia(context, sourceUri)
+
                 if (!workBitmap.isRecycled) {
                     workBitmap.recycle()
                 }

@@ -10,7 +10,9 @@ import android.net.Uri
 import android.widget.Toast
 import java.io.InputStream
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -118,6 +120,7 @@ import com.inferno.gallery.ui.editor.studios.FiltersStudio
 import com.inferno.gallery.ui.editor.studios.MarkupStudio
 import com.inferno.gallery.ui.editor.studios.MoreStudio
 import com.inferno.gallery.ui.editor.studios.ToolSearchSheet
+import com.inferno.gallery.ui.theme.PhotonStudioTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -149,9 +152,12 @@ data class EditorSnapshot(
  * @param onBack Invoked when user exits the editor.
  * @param onSaved Invoked with the newly created copy URI when export succeeds.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 @Composable
-fun GooglePhotosEditorScreen(
+fun PhotonEditorScreen(
     imageUri: Uri,
     onBack: () -> Unit,
     onSaved: (Uri) -> Unit = {},
@@ -221,7 +227,7 @@ fun GooglePhotosEditorScreen(
 
                 applyExifOrientation(rawBmp, exifOrientation)
             } catch (e: Exception) {
-                android.util.Log.e("GooglePhotosEditor", "Failed to load bitmap from $imageUri", e)
+                android.util.Log.e("PhotonEditor", "Failed to load bitmap from $imageUri", e)
                 null
             }
         }
@@ -329,6 +335,7 @@ fun GooglePhotosEditorScreen(
                     )
                 }
             }
+
         }
     }
 
@@ -373,6 +380,7 @@ fun GooglePhotosEditorScreen(
         if (isComparingOriginal) null else ColorFilter.colorMatrix(combinedMatrix)
     }
 
+    PhotonStudioTheme {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = Color.Black,
@@ -428,13 +436,18 @@ fun GooglePhotosEditorScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // ── CENTER CANVAS VIEWPORT ───────────────────────────────────
-            BoxWithConstraints(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clipToBounds(),
-                contentAlignment = Alignment.TopStart
             ) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .clipToBounds(),
+                    contentAlignment = Alignment.TopStart
+                ) {
                 val bmp = originalBitmap
                 val imgBmp = imageBitmap
 
@@ -691,6 +704,28 @@ fun GooglePhotosEditorScreen(
                                 val updatedCrop = currentSnapshot.cropState.copy(cropRect = newRect)
                                 updateLiveSnapshot(currentSnapshot.copy(cropState = updatedCrop))
                             },
+                            onPhotoPanZoomStateChange = { active ->
+                                if (active) {
+                                    isCropDragging = true
+                                    isDraggingCropHandle = false
+                                    dragStartCropSnapshot = currentSnapshot
+                                    if (animProgress.isRunning) {
+                                        scope.launch { animProgress.snapTo(1f) }
+                                    }
+                                } else {
+                                    isCropDragging = false
+                                    dragStartCropSnapshot?.let { startSnap ->
+                                        if (startSnap != currentSnapshot) {
+                                            historyState = EditorHistoryState(
+                                                past = historyState.past + startSnap,
+                                                current = currentSnapshot,
+                                                future = emptyList()
+                                            )
+                                        }
+                                    }
+                                    dragStartCropSnapshot = null
+                                }
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     } else if (isCropped) {
@@ -734,58 +769,7 @@ fun GooglePhotosEditorScreen(
                         }
                     }
 
-                    // 6. Floating View Original / Compare button in top-right corner
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 12.dp, end = 12.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                                    shape = CircleShape
-                                ),
-                            shape = CircleShape,
-                            color = if (isComparingOriginal) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
-                            },
-                            tonalElevation = 4.dp,
-                            shadowElevation = 2.dp
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(Unit) {
-                                        awaitEachGesture {
-                                            awaitFirstDown(requireUnconsumed = false)
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            isComparingOriginal = true
-                                            waitForUpOrCancellation()
-                                            isComparingOriginal = false
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_ms_compare),
-                                    contentDescription = stringResource(R.string.editor_action_original),
-                                    tint = if (isComparingOriginal) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // 7. Floating Markup Zoom Reset Pill (top-start corner)
+                    // 6. Floating Markup Zoom Reset Pill (top-start corner)
                     androidx.compose.animation.AnimatedVisibility(
                         visible = selectedTab == EditorTab.MARKUP && markupZoom > 1.05f,
                         enter = fadeIn(tween(150)),
@@ -811,7 +795,7 @@ fun GooglePhotosEditorScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.ic_ms_refresh),
+                                    painter = painterResource(id = R.drawable.ic_ms_thin_refresh),
                                     contentDescription = "Reset zoom",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
@@ -843,13 +827,74 @@ fun GooglePhotosEditorScreen(
                 }
             }
 
+            // Floating View Original / Compare button aligned directly beneath the 3-dot menu
+            if (originalBitmap != null && imageBitmap != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 4.dp, end = 8.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                shape = CircleShape
+                            ),
+                        shape = CircleShape,
+                        color = if (isComparingOriginal) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                        },
+                        tonalElevation = 4.dp,
+                        shadowElevation = 2.dp
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isComparingOriginal = true
+                                        waitForUpOrCancellation()
+                                        isComparingOriginal = false
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_ms_thin_compare),
+                                contentDescription = stringResource(R.string.editor_action_original),
+                                tint = if (isComparingOriginal) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
             // ── BOTTOM STUDIOS CONTAINER ──────────────────────────────────
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp
+                color = Color.Black
             ) {
-                when (selectedTab) {
+                val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        fadeIn(animationSpec = effectsSpec) togetherWith fadeOut(animationSpec = effectsSpec)
+                    },
+                    label = "editorStudioSwitch"
+                ) { activeTab ->
+                    when (activeTab) {
                     EditorTab.AUTO -> {
                         AutoStudio(
                             previewBitmap = originalBitmap,
@@ -947,11 +992,13 @@ fun GooglePhotosEditorScreen(
                         )
                     }
 
-                    EditorTab.MORE -> {
-                        MoreStudio(imageUri = imageUri)
+                        EditorTab.MORE -> {
+                            MoreStudio(imageUri = imageUri)
+                        }
                     }
                 }
             }
+
         }
     }
 
@@ -1065,7 +1112,8 @@ fun GooglePhotosEditorScreen(
                         // Tab switch suffices
                     }
                 }
-            },
+            }
+,
             onDismiss = { isSearchOpen = false }
         )
     }
@@ -1125,12 +1173,14 @@ fun GooglePhotosEditorScreen(
                 ) {
                     Text(text = stringResource(R.string.action_discard), color = MaterialTheme.colorScheme.error)
                 }
-            },
+            }
+,
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
                     Text(text = stringResource(R.string.action_keep_editing))
                 }
             }
+
         )
     }
 
@@ -1162,7 +1212,9 @@ fun GooglePhotosEditorScreen(
                     )
                 }
             }
+
         }
+    }
     }
 }
 

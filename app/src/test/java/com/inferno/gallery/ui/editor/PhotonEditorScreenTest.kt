@@ -18,7 +18,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class GooglePhotosEditorScreenTest {
+class PhotonEditorScreenTest {
 
     @Test
     fun testDefaultSnapshotIsNotModified() {

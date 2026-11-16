@@ -20,10 +20,14 @@ class SmartSearchEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "SmartSearchEngine"
-        private const val MODEL_DIR = "smart_search_model_v3"
-        private const val TEXT_MODEL_NAME = "text_model_quantized.onnx"
-        private const val VISION_MODEL_NAME = "vision_model_quantized.onnx"
+        private const val MODEL_DIR = "smart_search_model_v7"
+        private const val TEXT_MODEL_NAME = "text.onnx"
+        private const val TEXT_DATA_NAME = "text.onnx.data"
+        private const val VISION_MODEL_NAME = "visual.onnx"
+        private const val VISION_DATA_NAME = "visual.onnx.data"
         private const val TOKENIZER_NAME = "tokenizer.json"
+        const val IMAGE_SIZE = 256
+        const val EMBEDDING_DIM = 512
 
         @Volatile
         private var INSTANCE: SmartSearchEngine? = null
@@ -54,7 +58,20 @@ class SmartSearchEngine(private val context: Context) {
             Regex("""\b(chappal(s)?|slippers)\b""", RegexOption.IGNORE_CASE) to "slippers sandals footwear",
             Regex("""\b(mobile|cellphone|cell\s*phone)\b""", RegexOption.IGNORE_CASE) to "smartphone mobile phone",
             Regex("""\b(doggie|doggy)\b""", RegexOption.IGNORE_CASE) to "dog puppy",
-            Regex("""\b(kitty)\b""", RegexOption.IGNORE_CASE) to "cat kitten"
+            Regex("""\b(kitty)\b""", RegexOption.IGNORE_CASE) to "cat kitten",
+            Regex("""\b(aadhaar|aadhar|pan\s*card|voter\s*id|ration\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card government id document",
+            Regex("""\b(driving\s*licen[sc]e|dl)\b""", RegexOption.IGNORE_CASE) to "driving license card id document",
+            Regex("""\b(bill|receipt|invoice)\b""", RegexOption.IGNORE_CASE) to "printed receipt bill paper invoice",
+            Regex("""\b(screen\s*shot(s)?|screenshots?)\b""", RegexOption.IGNORE_CASE) to "phone screenshot screen capture interface",
+            Regex("""\b(bike|two\s*wheeler)\b""", RegexOption.IGNORE_CASE) to "motorcycle motorbike",
+            Regex("""\b(gadi|gaadi)\b""", RegexOption.IGNORE_CASE) to "automobile car passenger vehicle",
+            Regex("""\b(laptop|notebook\s*pc)\b""", RegexOption.IGNORE_CASE) to "laptop computer keyboard",
+            Regex("""\b(earphones|earbuds|airpods|headset)\b""", RegexOption.IGNORE_CASE) to "headphones earbuds audio device",
+            Regex("""\b(charger|adapter|data\s*cable)\b""", RegexOption.IGNORE_CASE) to "phone charger power adapter cable",
+            Regex("""\b(selfie|selfies)\b""", RegexOption.IGNORE_CASE) to "selfie portrait front camera photo",
+            Regex("""\b(baby|infant|toddler)\b""", RegexOption.IGNORE_CASE) to "cute baby infant child",
+            Regex("""\b(biryani|biriyani)\b""", RegexOption.IGNORE_CASE) to "spiced rice biryani dish food",
+            Regex("""\b(id\s*card|identity\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card badge document"
         )
 
         fun normalizeQuery(query: String): String {
@@ -74,7 +91,10 @@ class SmartSearchEngine(private val context: Context) {
     private var textSession: OrtSession? = null
     private var visionSession: OrtSession? = null
     private var tokenizer: BPETokenizer? = null
-    private var isLoaded = false
+    private val queryVectorCache = android.util.LruCache<String, FloatArray>(64)
+    private val visionLock = Any()
+    private var reusablePixels: IntArray? = null
+    private var reusableFloatBuffer: FloatArray? = null
 
     fun getModelDir(): File = modelDirFile
 
@@ -86,11 +106,15 @@ class SmartSearchEngine(private val context: Context) {
     fun isModelDownloaded(): Boolean {
         if (!isSupported()) return false
         val textFile = File(modelDirFile, TEXT_MODEL_NAME)
+        val textDataFile = File(modelDirFile, TEXT_DATA_NAME)
         val visionFile = File(modelDirFile, VISION_MODEL_NAME)
+        val visionDataFile = File(modelDirFile, VISION_DATA_NAME)
         val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
-        
-        val filesExist = textFile.exists() && textFile.length() > 10 * 1024 * 1024L &&
-               visionFile.exists() && visionFile.length() > 20 * 1024 * 1024L &&
+
+        val filesExist = textFile.exists() && textFile.length() > 500 * 1024L &&
+               textDataFile.exists() && textDataFile.length() > 100 * 1024 * 1024L &&
+               visionFile.exists() && visionFile.length() > 500 * 1024L &&
+               visionDataFile.exists() && visionDataFile.length() > 50 * 1024 * 1024L &&
                tokenizerFile.exists() && tokenizerFile.length() > 100 * 1024L
                
         if (filesExist) return true
@@ -131,223 +155,268 @@ class SmartSearchEngine(private val context: Context) {
         return false
     }
 
-    @Synchronized
-    fun loadModel() {
-        if (isLoaded) return
+    private fun createCpuSessionOptions(intraOpThreads: Int): OrtSession.SessionOptions {
+        return OrtSession.SessionOptions().apply {
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+            setIntraOpNumThreads(intraOpThreads)
+            // Disable busy-wait spinning on mobile big.LITTLE CPUs to reduce thermal throttling & battery drain
+            addConfigEntry("session.intra_op.allow_spinning", "0")
+        }
+    }
+
+    private fun ensurePrerequisites() {
         if (!isSupported()) {
-            Log.w(TAG, "Smart Search is not supported on this device architecture (${Build.SUPPORTED_ABIS.firstOrNull()}). Requires arm64-v8a.")
-            return
+            throw IllegalStateException("Smart Search requires 64-bit arm64-v8a or x86_64 architecture.")
         }
         if (!isModelDownloaded()) {
             throw IllegalStateException("Model files are not fully downloaded yet")
         }
+        if (env == null) {
+            env = OrtEnvironment.getEnvironment()
+        }
+    }
 
+    @Synchronized
+    fun prewarmTokenizer() {
+        if (tokenizer != null || !isModelDownloaded()) return
+        val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
+        if (tokenizerFile.exists()) {
+            tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
+            Log.d(TAG, "MobileCLIP2-S2 tokenizer pre-warmed.")
+        }
+    }
+
+    @Synchronized
+    fun loadTextModel() {
+        if (textSession != null && tokenizer != null) return
+        ensurePrerequisites()
+        val environment = env ?: throw IllegalStateException("Environment not loaded")
         try {
-            val environment = OrtEnvironment.getEnvironment()
-            this.env = environment
-
-            // Load Tokenizer
-            val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
-            this.tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
-
-            // Initialize Text Session options (optimized for mobile CPU)
-            val textFile = File(modelDirFile, TEXT_MODEL_NAME)
-            OrtSession.SessionOptions().use { textOptions ->
-                textOptions.setIntraOpNumThreads(4)
-                this.textSession = environment.createSession(textFile.absolutePath, textOptions)
+            if (tokenizer == null) {
+                val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
+                tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
             }
-
-            // Initialize Vision Session options (optimized for mobile CPU)
-            val visionFile = File(modelDirFile, VISION_MODEL_NAME)
-            OrtSession.SessionOptions().use { visionOptions ->
-                visionOptions.setIntraOpNumThreads(4)
-                this.visionSession = environment.createSession(visionFile.absolutePath, visionOptions)
+            if (textSession == null) {
+                val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
+                val threads = cores.coerceIn(2, 4)
+                val textFile = File(modelDirFile, TEXT_MODEL_NAME)
+                createCpuSessionOptions(threads).use { textOptions ->
+                    textSession = environment.createSession(textFile.absolutePath, textOptions)
+                }
             }
-
-            isLoaded = true
-            Log.d(TAG, "SmartSearchEngine models loaded successfully.")
+            Log.d(TAG, "MobileCLIP2-S2 text model loaded successfully.")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load SmartSearchEngine models: ${e.message}", e)
-            close()
+            Log.e(TAG, "Failed to load MobileCLIP2-S2 text model: ${e.message}", e)
+            textSession?.close()
+            textSession = null
             throw e
         }
     }
 
     @Synchronized
+    fun loadVisionModel() {
+        if (visionSession != null) return
+        ensurePrerequisites()
+        val environment = env ?: throw IllegalStateException("Environment not loaded")
+        try {
+            val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
+            // Use half the logical cores (2..4) during background indexing to avoid UI starvation & thermal throttling
+            val threads = (cores / 2).coerceIn(2, 4)
+            val visionFile = File(modelDirFile, VISION_MODEL_NAME)
+            createCpuSessionOptions(threads).use { visionOptions ->
+                visionSession = environment.createSession(visionFile.absolutePath, visionOptions)
+            }
+            Log.d(TAG, "SigLIP 2 vision model loaded successfully ($threads CPU threads).")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load SigLIP 2 vision model: ${e.message}", e)
+            visionSession?.close()
+            visionSession = null
+            throw e
+        }
+    }
+
+    @Synchronized
+    fun unloadVisionModel() {
+        try {
+            visionSession?.close()
+            visionSession = null
+            synchronized(visionLock) {
+                reusablePixels = null
+                reusableFloatBuffer = null
+            }
+            Log.d(TAG, "SigLIP 2 vision model unloaded to free RAM.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unloading vision model: ${e.message}", e)
+        }
+    }
+
+    @Synchronized
+    fun loadModel() {
+        if (!isSupported()) {
+            Log.w(TAG, "Smart Search is not supported on this device architecture (${Build.SUPPORTED_ABIS.firstOrNull()}). Requires arm64-v8a.")
+            return
+        }
+        loadTextModel()
+        loadVisionModel()
+    }
+
+    @Synchronized
     fun close() {
         try {
+            synchronized(queryVectorCache) {
+                queryVectorCache.evictAll()
+            }
             textSession?.close()
             textSession = null
             visionSession?.close()
             visionSession = null
+            synchronized(visionLock) {
+                reusablePixels = null
+                reusableFloatBuffer = null
+            }
             env?.close()
             env = null
             tokenizer = null
-            isLoaded = false
             Log.d(TAG, "SmartSearchEngine closed successfully.")
         } catch (e: Exception) {
             Log.e(TAG, "Error closing SmartSearchEngine: ${e.message}", e)
         }
     }
 
-    fun isLoaded(): Boolean = isLoaded
+    fun isLoaded(): Boolean = textSession != null && visionSession != null
 
     fun encodeText(query: String): FloatArray {
         val trimmed = normalizeQuery(query)
-        if (trimmed.isEmpty()) return FloatArray(512)
+        if (trimmed.isEmpty()) return FloatArray(EMBEDDING_DIM)
 
-        if (trimmed.startsWith("a photo of", ignoreCase = true) ||
-            trimmed.startsWith("a picture of", ignoreCase = true) ||
-            trimmed.startsWith("photo of", ignoreCase = true)
+        synchronized(queryVectorCache) {
+            val cached = queryVectorCache.get(trimmed)
+            if (cached != null) return cached
+        }
+
+        val prompt = if (!trimmed.contains(' ') &&
+            !trimmed.equals("screenshot", ignoreCase = true) &&
+            !trimmed.equals("selfie", ignoreCase = true)
         ) {
-            return encodeSingleText(trimmed)
+            "a photo of $trimmed"
+        } else {
+            trimmed
         }
 
-        // Canonical CLIP multi-template prompt ensembling:
-        // Averages embeddings across multiple descriptive templates to maximize retrieval recall
-        val templates = listOf(
-            trimmed,
-            "a photo of $trimmed",
-            "a photo of the $trimmed",
-            "a close-up photo of $trimmed"
-        )
+        val normalized = encodeSingleText(prompt)
+        synchronized(queryVectorCache) {
+            queryVectorCache.put(trimmed, normalized)
+        }
+        return normalized
+    }
 
-        val ensembled = FloatArray(512)
-        for (tpl in templates) {
-            val vec = encodeSingleText(tpl)
-            for (i in 0 until 512) {
-                ensembled[i] += vec[i]
+    private fun extractEmbeddingOutput(result: OrtSession.Result): FloatArray {
+        val value = result[0].value
+        return when (value) {
+            is Array<*> -> {
+                val firstElem = value[0]
+                when (firstElem) {
+                    is FloatArray -> firstElem
+                    is Array<*> -> firstElem[0] as FloatArray
+                    else -> throw IllegalStateException("Unexpected element type: ${firstElem?.javaClass}")
+                }
             }
+            is FloatArray -> value
+            else -> throw IllegalStateException("Unexpected embedding output type: ${value?.javaClass}")
         }
-        return l2Normalize(ensembled)
     }
 
     private fun encodeSingleText(text: String): FloatArray {
-        if (!isLoaded) loadModel()
+        if (textSession == null || tokenizer == null) loadTextModel()
         val currentTokenizer = tokenizer ?: throw IllegalStateException("Tokenizer not loaded")
         val currentEnv = env ?: throw IllegalStateException("Environment not loaded")
         val currentTextSession = textSession ?: throw IllegalStateException("Text session not loaded")
 
         val tokenIds = currentTokenizer.encode(text)
-
-        // Generate attention mask (1s for valid tokens, 0s for trailing padding)
-        val attentionMask = LongArray(77)
-        for (i in 0 until 77) {
-            attentionMask[i] = if (tokenIds[i] != 0L) 1L else 0L
-        }
-
         val shape = longArrayOf(1, 77)
-        val inputNames = currentTextSession.inputNames
-        val inputs = mutableMapOf<String, OnnxTensor>()
-
+        val inputName = currentTextSession.inputNames.firstOrNull() ?: "input_ids"
         val inputIdsTensor = OnnxTensor.createTensor(currentEnv, LongBuffer.wrap(tokenIds), shape)
-        inputs["input_ids"] = inputIdsTensor
-
-        var maskTensor: OnnxTensor? = null
-        if (inputNames.contains("attention_mask")) {
-            maskTensor = OnnxTensor.createTensor(currentEnv, LongBuffer.wrap(attentionMask), shape)
-            inputs["attention_mask"] = maskTensor
-        }
 
         try {
-            currentTextSession.run(inputs).use { result ->
-                val embedsObj = result[0].value
-                val rawEmbeds = when (embedsObj) {
-                    is Array<*> -> {
-                        val firstElem = embedsObj[0]
-                        when (firstElem) {
-                            is FloatArray -> firstElem
-                            is Array<*> -> firstElem[0] as FloatArray
-                            else -> throw IllegalStateException("Unexpected element type: ${firstElem?.javaClass}")
-                        }
-                    }
-                    else -> {
-                        throw IllegalStateException("Unexpected output type from text model: ${embedsObj?.javaClass}")
-                    }
-                }
-                return l2Normalize(rawEmbeds)
+            currentTextSession.run(mapOf(inputName to inputIdsTensor)).use { result ->
+                return l2Normalize(extractEmbeddingOutput(result))
             }
         } finally {
             inputIdsTensor.close()
-            maskTensor?.close()
         }
     }
 
     fun encodeImage(bitmap: Bitmap): FloatArray {
-        if (bitmap.isRecycled) return FloatArray(512)
-        if (!isLoaded) loadModel()
+        if (bitmap.isRecycled) return FloatArray(EMBEDDING_DIM)
+        if (visionSession == null) loadVisionModel()
         val currentEnv = env ?: throw IllegalStateException("Environment not loaded")
         val currentVisionSession = visionSession ?: throw IllegalStateException("Vision session not loaded")
 
-        // Ensure we have a software-backed bitmap to extract pixels without hardware buffer crashes
         val softwareBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.config == Bitmap.Config.HARDWARE) {
-            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return FloatArray(512)
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return FloatArray(EMBEDDING_DIM)
         } else {
             bitmap
         }
 
-        val inputBitmap = prepareCenterCropInputBitmap(softwareBitmap, 224)
-        if (softwareBitmap != bitmap) {
-            softwareBitmap.recycle()
+        val resizedBitmap = if (softwareBitmap.width == IMAGE_SIZE && softwareBitmap.height == IMAGE_SIZE) {
+            softwareBitmap
+        } else {
+            Bitmap.createScaledBitmap(softwareBitmap, IMAGE_SIZE, IMAGE_SIZE, true)
         }
 
-        // Preprocess pixels into RGB flat NCHW buffer for CLIP ViT-B/16 (224x224)
-        val planeSize = 224 * 224
-        val pixels = IntArray(planeSize)
-        inputBitmap.getPixels(pixels, 0, 224, 0, 0, 224, 224)
-        if (inputBitmap != bitmap) {
-            inputBitmap.recycle()
-        }
-
-        val floatBuffer = FloatArray(3 * planeSize)
-        for (i in 0 until planeSize) {
-            val pixel = pixels[i]
-            val r = ((pixel shr 16) and 0xFF) / 255.0f
-            val g = ((pixel shr 8) and 0xFF) / 255.0f
-            val b = (pixel and 0xFF) / 255.0f
-
-            // Official OpenAI CLIP Image Normalization
-            floatBuffer[i] = (r - 0.48145466f) / 0.26862954f
-            floatBuffer[i + planeSize] = (g - 0.4578275f) / 0.26130258f
-            floatBuffer[i + 2 * planeSize] = (b - 0.40821073f) / 0.2757771f
-        }
-
-        val shape = longArrayOf(1, 3, 224, 224)
-        val imageTensor = OnnxTensor.createTensor(currentEnv, FloatBuffer.wrap(floatBuffer), shape)
-
-        val inputs = mapOf(
-            "pixel_values" to imageTensor
-        )
-
-        try {
-            currentVisionSession.run(inputs).use { result ->
-                val embedsObj = result[0].value
-                val rawEmbeds = when (embedsObj) {
-                    is Array<*> -> {
-                        val firstElem = embedsObj[0]
-                        when (firstElem) {
-                            is FloatArray -> firstElem
-                            is Array<*> -> firstElem[0] as FloatArray
-                            else -> throw IllegalStateException("Unexpected element type: ${firstElem?.javaClass}")
-                        }
-                    }
-                    else -> {
-                        throw IllegalStateException("Unexpected output type from vision model: ${embedsObj?.javaClass}")
-                    }
-                }
-                return l2Normalize(rawEmbeds)
-            }
+        return try {
+            runVisionInference(resizedBitmap, currentEnv, currentVisionSession)
         } finally {
-            imageTensor.close()
+            if (resizedBitmap != softwareBitmap && resizedBitmap != bitmap) {
+                resizedBitmap.recycle()
+            }
+            if (softwareBitmap != bitmap) {
+                softwareBitmap.recycle()
+            }
+        }
+    }
+
+    private fun runVisionInference(
+        inputBitmap: Bitmap,
+        environment: OrtEnvironment,
+        session: OrtSession
+    ): FloatArray {
+        val planeSize = IMAGE_SIZE * IMAGE_SIZE
+        val shape = longArrayOf(1, 3, IMAGE_SIZE.toLong(), IMAGE_SIZE.toLong())
+        val inputName = session.inputNames.firstOrNull() ?: "pixel_values"
+
+        synchronized(visionLock) {
+            val pixels = reusablePixels ?: IntArray(planeSize).also { reusablePixels = it }
+            val floatBuffer = reusableFloatBuffer ?: FloatArray(3 * planeSize).also { reusableFloatBuffer = it }
+
+            inputBitmap.getPixels(pixels, 0, IMAGE_SIZE, 0, 0, IMAGE_SIZE, IMAGE_SIZE)
+
+            // MobileCLIP2-S2 OpenCLIP preprocessing: mean=[0,0,0], std=[1,1,1] -> pixel / 255.0
+            for (i in 0 until planeSize) {
+                val pixel = pixels[i]
+                floatBuffer[i] = ((pixel shr 16) and 0xFF) / 255.0f
+                floatBuffer[i + planeSize] = ((pixel shr 8) and 0xFF) / 255.0f
+                floatBuffer[i + 2 * planeSize] = (pixel and 0xFF) / 255.0f
+            }
+
+            val imageTensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(floatBuffer), shape)
+            try {
+                session.run(mapOf(inputName to imageTensor)).use { result ->
+                    return l2Normalize(extractEmbeddingOutput(result))
+                }
+            } finally {
+                imageTensor.close()
+            }
         }
     }
 
     /**
-     * Canonical aspect-preserving center crop for CLIP ViT-B/16.
+     * Canonical aspect-preserving center crop for MobileCLIP-S2.
      * Scales image so min(width, height) = targetSize, then extracts central targetSize x targetSize square.
      * Prevents artificial black letterbox borders that distort vision transformer attention.
      */
-    fun prepareCenterCropInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {
+    fun prepareCenterCropInputBitmap(bitmap: Bitmap, targetSize: Int = IMAGE_SIZE): Bitmap {
         val sourceWidth = bitmap.width
         val sourceHeight = bitmap.height
         if (sourceWidth <= 0 || sourceHeight <= 0) {
@@ -376,7 +445,7 @@ class SmartSearchEngine(private val context: Context) {
         return output
     }
 
-    fun prepareLetterboxInputBitmap(bitmap: Bitmap, targetSize: Int = 224): Bitmap {
+    fun prepareLetterboxInputBitmap(bitmap: Bitmap, targetSize: Int = IMAGE_SIZE): Bitmap {
         val sourceWidth = bitmap.width
         val sourceHeight = bitmap.height
         if (sourceWidth <= 0 || sourceHeight <= 0) {

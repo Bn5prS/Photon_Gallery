@@ -1,0 +1,5 @@
+• Interfaz Material 3 Expressive, animaciones y movimiento más cuidados
+• Indexación de archivos, rendimiento de las consultas y sincronización en segundo plano optimizados
+• Seguridad del espacio privado y flujo de compartir archivos mejorados
+• Ajustes de interfaz en Inicio, Álbumes, Visor y Ajustes
+• Mejor rendimiento de la búsqueda inteligente en el dispositivo

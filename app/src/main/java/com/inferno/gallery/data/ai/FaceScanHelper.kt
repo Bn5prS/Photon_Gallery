@@ -164,6 +164,12 @@ object FaceScanHelper {
             )
             savedFaceCount
         } catch (e: Exception) {
+            val isMlKitUnavailable = e is com.google.mlkit.common.MlKitException &&
+                    e.errorCode == com.google.mlkit.common.MlKitException.UNAVAILABLE
+            if (isMlKitUnavailable) {
+                Log.w(TAG, "ML Kit Face module is still downloading or unavailable. Skipping mediaId $mediaId without marking as scanned.")
+                return@withContext 0
+            }
             Log.w(TAG, "Error scanning faces for media $mediaId: ${e.message}")
             faceDao.insertFaceStatus(
                 MediaFaceStatusEntity(

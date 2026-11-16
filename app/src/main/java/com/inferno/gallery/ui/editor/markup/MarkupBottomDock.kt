@@ -283,7 +283,7 @@ fun MarkupBottomDock(
                     // Clear All action button
                     MarkupActionChip(
                         label = "Clear All",
-                        iconRes = R.drawable.ic_ms_delete,
+                        iconRes = R.drawable.ic_ms_thin_delete,
                         isSelected = false,
                         isDestructive = true,
                         onClick = onClearAllClick
@@ -301,7 +301,7 @@ fun MarkupBottomDock(
                     item {
                         MarkupActionChip(
                             label = "Add",
-                            iconRes = R.drawable.ic_ms_add,
+                            iconRes = R.drawable.ic_ms_thin_add,
                             isSelected = false,
                             onClick = onAddTextClick
                         )
@@ -311,7 +311,7 @@ fun MarkupBottomDock(
                         item {
                             MarkupActionChip(
                                 label = "Size",
-                                iconRes = R.drawable.ic_ms_open_in_full,
+                                iconRes = R.drawable.ic_ms_thin_open_in_full,
                                 isSelected = showSizeSlider,
                                 onClick = { showSizeSlider = !showSizeSlider }
                             )
@@ -320,7 +320,7 @@ fun MarkupBottomDock(
                         item {
                             MarkupActionChip(
                                 label = "+45°",
-                                iconRes = R.drawable.ic_ms_rotate_right,
+                                iconRes = R.drawable.ic_ms_thin_rotate_right,
                                 isSelected = false,
                                 onClick = onRotateTextClick
                             )
@@ -329,7 +329,7 @@ fun MarkupBottomDock(
                         item {
                             MarkupActionChip(
                                 label = if (selectedText.hasBackgroundBox) "Box On" else "Box Off",
-                                iconRes = R.drawable.ic_ms_border_all,
+                                iconRes = R.drawable.ic_ms_thin_border_all,
                                 isSelected = selectedText.hasBackgroundBox,
                                 onClick = onToggleBoxClick
                             )
@@ -338,7 +338,7 @@ fun MarkupBottomDock(
                         item {
                             MarkupActionChip(
                                 label = "Edit",
-                                iconRes = R.drawable.ic_ms_edit,
+                                iconRes = R.drawable.ic_ms_thin_edit,
                                 isSelected = false,
                                 onClick = onEditTextClick
                             )
@@ -347,7 +347,7 @@ fun MarkupBottomDock(
                         item {
                             MarkupActionChip(
                                 label = "Delete",
-                                iconRes = R.drawable.ic_ms_delete,
+                                iconRes = R.drawable.ic_ms_thin_delete,
                                 isSelected = false,
                                 isDestructive = true,
                                 onClick = onDeleteTextClick
@@ -365,7 +365,7 @@ fun MarkupBottomDock(
             ) {
                 MarkupToolItem(
                     label = "Pen",
-                    iconRes = R.drawable.ic_ms_edit,
+                    iconRes = R.drawable.ic_ms_thin_edit,
                     isSelected = activeTool == MarkupTool.PEN,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -375,7 +375,7 @@ fun MarkupBottomDock(
 
                 MarkupToolItem(
                     label = "Highlighter",
-                    iconRes = R.drawable.ic_ms_auto_fix_high,
+                    iconRes = R.drawable.ic_ms_thin_auto_fix_high,
                     isSelected = activeTool == MarkupTool.HIGHLIGHTER,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -385,7 +385,7 @@ fun MarkupBottomDock(
 
                 MarkupToolItem(
                     label = "Arrow",
-                    iconRes = R.drawable.ic_ms_north_west,
+                    iconRes = R.drawable.ic_ms_thin_north_west,
                     isSelected = activeTool == MarkupTool.ARROW,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -395,7 +395,7 @@ fun MarkupBottomDock(
 
                 MarkupToolItem(
                     label = "Eraser",
-                    iconRes = R.drawable.ic_ms_cleaning_services,
+                    iconRes = R.drawable.ic_ms_thin_ink_eraser,
                     isSelected = activeTool == MarkupTool.ERASER,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -405,7 +405,7 @@ fun MarkupBottomDock(
 
                 MarkupToolItem(
                     label = "Text",
-                    iconRes = R.drawable.ic_ms_text_fields,
+                    iconRes = R.drawable.ic_ms_thin_text_fields,
                     isSelected = activeTool == MarkupTool.TEXT,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -463,7 +463,7 @@ fun MarkupBottomDock(
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_full),
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_open_in_full),
                                     contentDescription = "Size",
                                     modifier = Modifier.size(IconSizeTokens.S)
                                 )
@@ -500,7 +500,7 @@ fun MarkupBottomDock(
                                 if (isSelected) {
                                     val checkTint = if (color == Color.White || color == Color(0xFFFFD600)) Color.Black else Color.White
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check),
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_check),
                                         contentDescription = null,
                                         tint = checkTint,
                                         modifier = Modifier.size(14.dp)

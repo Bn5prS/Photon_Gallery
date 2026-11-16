@@ -254,10 +254,10 @@ private fun MarkupCarouselView(
 ) {
     val view = LocalView.current
     val tools = listOf(
-        MarkupToolTileData(MarkupTool.PEN, "Pen", R.drawable.ic_ms_edit),
-        MarkupToolTileData(MarkupTool.HIGHLIGHTER, "Highlighter", R.drawable.ic_ms_auto_fix_high),
-        MarkupToolTileData(MarkupTool.REDACT, "Redact", R.drawable.ic_ms_visibility_off),
-        MarkupToolTileData(MarkupTool.TEXT, "Text", R.drawable.ic_ms_text_fields)
+        MarkupToolTileData(MarkupTool.PEN, "Pen", R.drawable.ic_ms_thin_edit),
+        MarkupToolTileData(MarkupTool.HIGHLIGHTER, "Highlighter", R.drawable.ic_ms_thin_auto_fix_high),
+        MarkupToolTileData(MarkupTool.REDACT, "Redact", R.drawable.ic_ms_thin_visibility_off),
+        MarkupToolTileData(MarkupTool.TEXT, "Text", R.drawable.ic_ms_thin_text_fields)
     )
 
     Row(
@@ -433,7 +433,7 @@ private fun ActiveDrawingModeView(
                 ) {
                     RedactModePill(
                         label = "Mosaic",
-                        iconRes = R.drawable.ic_ms_grid_view,
+                        iconRes = R.drawable.ic_ms_thin_grid_view,
                         isSelected = redactMode == RedactMode.MOSAIC,
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -442,7 +442,7 @@ private fun ActiveDrawingModeView(
                     )
                     RedactModePill(
                         label = stringResource(R.string.editor_redact_blur),
-                        iconRes = R.drawable.ic_ms_blur_on,
+                        iconRes = R.drawable.ic_ms_thin_blur_on,
                         isSelected = redactMode == RedactMode.BLUR,
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -451,7 +451,7 @@ private fun ActiveDrawingModeView(
                     )
                     RedactModePill(
                         label = stringResource(R.string.editor_redact_blackout),
-                        iconRes = R.drawable.ic_ms_visibility_off,
+                        iconRes = R.drawable.ic_ms_thin_visibility_off,
                         isSelected = redactMode == RedactMode.BLACKOUT,
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -524,7 +524,7 @@ private fun ActiveDrawingModeView(
                         if (isSelected) {
                             val checkTint = if (color == Color.White || color == Color(0xFFFFD600)) Color.Black else Color.White
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_ms_check),
+                                painter = painterResource(id = R.drawable.ic_ms_thin_check),
                                 contentDescription = null,
                                 tint = checkTint,
                                 modifier = Modifier.size(15.dp)
@@ -553,7 +553,7 @@ private fun ActiveDrawingModeView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = if (redactMode == RedactMode.BLUR) R.drawable.ic_ms_blur_on else R.drawable.ic_ms_shield),
+                        painter = painterResource(id = if (redactMode == RedactMode.BLUR) R.drawable.ic_ms_thin_blur_on else R.drawable.ic_ms_thin_shield),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
@@ -588,7 +588,7 @@ private fun ActiveDrawingModeView(
                 )
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_close),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_close),
                     contentDescription = "Cancel",
                     modifier = Modifier.size(22.dp)
                 )
@@ -613,7 +613,7 @@ private fun ActiveDrawingModeView(
                 )
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_check),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_check),
                     contentDescription = "Apply",
                     modifier = Modifier.size(22.dp)
                 )
@@ -667,7 +667,7 @@ private fun ActiveTextModeView(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_add),
                         contentDescription = "Add Text",
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -700,7 +700,7 @@ private fun ActiveTextModeView(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_edit),
                             contentDescription = "Edit Text",
                             modifier = Modifier.size(18.dp)
                         )
@@ -731,7 +731,7 @@ private fun ActiveTextModeView(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_thin_delete),
                             contentDescription = "Delete Text",
                             modifier = Modifier.size(18.dp)
                         )
@@ -765,7 +765,7 @@ private fun ActiveTextModeView(
                 )
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_close),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_close),
                     contentDescription = "Cancel",
                     modifier = Modifier.size(22.dp)
                 )
@@ -790,7 +790,7 @@ private fun ActiveTextModeView(
                 )
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_check),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_check),
                     contentDescription = "Apply",
                     modifier = Modifier.size(22.dp)
                 )

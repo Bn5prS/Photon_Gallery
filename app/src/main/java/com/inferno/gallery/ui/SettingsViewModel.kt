@@ -5,7 +5,10 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.SettingsRepository
+import com.inferno.gallery.data.model.ExifStripAction
 import com.inferno.gallery.data.DockStyle
+import com.inferno.gallery.data.MemoriesCarouselStyle
+import com.inferno.gallery.data.PinnedAlbumsStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +42,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _useAmoledBlack = MutableStateFlow(false)
+    val useAmoledBlack: StateFlow<Boolean> = _useAmoledBlack.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.migrateThemeDefaultsIfNeeded()
@@ -48,7 +54,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val days = repository.autoCleanTrashDaysFlow.first()
             setupAutoCleanTrashWorker(autoClean, days)
             // Pre-warm theme preferences so UI doesn't experience cold-start theme flips
-            repository.useAmoledBlackFlow.first()
+            _useAmoledBlack.value = repository.useAmoledBlackFlow.first()
             repository.themeModeFlow.first()
             repository.useMaterialYouFlow.first()
             repository.colorPresetNameFlow.first()
@@ -56,6 +62,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             repository.motionStyleFlow.first()
             repository.dateHeaderAlignmentFlow.first()
             _isLoading.value = false
+        }
+
+        viewModelScope.launch {
+            repository.useAmoledBlackFlow.collect {
+                _useAmoledBlack.value = it
+            }
         }
 
         viewModelScope.launch {
@@ -174,6 +186,42 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val viewerToolbarActions: StateFlow<List<String>> = repository.viewerToolbarActionsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS
+    )
+
+    val selectionDockActions: StateFlow<List<String>> = repository.selectionDockActionsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS
+    )
+
+    fun updateViewerToolbarActions(actions: List<String>) {
+        viewModelScope.launch {
+            repository.updateViewerToolbarActions(actions)
+        }
+    }
+
+    fun updateSelectionDockActions(actions: List<String>) {
+        viewModelScope.launch {
+            repository.updateSelectionDockActions(actions)
+        }
+    }
+
+    fun resetViewerToolbarActions() {
+        viewModelScope.launch {
+            repository.resetViewerToolbarActions()
+        }
+    }
+
+    fun resetSelectionDockActions() {
+        viewModelScope.launch {
+            repository.resetSelectionDockActions()
+        }
+    }
+
     val useMaterialYou: StateFlow<Boolean> = repository.useMaterialYouFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -198,13 +246,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val useAmoledBlack: StateFlow<Boolean> = repository.useAmoledBlackFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = false
-    )
-
     fun setUseAmoledBlack(use: Boolean) {
+        _useAmoledBlack.value = use
         viewModelScope.launch {
             repository.updateUseAmoledBlack(use)
         }
@@ -225,7 +268,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val dateHeaderAlignment: StateFlow<String> = repository.dateHeaderAlignmentFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = "LEFT"
+        initialValue = "CENTER"
     )
 
     fun setDateHeaderAlignment(alignment: String) {
@@ -332,7 +375,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val showMemories: StateFlow<Boolean> = repository.showMemoriesFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
+        initialValue = false
     )
 
     fun setShowMemories(show: Boolean) {
@@ -350,6 +393,30 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun restoreMemoriesBanner() {
         viewModelScope.launch {
             repository.updateMemoriesDismissed(false)
+        }
+    }
+
+    val memoriesCarouselStyle: StateFlow<MemoriesCarouselStyle> = repository.memoriesCarouselStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = MemoriesCarouselStyle.SPOTLIGHT
+    )
+
+    fun setMemoriesCarouselStyle(style: MemoriesCarouselStyle) {
+        viewModelScope.launch {
+            repository.updateMemoriesCarouselStyle(style)
+        }
+    }
+
+    val pinnedAlbumsStyle: StateFlow<PinnedAlbumsStyle> = repository.pinnedAlbumsStyleFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = PinnedAlbumsStyle.DEFAULT
+    )
+
+    fun setPinnedAlbumsStyle(style: PinnedAlbumsStyle) {
+        viewModelScope.launch {
+            repository.updatePinnedAlbumsStyle(style)
         }
     }
 
@@ -382,6 +449,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setShowVideosInDock(show: Boolean) {
         viewModelScope.launch {
             repository.updateShowVideosInDock(show)
+        }
+    }
+
+    val showPillLabels: StateFlow<Boolean> = repository.showPillLabelsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setShowPillLabels(show: Boolean) {
+        viewModelScope.launch {
+            repository.updateShowPillLabels(show)
         }
     }
 
@@ -418,10 +497,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
 
     fun setOcrIndexingEnabled(enabled: Boolean) {
-        if (enabled) {
-            startOcrIndexing()
-        } else {
-            stopOcrIndexing()
+        viewModelScope.launch {
+            repository.updateOcrIndexingEnabled(enabled)
+            if (enabled) {
+                val hasUnindexed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    db.mediaDao().getUnindexedImageCount() > 0
+                }
+                if (hasUnindexed) {
+                    startOcrIndexing()
+                }
+            }
         }
     }
 
@@ -431,7 +516,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun startOcrIndexing() {
         viewModelScope.launch {
-            repository.updateOcrIndexingEnabled(true)
             val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.OcrIndexWorker>()
                 .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
@@ -441,14 +525,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun stopOcrIndexing() {
         viewModelScope.launch {
-            repository.updateOcrIndexingEnabled(false)
             WorkManager.getInstance(getApplication()).cancelUniqueWork("OcrIndexWorker")
         }
     }
 
     fun rebuildOcrIndex() {
         viewModelScope.launch {
-            repository.updateOcrIndexingEnabled(true)
             db.mediaDao().resetOcrIndexStatus()
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 db.openHelper.writableDatabase.execSQL("DELETE FROM image_fts")
@@ -470,6 +552,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setStripMetadataOnShare(enabled: Boolean) {
         viewModelScope.launch {
             repository.updateStripMetadataOnShare(enabled)
+        }
+    }
+
+    val exifStripAction: StateFlow<ExifStripAction> = repository.exifStripActionFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ExifStripAction.ASK_EVERY_TIME
+    )
+
+    fun setExifStripAction(action: ExifStripAction) {
+        viewModelScope.launch {
+            repository.setExifStripAction(action)
         }
     }
 
@@ -650,10 +744,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun startFaceModelDownload() {
         val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.FaceModelDownloadWorker>()
+            .setConstraints(
+                androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                    .build()
+            )
             .build()
         WorkManager.getInstance(getApplication()).enqueueUniqueWork(
             "FaceModelDownloadWorker",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request
         )
     }
@@ -676,7 +775,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 .build()
             WorkManager.getInstance(getApplication()).enqueueUniqueWork(
                 "FaceIndexWorker",
-                if (forceRescan) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,
                 request
             )
         }
@@ -690,6 +789,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun stopFaceIndexing() {
         WorkManager.getInstance(getApplication()).cancelUniqueWork("FaceIndexWorker")
+        com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
+            isIndexing = false,
+            progress = 0,
+            total = 0
+        )
     }
 
     fun clearFaceIndex() {
@@ -840,6 +944,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setViewerZoomMinimapEnabled(enabled: Boolean) {
         viewModelScope.launch {
             repository.updateViewerZoomMinimapEnabled(enabled)
+        }
+    }
+
+    val hdrDisplayEnabled: StateFlow<Boolean> = repository.hdrDisplayEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setHdrDisplayEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updateHdrDisplayEnabled(enabled)
         }
     }
 

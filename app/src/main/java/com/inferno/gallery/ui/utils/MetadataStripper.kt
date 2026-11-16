@@ -55,7 +55,6 @@ object MetadataStripper {
             try {
                 inputFile.copyTo(outputFile, overwrite = true)
                 stripGenericExifInPlace(outputFile)
-                true
             } catch (_: Exception) {
                 false
             }
@@ -102,6 +101,9 @@ object MetadataStripper {
         }
 
         val inputBytes = inputFile.readBytes()
+        if (inputBytes.size < 4 || (inputBytes[0].toInt() and 0xFF) != 0xFF || (inputBytes[1].toInt() and 0xFF) != 0xD8) {
+            return false
+        }
         val cleanBytes = stripJpegBytes(inputBytes)
         outputFile.writeBytes(cleanBytes)
         return true
@@ -555,12 +557,11 @@ object MetadataStripper {
 
     private fun stripGenericImage(inputFile: File, outputFile: File): Boolean {
         inputFile.copyTo(outputFile, overwrite = true)
-        stripGenericExifInPlace(outputFile)
-        return true
+        return stripGenericExifInPlace(outputFile)
     }
 
-    private fun stripGenericExifInPlace(file: File) {
-        try {
+    private fun stripGenericExifInPlace(file: File): Boolean {
+        return try {
             val exif = ExifInterface(file.absolutePath)
             ALL_EXIF_TAGS.forEach { tag ->
                 try {
@@ -568,7 +569,10 @@ object MetadataStripper {
                 } catch (_: Exception) {}
             }
             exif.saveAttributes()
-        } catch (_: Exception) {}
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private val ALL_EXIF_TAGS = listOf(

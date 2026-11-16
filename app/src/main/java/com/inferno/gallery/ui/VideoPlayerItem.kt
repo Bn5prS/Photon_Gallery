@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,6 +58,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,20 +87,24 @@ fun VideoPlayerItem(
     isCurrentPage: Boolean,
     showControls: Boolean,
     modifier: Modifier = Modifier,
+    isFilmstripOverview: Boolean = false,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
     onPinchExpand: (() -> Unit)? = null,
-    onScrubbingChanged: ((Boolean) -> Unit)? = null
+    onScrubbingChanged: ((Boolean) -> Unit)? = null,
+    onScaleChanged: ((Float) -> Unit)? = null
 ) {
     VideoPlayerItemWithResolvedUri(
         uri = uri,
         isCurrentPage = isCurrentPage,
         showControls = showControls,
         modifier = modifier,
+        isFilmstripOverview = isFilmstripOverview,
         onTap = onTap,
         onPinchOverview = onPinchOverview,
         onPinchExpand = onPinchExpand,
-        onScrubbingChanged = onScrubbingChanged
+        onScrubbingChanged = onScrubbingChanged,
+        onScaleChanged = onScaleChanged
     )
 }
 
@@ -108,10 +115,12 @@ fun VideoPlayerItemWithResolvedUri(
     isCurrentPage: Boolean,
     showControls: Boolean,
     modifier: Modifier = Modifier,
+    isFilmstripOverview: Boolean = false,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
     onPinchExpand: (() -> Unit)? = null,
-    onScrubbingChanged: ((Boolean) -> Unit)? = null
+    onScrubbingChanged: ((Boolean) -> Unit)? = null,
+    onScaleChanged: ((Float) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val exoPlayer = remember(uri) {
@@ -139,10 +148,20 @@ fun VideoPlayerItemWithResolvedUri(
     val offsetY = remember { mutableFloatStateOf(0f) }
     val animJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val currentIsOverview by rememberUpdatedState(isFilmstripOverview)
+    val currentOnPinchOverview by rememberUpdatedState(onPinchOverview)
+    val currentOnPinchExpand by rememberUpdatedState(onPinchExpand)
+    val currentOnScaleChanged by rememberUpdatedState(onScaleChanged)
 
-    // Reset zoom when switching pages
-    LaunchedEffect(isCurrentPage) {
-        if (!isCurrentPage) {
+    LaunchedEffect(scale.floatValue, isCurrentPage) {
+        if (isCurrentPage) {
+            currentOnScaleChanged?.invoke(scale.floatValue)
+        }
+    }
+
+    // Reset zoom when switching pages or entering filmstrip overview
+    LaunchedEffect(isCurrentPage, isFilmstripOverview) {
+        if (!isCurrentPage || isFilmstripOverview) {
             animJob.value?.cancel()
             scale.floatValue = 1f
             offsetX.floatValue = 0f
@@ -245,7 +264,7 @@ fun VideoPlayerItemWithResolvedUri(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
+            .background(MaterialTheme.colorScheme.surface)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
@@ -330,6 +349,7 @@ fun VideoPlayerItemWithResolvedUri(
                     }
 
                     if (shouldStartZoomPan) {
+                        val gestureStartScale = scale.floatValue
                         var accumulatedZoom = 1f
                         var accumulatedPan = Offset.Zero
                         var pastTouchSlop = false
@@ -353,6 +373,7 @@ fun VideoPlayerItemWithResolvedUri(
 
                             val zoomChange = event.calculateZoom()
                             val panChange = event.calculatePan()
+                            val isMultiTouch = pressedCount >= 2
 
                             if (!pastTouchSlop) {
                                 accumulatedZoom *= zoomChange
@@ -360,26 +381,35 @@ fun VideoPlayerItemWithResolvedUri(
                                 val centroidSize = event.calculateCentroidSize(useCurrent = false)
                                 val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
                                 val panMotion = accumulatedPan.getDistance()
-                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                if (zoomMotion > touchSlop || panMotion > touchSlop || isMultiTouch) {
                                     pastTouchSlop = true
                                 }
+                            } else if (isMultiTouch) {
+                                accumulatedZoom *= zoomChange
                             }
 
-                            if (pastTouchSlop && scale.floatValue <= 1.05f && maxPointerCount == 1) {
+                            if (pastTouchSlop && !isMultiTouch && scale.floatValue <= 1.05f && maxPointerCount == 1) {
                                 break
                             }
 
-                            if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero)) {
+                            if (pastTouchSlop && currentIsOverview) {
+                                // In filmstrip overview: pinch out exits overview without zooming video
+                                if (isMultiTouch && accumulatedZoom > 1.15f) {
+                                    currentOnPinchExpand?.invoke()
+                                }
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            } else if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero || isMultiTouch)) {
                                 val centroid = event.calculateCentroid(useCurrent = false)
                                 animJob.value?.cancel()
-                                val newScale = (scale.floatValue * zoomChange).coerceIn(0.85f, 6f)
+                                val oldScale = scale.floatValue
+                                val newScale = (oldScale * zoomChange).coerceIn(0.85f, 6f)
 
                                 val maxX = (composableW * (newScale - 1)).coerceAtLeast(0f) / 2f
                                 val maxY = (composableH * (newScale - 1)).coerceAtLeast(0f) / 2f
 
                                 val focalX = centroid.x - composableW / 2f
                                 val focalY = centroid.y - composableH / 2f
-                                val effectiveZoom = if (scale.floatValue > 0f) newScale / scale.floatValue else 1f
+                                val effectiveZoom = if (oldScale > 0f) newScale / oldScale else 1f
                                 var newOffsetX = (offsetX.floatValue - focalX) * effectiveZoom + focalX + panChange.x
                                 var newOffsetY = (offsetY.floatValue - focalY) * effectiveZoom + focalY + panChange.y
 
@@ -390,102 +420,94 @@ fun VideoPlayerItemWithResolvedUri(
                                 offsetX.floatValue = newOffsetX
                                 offsetY.floatValue = newOffsetY
 
-                                if (newScale > 1f) {
+                                // Pinch-in from unzoomed normal view enters filmstrip overview
+                                if (isMultiTouch && gestureStartScale <= 1.05f && oldScale <= 1.05f && accumulatedZoom < 0.85f) {
+                                    currentOnPinchOverview?.invoke()
+                                }
+
+                                if (isMultiTouch) {
+                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                } else if (newScale > 1f) {
                                     val hittingLeft = newOffsetX >= maxX && panChange.x > 0
                                     val hittingRight = newOffsetX <= -maxX && panChange.x < 0
                                     if (!hittingLeft && !hittingRight) {
                                         event.changes.forEach { if (it.positionChanged()) it.consume() }
                                     }
                                 }
-                            } // end if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero))
-
-                            // Pinch-in threshold check on every multitouch frame
-                            if (pastTouchSlop && event.changes.count { it.pressed } >= 2) {
-                                accumulatedZoom *= zoomChange
-                                if (accumulatedZoom < 0.85f && scale.floatValue <= 1.05f) {
-                                    onPinchOverview?.invoke()
-                                } else if (accumulatedZoom > 1.15f) {
-                                    onPinchExpand?.invoke()
-                                }
                             }
 
                             if (!event.changes.any { it.pressed }) break
                         }
 
-                        // If pinched in past threshold or released below 0.90x, trigger overview
-                        if (pastTouchSlop && maxPointerCount >= 2) {
-                            if (scale.floatValue < 0.90f || accumulatedZoom < 0.88f) {
-                                onPinchOverview?.invoke()
+                        if (!currentIsOverview) {
+                            // Only enter overview if pinch started unzoomed and pinched inward past threshold
+                            if (pastTouchSlop && maxPointerCount >= 2 && gestureStartScale <= 1.05f &&
+                                (scale.floatValue < 0.90f || accumulatedZoom < 0.85f)
+                            ) {
+                                currentOnPinchOverview?.invoke()
                                 scale.floatValue = 1f
                                 offsetX.floatValue = 0f
                                 offsetY.floatValue = 0f
-                            } else if (accumulatedZoom > 1.15f) {
-                                onPinchExpand?.invoke()
-                                scale.floatValue = 1f
-                                offsetX.floatValue = 0f
-                                offsetY.floatValue = 0f
-                            }
-                        }
-
-                        // Snap back if released below 1.05x
-                        if (scale.floatValue < 1.05f && scale.floatValue != 1f) {
-                            animJob.value?.cancel()
-                            animJob.value = coroutineScope.launch {
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = scale.floatValue,
-                                        targetValue = 1f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> scale.floatValue = v }
+                            } else if (scale.floatValue < 1.05f && (scale.floatValue != 1f || offsetX.floatValue != 0f || offsetY.floatValue != 0f)) {
+                                // Snap back cleanly if released below 1.05x
+                                animJob.value?.cancel()
+                                animJob.value = coroutineScope.launch {
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = scale.floatValue,
+                                            targetValue = 1f,
+                                            animationSpec = MotionTokens.gentleSpring()
+                                        ) { v, _ -> scale.floatValue = v }
+                                    }
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetX.floatValue,
+                                            targetValue = 0f,
+                                            animationSpec = MotionTokens.gentleSpring()
+                                        ) { v, _ -> offsetX.floatValue = v }
+                                    }
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetY.floatValue,
+                                            targetValue = 0f,
+                                            animationSpec = MotionTokens.gentleSpring()
+                                        ) { v, _ -> offsetY.floatValue = v }
+                                    }
                                 }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetX.floatValue,
-                                        targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> offsetX.floatValue = v }
-                                }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetY.floatValue,
-                                        targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> offsetY.floatValue = v }
-                                }
-                            }
-                        } else if (pastTouchSlop && scale.floatValue >= 1.05f && maxPointerCount == 1) {
-                            // Fling momentum when panning while zoomed
-                            val velocity = velocityTracker.calculateVelocity()
-                            val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
-                            val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
-                            val flingFactor = 0.35f
-                            val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
-                                .coerceIn(-currentMaxX, currentMaxX)
-                            val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
-                                .coerceIn(-currentMaxY, currentMaxY)
-                            animJob.value?.cancel()
-                            animJob.value = coroutineScope.launch {
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetX.floatValue,
-                                        targetValue = targetFlingX,
-                                        initialVelocity = velocity.x,
-                                        animationSpec = androidx.compose.animation.core.spring(
-                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                            stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
-                                        )
-                                    ) { v, _ -> offsetX.floatValue = v }
-                                }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetY.floatValue,
-                                        targetValue = targetFlingY,
-                                        initialVelocity = velocity.y,
-                                        animationSpec = androidx.compose.animation.core.spring(
-                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                            stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
-                                        )
-                                    ) { v, _ -> offsetY.floatValue = v }
+                            } else if (pastTouchSlop && scale.floatValue >= 1.05f && maxPointerCount == 1) {
+                                // Fling momentum when panning while zoomed
+                                val velocity = velocityTracker.calculateVelocity()
+                                val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
+                                val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
+                                val flingFactor = 0.35f
+                                val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
+                                    .coerceIn(-currentMaxX, currentMaxX)
+                                val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
+                                    .coerceIn(-currentMaxY, currentMaxY)
+                                animJob.value?.cancel()
+                                animJob.value = coroutineScope.launch {
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetX.floatValue,
+                                            targetValue = targetFlingX,
+                                            initialVelocity = velocity.x,
+                                            animationSpec = androidx.compose.animation.core.spring(
+                                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
+                                            )
+                                        ) { v, _ -> offsetX.floatValue = v }
+                                    }
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetY.floatValue,
+                                            targetValue = targetFlingY,
+                                            initialVelocity = velocity.y,
+                                            animationSpec = androidx.compose.animation.core.spring(
+                                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
+                                            )
+                                        ) { v, _ -> offsetY.floatValue = v }
+                                    }
                                 }
                             }
                         }
@@ -552,21 +574,7 @@ fun VideoPlayerItemWithResolvedUri(
             )
         }
 
-        // Dim Scrim overlay
-        AnimatedVisibility(
-            visible = showControls && isCurrentPage,
-            enter = fadeIn(MotionTokens.snappySpring()),
-            exit = fadeOut(MotionTokens.gentleSpring()),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.material3.MaterialTheme.colorScheme.scrim.copy(alpha = 0.4f))
-            )
-        }
-
-        // Floating Video Scrubber Capsule: Single unified floating pill
+        // Floating Video Scrubber Capsule: Single unified floating pill styling
         AnimatedVisibility(
             visible = showControls && isCurrentPage,
             enter = slideInVertically(
@@ -580,28 +588,29 @@ fun VideoPlayerItemWithResolvedUri(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 76.dp, start = 16.dp, end = 16.dp)
+                .padding(bottom = 88.dp, start = 20.dp, end = 20.dp)
         ) {
             Surface(
-                shape = ShapeFull,
-                color = Color.Black.copy(alpha = 0.78f),
-                contentColor = Color.White,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                border = null,
                 tonalElevation = 0.dp,
-                shadowElevation = 4.dp,
+                shadowElevation = 0.dp,
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .widthIn(max = 360.dp)
-                    .height(46.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = 380.dp)
+                    .height(52.dp)
                     .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 6.dp),
+                        .padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Play / Pause button on left
-                    IconButton(
+                    // Play / Pause button on left: Circular tonal button
+                    FilledTonalIconButton(
                         onClick = {
                             if (isPlaying) {
                                 exoPlayer.pause()
@@ -612,20 +621,27 @@ fun VideoPlayerItemWithResolvedUri(
                                 exoPlayer.play()
                             }
                         },
-                        modifier = Modifier.size(36.dp)
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = ImageVector.vectorResource(if (isPlaying) R.drawable.ic_ms_pause else R.drawable.ic_ms_play_arrow),
                             contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Text(
                         text = formatTime(dragPosition ?: currentPosition),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                        color = Color.White.copy(alpha = 0.90f)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Slider(
@@ -644,32 +660,39 @@ fun VideoPlayerItemWithResolvedUri(
                         },
                         valueRange = 0f..videoDuration.toFloat().coerceAtLeast(1f),
                         colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color(0xFF2979FF),
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f),
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                             activeTickColor = Color.Transparent,
                             inactiveTickColor = Color.Transparent
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 6.dp)
+                            .padding(horizontal = 8.dp)
                     )
 
                     Text(
                         text = formatTime(videoDuration),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                        color = Color.White.copy(alpha = 0.65f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Audio mute / unmute button on right
-                    IconButton(
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Audio mute / unmute button on right: Circular tonal button
+                    FilledTonalIconButton(
                         onClick = { isMuted = !isMuted },
-                        modifier = Modifier.size(36.dp)
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = if (isMuted) ImageVector.vectorResource(R.drawable.ic_ms_volume_off) else ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
                             contentDescription = if (isMuted) "Unmute" else "Mute",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }

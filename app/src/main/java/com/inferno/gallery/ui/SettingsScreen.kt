@@ -1,5 +1,6 @@
 package com.inferno.gallery.ui
 
+import com.inferno.gallery.data.model.ExifStripAction
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -7,15 +8,18 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +29,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,18 +57,21 @@ import com.inferno.gallery.ui.components.PhotonConnectedCardWrapper
 import com.inferno.gallery.ui.components.PhotonBackButton
 import com.inferno.gallery.ui.components.PhotonCloseButton
 import com.inferno.gallery.ui.components.PhotonHeaderIconButton
-import com.inferno.gallery.ui.components.PhotonPaletteGrid
 import com.inferno.gallery.ui.components.PhotonCustomColorSection
 import com.inferno.gallery.ui.theme.ThemePalettes
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.core.graphics.ColorUtils
 import com.inferno.gallery.ui.theme.ShapeExtraSmall
 import com.inferno.gallery.ui.theme.ShapeSmall
 import com.inferno.gallery.ui.theme.ShapeMedium
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.IconSizeTokens
+import com.inferno.gallery.ui.theme.SpacingTokens
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -75,7 +84,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -106,6 +118,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -119,6 +133,8 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.inferno.gallery.ui.components.LanguageSelectionDialog
 import com.inferno.gallery.ui.components.getCurrentAppLanguageTag
 import com.inferno.gallery.ui.components.getActiveLanguage
@@ -146,6 +162,7 @@ import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
 import com.inferno.gallery.ui.theme.photonColors
 import com.inferno.gallery.ui.utils.pressScale
+import com.inferno.gallery.ui.utils.UltraHdrHelper
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -161,7 +178,6 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsState()
     val useMaterialYou by viewModel.useMaterialYou.collectAsState()
     val colorPresetName by viewModel.colorPresetName.collectAsState()
-    val themePaletteStyle by viewModel.themePaletteStyle.collectAsState()
     val appSeedColor by viewModel.appSeedColor.collectAsState()
     val useAmoledBlack by viewModel.useAmoledBlack.collectAsState()
     val showAlbumSize by viewModel.showAlbumSize.collectAsState()
@@ -169,19 +185,26 @@ fun SettingsScreen(
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
     val showMemories by viewModel.showMemories.collectAsState()
     val memoriesDismissed by viewModel.memoriesDismissed.collectAsState()
+    val memoriesCarouselStyle by viewModel.memoriesCarouselStyle.collectAsState()
+    val pinnedAlbumsStyle by viewModel.pinnedAlbumsStyle.collectAsState()
     val isSystemDark = isSystemInDarkTheme()
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
+    val showPillLabels by viewModel.showPillLabels.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
     val ocrProgressState by viewModel.ocrProgress.collectAsState()
+    val ocrIndexingEnabled by viewModel.ocrIndexingEnabled.collectAsState()
     val clipProgressState by viewModel.clipProgress.collectAsState()
     val modelDownloadWorkInfo by viewModel.modelDownloadWorkInfo.collectAsState(initial = null)
     val totalImagesCount by viewModel.totalImagesCount.collectAsState()
     val unindexedOcrImagesCount by viewModel.unindexedOcrImagesCount.collectAsState()
     val stripMetadataOnShare by viewModel.stripMetadataOnShare.collectAsState()
+    val exifStripAction by viewModel.exifStripAction.collectAsState()
+    var showExifStripActionDialog by remember { mutableStateOf(false) }
     val maxBrightnessEnabled by viewModel.maxBrightnessEnabled.collectAsState()
+    val hdrDisplayEnabled by viewModel.hdrDisplayEnabled.collectAsState()
     val useSystemFont by viewModel.useSystemFont.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val secureRecentsEnabled by viewModel.secureRecentsEnabled.collectAsState()
@@ -210,6 +233,7 @@ fun SettingsScreen(
     val faceAutoIndex by viewModel.faceAutoIndex.collectAsState()
 
     val context = LocalContext.current
+    val isHdrSupported = remember(context) { UltraHdrHelper.isHdrSupported(context) }
     val uriHandler = LocalUriHandler.current
     val haptic = LocalHapticFeedback.current
 
@@ -224,7 +248,7 @@ fun SettingsScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var currentLanguageTag by remember { mutableStateOf(getCurrentAppLanguageTag(context)) }
     var showCustomColorSheet by remember { mutableStateOf(false) }
-    var showPaletteStyleSheet by remember { mutableStateOf(false) }
+    var showCuratedPalettesCard by remember { mutableStateOf(false) }
 
     if (showLanguageDialog) {
         LanguageSelectionDialog(
@@ -299,66 +323,102 @@ fun SettingsScreen(
         }
     }
 
-    if (showPaletteStyleSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showPaletteStyleSheet = false },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            shape = ShapeEdgeTop,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
+
+    if (showCuratedPalettesCard) {
+        Dialog(
+            onDismissRequest = { showCuratedPalettesCard = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Card(
+                modifier = Modifier.fillMaxWidth(0.94f),
+                shape = ShapeExtraLarge,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            text = stringResource(R.string.setting_palette_style_title),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.setting_palette_style_sub),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                text = stringResource(R.string.setting_color_palette),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.setting_color_palette_sub),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showCuratedPalettesCard = false }
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                contentDescription = stringResource(R.string.action_close),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+
+                    val allPalettes = remember { ThemePalettes.allPalettes }
+                    val chunkedPalettes = remember(allPalettes) { allPalettes.chunked(4) }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        chunkedPalettes.forEach { rowPalettes ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                rowPalettes.forEach { palette ->
+                                    val isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id)
+                                    FourQuadrantColorSwatch(
+                                        palette = palette,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            viewModel.setUseMaterialYou(false)
+                                            viewModel.setColorPresetName(palette.id)
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (rowPalettes.size < 4) {
+                                    repeat(4 - rowPalettes.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     FilledTonalButton(
-                        onClick = { showPaletteStyleSheet = false },
+                        onClick = { showCuratedPalettesCard = false },
+                        modifier = Modifier.fillMaxWidth(),
                         shape = CircleShape
                     ) {
                         Text(
-                            text = stringResource(R.string.action_done),
+                            text = stringResource(R.string.action_close),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                         )
                     }
                 }
-
-                val effectiveSeedColor = if (colorPresetName == "custom" && appSeedColor != -1) {
-                    Color(appSeedColor)
-                } else if (useMaterialYou || colorPresetName == "dynamic") {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    ThemePalettes.getById(colorPresetName).seedColor
-                }
-
-                PhotonPaletteGrid(
-                    currentStyle = themePaletteStyle,
-                    seedColor = effectiveSeedColor,
-                    isDark = isCurrentlyDark,
-                    isAmoled = useAmoledBlack && isCurrentlyDark,
-                    onStyleSelected = { selectedStyle ->
-                        viewModel.setThemePaletteStyle(selectedStyle)
-                    }
-                )
             }
         }
     }
@@ -545,7 +605,13 @@ fun SettingsScreen(
 
 
     androidx.activity.compose.BackHandler(enabled = activeSection != null) {
-        onActiveSectionChange(if (activeSection == "Update Log") "About" else null)
+        onActiveSectionChange(
+            when (activeSection) {
+                "Update Log" -> "About"
+                "Customize Toolbars" -> "Layout & Navigation"
+                else -> null
+            }
+        )
     }
 
     Column(
@@ -730,48 +796,90 @@ fun SettingsScreen(
                                         )
                                     },
                                     {
-                                        Column(
+                                        val isPresetActive = !useMaterialYou && colorPresetName != "dynamic" && colorPresetName != "custom"
+                                        val activePalette = if (isPresetActive) ThemePalettes.getById(colorPresetName) else null
+                                        val paletteSubtitle = when {
+                                            isPresetActive && activePalette != null -> activePalette.name
+                                            useMaterialYou || colorPresetName == "dynamic" -> "System Wallpaper (Material You)"
+                                            colorPresetName == "custom" -> "Custom Color Active"
+                                            else -> stringResource(R.string.setting_color_palette_sub)
+                                        }
+
+                                        Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .clickable { showCuratedPalettesCard = true }
                                                 .padding(horizontal = 16.dp, vertical = 12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                                             ) {
-                                                Column(modifier = Modifier.weight(1f)) {
+                                                if (activePalette != null) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .border(
+                                                                width = 2.dp,
+                                                                color = MaterialTheme.colorScheme.primary,
+                                                                shape = CircleShape
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Canvas(modifier = Modifier.size(36.dp)) {
+                                                            val hw = size.width / 2f
+                                                            val hh = size.height / 2f
+                                                            val qSize = Size(hw, hh)
+                                                            drawRect(activePalette.quadrantColors[0], Offset.Zero, qSize)
+                                                            drawRect(activePalette.quadrantColors[1], Offset(hw, 0f), qSize)
+                                                            drawRect(activePalette.quadrantColors[2], Offset(0f, hh), qSize)
+                                                            drawRect(activePalette.quadrantColors[3], Offset(hw, hh), qSize)
+                                                        }
+                                                    }
+                                                } else {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                Column {
                                                     Text(
                                                         text = stringResource(R.string.setting_color_palette),
                                                         style = MaterialTheme.typography.titleMedium,
                                                         color = MaterialTheme.colorScheme.onSurface
                                                     )
                                                     Text(
-                                                        text = if (useMaterialYou || colorPresetName == "dynamic") "Select any preset to switch from system wallpaper" else "Curated 4-color Material 3 combinations",
+                                                        text = paletteSubtitle,
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
                                             }
 
-                                            LazyRow(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(top = 4.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                                            FilledTonalButton(
+                                                onClick = { showCuratedPalettesCard = true },
+                                                shape = CircleShape,
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                             ) {
-                                                items(ThemePalettes.allPalettes) { palette ->
-                                                    FourQuadrantColorSwatch(
-                                                        palette = palette,
-                                                        isSelected = !useMaterialYou && colorPresetName != "dynamic" && (colorPresetName == palette.id),
-                                                        onClick = {
-                                                            viewModel.setUseMaterialYou(false)
-                                                            viewModel.setColorPresetName(palette.id)
-                                                        }
-                                                    )
-                                                }
+                                                Text(
+                                                    text = stringResource(R.string.action_choose),
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
                                             }
                                         }
                                     },
@@ -848,159 +956,14 @@ fun SettingsScreen(
                                                 )
                                             }
                                         }
-                                    },
-                                    {
-                                        val styleDisplayName = when (themePaletteStyle) {
-                                            "TonalSpot" -> "Tonal Spot"
-                                            "Neutral" -> "Neutral"
-                                            "Vibrant" -> "Vibrant"
-                                            "Expressive" -> "Expressive"
-                                            "Monochrome" -> "Monochrome"
-                                            else -> themePaletteStyle
-                                        }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { showPaletteStyleSheet = true }
-                                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.secondaryContainer),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_palette),
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                                Column {
-                                                    Text(
-                                                        text = stringResource(R.string.setting_palette_style_title),
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    Text(
-                                                        text = styleDisplayName,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        fontWeight = FontWeight.SemiBold
-                                                    )
-                                                }
-                                            }
-
-                                            FilledTonalButton(
-                                                onClick = { showPaletteStyleSheet = true },
-                                                shape = CircleShape,
-                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                            ) {
-                                                Text(
-                                                    text = stringResource(R.string.action_change),
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                            }
-                                        }
                                     }
                                 )
                             )
 
-                            // ── Card 2: Media Viewer ──
+                            // ── Card 2: Typography ──
                             SettingsGroupCard(
-                                title = stringResource(R.string.setting_media_viewer_title),
+                                title = "Typography",
                                 items = listOf(
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_blur_viewer_bg_title),
-                                            subtitle = stringResource(R.string.setting_blur_viewer_bg_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                            checked = viewerBlurEffect,
-                                            onCheckedChange = { viewModel.setViewerBlurEffect(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_zoom_navigator_title),
-                                            subtitle = stringResource(R.string.setting_zoom_navigator_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
-                                            checked = viewerZoomMinimapEnabled,
-                                            onCheckedChange = { viewModel.setViewerZoomMinimapEnabled(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_max_brightness_title),
-                                            subtitle = stringResource(R.string.setting_max_brightness_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
-                                            checked = maxBrightnessEnabled,
-                                            onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
-                                        )
-                                    }
-                                )
-                            )
-
-                            // ── Card 3: Typography & Layout ──
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_typography_layout_title),
-                                items = listOf(
-                                    {
-                                        Column(modifier = Modifier.padding(16.dp)) {
-                                            Text(
-                                                text = stringResource(R.string.setting_date_header_align),
-                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = if (dateHeaderAlignment == "LEFT") {
-                                                    "Left-aligned timeline date headers and floating scroll badge"
-                                                } else {
-                                                    "Center-aligned timeline date headers and floating scroll badge (Center-aligned style)"
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            SingleChoiceSegmentedButtonRow(
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                                    onClick = { viewModel.setDateHeaderAlignment("LEFT") },
-                                                    selected = dateHeaderAlignment == "LEFT",
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_left), contentDescription = null) },
-                                                    label = { Text(stringResource(R.string.align_left), style = MaterialTheme.typography.labelMedium) }
-                                                )
-                                                SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                                    onClick = { viewModel.setDateHeaderAlignment("CENTER") },
-                                                    selected = dateHeaderAlignment == "CENTER",
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_center), contentDescription = null) },
-                                                    label = { Text(stringResource(R.string.align_center), style = MaterialTheme.typography.labelMedium) }
-                                                )
-                                            }
-                                        }
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_show_album_size),
-                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
-                                            checked = showAlbumSize,
-                                            onCheckedChange = { viewModel.setShowAlbumSize(it) }
-                                        )
-                                    },
                                     {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_use_system_font_title),
@@ -1022,10 +985,11 @@ fun SettingsScreen(
                         }
 
                         "Layout & Navigation" -> {
+                            // ── Card 1: Timeline Grid & Memories ──
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_timeline_grid_title),
-                                items = listOf(
-                                    {
+                                items = buildList<@Composable () -> Unit> {
+                                    add {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -1152,9 +1116,152 @@ fun SettingsScreen(
                                             }
                                         }
                                     }
-                                )
+                                    add {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Text(
+                                                text = stringResource(R.string.setting_date_header_align),
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = if (dateHeaderAlignment == "LEFT") {
+                                                    "Left-aligned timeline date headers and floating scroll badge"
+                                                } else {
+                                                    "Center-aligned timeline date headers and floating scroll badge (Center-aligned style)"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            SingleChoiceSegmentedButtonRow(
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                SegmentedButton(
+                                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                                    onClick = { viewModel.setDateHeaderAlignment("LEFT") },
+                                                    selected = dateHeaderAlignment == "LEFT",
+                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_left), contentDescription = null) },
+                                                    label = { Text(stringResource(R.string.align_left), style = MaterialTheme.typography.labelMedium) }
+                                                )
+                                                SegmentedButton(
+                                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                                    onClick = { viewModel.setDateHeaderAlignment("CENTER") },
+                                                    selected = dateHeaderAlignment == "CENTER",
+                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_center), contentDescription = null) },
+                                                    label = { Text(stringResource(R.string.align_center), style = MaterialTheme.typography.labelMedium) }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    add {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_memories),
+                                            subtitle = stringResource(R.string.setting_memories_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
+                                            checked = showMemories,
+                                            onCheckedChange = { viewModel.setShowMemories(it) }
+                                        )
+                                    }
+                                    if (showMemories) {
+                                        add {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.setting_memories_style_title),
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+
+                                                Surface(
+                                                    shape = ShapeFull,
+                                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                                    tonalElevation = 0.dp,
+                                                    shadowElevation = 0.dp,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(44.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .padding(4.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        val styles = com.inferno.gallery.data.MemoriesCarouselStyle.entries
+                                                        styles.forEachIndexed { index, style ->
+                                                            val isSelected = style == memoriesCarouselStyle
+                                                            val shape = com.inferno.gallery.ui.theme.getSegmentShape(
+                                                                index = index,
+                                                                total = styles.size,
+                                                                outerCorner = 20.dp,
+                                                                innerCorner = 6.dp
+                                                            )
+                                                            Surface(
+                                                                shape = shape,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                                tonalElevation = 0.dp,
+                                                                shadowElevation = 0.dp,
+                                                                modifier = Modifier
+                                                                    .weight(1f)
+                                                                    .fillMaxHeight()
+                                                                    .clip(shape)
+                                                                    .clickable { viewModel.setMemoriesCarouselStyle(style) }
+                                                            ) {
+                                                                Box(
+                                                                    contentAlignment = Alignment.Center,
+                                                                    modifier = Modifier.fillMaxSize()
+                                                                ) {
+                                                                    val label = when (style) {
+                                                                        com.inferno.gallery.data.MemoriesCarouselStyle.STORIES -> stringResource(R.string.setting_memories_style_stories)
+                                                                        com.inferno.gallery.data.MemoriesCarouselStyle.SPOTLIGHT -> stringResource(R.string.setting_memories_style_spotlight)
+                                                                    }
+                                                                    Text(
+                                                                        text = label,
+                                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                                        ),
+                                                                        maxLines = 1,
+                                                                        overflow = TextOverflow.Ellipsis
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                val desc = when (memoriesCarouselStyle) {
+                                                    com.inferno.gallery.data.MemoriesCarouselStyle.STORIES -> stringResource(R.string.setting_memories_style_stories_desc)
+                                                    com.inferno.gallery.data.MemoriesCarouselStyle.SPOTLIGHT -> stringResource(R.string.setting_memories_style_spotlight_desc)
+                                                }
+                                                Text(
+                                                    text = desc,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (showMemories && memoriesDismissed) {
+                                        add {
+                                            ClickableSettingItem(
+                                                title = stringResource(R.string.setting_restore_spotlight_title),
+                                                subtitle = stringResource(R.string.setting_restore_spotlight_sub),
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
+                                                onClick = { viewModel.restoreMemoriesBanner() }
+                                            )
+                                        }
+                                    }
+                                }
                             )
 
+                            // ── Card 2: Navigation Dock ──
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_dock_navigation_title),
                                 items = buildList<@Composable () -> Unit> {
@@ -1170,6 +1277,17 @@ fun SettingsScreen(
                                             }
                                         )
                                     }
+                                    if (dockStyle == com.inferno.gallery.data.DockStyle.PILL) {
+                                        add {
+                                            SwitchSettingItem(
+                                                title = stringResource(R.string.setting_dock_pill_labels),
+                                                subtitle = stringResource(R.string.setting_dock_pill_labels_sub),
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
+                                                checked = showPillLabels,
+                                                onCheckedChange = { viewModel.setShowPillLabels(it) }
+                                            )
+                                        }
+                                    }
                                     add {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_dock_videos),
@@ -1179,33 +1297,122 @@ fun SettingsScreen(
                                             onCheckedChange = { viewModel.setShowVideosInDock(it) }
                                         )
                                     }
-                                    add {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_memories),
-                                            subtitle = stringResource(R.string.setting_memories_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_history),
-                                            checked = showMemories,
-                                            onCheckedChange = { viewModel.setShowMemories(it) }
-                                        )
-                                    }
-                                    if (showMemories && memoriesDismissed) {
-                                        add {
-                                            ClickableSettingItem(
-                                                title = stringResource(R.string.setting_restore_spotlight_title),
-                                                subtitle = stringResource(R.string.setting_restore_spotlight_sub),
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                                onClick = { viewModel.restoreMemoriesBanner() }
-                                            )
-                                        }
-                                    }
                                 }
                             )
-                        }
 
-                        "General" -> {
+                            // ── Card 3: Customize Toolbars ──
+                            SettingsGroupCard(
+                                title = stringResource(R.string.customize_toolbars_title),
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.customize_toolbars_title),
+                                            subtitle = stringResource(R.string.customize_toolbars_subtitle),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                            onClick = { onActiveSectionChange("Customize Toolbars") }
+                                        )
+                                    }
+                                )
+                            )
+
+                            // ── Card 4: Albums & Collections ──
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_albums_library_title),
                                 items = listOf(
+                                    {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.M),
+                                            verticalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.setting_pinned_albums_style_title),
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+
+                                            Surface(
+                                                shape = ShapeFull,
+                                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 0.dp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(44.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(4.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    val styles = com.inferno.gallery.data.PinnedAlbumsStyle.entries
+                                                    styles.forEachIndexed { index, style ->
+                                                        val isSelected = style == pinnedAlbumsStyle
+                                                        val shape = com.inferno.gallery.ui.theme.getSegmentShape(
+                                                            index = index,
+                                                            total = styles.size,
+                                                            outerCorner = 20.dp,
+                                                            innerCorner = 6.dp
+                                                        )
+                                                        Surface(
+                                                            shape = shape,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                            tonalElevation = 0.dp,
+                                                            shadowElevation = 0.dp,
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .fillMaxHeight()
+                                                                .clip(shape)
+                                                                .clickable { viewModel.setPinnedAlbumsStyle(style) }
+                                                        ) {
+                                                            Box(
+                                                                contentAlignment = Alignment.Center,
+                                                                modifier = Modifier.fillMaxSize()
+                                                            ) {
+                                                                val label = when (style) {
+                                                                    com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT -> stringResource(R.string.setting_pinned_albums_style_default)
+                                                                    com.inferno.gallery.data.PinnedAlbumsStyle.PORTRAIT -> stringResource(R.string.setting_pinned_albums_style_portrait)
+                                                                    com.inferno.gallery.data.PinnedAlbumsStyle.SPOTLIGHT -> stringResource(R.string.setting_pinned_albums_style_spotlight)
+                                                                }
+                                                                Text(
+                                                                    text = label,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                                    ),
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            val desc = when (pinnedAlbumsStyle) {
+                                                com.inferno.gallery.data.PinnedAlbumsStyle.DEFAULT -> stringResource(R.string.setting_pinned_albums_style_default_desc)
+                                                com.inferno.gallery.data.PinnedAlbumsStyle.PORTRAIT -> stringResource(R.string.setting_pinned_albums_style_portrait_desc)
+                                                com.inferno.gallery.data.PinnedAlbumsStyle.SPOTLIGHT -> stringResource(R.string.setting_pinned_albums_style_spotlight_desc)
+                                            }
+                                            Text(
+                                                text = desc,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_show_album_size),
+                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                            checked = showAlbumSize,
+                                            onCheckedChange = { viewModel.setShowAlbumSize(it) }
+                                        )
+                                    },
                                     {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_show_hidden),
@@ -1226,60 +1433,58 @@ fun SettingsScreen(
                                     }
                                 )
                             )
+                        }
 
-                            val hapticsItems = mutableListOf<@Composable () -> Unit>(
-                                {
-                                    SwitchSettingItem(
-                                        title = stringResource(R.string.setting_haptics),
-                                        subtitle = stringResource(R.string.setting_haptics_sub),
-                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_touch_app),
-                                        checked = hapticsEnabled,
-                                        onCheckedChange = { viewModel.setHapticsEnabled(it) }
-                                    )
-                                }
+                        "Customize Toolbars" -> {
+                            com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
+                                onBackClick = { onActiveSectionChange("Layout & Navigation") },
+                                settingsViewModel = viewModel,
+                                showTopBar = false
                             )
+                        }
 
-                            if (hapticsEnabled) {
-                                hapticsItems.add {
-                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(text = stringResource(R.string.setting_haptic_strength), style = MaterialTheme.typography.bodyLarge)
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.secondaryContainer
-                                            ) {
-                                                Text(
-                                                    text = "${(hapticsStrength * 100).toInt()}%",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Slider(
-                                            value = hapticsStrength,
-                                            onValueChange = { viewModel.setHapticsStrength(it) },
-                                            valueRange = 0f..1f,
-                                            steps = 9
-                                        )
-                                    }
-                                }
-                            }
-
+                        "General" -> {
+                            // ── Card 1: Media Viewer & Playback ──
                             SettingsGroupCard(
-                                title = stringResource(R.string.setting_haptics_title),
-                                items = hapticsItems
-                            )
-
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_media_playback_title),
+                                title = "${stringResource(R.string.setting_media_viewer_title)} & Playback",
                                 items = listOf(
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_blur_viewer_bg_title),
+                                            subtitle = stringResource(R.string.setting_blur_viewer_bg_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                            checked = viewerBlurEffect,
+                                            onCheckedChange = { viewModel.setViewerBlurEffect(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_zoom_navigator_title),
+                                            subtitle = stringResource(R.string.setting_zoom_navigator_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
+                                            checked = viewerZoomMinimapEnabled,
+                                            onCheckedChange = { viewModel.setViewerZoomMinimapEnabled(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_max_brightness_title),
+                                            subtitle = stringResource(R.string.setting_max_brightness_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
+                                            checked = maxBrightnessEnabled,
+                                            onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.settings_ultra_hdr_title),
+                                            subtitle = stringResource(R.string.settings_ultra_hdr_desc),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
+                                            checked = hdrDisplayEnabled,
+                                            onCheckedChange = { viewModel.setHdrDisplayEnabled(it) },
+                                            enabled = isHdrSupported
+                                        )
+                                    },
                                     {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_video_autoplay),
@@ -1292,879 +1497,7 @@ fun SettingsScreen(
                                 )
                             )
 
-                            val activeLang = getActiveLanguage(context, currentLanguageTag)
-                            val langSubtitle = if (currentLanguageTag.isEmpty()) {
-                                "${stringResource(R.string.language_system_default)} (${activeLang.displayName})"
-                            } else {
-                                "${activeLang.flagEmoji} ${activeLang.displayName}"
-                            }
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.select_language),
-                                items = listOf(
-                                    {
-                                        ClickableSettingItem(
-                                            title = stringResource(R.string.select_language),
-                                            subtitle = langSubtitle,
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_menu_book),
-                                            onClick = {
-                                                showLanguageDialog = true
-                                            }
-                                        )
-                                    }
-                                )
-                            )
-                        }
-
-                        "Smart Search & OCR" -> {
-                            val dbIndexed = totalImagesCount - unindexedOcrImagesCount
-                            val isOcrRunning = ocrProgressState.isIndexing
-                            val ocrIndexed = if (isOcrRunning) ocrProgressState.progress else dbIndexed
-                            val ocrTotal = if (isOcrRunning) ocrProgressState.total else totalImagesCount
-
-                            // ── 100% On-Device & Open Source Privacy Explainer Card ──
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                                shape = ShapeLarge,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                border = BorderStroke(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Surface(
-                                        shape = ShapeFull,
-                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(IconSizeTokens.M)
-                                            )
-                                        }
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "100% On-Device & Open Source",
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "These AI models are open source and completely optional. You only need to download them once. All photo scanning, text recognition, and face clustering run entirely on your device—no images or personal data will ever be sent to any cloud or external server.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_ocr_search),
-                                items = listOf(
-                                    {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_search),
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Text(
-                                                    text = "Text (OCR) Indexing",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    modifier = Modifier.weight(1f)
-                                                )
-
-                                                val badgeColor = if (isOcrRunning) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                                val badgeTextColor = if (isOcrRunning) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                val badgeText = if (isOcrRunning) "Indexing" else "Idle"
-
-                                                Surface(
-                                                    color = badgeColor,
-                                                    contentColor = badgeTextColor,
-                                                    shape = MaterialTheme.shapes.extraSmall,
-                                                    modifier = Modifier.padding(start = 8.dp)
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                    ) {
-                                                        if (isOcrRunning) {
-                                                            CircularProgressIndicator(
-                                                                modifier = Modifier.size(12.dp),
-                                                                strokeWidth = 2.dp,
-                                                                color = badgeTextColor
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = badgeText,
-                                                            style = MaterialTheme.typography.labelSmall
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            Text(
-                                                text = "Index text in images entirely on-device for instant search.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-
-                                            if (ocrTotal > 0) {
-                                                val progressFloat = (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f)
-                                                Column(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .height(10.dp)
-                                                            .background(
-                                                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                                                shape = CircleShape
-                                                            )
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth(progressFloat)
-                                                                .fillMaxHeight()
-                                                                .background(
-                                                                    color = MaterialTheme.colorScheme.primary,
-                                                                    shape = CircleShape
-                                                                )
-                                                        )
-                                                    }
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        val currentImageName = ocrProgressState.currentImageName
-                                                        Text(
-                                                            text = if (isOcrRunning && !currentImageName.isNullOrBlank()) "Scanning: $currentImageName"
-                                                            else if (ocrIndexed == ocrTotal) "Indexing complete"
-                                                            else "Progress",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.weight(1f),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        Text(
-                                                            text = if (ocrIndexed == ocrTotal && ocrTotal > 0) "100%" else "$ocrIndexed / $ocrTotal images (${(progressFloat * 100).toInt()}%)",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                if (isOcrRunning) {
-                                                    ExpressiveButton(
-                                                        onClick = { viewModel.stopOcrIndexing() },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                        ),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_stop_indexing))
-                                                    }
-                                                } else {
-                                                    FilledTonalButton(
-                                                        onClick = { viewModel.startOcrIndexing() },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_start_indexing))
-                                                    }
-                                                    OutlinedButton(
-                                                        onClick = { showRebuildOcrConfirm = true },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_rebuild_index))
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                )
-                            )
-
-                            val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING || modelDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
-                            val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
-                            val isClipIndexing = clipProgressState.isIndexing
-                            val unindexedClip = unindexedSmartSearchCount
-                            val indexedClip = maxOf(0, totalImagesCount - unindexedClip)
-                            val displayClipIndexed = if (isClipIndexing) clipProgressState.progress else indexedClip
-                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalImagesCount
-                            val smartCurrentImageName = clipProgressState.currentImageName
-
-                            val smartSearchItems = mutableListOf<@Composable () -> Unit>()
-
-                            if (!smartSearchModelDownloaded) {
-                                smartSearchItems.add {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Surface(
-                                                shape = ExpressiveShapes.Clover4Leaf,
-                                                color = MaterialTheme.colorScheme.primaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(44.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(22.dp)
-                                                    )
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.width(14.dp))
-                                            Text(
-                                                text = "Smart Search (Semantic AI)",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Surface(
-                                                color = if (isDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                shape = ShapeFull
-                                            ) {
-                                                Text(
-                                                    text = if (isDownloading) "Downloading" else "No Model",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = if (isDownloading) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                                )
-                                            }
-                                        }
-
-                                        Text(
-                                            text = "Download on-device OpenAI CLIP ViT-B/16 model (~150MB) to search photos using natural descriptions (e.g. 'dog sleeping on green rug', 'sunset at beach with friends'). Runs entirely on-device on CPU.",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(ShapeSmall)
-                                                .clickable {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    uriHandler.openUri("https://huggingface.co/Xenova/clip-vit-base-patch16")
-                                                }
-                                                .padding(vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(IconSizeTokens.S)
-                                            )
-                                            Text(
-                                                text = "Model source: Hugging Face (OpenAI CLIP ViT-B/16)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-
-                                        if (isDownloading) {
-                                            LinearWavyProgressIndicator(
-                                                progress = { downloadProgress / 100f },
-                                                modifier = Modifier.fillMaxWidth().height(10.dp)
-                                            )
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Downloading model: $downloadProgress%",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                TextButton(
-                                                    onClick = { viewModel.cancelModelDownload() },
-                                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                                ) {
-                                                    Text(stringResource(R.string.action_cancel))
-                                                }
-                                            }
-                                        } else {
-                                            ExpressiveButton(
-                                                onClick = { viewModel.startModelDownload() },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(stringResource(R.string.btn_download_ai_models))
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                smartSearchItems.add {
-                                    SwitchSettingItem(
-                                        title = stringResource(R.string.setting_auto_index_images),
-                                        subtitle = stringResource(R.string.setting_auto_index_images_sub),
-                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                        checked = smartSearchAutoIndex,
-                                        onCheckedChange = { viewModel.setSmartSearchAutoIndex(it) }
-                                    )
-                                }
-
-                                smartSearchItems.add {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "AI Embedding Generation",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                modifier = Modifier.weight(1f)
-                                            )
-
-                                            val badgeColor = if (isClipIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                                            val badgeTextColor = if (isClipIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                            val badgeText = if (isClipIndexing) "Indexing" else "Ready"
-
-                                            Surface(
-                                                color = badgeColor,
-                                                contentColor = badgeTextColor,
-                                                shape = ShapeFull
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    if (isClipIndexing) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(12.dp),
-                                                            strokeWidth = 2.dp,
-                                                            color = badgeTextColor
-                                                        )
-                                                    }
-                                                    Text(
-                                                        text = badgeText,
-                                                        style = MaterialTheme.typography.labelSmall
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        if (displayClipTotal > 0) {
-                                            val progressFloat = (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f)
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(10.dp)
-                                                        .background(
-                                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                                            shape = CircleShape
-                                                        )
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth(progressFloat)
-                                                            .fillMaxHeight()
-                                                            .background(
-                                                                color = MaterialTheme.colorScheme.primary,
-                                                                shape = CircleShape
-                                                            )
-                                                    )
-                                                }
-
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = if (isClipIndexing && !smartCurrentImageName.isNullOrBlank()) "Scanning: $smartCurrentImageName"
-                                                        else if (displayClipIndexed == displayClipTotal) "AI indexing complete"
-                                                        else "Progress",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.weight(1f),
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Text(
-                                                        text = if (displayClipIndexed == displayClipTotal && displayClipTotal > 0) "100%" else "$displayClipIndexed / $displayClipTotal images (${(progressFloat * 100).toInt()}%)",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            if (isClipIndexing) {
-                                                ExpressiveButton(
-                                                    onClick = { viewModel.stopSmartSearchIndexing() },
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                    ),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(stringResource(R.string.btn_stop_indexing))
-                                                }
-                                            } else {
-                                                FilledTonalButton(
-                                                    onClick = { viewModel.startSmartSearchIndexing() },
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(stringResource(R.string.btn_start_indexing))
-                                                }
-                                                OutlinedButton(
-                                                    onClick = { showClearIndexConfirm = true },
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(stringResource(R.string.btn_clear_index))
-                                                }
-                                            }
-                                        }
-
-                                        Row(
-                                            modifier = Modifier
-                                                .clip(ShapeSmall)
-                                                .clickable {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    uriHandler.openUri("https://huggingface.co/Xenova/clip-vit-base-patch16")
-                                                }
-                                                .padding(vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(IconSizeTokens.S)
-                                            )
-                                            Text(
-                                                text = "Model source: Hugging Face (OpenAI CLIP ViT-B/16)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-
-                                        if (!isClipIndexing) {
-                                            OutlinedButton(
-                                                onClick = { showDeleteModelConfirm = true },
-                                                colors = ButtonDefaults.outlinedButtonColors(
-                                                    contentColor = MaterialTheme.colorScheme.error
-                                                ),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(stringResource(R.string.setting_delete_models))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_smart_search_title),
-                                items = smartSearchItems
-                            )
-
-                            // ── Face Recognition & Clustering Group Card ──
-                            val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
-                                    faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-                            val isFaceIndexing = faceProgressState.isIndexing ||
-                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
-                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
-                            val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
-                            val faceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
-                            val faceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
-                            val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
-                            val faceItems = mutableListOf<@Composable () -> Unit>()
-
-                            faceItems.add {
-                                SwitchSettingItem(
-                                    title = stringResource(R.string.setting_face_clustering),
-                                    subtitle = stringResource(R.string.setting_face_clustering_desc),
-                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                    checked = faceRecognitionEnabled,
-                                    onCheckedChange = { viewModel.setFaceRecognitionEnabled(it) }
-                                )
-                            }
-
-                            if (faceRecognitionEnabled) {
-                                if (!faceModelDownloaded) {
-                                    faceItems.add {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Surface(
-                                                    shape = ShapeFull,
-                                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.size(40.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                                        Icon(
-                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-                                                Spacer(modifier = Modifier.width(14.dp))
-                                                Text(
-                                                    text = "Face Recognition Model",
-                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                    modifier = Modifier.weight(1f)
-                                                )
-                                                Surface(
-                                                    color = if (isFaceDownloading) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    shape = ShapeFull
-                                                ) {
-                                                    Text(
-                                                        text = if (isFaceDownloading) "Downloading" else "Needs Download",
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                        color = if (isFaceDownloading) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                                    )
-                                                }
-                                            }
-
-                                            Text(
-                                                text = "Download lightweight MobileFaceNet (~13MB) to cluster and group people directly on your device with complete privacy.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-
-                                            Row(
-                                                modifier = Modifier
-                                                    .clip(ShapeSmall)
-                                                    .clickable {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        uriHandler.openUri("https://huggingface.co/deepghs/insightface")
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(IconSizeTokens.S)
-                                                )
-                                                Text(
-                                                    text = "Model source: Hugging Face (MobileFaceNet)",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-
-                                            if (isFaceDownloading) {
-                                                LinearWavyProgressIndicator(
-                                                    progress = { faceDownloadProgress / 100f },
-                                                    modifier = Modifier.fillMaxWidth().height(10.dp)
-                                                )
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = "Downloading model: $faceDownloadProgress%",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    TextButton(
-                                                        onClick = { viewModel.cancelFaceModelDownload() },
-                                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                                                    ) {
-                                                        Text(stringResource(R.string.action_cancel))
-                                                    }
-                                                }
-                                            } else {
-                                                ExpressiveButton(
-                                                    onClick = { viewModel.startFaceModelDownload() },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Text(stringResource(R.string.btn_download_face_model))
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    faceItems.add {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_auto_index_faces),
-                                            subtitle = stringResource(R.string.setting_auto_index_faces_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_auto_fix_high),
-                                            checked = faceAutoIndex,
-                                            onCheckedChange = { viewModel.setFaceAutoIndex(it) }
-                                        )
-                                    }
-
-                                    faceItems.add {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Face Scanning & Clustering",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    modifier = Modifier.weight(1f)
-                                                )
-
-                                                val badgeColor = if (isFaceIndexing) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                                                val badgeTextColor = if (isFaceIndexing) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                                val badgeText = if (isFaceIndexing) "Indexing" else if (unindexedFacesCount == 0) "Completed" else "Ready"
-
-                                                Surface(
-                                                    color = badgeColor,
-                                                    contentColor = badgeTextColor,
-                                                    shape = ShapeFull
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                    ) {
-                                                        if (isFaceIndexing) {
-                                                            CircularProgressIndicator(
-                                                                modifier = Modifier.size(12.dp),
-                                                                strokeWidth = 2.dp,
-                                                                color = badgeTextColor
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = badgeText,
-                                                            style = MaterialTheme.typography.labelSmall
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            if (isFaceIndexing || (faceTotal > 0 && faceProcessed < faceTotal)) {
-                                                val animatedFaceProgress by animateFloatAsState(
-                                                    targetValue = faceProgressFloat,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessLow),
-                                                    label = "faceProgress"
-                                                )
-                                                Column(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    if (faceTotal > 0) {
-                                                        LinearWavyProgressIndicator(
-                                                            progress = { animatedFaceProgress.coerceIn(0f, 1f) },
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .height(10.dp)
-                                                        )
-                                                    } else {
-                                                        LinearWavyProgressIndicator(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .height(10.dp)
-                                                        )
-                                                    }
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        val currentFaceImage = faceProgressState.currentImageName
-                                                        Text(
-                                                            text = if (isFaceIndexing) {
-                                                                if (!currentFaceImage.isNullOrBlank()) "Scanning: $currentFaceImage"
-                                                                else if (faceTotal > 0) "Scanning: $faceProcessed / $faceTotal photos"
-                                                                else "Scanning faces in your gallery…"
-                                                            } else if (faceProcessed == faceTotal && faceTotal > 0) {
-                                                                "Face indexing complete"
-                                                            } else {
-                                                                "Progress"
-                                                            },
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.weight(1f),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        val pctInt = (animatedFaceProgress * 100).toInt()
-                                                        val displayPct = if (faceProcessed == faceTotal && faceTotal > 0) "100%"
-                                                            else if (faceProcessed > 0 && pctInt == 0) "<1%"
-                                                            else "$pctInt%"
-                                                        Text(
-                                                            text = if (faceTotal > 0) "$faceProcessed / $faceTotal ($displayPct)" else displayPct,
-                                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                Text(
-                                                    text = if (unindexedFacesCount == 0) {
-                                                        "All photos have been scanned and organized into People."
-                                                    } else {
-                                                        "$unindexedFacesCount photos waiting to be scanned for faces."
-                                                    },
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                if (isFaceIndexing) {
-                                                    ExpressiveButton(
-                                                        onClick = { viewModel.stopFaceIndexing() },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                        ),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_stop_scanning))
-                                                    }
-                                                } else {
-                                                    FilledTonalButton(
-                                                        onClick = {
-                                                            if (unindexedFacesCount == 0) {
-                                                                showRescanFacesConfirm = true
-                                                            } else {
-                                                                viewModel.startFaceIndexing(forceRescan = false)
-                                                            }
-                                                        },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(if (unindexedFacesCount == 0) "Rescan All Faces" else "Scan Faces Now")
-                                                    }
-                                                    OutlinedButton(
-                                                        onClick = { showClearFacesConfirm = true },
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Text(stringResource(R.string.btn_clear_faces))
-                                                    }
-                                                }
-                                            }
-
-                                            Row(
-                                                modifier = Modifier
-                                                    .clip(ShapeSmall)
-                                                    .clickable {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        uriHandler.openUri("https://huggingface.co/deepghs/insightface")
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(IconSizeTokens.S)
-                                                )
-                                                Text(
-                                                    text = "Model source: Hugging Face (MobileFaceNet)",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-
-                                            if (!isFaceIndexing) {
-                                                OutlinedButton(
-                                                    onClick = { showDeleteFaceModelConfirm = true },
-                                                    colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.error
-                                                    ),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Text(stringResource(R.string.dialog_delete_face_model_title))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_face_clustering),
-                                items = faceItems
-                            )
-                        }
-
-                        "Privacy & Security" -> {
+                            // ── Card 2: Recycle Bin ──
                             val recycleBinItems = mutableListOf<@Composable () -> Unit>(
                                 {
                                     SwitchSettingItem(
@@ -2239,6 +1572,966 @@ fun SettingsScreen(
                                 items = recycleBinItems
                             )
 
+                            // ── Card 3: Haptics ──
+                            val hapticsItems = mutableListOf<@Composable () -> Unit>(
+                                {
+                                    SwitchSettingItem(
+                                        title = stringResource(R.string.setting_haptics),
+                                        subtitle = stringResource(R.string.setting_haptics_sub),
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_touch_app),
+                                        checked = hapticsEnabled,
+                                        onCheckedChange = { viewModel.setHapticsEnabled(it) }
+                                    )
+                                }
+                            )
+
+                            if (hapticsEnabled) {
+                                hapticsItems.add {
+                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(text = stringResource(R.string.setting_haptic_strength), style = MaterialTheme.typography.bodyLarge)
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.secondaryContainer
+                                            ) {
+                                                Text(
+                                                    text = "${(hapticsStrength * 100).toInt()}%",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Slider(
+                                            value = hapticsStrength,
+                                            onValueChange = { viewModel.setHapticsStrength(it) },
+                                            valueRange = 0f..1f,
+                                            steps = 9
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_haptics_title),
+                                items = hapticsItems
+                            )
+
+                            // ── Card 4: Language ──
+                            val activeLang = getActiveLanguage(context, currentLanguageTag)
+                            val langSubtitle = if (currentLanguageTag.isEmpty()) {
+                                "${stringResource(R.string.language_system_default)} (${activeLang.displayName})"
+                            } else {
+                                "${activeLang.flagEmoji} ${activeLang.displayName}"
+                            }
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.select_language),
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.select_language),
+                                            subtitle = langSubtitle,
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_menu_book),
+                                            onClick = {
+                                                showLanguageDialog = true
+                                            }
+                                        )
+                                    }
+                                )
+                            )
+                        }
+
+                        "Smart Search & OCR" -> {
+                            val dbIndexed = totalImagesCount - unindexedOcrImagesCount
+                            val isOcrRunning = ocrProgressState.isIndexing
+                            val ocrIndexed = if (isOcrRunning) ocrProgressState.progress else dbIndexed
+                            val ocrTotal = if (isOcrRunning) ocrProgressState.total else totalImagesCount
+
+                            // ── 100% On-Device & Open Source Privacy Explainer Card ──
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                shape = ShapeLarge,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(
+                                    width = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Surface(
+                                        shape = ShapeFull,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_shield_lock),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(IconSizeTokens.M)
+                                            )
+                                        }
+                                    }
+
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "100% On-Device & Open Source",
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "These AI models are open source and completely optional. You only need to download them once. All photo scanning, text recognition, and face clustering run entirely on your device—no images or personal data will ever be sent to any cloud or external server.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            // ── Text Search in Photos Group Card (Pixel Breathe) ──
+                            val ocrItems = mutableListOf<@Composable () -> Unit>()
+
+                            ocrItems.add {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setOcrIndexingEnabled(!ocrIndexingEnabled) }
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Auto index text",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Scan receipts, screenshots & notes in background",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Switch(
+                                        checked = ocrIndexingEnabled,
+                                        onCheckedChange = null,
+                                        thumbContent = {
+                                            Icon(
+                                                imageVector = if (ocrIndexingEnabled) ImageVector.vectorResource(R.drawable.ic_ms_check) else ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
+                            ocrItems.add {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Google ML Kit",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Built-in Android system library",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        val ocrBadgeText = if (isOcrRunning) "Indexing" else if (ocrTotal > 0 && ocrIndexed == ocrTotal) "Indexed" else "Idle"
+                                        ModelStatusBadge(
+                                            isActive = isOcrRunning,
+                                            text = ocrBadgeText
+                                        )
+                                    }
+
+                                    val ocrProgressFloat = if (ocrTotal > 0) (ocrIndexed.toFloat() / ocrTotal.toFloat()).coerceIn(0f, 1f) else 0f
+                                    val currentImageName = ocrProgressState.currentImageName
+                                    val statusText = when {
+                                        isOcrRunning && !currentImageName.isNullOrBlank() -> "Scanning: $currentImageName"
+                                        isOcrRunning -> "Indexing text in photos…"
+                                        ocrTotal > 0 && ocrIndexed == ocrTotal -> "All $ocrTotal images indexed"
+                                        else -> "Index coverage"
+                                    }
+                                    val pctInt = (ocrProgressFloat * 100).toInt()
+                                    val progressText = if (ocrIndexed == ocrTotal && ocrTotal > 0) "100%"
+                                        else if (ocrIndexed > 0 && pctInt == 0) "<1%"
+                                        else if (ocrTotal > 0) "$ocrIndexed / $ocrTotal ($pctInt%)"
+                                        else "$pctInt%"
+
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = statusText,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.weight(1f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = progressText,
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+
+                                        LinearProgressIndicator(
+                                            progress = { ocrProgressFloat },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            strokeCap = StrokeCap.Round
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (isOcrRunning) {
+                                            FilledTonalButton(
+                                                onClick = { viewModel.stopOcrIndexing() },
+                                                colors = ButtonDefaults.filledTonalButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(stringResource(R.string.btn_stop_indexing))
+                                            }
+                                        } else {
+                                            FilledTonalButton(
+                                                onClick = { viewModel.startOcrIndexing() },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(R.string.btn_start_indexing))
+                                            }
+                                            OutlinedButton(
+                                                onClick = { showRebuildOcrConfirm = true },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(R.string.btn_rebuild_index))
+                                            }
+                                        }
+                                    }
+
+                                    ModelSpecificationsDrawer(
+                                        specs = listOf(
+                                            "Engine" to "Google Play Services",
+                                            "Execution" to "100% On-Device",
+                                            "Download Size" to "0 MB (Pre-installed)"
+                                        ),
+                                        links = listOf(
+                                            ModelLinkItem("ML Kit Documentation ↗", "https://developers.google.com/ml-kit/vision/text-recognition/android"),
+                                            ModelLinkItem("Privacy Policy ↗", "https://developers.google.com/android/guides/setup")
+                                        )
+                                    )
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "Text Search in Photos",
+                                items = ocrItems
+                            )
+
+                            // ── Face Recognition & Clustering Group Card ──
+                            val isFaceDownloading = faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+                                    faceModelDownloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+                            val isFaceWorkRunning = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING
+                            val isFaceWorkQueued = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+                            val isFaceWorkTerminal = faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.FAILED ||
+                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.CANCELLED ||
+                                    faceIndexWorkInfo?.state == androidx.work.WorkInfo.State.SUCCEEDED
+                            val isFaceScanningActive = isFaceWorkRunning || (faceProgressState.isIndexing && !isFaceWorkTerminal)
+                            val isFaceScanQueued = !isFaceScanningActive && isFaceWorkQueued
+                            val isFaceIndexing = isFaceScanningActive || isFaceScanQueued
+                            val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+                            val rawFaceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
+                            val rawFaceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
+                            val faceTotal = if (rawFaceTotal > 0) rawFaceTotal else totalImagesCount
+                            val faceProcessed = if (rawFaceTotal > 0) rawFaceProcessed else (totalImagesCount - unindexedFacesCount).coerceAtLeast(0)
+                            val facePending = (faceTotal - faceProcessed).coerceAtLeast(0).let { if (it > 0) it else unindexedFacesCount }
+                            val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
+                            val faceItems = mutableListOf<@Composable () -> Unit>()
+
+                            faceItems.add {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setFaceRecognitionEnabled(!faceRecognitionEnabled) }
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Face clustering",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Recognize and group familiar faces in private albums",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Switch(
+                                        checked = faceRecognitionEnabled,
+                                        onCheckedChange = null,
+                                        thumbContent = {
+                                            Icon(
+                                                imageVector = if (faceRecognitionEnabled) ImageVector.vectorResource(R.drawable.ic_ms_check) else ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
+                            if (faceRecognitionEnabled) {
+                                faceItems.add {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.setFaceAutoIndex(!faceAutoIndex) }
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Auto index faces",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Cluster new photos automatically in background",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Switch(
+                                            checked = faceAutoIndex,
+                                            onCheckedChange = null,
+                                            thumbContent = {
+                                                Icon(
+                                                    imageVector = if (faceAutoIndex) ImageVector.vectorResource(R.drawable.ic_ms_check) else ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+
+                                if (!faceModelDownloaded) {
+                                    faceItems.add {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "MobileFaceNet",
+                                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = "InsightFace w600k ONNX • ~13.2 MB",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                val faceModelBadgeText = if (isFaceDownloading) "Downloading" else "Needs Setup"
+                                                ModelStatusBadge(
+                                                    isActive = isFaceDownloading,
+                                                    text = faceModelBadgeText
+                                                )
+                                            }
+
+                                            if (isFaceDownloading) {
+                                                Column(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    LinearProgressIndicator(
+                                                        progress = { (faceDownloadProgress / 100f).coerceIn(0f, 1f) },
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                        strokeCap = StrokeCap.Round,
+                                                        modifier = Modifier.fillMaxWidth().height(6.dp)
+                                                    )
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "Downloading model: $faceDownloadProgress%",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                        TextButton(
+                                                            onClick = { viewModel.cancelFaceModelDownload() },
+                                                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                                        ) {
+                                                            Text(stringResource(R.string.action_cancel))
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                Button(
+                                                    onClick = { viewModel.startFaceModelDownload() },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Download Face Model (~13.2 MB)")
+                                                }
+                                            }
+
+                                            ModelSpecificationsDrawer(
+                                                specs = listOf(
+                                                    "Model" to "MobileFaceNet w600k",
+                                                    "Storage" to "~13.2 MB",
+                                                    "Engine" to "ONNX Runtime CPU"
+                                                ),
+                                                links = listOf(
+                                                    ModelLinkItem("Hugging Face ↗", "https://huggingface.co/deepghs/insightface"),
+                                                    ModelLinkItem("GitHub v1 ↗", "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1")
+                                                )
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    faceItems.add {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "MobileFaceNet",
+                                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = "InsightFace w600k ONNX • ~13.2 MB",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                val faceBadgeText = when {
+                                                    isFaceScanningActive -> "Scanning"
+                                                    isFaceScanQueued -> "Scheduled"
+                                                    unindexedFacesCount == 0 && faceTotal > 0 -> "Completed"
+                                                    else -> "Ready"
+                                                }
+                                                ModelStatusBadge(
+                                                    isActive = isFaceScanningActive,
+                                                    isQueued = isFaceScanQueued,
+                                                    text = faceBadgeText
+                                                )
+                                            }
+
+                                            val currentFaceImage = faceProgressState.currentImageName
+                                            val progressDescription = when {
+                                                isFaceScanningActive && !currentFaceImage.isNullOrBlank() -> "Scanning: $currentFaceImage"
+                                                isFaceScanningActive -> "Scanning: $faceProcessed of $faceTotal photos ($facePending pending)"
+                                                isFaceScanQueued -> "Background scan scheduled ($facePending pending)"
+                                                unindexedFacesCount == 0 && faceTotal > 0 -> "All photos scanned"
+                                                else -> "Clustering progress"
+                                            }
+                                            val pctInt = (faceProgressFloat * 100).toInt()
+                                            val displayPct = if (unindexedFacesCount == 0 && faceTotal > 0) "100%"
+                                                else if (faceProcessed > 0 && pctInt == 0) "<1%"
+                                                else "$pctInt%"
+                                            val progressText = if (faceTotal > 0) "$faceProcessed / $faceTotal ($displayPct)" else displayPct
+
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = progressDescription,
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.weight(1f),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = progressText,
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+
+                                                LinearProgressIndicator(
+                                                    progress = { faceProgressFloat },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(6.dp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    strokeCap = StrokeCap.Round
+                                                )
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (isFaceScanningActive) {
+                                                    FilledTonalButton(
+                                                        onClick = { viewModel.stopFaceIndexing() },
+                                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                        ),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(stringResource(R.string.btn_stop_scanning))
+                                                    }
+                                                } else {
+                                                    FilledTonalButton(
+                                                        onClick = {
+                                                            if (unindexedFacesCount == 0) {
+                                                                showRescanFacesConfirm = true
+                                                            } else {
+                                                                viewModel.startFaceIndexing(forceRescan = false)
+                                                            }
+                                                        },
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Text(if (unindexedFacesCount == 0) "Rescan All Faces" else "Scan Faces Now")
+                                                    }
+                                                    if (isFaceScanQueued) {
+                                                        OutlinedButton(
+                                                            onClick = { viewModel.stopFaceIndexing() },
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Text("Cancel Queue")
+                                                        }
+                                                    } else {
+                                                        OutlinedButton(
+                                                            onClick = { showClearFacesConfirm = true },
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Text(stringResource(R.string.btn_clear_faces))
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if (!isFaceScanningActive) {
+                                                OutlinedButton(
+                                                    onClick = { showDeleteFaceModelConfirm = true },
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.error
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text(stringResource(R.string.dialog_delete_face_model_title))
+                                                }
+                                            }
+
+                                            ModelSpecificationsDrawer(
+                                                specs = listOf(
+                                                    "Model" to "MobileFaceNet w600k",
+                                                    "Storage" to "~13.2 MB (Downloaded)",
+                                                    "Engine" to "ONNX Runtime CPU"
+                                                ),
+                                                links = listOf(
+                                                    ModelLinkItem("Hugging Face ↗", "https://huggingface.co/deepghs/insightface"),
+                                                    ModelLinkItem("GitHub v1 ↗", "https://github.com/Bn5prS/Photon_Gallery/releases/tag/models-v1")
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "People & Face Recognition",
+                                items = faceItems
+                            )
+
+                            val isDownloading = modelDownloadWorkInfo?.state == WorkInfo.State.RUNNING || modelDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+                            val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
+                            val isClipIndexing = clipProgressState.isIndexing
+                            val unindexedClip = unindexedSmartSearchCount
+                            val indexedClip = maxOf(0, totalImagesCount - unindexedClip)
+                            val displayClipIndexed = if (isClipIndexing) clipProgressState.progress else indexedClip
+                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalImagesCount
+                            val smartCurrentImageName = clipProgressState.currentImageName
+
+                            val smartSearchItems = mutableListOf<@Composable () -> Unit>()
+
+                            if (!smartSearchModelDownloaded) {
+                                smartSearchItems.add {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Search natural queries like 'beach sunset with friends'",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            val smartModelBadgeText = if (isDownloading) "Downloading" else "Needs Setup"
+                                            ModelStatusBadge(
+                                                isActive = isDownloading,
+                                                text = smartModelBadgeText
+                                            )
+                                        }
+
+                                        if (isDownloading) {
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                LinearProgressIndicator(
+                                                    progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    strokeCap = StrokeCap.Round,
+                                                    modifier = Modifier.fillMaxWidth().height(6.dp)
+                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Downloading model: $downloadProgress%",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    TextButton(
+                                                        onClick = { viewModel.cancelModelDownload() },
+                                                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                                    ) {
+                                                        Text(stringResource(R.string.action_cancel))
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            Button(
+                                                onClick = { viewModel.startModelDownload() },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Download AI Model (~386 MB)")
+                                            }
+                                        }
+
+                                        ModelSpecificationsDrawer(
+                                            specs = listOf(
+                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
+                                                "Quantization" to "ONNX FP32 (Full Precision)",
+                                                "Inference" to "CPU (Arm Neon)",
+                                                "Model Footprint" to "~386 MB"
+                                            ),
+                                            links = listOf(
+                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
+                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
+                                            )
+                                        )
+                                    }
+                                }
+                            } else {
+                                smartSearchItems.add {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.setSmartSearchAutoIndex(!smartSearchAutoIndex) }
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Auto index new images",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Compute AI embeddings for new photos in background",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Switch(
+                                            checked = smartSearchAutoIndex,
+                                            onCheckedChange = null,
+                                            thumbContent = {
+                                                Icon(
+                                                    imageVector = if (smartSearchAutoIndex) ImageVector.vectorResource(R.drawable.ic_ms_check) else ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+
+                                smartSearchItems.add {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "MobileCLIP2-S2 (FastViT-MCi2)",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Search natural queries like 'beach sunset with friends'",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            val smartBadgeText = if (isClipIndexing) "Indexing" else if (displayClipTotal > 0 && displayClipIndexed == displayClipTotal) "Indexed" else "Ready"
+                                            ModelStatusBadge(
+                                                isActive = isClipIndexing,
+                                                text = smartBadgeText
+                                            )
+                                        }
+
+                                        val clipProgressFloat = if (displayClipTotal > 0) (displayClipIndexed.toFloat() / displayClipTotal.toFloat()).coerceIn(0f, 1f) else 0f
+                                        val statusText = when {
+                                            isClipIndexing && !smartCurrentImageName.isNullOrBlank() -> "Scanning: $smartCurrentImageName"
+                                            isClipIndexing -> "Indexing photos with AI…"
+                                            displayClipTotal > 0 && displayClipIndexed == displayClipTotal -> "AI indexing complete"
+                                            else -> "Index coverage"
+                                        }
+                                        val pctInt = (clipProgressFloat * 100).toInt()
+                                        val progressText = if (displayClipIndexed == displayClipTotal && displayClipTotal > 0) "100%"
+                                            else if (displayClipIndexed > 0 && pctInt == 0) "<1%"
+                                            else if (displayClipTotal > 0) "$displayClipIndexed / $displayClipTotal ($pctInt%)"
+                                            else "$pctInt%"
+
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = statusText,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = progressText,
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+
+                                            LinearProgressIndicator(
+                                                progress = { clipProgressFloat },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(6.dp),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                strokeCap = StrokeCap.Round
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (isClipIndexing) {
+                                                FilledTonalButton(
+                                                    onClick = { viewModel.stopSmartSearchIndexing() },
+                                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(
+                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(stringResource(R.string.btn_stop_indexing))
+                                                }
+                                            } else {
+                                                FilledTonalButton(
+                                                    onClick = { viewModel.startSmartSearchIndexing() },
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(stringResource(R.string.btn_start_indexing))
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { showClearIndexConfirm = true },
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(stringResource(R.string.btn_clear_index))
+                                                }
+                                            }
+                                        }
+
+                                        if (!isClipIndexing) {
+                                            OutlinedButton(
+                                                onClick = { showDeleteModelConfirm = true },
+                                                colors = ButtonDefaults.outlinedButtonColors(
+                                                    contentColor = MaterialTheme.colorScheme.error
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(stringResource(R.string.setting_delete_models))
+                                            }
+                                        }
+
+                                        ModelSpecificationsDrawer(
+                                            specs = listOf(
+                                                "Architecture" to "Apple MobileCLIP2-S2 (FastViT-MCi2)",
+                                                "Quantization" to "ONNX FP32 (Full Precision)",
+                                                "Inference" to "CPU (Arm Neon)",
+                                                "Model Footprint" to "~386 MB"
+                                            ),
+                                            links = listOf(
+                                                ModelLinkItem("Hugging Face ONNX ↗", "https://huggingface.co/RuteNL/MobileCLIP2-S2-OpenCLIP-ONNX"),
+                                                ModelLinkItem("Model Card ↗", "https://huggingface.co/apple/MobileCLIP2-S2")
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "Semantic AI Search",
+                                items = smartSearchItems
+                            )
+                        }
+
+                        "Privacy & Security" -> {
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_recents_security_title),
                                 items = listOf(
@@ -2265,9 +2558,90 @@ fun SettingsScreen(
                                             checked = stripMetadataOnShare,
                                             onCheckedChange = { viewModel.setStripMetadataOnShare(it) }
                                         )
+                                    },
+                                    {
+                                        val actionSubtitle = when (exifStripAction) {
+                                            ExifStripAction.ASK_EVERY_TIME -> stringResource(R.string.setting_exif_strip_action_ask)
+                                            ExifStripAction.SAVE_AS_COPY -> stringResource(R.string.setting_exif_strip_action_copy)
+                                            ExifStripAction.OVERWRITE_ORIGINAL -> stringResource(R.string.setting_exif_strip_action_overwrite)
+                                        }
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.setting_exif_strip_action_title),
+                                            subtitle = actionSubtitle,
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services),
+                                            onClick = { showExifStripActionDialog = true }
+                                        )
                                     }
                                 )
                             )
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_folder_visibility_title),
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.setting_excluded_folders_category),
+                                            subtitle = stringResource(R.string.setting_excluded_folders_category_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_off),
+                                            onClick = { onActiveSectionChange("Excluded Folders") }
+                                        )
+                                    }
+                                )
+                            )
+
+                            if (showExifStripActionDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showExifStripActionDialog = false },
+                                    title = { Text(stringResource(R.string.setting_exif_strip_action_title)) },
+                                    text = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = stringResource(R.string.setting_exif_strip_action_desc),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            ExifStripAction.entries.forEach { action ->
+                                                val label = when (action) {
+                                                    ExifStripAction.ASK_EVERY_TIME -> stringResource(R.string.setting_exif_strip_action_ask)
+                                                    ExifStripAction.SAVE_AS_COPY -> stringResource(R.string.setting_exif_strip_action_copy)
+                                                    ExifStripAction.OVERWRITE_ORIGINAL -> stringResource(R.string.setting_exif_strip_action_overwrite)
+                                                }
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            viewModel.setExifStripAction(action)
+                                                            showExifStripActionDialog = false
+                                                        }
+                                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    RadioButton(
+                                                        selected = (exifStripAction == action),
+                                                        onClick = {
+                                                            viewModel.setExifStripAction(action)
+                                                            showExifStripActionDialog = false
+                                                        }
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { showExifStripActionDialog = false }) {
+                                            Text(stringResource(android.R.string.cancel))
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         "Excluded Folders" -> {
@@ -2375,6 +2749,362 @@ private data class CategoryItem(
     val iconColor: Color,
     val section: String
 )
+
+
+private data class ModelSpecItem(
+    val text: String,
+    val icon: ImageVector? = null
+)
+
+private data class ModelLinkItem(
+    val label: String,
+    val url: String,
+    val icon: ImageVector? = null
+)
+
+@Composable
+private fun ModelSpecificationsDrawer(
+    specs: List<Pair<String, String>>,
+    links: List<ModelLinkItem> = emptyList(),
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Model specifications & links",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Icon(
+                imageVector = if (expanded) {
+                    ImageVector.vectorResource(R.drawable.ic_ms_keyboard_arrow_up)
+                } else {
+                    ImageVector.vectorResource(R.drawable.ic_ms_keyboard_arrow_down)
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                specs.forEach { (label, value) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = value,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                if (links.isNotEmpty()) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        links.forEach { link ->
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { uriHandler.openUri(link.url) }
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = link.label,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelStatusBadge(
+    isActive: Boolean,
+    text: String,
+    isQueued: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = when {
+        isActive -> MaterialTheme.colorScheme.primaryContainer
+        isQueued -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    val contentColor = when {
+        isActive -> MaterialTheme.colorScheme.onPrimaryContainer
+        isQueued -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = ShapeFull,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (isActive) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(11.dp),
+                    strokeWidth = 1.8.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else if (isQueued) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
+                    contentDescription = null,
+                    modifier = Modifier.size(11.dp),
+                    tint = contentColor
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelScanProgressBar(
+    isScanning: Boolean,
+    progressFloat: Float,
+    statusText: String,
+    progressText: String,
+    isQueued: Boolean = false
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = progressText,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        LinearProgressIndicator(
+            progress = { progressFloat.coerceIn(0f, 1f) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            strokeCap = StrokeCap.Round
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelMetadataPanel(
+    specs: List<ModelSpecItem>,
+    links: List<ModelLinkItem>,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Specifications Chips
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            specs.forEach { spec ->
+                ModelSpecChip(
+                    text = spec.text,
+                    icon = spec.icon,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Upstream & Runtime Links
+        if (links.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                links.forEach { link ->
+                    ModelLinkChip(
+                        label = link.label,
+                        url = link.url,
+                        icon = link.icon
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelSpecChip(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    Surface(
+        modifier = modifier,
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelLinkChip(
+    label: String,
+    url: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null
+) {
+    val uriHandler = LocalUriHandler.current
+    val haptic = LocalHapticFeedback.current
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                uriHandler.openUri(url)
+            },
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+        contentColor = MaterialTheme.colorScheme.primary,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_open_in_new),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                modifier = Modifier.size(10.dp)
+            )
+        }
+    }
+}
 
 /**
  * Container for a group of settings items rendered in the connected segmented card style:
@@ -2839,7 +3569,8 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
         "Coil 3 Image Loading" to "Apache License 2.0 • Coil Contributors",
         "Room Database" to "Apache License 2.0 • Google LLC",
         "ONNX Runtime" to "MIT License • Microsoft Corp.",
-        "CLIP Vision & Language" to "MIT License • OpenAI",
+        "Apple MobileCLIP2-S2" to "MIT License • Apple / RuteNL",
+        "MobileFaceNet" to "MIT License • InsightFace",
         "Roboto Flex & Google Sans Flex" to "SIL Open Font License 1.1 • Google LLC",
         "AndroidX WorkManager" to "Apache License 2.0 • Google LLC",
         "AndroidX Graphics Shapes" to "Apache License 2.0 • Google LLC",
@@ -2853,7 +3584,7 @@ fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Open Source Licenses", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.open_source_licenses), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         },
         text = {
             LazyColumn(

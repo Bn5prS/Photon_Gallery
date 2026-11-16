@@ -40,6 +40,43 @@ data class MediaData(
 class LocalMediaRepository(
     private val contentResolver: ContentResolver
 ) {
+    companion object {
+        private val IMAGE_EXTENSIONS = setOf(
+            "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "avif",
+            "dng", "raw", "cr2", "nef", "arw", "orf", "raf"
+        )
+        private val VIDEO_EXTENSIONS = setOf(
+            "mp4", "mkv", "webm", "3gp", "mov", "avi", "m4v", "ts", "flv"
+        )
+
+        /**
+         * Determines whether a trashed MediaStore.Files row is a gallery video (`true`),
+         * gallery image (`false`), or non-media file (`null`, e.g. PDF/APK/audio/.nomedia).
+         * Needed because OEM MediaProviders often reset MEDIA_TYPE to 0 when trashing files.
+         */
+        internal fun classifyTrashedMedia(
+            mediaType: Int,
+            mimeType: String?,
+            name: String,
+            path: String
+        ): Boolean? {
+            if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) return true
+            if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) return false
+            if (mediaType != MediaStore.Files.FileColumns.MEDIA_TYPE_NONE) return null
+
+            val normalizedMime = mimeType?.lowercase()?.trim().orEmpty()
+            if (normalizedMime.startsWith("video/")) return true
+            if (normalizedMime.startsWith("image/")) return false
+
+            val candidate = if (name.contains('.')) name else path.substringAfterLast('/', "")
+            val ext = candidate.substringAfterLast('.', "").lowercase()
+            return when (ext) {
+                in VIDEO_EXTENSIONS -> true
+                in IMAGE_EXTENSIONS -> false
+                else -> null
+            }
+        }
+    }
 
     fun observeImages(folderName: String? = null): Flow<List<MediaData>> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -65,6 +102,7 @@ class LocalMediaRepository(
             MediaStore.Images.Media.DATE_MODIFIED,
             MediaStore.Images.Media.DATA,
             MediaStore.Files.FileColumns.MEDIA_TYPE,
+            MediaStore.MediaColumns.MIME_TYPE,
             MediaStore.MediaColumns.DURATION,
             MediaStore.MediaColumns.IS_TRASHED,
             MediaStore.MediaColumns.IS_FAVORITE,
@@ -78,8 +116,9 @@ class LocalMediaRepository(
         val isAllRequest = folderName == null
         
         var selection = when {
+            isTrashRequest -> null // Don't filter by MEDIA_TYPE because trashed files often have MEDIA_TYPE reset to 0 in MediaStore.Files
             isFavoritesRequest -> "$baseSelection AND ${MediaStore.MediaColumns.IS_FAVORITE} = 1"
-            folderName != null && !isTrashRequest -> "$baseSelection AND ${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
+            folderName != null -> "$baseSelection AND ${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
             else -> baseSelection
         }
         
@@ -89,7 +128,8 @@ class LocalMediaRepository(
         }
 
         if (lastGeneration != null && lastGeneration > 0) {
-            selection += " AND (${MediaStore.MediaColumns.GENERATION_ADDED} > ? OR ${MediaStore.MediaColumns.GENERATION_MODIFIED} > ?)"
+            val genClause = "(${MediaStore.MediaColumns.GENERATION_ADDED} > ? OR ${MediaStore.MediaColumns.GENERATION_MODIFIED} > ?)"
+            selection = if (selection.isNullOrBlank()) genClause else "$selection AND $genClause"
             selectionArgsList.add(lastGeneration.toString())
             selectionArgsList.add(lastGeneration.toString())
         }
@@ -126,6 +166,7 @@ class LocalMediaRepository(
                 val dateModifiedColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATE_MODIFIED)
                 val pathColumn = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
                 val mediaTypeColumn = cursor.getColumnIndex(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                val mimeTypeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
                 val durationColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
                 val isTrashedColumn = cursor.getColumnIndex(MediaStore.MediaColumns.IS_TRASHED)
 
@@ -139,17 +180,30 @@ class LocalMediaRepository(
                     val dateTakenMs = if (dateTakenColumn >= 0) cursor.getLong(dateTakenColumn) else 0L
                     val dateTakenSec = if (dateTakenMs > 0) dateTakenMs / 1000L else 0L
                     val rawDateModified = if (dateModifiedColumn >= 0) cursor.getLong(dateModifiedColumn) else 0L
-                    val dateModified = maxOf(rawDateModified, rawDateAdded)
-                    val dateAdded = when {
-                        dateTakenSec > 0 -> dateTakenSec
-                        rawDateModified > 0 -> rawDateModified
-                        else -> rawDateAdded
-                    }
                     val size = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
                     val name = (if (nameColumn >= 0) cursor.getString(nameColumn) else null) ?: "Unknown"
                     val path = (if (pathColumn >= 0) cursor.getString(pathColumn) else null) ?: ""
+
+                    val dateModified = if (rawDateModified > 0) rawDateModified else rawDateAdded
+                    val parsedFilenameDate = if (dateTakenSec <= 0) FilenameDateParser.parseDateFromFilename(name) else null
+                    val exifDate = if (dateTakenSec <= 0 && parsedFilenameDate == null && path.isNotBlank()) {
+                        FilenameDateParser.extractExifDate(path)
+                    } else null
+
+                    val dateAdded = when {
+                        dateTakenSec > 0 -> dateTakenSec
+                        parsedFilenameDate != null && parsedFilenameDate > 0 -> parsedFilenameDate
+                        exifDate != null && exifDate > 0 -> exifDate
+                        rawDateModified > 0 -> rawDateModified
+                        else -> rawDateAdded
+                    }
                     val mediaType = if (mediaTypeColumn >= 0) cursor.getInt(mediaTypeColumn) else 0
-                    val isVideo = mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                    val mimeType = if (mimeTypeColumn >= 0) cursor.getString(mimeTypeColumn) else null
+                    val isVideo = if (isTrashRequest || isTrashed) {
+                        classifyTrashedMedia(mediaType, mimeType, name, path) ?: continue
+                    } else {
+                        mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                    }
                     
                     var durationMs: Long? = null
                     if (durationColumn >= 0) {
@@ -159,9 +213,13 @@ class LocalMediaRepository(
                     
                     val volumeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.VOLUME_NAME)
                     val volumeName = if (volumeColumn >= 0) cursor.getString(volumeColumn) else null
+                    val isSecondaryVolume = volumeName != null &&
+                        !volumeName.equals("external_primary", ignoreCase = true) &&
+                        !volumeName.equals("external", ignoreCase = true) &&
+                        !volumeName.equals(MediaStore.VOLUME_INTERNAL, ignoreCase = true)
                     val baseUri = when {
-                        volumeName != null && isVideo -> MediaStore.Video.Media.getContentUri(volumeName)
-                        volumeName != null -> MediaStore.Images.Media.getContentUri(volumeName)
+                        isSecondaryVolume && isVideo -> MediaStore.Video.Media.getContentUri(volumeName!!)
+                        isSecondaryVolume -> MediaStore.Images.Media.getContentUri(volumeName!!)
                         isVideo -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                         else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                     }
@@ -211,30 +269,63 @@ class LocalMediaRepository(
 
     suspend fun getTrashedMediaIds(): Set<Long> = withContext(Dispatchers.IO) {
         val ids = mutableSetOf<Long>()
-        val projection = arrayOf(MediaStore.Images.Media._ID)
-        val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
-        
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
         val bundle = android.os.Bundle().apply {
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
-            putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
         }
 
+        fun queryUri(uri: android.net.Uri) {
+            try {
+                contentResolver.query(uri, projection, bundle, null)?.use { cursor ->
+                    val idCol = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
+                    if (idCol >= 0) {
+                        while (cursor.moveToNext()) {
+                            ids.add(cursor.getLong(idCol))
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Query both Images and Video tables directly with MATCH_ONLY
+        queryUri(MediaStore.Images.Media.getContentUri("external"))
+        queryUri(MediaStore.Video.Media.getContentUri("external"))
+
+        // Also query Files table without strict MEDIA_TYPE filter to handle OEMs resetting MEDIA_TYPE on trash,
+        // while still filtering out non-media trashed files (PDFs, APKs, audio, etc.).
         try {
+            val filesProjection = arrayOf(
+                MediaStore.MediaColumns._ID,
+                MediaStore.Files.FileColumns.MEDIA_TYPE,
+                MediaStore.MediaColumns.MIME_TYPE,
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.DATA
+            )
             contentResolver.query(
                 MediaStore.Files.getContentUri("external"),
-                projection,
+                filesProjection,
                 bundle,
                 null
             )?.use { cursor ->
-                val idCol = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                val idCol = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
+                val mediaTypeCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                val mimeTypeCol = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+                val nameCol = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
                 if (idCol >= 0) {
                     while (cursor.moveToNext()) {
-                        ids.add(cursor.getLong(idCol))
+                        val mediaType = if (mediaTypeCol >= 0) cursor.getInt(mediaTypeCol) else 0
+                        val mimeType = if (mimeTypeCol >= 0) cursor.getString(mimeTypeCol) else null
+                        val name = (if (nameCol >= 0) cursor.getString(nameCol) else null) ?: ""
+                        val path = (if (dataCol >= 0) cursor.getString(dataCol) else null) ?: ""
+                        if (classifyTrashedMedia(mediaType, mimeType, name, path) != null) {
+                            ids.add(cursor.getLong(idCol))
+                        }
                     }
                 }
             }
-        } catch (_: SecurityException) {
-        }
+        } catch (_: Exception) {}
+
         ids
     }
 }

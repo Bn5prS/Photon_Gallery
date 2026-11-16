@@ -32,7 +32,8 @@ object MediaQueryBuilder {
         excluded: Set<String> = emptySet(),
         favIds: Set<String> = emptySet(),
         ftsIds: List<String> = emptyList(),
-        smartIds: List<String> = emptyList()
+        smartIds: List<String> = emptyList(),
+        albumMediaFilter: AlbumMediaFilter = AlbumMediaFilter.ALL
     ): QueryConditions {
         val conditions = mutableListOf<String>()
         val args = mutableListOf<Any>()
@@ -41,18 +42,20 @@ object MediaQueryBuilder {
 
         when {
             bucket == BucketNames.SEARCH_TEXT -> {
-                if (ftsIds.isEmpty()) {
+                val numericIds = ftsIds.mapNotNull { it.toLongOrNull() }
+                if (numericIds.isEmpty()) {
                     conditions.add("cm.id IN (0)")
                 } else {
-                    conditions.add("cm.id IN (${ftsIds.joinToString(",")})")
+                    conditions.add("cm.id IN (${numericIds.joinToString(",")})")
                     conditions.add(NOT_HIDDEN)
                 }
             }
             bucket == BucketNames.SEARCH_SMART -> {
-                if (smartIds.isEmpty()) {
+                val numericIds = smartIds.mapNotNull { it.toLongOrNull() }
+                if (numericIds.isEmpty()) {
                     conditions.add("cm.id IN (0)")
                 } else {
-                    conditions.add("cm.id IN (${smartIds.joinToString(",")})")
+                    conditions.add("cm.id IN (${numericIds.joinToString(",")})")
                     conditions.add(NOT_HIDDEN)
                 }
             }
@@ -176,6 +179,20 @@ object MediaQueryBuilder {
             val placeholders = excluded.joinToString(",") { "?" }
             conditions.add("cm.bucketName NOT IN ($placeholders)")
             args.addAll(excluded)
+        }
+
+        when (albumMediaFilter) {
+            AlbumMediaFilter.PHOTOS -> conditions.add("cm.isVideo = 0")
+            AlbumMediaFilter.VIDEOS -> conditions.add("cm.isVideo = 1")
+            AlbumMediaFilter.FAVORITES -> {
+                val numericIds = favIds.mapNotNull { it.toLongOrNull() }
+                if (numericIds.isEmpty()) {
+                    conditions.add("cm.id IN (0)")
+                } else {
+                    conditions.add("cm.id IN (${numericIds.joinToString(",")})")
+                }
+            }
+            AlbumMediaFilter.ALL -> {}
         }
 
         return QueryConditions(conditions, args)

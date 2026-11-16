@@ -75,11 +75,7 @@ class FaceModelDownloadWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val context = applicationContext
-        try {
-            setForeground(createForegroundInfo("Connecting…"))
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set foreground info: ${e.message}")
-        }
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         setProgress(workDataOf("progress" to 0))
 
         val targetDir = File(context.filesDir, FaceModelRegistry.MODEL_DIR).apply {
@@ -184,9 +180,6 @@ class FaceModelDownloadWorker(
                                     "speedBytesPerSec" to currentSpeedBytesPerSec
                                 )
                             )
-                            try {
-                                setForeground(createForegroundInfo("Downloading MobileFaceNet: $percent%", percent))
-                            } catch (_: Exception) {}
                         }
                     }
                     output.flush()
@@ -236,13 +229,15 @@ class FaceModelDownloadWorker(
             val db = DatabaseProvider.getDatabase(context)
             val shouldAutoIndex = withContext(Dispatchers.IO) {
                 val settingsRepo = SettingsRepository.getInstance(context)
-                settingsRepo.faceAutoIndexFlow.first() && db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                val faceEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
+                val autoIndex = settingsRepo.faceAutoIndexFlow.first()
+                faceEnabled && autoIndex && db.faceDao().getUnindexedMediaIds().isNotEmpty()
             }
             if (shouldAutoIndex) {
                 val indexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>().build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     "FaceIndexWorker",
-                    ExistingWorkPolicy.KEEP,
+                    ExistingWorkPolicy.REPLACE,
                     indexRequest
                 )
             }

@@ -75,10 +75,13 @@ fun PinnedAlbumsScreen(
     val userPinnedAlbums by galleryViewModel.userPinnedAlbums.collectAsState()
     val albumSortOrder by galleryViewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by galleryViewModel.albumLayoutMode.collectAsState()
+    val albumsGridCellsCount by galleryViewModel.albumsGridCellsCount.collectAsState()
     val showAlbumSize by galleryViewModel.showAlbumSize.collectAsState()
     val customCovers by galleryViewModel.albumCustomCovers.collectAsState()
     val customShapes by galleryViewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
+    var albumToDelete by remember { mutableStateOf<AlbumBucket?>(null) }
+    var showDisplaySortSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
@@ -124,6 +127,23 @@ fun PinnedAlbumsScreen(
                             contentDescription = stringResource(R.string.action_close),
                             modifier = Modifier.size(IconSizeTokens.L)
                         )
+                    }
+                },
+                actions = {
+                    if (userPinnedAlbums.isNotEmpty()) {
+                        ExpressiveFilledIconButton(
+                            onClick = { showDisplaySortSheet = true },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
+                                contentDescription = stringResource(R.string.menu_sort_order),
+                                modifier = Modifier.size(IconSizeTokens.L)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -191,8 +211,9 @@ fun PinnedAlbumsScreen(
         } else {
             val lazyGridState = rememberLazyGridState()
 
-            LazyVerticalGrid(
-                columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(albumsGridCellsCount),
                 state = lazyGridState,
                 contentPadding = PaddingValues(
                     start = SpacingTokens.L,
@@ -208,22 +229,6 @@ fun PinnedAlbumsScreen(
                 horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Layout switcher & sort control bar
-                item(key = "pinned_albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
-                    AlbumsControlBar(
-                        currentLayout = albumLayoutMode,
-                        onLayoutChange = { newLayout ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            galleryViewModel.setAlbumLayoutMode(newLayout)
-                        },
-                        currentSort = albumSortOrder,
-                        onSortChange = { newSort ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            galleryViewModel.setAlbumSortOrder(newSort)
-                        }
-                    )
-                }
-
                 items(
                     items = userPinnedAlbums,
                     key = { "pinned_${it.bucketName}" }
@@ -256,9 +261,10 @@ fun PinnedAlbumsScreen(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 bucket = bucket.copy(bucketName = displayBucketName),
-                                showAlbumSize = showAlbumSize,
+                                sharedKey = "album_container_${bucket.bucketName}",
+                                showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                                 customShape = albumShape,
-                                isCompact = false,
+                                isCompact = albumsGridCellsCount >= 3,
                                 isPinned = true,
                                 onClick = { onAlbumClick(bucket.bucketName) },
                                 onLongPress = {
@@ -286,11 +292,24 @@ fun PinnedAlbumsScreen(
                             onChangeCover = { onChangeCover(bucket.bucketName) },
                             onDeleteCover = { onDeleteCover(bucket.bucketName) },
                             onChangeShape = { shapePickerBucket = bucket },
-                            onResetShape = { galleryViewModel.removeAlbumCustomShape(bucket.bucketName) }
+                            onResetShape = { galleryViewModel.removeAlbumCustomShape(bucket.bucketName) },
+                            onDelete = { albumToDelete = bucket }
                         )
                     }
                 }
             }
+
+            com.inferno.gallery.ui.components.ExpressiveScrollBar(
+                gridState = lazyGridState,
+                totalItemsCount = userPinnedAlbums.size,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = innerPadding.calculateBottomPadding()
+                    )
+            )
+        }
         }
 
         // Custom shape picker sheet
@@ -310,6 +329,28 @@ fun PinnedAlbumsScreen(
                 onDismissRequest = {
                     shapePickerBucket = null
                 }
+            )
+        }
+
+        albumToDelete?.let { targetAlbum ->
+            DeleteAlbumConfirmationDialog(
+                bucket = targetAlbum,
+                onDismissRequest = { albumToDelete = null },
+                onConfirm = {
+                    galleryViewModel.deleteAlbum(targetAlbum.bucketName)
+                    albumToDelete = null
+                }
+            )
+        }
+
+        if (showDisplaySortSheet) {
+            com.inferno.gallery.ui.components.DisplayAndSortBottomSheet(
+                isAlbumsScreen = true,
+                albumLayoutMode = albumLayoutMode,
+                onAlbumLayoutModeChange = { galleryViewModel.setAlbumLayoutMode(it) },
+                albumSortOrder = albumSortOrder,
+                onAlbumSortOrderChange = { galleryViewModel.setAlbumSortOrder(it) },
+                onDismissRequest = { showDisplaySortSheet = false }
             )
         }
     }

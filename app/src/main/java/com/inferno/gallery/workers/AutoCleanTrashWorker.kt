@@ -55,21 +55,22 @@ class AutoCleanTrashWorker(
 
             for (item in expiredItems) {
                 Log.d(TAG, "Deleting expired trash item: ${item.name} (modified: ${item.dateModified})")
+                val targetUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(Uri.parse(item.uriString))
                 try {
                     val file = File(item.filePath)
                     if (file.exists()) {
                         val deleted = file.delete()
                         if (deleted) {
-                            applicationContext.contentResolver.delete(Uri.parse(item.uriString), null, null)
+                            applicationContext.contentResolver.delete(targetUri, null, null)
                         }
                     } else {
-                        applicationContext.contentResolver.delete(Uri.parse(item.uriString), null, null)
+                        applicationContext.contentResolver.delete(targetUri, null, null)
                     }
                     deletedIds.add(item.id)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to delete file/MediaStore entry for item ${item.id}: ${e.message}")
                     try {
-                        applicationContext.contentResolver.delete(Uri.parse(item.uriString), null, null)
+                        applicationContext.contentResolver.delete(targetUri, null, null)
                         deletedIds.add(item.id)
                     } catch (ex: Exception) {
                         Log.e(TAG, "Second deletion attempt failed for item ${item.id}: ${ex.message}")

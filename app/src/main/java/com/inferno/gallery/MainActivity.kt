@@ -183,6 +183,7 @@ class MainActivity : FragmentActivity() {
 
     private fun triggerSyncOnResume() {
         try {
+            galleryViewModel.runFastInitialSync()
             val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
             androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
                 "MediaSyncWorker_Foreground",

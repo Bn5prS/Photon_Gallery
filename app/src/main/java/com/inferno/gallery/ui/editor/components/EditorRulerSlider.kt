@@ -114,7 +114,11 @@ fun EditorRulerSlider(
                 .height(60.dp),
             shape = CircleShape,
             color = containerColor,
-            tonalElevation = 4.dp
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+            ),
+            tonalElevation = 2.dp
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -137,7 +141,10 @@ fun EditorRulerSlider(
                     } else {
                         Text(
                             text = valueFormatter(value),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFeatureSettings = "tnum"
+                            ),
                             color = if (isNonDefault) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -289,7 +296,7 @@ fun EditorRulerSlider(
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_ms_refresh),
+                            painter = painterResource(id = R.drawable.ic_ms_thin_refresh),
                             contentDescription = "Reset value to default",
                             tint = if (isNonDefault) {
                                 MaterialTheme.colorScheme.onSurface

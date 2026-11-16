@@ -37,218 +37,248 @@ object MemoriesManager {
         val currentYear = calendar.get(Calendar.YEAR)
         val currentMonth = calendar.get(Calendar.MONTH) + 1
         val currentDay = calendar.get(Calendar.DAY_OF_MONTH)
-
-        val monthStr = String.format(Locale.US, "%02d", currentMonth)
-        val dayStr = String.format(Locale.US, "%02d", currentDay)
         val currentYearStr = currentYear.toString()
+        val currentMonthStr = String.format(Locale.US, "%02d", currentMonth)
 
-        // 1. Try exact day match across past years
-        var rawEntities = mediaDao.getOnThisDayMedia(monthStr, dayStr, currentYearStr)
-        var isExactDay = true
+        val finalMemoryGroups = mutableListOf<MemoryDayGroup>()
+        val usedMediaIds = mutableSetOf<Long>()
+        val yearsCovered = mutableSetOf<Int>()
 
-        // 2. If exact day has no memories, check adjacent days (±1 day) for nearby memories
-        if (rawEntities.isEmpty()) {
-            val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-            val yMonth = String.format(Locale.US, "%02d", yesterdayCal.get(Calendar.MONTH) + 1)
-            val yDay = String.format(Locale.US, "%02d", yesterdayCal.get(Calendar.DAY_OF_MONTH))
-            val yesterdayEntities = mediaDao.getOnThisDayMedia(yMonth, yDay, currentYearStr)
+        val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+        val monthNameFormat = SimpleDateFormat("MMMM", Locale.getDefault())
+        val monthYearFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
 
-            if (yesterdayEntities.isNotEmpty()) {
-                rawEntities = yesterdayEntities
-                isExactDay = false
-            } else {
-                val tomorrowCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
-                val tMonth = String.format(Locale.US, "%02d", tomorrowCal.get(Calendar.MONTH) + 1)
-                val tDay = String.format(Locale.US, "%02d", tomorrowCal.get(Calendar.DAY_OF_MONTH))
-                val tomorrowEntities = mediaDao.getOnThisDayMedia(tMonth, tDay, currentYearStr)
-                if (tomorrowEntities.isNotEmpty()) {
-                    rawEntities = tomorrowEntities
-                    isExactDay = false
+        // ─────────────────────────────────────────────────────────────
+        // 1. "ON THIS DAY" & "THIS WEEK" ANNIVERSARIES (±3 days window)
+        // ─────────────────────────────────────────────────────────────
+        val windowDays = (-3..3).map { offset ->
+            val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }
+            val m = String.format(Locale.US, "%02d", cal.get(Calendar.MONTH) + 1)
+            val d = String.format(Locale.US, "%02d", cal.get(Calendar.DAY_OF_MONTH))
+            "$m-$d"
+        }.distinct()
+
+        val rangeMedia = mediaDao.getOnThisDayRangeMedia(windowDays, currentYearStr)
+            .filter { it.bucketName !in excludedFolders }
+
+        if (rangeMedia.isNotEmpty()) {
+            val yearGroups = rangeMedia.groupBy { entity ->
+                val cal = Calendar.getInstance().apply {
+                    val ms = if (entity.dateAdded > 100_000_000_000L) entity.dateAdded else entity.dateAdded * 1000L
+                    timeInMillis = ms
+                }
+                cal.get(Calendar.YEAR)
+            }
+
+            yearGroups.keys.sortedDescending().forEach { year ->
+                val yearsAgo = currentYear - year
+                if (yearsAgo > 0) {
+                    val groupEntities = yearGroups[year] ?: emptyList()
+                    if (groupEntities.isNotEmpty()) {
+                        val galleryItems = groupEntities.map { entityToGalleryItem(it, uriResolver) }
+                        val coverItem = galleryItems.firstOrNull { favoriteIds.contains(it.id) } ?: galleryItems.first()
+
+                        val cal = Calendar.getInstance().apply {
+                            val ms = if (coverItem.dateAdded > 100_000_000_000L) coverItem.dateAdded else coverItem.dateAdded * 1000L
+                            timeInMillis = ms
+                        }
+                        val itemDay = cal.get(Calendar.DAY_OF_MONTH)
+                        val isExactDay = (itemDay == currentDay)
+
+                        val title = if (isExactDay) {
+                            when (yearsAgo) {
+                                1 -> "1 Year Ago Today"
+                                else -> "$yearsAgo Years Ago Today"
+                            }
+                        } else {
+                            when (yearsAgo) {
+                                1 -> "This Week 1 Year Ago"
+                                else -> "This Week ($yearsAgo Years Ago)"
+                            }
+                        }
+
+                        val sampleDateMs = if (coverItem.dateAdded > 100_000_000_000L) coverItem.dateAdded else coverItem.dateAdded * 1000L
+                        val formattedDate = dateFormat.format(Date(sampleDateMs))
+
+                        finalMemoryGroups.add(
+                            MemoryDayGroup(
+                                key = "memory_anniversary_$year",
+                                year = year,
+                                yearsAgo = yearsAgo,
+                                title = title,
+                                formattedDate = formattedDate,
+                                coverItem = coverItem,
+                                items = galleryItems,
+                                isExactDay = isExactDay
+                            )
+                        )
+                        yearsCovered.add(year)
+                        groupEntities.forEach { usedMediaIds.add(it.id) }
+                    }
                 }
             }
         }
 
-        // Filter out user-excluded folders
-        val pastYearFiltered = rawEntities.filter { it.bucketName !in excludedFolders }
+        // ─────────────────────────────────────────────────────────────
+        // 2. THIS MONTH IN PAST YEARS (e.g. November 2024, November 2023)
+        // ─────────────────────────────────────────────────────────────
+        val monthMedia = mediaDao.getPastYearsMonthMedia(currentMonthStr, currentYearStr, limit = 350)
+            .filter { it.bucketName !in excludedFolders && it.id !in usedMediaIds }
 
-        // If we found past-year memories, group them by year
-        if (pastYearFiltered.isNotEmpty()) {
-            val pastYearGroups = createPastYearGroups(
-                filtered = pastYearFiltered,
-                currentYear = currentYear,
-                isExactDay = isExactDay,
-                favoriteIds = favoriteIds,
-                uriResolver = uriResolver
-            )
-            if (pastYearGroups.isNotEmpty()) {
-                return@withContext pastYearGroups
+        if (monthMedia.isNotEmpty()) {
+            val monthYearGroups = monthMedia.groupBy { entity ->
+                val cal = Calendar.getInstance().apply {
+                    val ms = if (entity.dateAdded > 100_000_000_000L) entity.dateAdded else entity.dateAdded * 1000L
+                    timeInMillis = ms
+                }
+                cal.get(Calendar.YEAR)
+            }
+
+            monthYearGroups.keys.sortedDescending().forEach { year ->
+                if (year !in yearsCovered || finalMemoryGroups.size < 5) {
+                    val groupEntities = monthYearGroups[year] ?: emptyList()
+                    if (groupEntities.size >= 2) {
+                        val galleryItems = groupEntities.map { entityToGalleryItem(it, uriResolver) }
+                        val coverItem = galleryItems.firstOrNull { favoriteIds.contains(it.id) } ?: galleryItems.first()
+                        val yearsAgo = currentYear - year
+                        val sampleDateMs = if (coverItem.dateAdded > 100_000_000_000L) coverItem.dateAdded else coverItem.dateAdded * 1000L
+                        val sampleDate = Date(sampleDateMs)
+
+                        val monthName = monthNameFormat.format(sampleDate)
+                        val title = if (yearsAgo == 1) {
+                            "$monthName Last Year"
+                        } else {
+                            "$monthName ($yearsAgo Years Ago)"
+                        }
+                        val formattedDate = "$monthName $year • $yearsAgo ${if (yearsAgo == 1) "year" else "years"} ago"
+
+                        finalMemoryGroups.add(
+                            MemoryDayGroup(
+                                key = "memory_month_${year}_$currentMonthStr",
+                                year = year,
+                                yearsAgo = yearsAgo,
+                                title = title,
+                                formattedDate = formattedDate,
+                                coverItem = coverItem,
+                                items = galleryItems.take(25),
+                                isExactDay = false
+                            )
+                        )
+                        yearsCovered.add(year)
+                        groupEntities.forEach { usedMediaIds.add(it.id) }
+                    }
+                }
             }
         }
 
-        // ── Smart Fallback: Recent Highlights / Monthly Spotlight ──
-        return@withContext createFallbackHighlights(
-            mediaDao = mediaDao,
-            excludedFolders = excludedFolders,
-            favoriteIds = favoriteIds,
-            uriResolver = uriResolver,
-            currentYear = currentYear
-        )
-    }
+        // ─────────────────────────────────────────────────────────────
+        // 3. ARCHIVAL CLUSTERS & TRIPS (Older years / historical months)
+        // ─────────────────────────────────────────────────────────────
+        if (finalMemoryGroups.size < 8) {
+            val sixMonthsAgoSec = (System.currentTimeMillis() / 1000L) - (180L * 24 * 3600)
+            val historicalMedia = mediaDao.getHistoricalMedia(sixMonthsAgoSec, limit = 500)
+                .filter { it.bucketName !in excludedFolders && it.id !in usedMediaIds }
 
-    private fun createPastYearGroups(
-        filtered: List<CoreMediaEntity>,
-        currentYear: Int,
-        isExactDay: Boolean,
-        favoriteIds: Set<String>,
-        uriResolver: ((uriString: String, filePath: String) -> Uri)?
-    ): List<MemoryDayGroup> {
-        val yearGroups = filtered.groupBy { entity ->
-            val cal = Calendar.getInstance().apply {
-                val ms = if (entity.dateAdded > 100_000_000_000L) entity.dateAdded else entity.dateAdded * 1000L
-                timeInMillis = ms
-            }
-            cal.get(Calendar.YEAR)
-        }
+            if (historicalMedia.isNotEmpty()) {
+                val historicalGroups = historicalMedia.groupBy { entity ->
+                    val cal = Calendar.getInstance().apply {
+                        val ms = if (entity.dateAdded > 100_000_000_000L) entity.dateAdded else entity.dateAdded * 1000L
+                        timeInMillis = ms
+                    }
+                    cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH)
+                }
 
-        val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-        val resultGroups = mutableListOf<MemoryDayGroup>()
+                for ((yearMonth, groupEntities) in historicalGroups) {
+                    if (finalMemoryGroups.size >= 8) break
+                    if (groupEntities.size < 2) continue
 
-        yearGroups.keys.sortedDescending().forEach { year ->
-            val yearsAgo = currentYear - year
-            if (yearsAgo > 0) {
-                val groupEntities = yearGroups[year] ?: emptyList()
-                if (groupEntities.isNotEmpty()) {
+                    val (itemYear, itemMonth) = yearMonth
+                    val yearsAgo = (currentYear - itemYear).coerceAtLeast(0)
+
                     val galleryItems = groupEntities.map { entityToGalleryItem(it, uriResolver) }
                     val coverItem = galleryItems.firstOrNull { favoriteIds.contains(it.id) } ?: galleryItems.first()
-                    val sampleDateMs = if (coverItem.dateAdded > 100_000_000_000L) {
-                        coverItem.dateAdded
-                    } else {
-                        coverItem.dateAdded * 1000L
-                    }
-                    val formattedDate = dateFormat.format(Date(sampleDateMs))
-                    val title = if (isExactDay) {
-                        when (yearsAgo) {
-                            1 -> "1 Year Ago Today"
-                            else -> "$yearsAgo Years Ago Today"
-                        }
-                    } else {
-                        when (yearsAgo) {
-                            1 -> "Around This Time (1 Year Ago)"
-                            else -> "Around This Time ($yearsAgo Years Ago)"
-                        }
-                    }
+                    val sampleDateMs = if (coverItem.dateAdded > 100_000_000_000L) coverItem.dateAdded else coverItem.dateAdded * 1000L
+                    val sampleDate = Date(sampleDateMs)
 
-                    resultGroups.add(
+                    val topBucket = groupEntities.groupBy { it.bucketName }
+                        .maxByOrNull { it.value.size }?.key
+
+                    val isGeneralFolder = topBucket in listOf("Camera", "Pictures", "DCIM", "Photos", "0", null)
+                    val title = when {
+                        !isGeneralFolder && !topBucket.isNullOrBlank() -> "Trip: $topBucket ($itemYear)"
+                        yearsAgo > 1 -> "Flashback: ${monthYearFormat.format(sampleDate)}"
+                        yearsAgo == 1 -> "${monthNameFormat.format(sampleDate)} Last Year"
+                        else -> "Moments from ${monthYearFormat.format(sampleDate)}"
+                    }
+                    val formattedDate = monthYearFormat.format(sampleDate)
+
+                    finalMemoryGroups.add(
                         MemoryDayGroup(
-                            key = "memory_year_$year",
-                            year = year,
+                            key = "memory_archive_${itemYear}_${itemMonth}_${topBucket.orEmpty()}",
+                            year = itemYear,
                             yearsAgo = yearsAgo,
                             title = title,
                             formattedDate = formattedDate,
                             coverItem = coverItem,
-                            items = galleryItems,
-                            isExactDay = isExactDay
+                            items = galleryItems.take(30),
+                            isExactDay = false
                         )
                     )
+                    groupEntities.forEach { usedMediaIds.add(it.id) }
                 }
             }
         }
-        return resultGroups
-    }
 
-    private suspend fun createFallbackHighlights(
-        mediaDao: MediaDao,
-        excludedFolders: Set<String>,
-        favoriteIds: Set<String>,
-        uriResolver: ((uriString: String, filePath: String) -> Uri)?,
-        currentYear: Int
-    ): List<MemoryDayGroup> {
-        var rawCandidates = mediaDao.getRecentHighlightMedia(limit = 120)
-            .filter { it.bucketName !in excludedFolders }
+        // ─────────────────────────────────────────────────────────────
+        // 4. RECENT HIGHLIGHTS (Capped at exactly 1 card)
+        // ─────────────────────────────────────────────────────────────
+        val recentCandidates = mediaDao.getRecentHighlightMedia(limit = 40)
+            .filter { it.bucketName !in excludedFolders && it.id !in usedMediaIds }
 
-        if (rawCandidates.isEmpty()) {
-            rawCandidates = mediaDao.getAnyRecentMedia(limit = 60)
-                .filter { it.bucketName !in excludedFolders }
-        }
+        if (recentCandidates.isNotEmpty()) {
+            val galleryItems = recentCandidates.map { entityToGalleryItem(it, uriResolver) }
+            val coverItem = galleryItems.firstOrNull { favoriteIds.contains(it.id) } ?: galleryItems.first()
+            val sampleDateMs = if (coverItem.dateAdded > 100_000_000_000L) coverItem.dateAdded else coverItem.dateAdded * 1000L
 
-        if (rawCandidates.isEmpty()) return emptyList()
-
-        val allItems = rawCandidates.map { entityToGalleryItem(it, uriResolver) }
-        val resultGroups = mutableListOf<MemoryDayGroup>()
-
-        val monthFormat = SimpleDateFormat("MMMM", Locale.getDefault())
-        val monthYearFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
-
-        // Group by Year-Month
-        val monthGroups = allItems.groupBy { item ->
-            val cal = Calendar.getInstance().apply {
-                val ms = if (item.dateAdded > 100_000_000_000L) item.dateAdded else item.dateAdded * 1000L
-                timeInMillis = ms
-            }
-            cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH)
-        }
-
-        var groupIndex = 0
-        for ((yearMonth, groupItems) in monthGroups) {
-            if (resultGroups.size >= 3) break // Up to 3 curated cards
-            if (groupItems.isEmpty()) continue
-
-            val (itemYear, itemMonth) = yearMonth
-            val sampleMs = if (groupItems.first().dateAdded > 100_000_000_000L) {
-                groupItems.first().dateAdded
-            } else {
-                groupItems.first().dateAdded * 1000L
-            }
-            val sampleDate = Date(sampleMs)
-
-            val title = when (groupIndex) {
-                0 -> "Recent Highlights"
-                1 -> "Best of ${monthFormat.format(sampleDate)}"
-                else -> "Moments from ${monthFormat.format(sampleDate)}"
-            }
-            val formattedDate = monthYearFormat.format(sampleDate)
-
-            val coverItem = groupItems.firstOrNull { favoriteIds.contains(it.id) } ?: groupItems.first()
-            val limitedItems = groupItems.take(20)
-
-            resultGroups.add(
+            finalMemoryGroups.add(
                 MemoryDayGroup(
-                    key = "memory_fallback_${itemYear}_${itemMonth}_$groupIndex",
-                    year = itemYear,
-                    yearsAgo = (currentYear - itemYear).coerceAtLeast(0),
-                    title = title,
-                    formattedDate = formattedDate,
-                    coverItem = coverItem,
-                    items = limitedItems,
-                    isExactDay = false
-                )
-            )
-            groupIndex++
-        }
-
-        // Fallback safety: if grouping didn't produce anything, take first 15 as Recent Highlights
-        if (resultGroups.isEmpty() && allItems.isNotEmpty()) {
-            val sampleMs = if (allItems.first().dateAdded > 100_000_000_000L) {
-                allItems.first().dateAdded
-            } else {
-                allItems.first().dateAdded * 1000L
-            }
-            val coverItem = allItems.firstOrNull { favoriteIds.contains(it.id) } ?: allItems.first()
-            resultGroups.add(
-                MemoryDayGroup(
-                    key = "memory_fallback_recent_general",
+                    key = "memory_recent_highlights",
                     year = currentYear,
                     yearsAgo = 0,
                     title = "Recent Highlights",
-                    formattedDate = monthYearFormat.format(Date(sampleMs)),
+                    formattedDate = monthYearFormat.format(Date(sampleDateMs)),
                     coverItem = coverItem,
-                    items = allItems.take(20),
+                    items = galleryItems.take(20),
                     isExactDay = false
                 )
             )
         }
 
-        return resultGroups
+        // Safety fallback: if database is tiny and has no past memories at all
+        if (finalMemoryGroups.isEmpty()) {
+            val anyRecent = mediaDao.getAnyRecentMedia(limit = 30)
+                .filter { it.bucketName !in excludedFolders }
+            if (anyRecent.isNotEmpty()) {
+                val galleryItems = anyRecent.map { entityToGalleryItem(it, uriResolver) }
+                val coverItem = galleryItems.firstOrNull { favoriteIds.contains(it.id) } ?: galleryItems.first()
+                val sampleDateMs = if (coverItem.dateAdded > 100_000_000_000L) coverItem.dateAdded else coverItem.dateAdded * 1000L
+
+                finalMemoryGroups.add(
+                    MemoryDayGroup(
+                        key = "memory_fallback_recent_general",
+                        year = currentYear,
+                        yearsAgo = 0,
+                        title = "Recent Highlights",
+                        formattedDate = monthYearFormat.format(Date(sampleDateMs)),
+                        coverItem = coverItem,
+                        items = galleryItems.take(20),
+                        isExactDay = false
+                    )
+                )
+            }
+        }
+
+        return@withContext finalMemoryGroups
     }
 
     private fun entityToGalleryItem(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -87,6 +88,36 @@ val ShapeEdgeTopLarge: Shape = RoundedCornerShape(
     topStart = 48.dp, topEnd = 48.dp,
     bottomStart = 0.dp, bottomEnd = 0.dp
 )
+
+/**
+ * Calculates connected segmented button shapes matching concentric stadium capsule geometry:
+ * - Start tile: Outer corner follows concentric capsule curve, inner corner has subtle radius.
+ * - Middle tiles: All corners subtle radius.
+ * - End tile: Inner corner subtle radius, outer corner follows concentric capsule curve.
+ */
+fun getSegmentShape(
+    index: Int,
+    total: Int,
+    outerCorner: Dp = 26.dp,
+    innerCorner: Dp = 6.dp
+): Shape {
+    return when {
+        total <= 1 -> CircleShape
+        index == 0 -> RoundedCornerShape(
+            topStart = outerCorner,
+            bottomStart = outerCorner,
+            topEnd = innerCorner,
+            bottomEnd = innerCorner
+        )
+        index == total - 1 -> RoundedCornerShape(
+            topStart = innerCorner,
+            bottomStart = innerCorner,
+            topEnd = outerCorner,
+            bottomEnd = outerCorner
+        )
+        else -> RoundedCornerShape(innerCorner)
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Spacing tokens — 4/8dp grid

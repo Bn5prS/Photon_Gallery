@@ -32,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
+import com.inferno.gallery.ui.theme.WavyProgressTokens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -140,6 +141,8 @@ fun GpsScanningAnimation(
                     Spacer(Modifier.height(20.dp))
                     LinearWavyProgressIndicator(
                         progress = { animatedProgress },
+                        wavelength = WavyProgressTokens.LinearWavelength,
+                        waveSpeed = WavyProgressTokens.CalmWaveSpeed,
                         modifier = Modifier
                             .fillMaxWidth(0.6f)
                             .height(10.dp),

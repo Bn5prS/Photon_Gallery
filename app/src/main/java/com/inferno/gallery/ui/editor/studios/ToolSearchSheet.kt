@@ -78,7 +78,7 @@ object ToolSearchCatalog {
             id = "auto_enhance",
             name = "Enhance",
             description = "Automatic image-adaptive exposure, contrast and color correction",
-            iconRes = R.drawable.ic_ms_auto_fix_high,
+            iconRes = R.drawable.ic_ms_thin_auto_fix_high,
             tab = EditorTab.AUTO,
             keywords = listOf("auto", "enhance", "fix", "magic", "smart", "one-tap", "automatic")
         ),
@@ -86,7 +86,7 @@ object ToolSearchCatalog {
             id = "auto_dynamic",
             name = "Dynamic",
             description = "Boost shadow details, vibrance and local dynamic tone",
-            iconRes = R.drawable.ic_ms_auto_fix_high,
+            iconRes = R.drawable.ic_ms_thin_auto_fix_high,
             tab = EditorTab.AUTO,
             keywords = listOf("dynamic", "hdr", "vibrance", "shadow boost", "punch")
         ),
@@ -96,7 +96,7 @@ object ToolSearchCatalog {
             id = "crop_aspect",
             name = "Crop & Aspect Ratio",
             description = "Freeform, square, and standard aspect ratio cropping",
-            iconRes = R.drawable.ic_ms_crop,
+            iconRes = R.drawable.ic_ms_thin_crop,
             tab = EditorTab.CROP,
             keywords = listOf("crop", "aspect", "ratio", "framing", "cut", "resize", "square", "16:9", "4:3")
         ),
@@ -104,7 +104,7 @@ object ToolSearchCatalog {
             id = "straighten",
             name = "Straighten",
             description = "Level horizon and adjust tilt angle (-45° to +45°)",
-            iconRes = R.drawable.ic_ms_straighten,
+            iconRes = R.drawable.ic_ms_thin_straighten,
             tab = EditorTab.CROP,
             keywords = listOf("straighten", "level", "horizon", "angle", "tilt", "ruler", "framing")
         ),
@@ -112,7 +112,7 @@ object ToolSearchCatalog {
             id = "rotate",
             name = "Rotate",
             description = "Rotate image 90 degrees counter-clockwise",
-            iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
+            iconRes = R.drawable.ic_ms_thin_rotate_90_degrees_ccw,
             tab = EditorTab.CROP,
             keywords = listOf("rotate", "turn", "orientation", "ccw", "spin")
         ),
@@ -120,7 +120,7 @@ object ToolSearchCatalog {
             id = "mirror",
             name = "Mirror",
             description = "Flip image horizontally",
-            iconRes = R.drawable.ic_ms_flip,
+            iconRes = R.drawable.ic_ms_thin_flip,
             tab = EditorTab.CROP,
             keywords = listOf("mirror", "flip", "invert", "horizontal flip", "reverse")
         ),
@@ -128,7 +128,7 @@ object ToolSearchCatalog {
             id = "perspective",
             name = "Perspective",
             description = "Correct vertical and horizontal keystone perspective",
-            iconRes = R.drawable.ic_ms_perspective,
+            iconRes = R.drawable.ic_ms_thin_perspective,
             tab = EditorTab.CROP,
             keywords = listOf("perspective", "keystone", "tilt", "skew", "geometry", "vertical", "horizontal")
         ),
@@ -136,7 +136,7 @@ object ToolSearchCatalog {
             id = "reset_crop",
             name = "Reset crop",
             description = "Reset crop boundaries, rotation and straighten",
-            iconRes = R.drawable.ic_ms_refresh,
+            iconRes = R.drawable.ic_ms_thin_refresh,
             tab = EditorTab.CROP,
             keywords = listOf("reset", "clear", "revert", "original", "undo crop")
         ),
@@ -146,7 +146,7 @@ object ToolSearchCatalog {
             id = "brightness",
             name = "Brightness",
             description = "Adjust the overall lightness or darkness",
-            iconRes = R.drawable.ic_ms_light_mode,
+            iconRes = R.drawable.ic_ms_thin_light_mode,
             tab = EditorTab.ADJUST,
             keywords = listOf("brightness", "light", "dark", "exposure", "illumination")
         ),
@@ -154,7 +154,7 @@ object ToolSearchCatalog {
             id = "contrast",
             name = "Contrast",
             description = "Adjust the difference between light and dark areas",
-            iconRes = R.drawable.ic_ms_contrast,
+            iconRes = R.drawable.ic_ms_thin_contrast,
             tab = EditorTab.ADJUST,
             keywords = listOf("contrast", "punch", "pop", "range", "dynamics")
         ),
@@ -162,7 +162,7 @@ object ToolSearchCatalog {
             id = "tone",
             name = "Tone HDR",
             description = "Enhance dynamic range and local contrast",
-            iconRes = R.drawable.ic_ms_auto_fix_high,
+            iconRes = R.drawable.ic_ms_thin_auto_fix_high,
             tab = EditorTab.ADJUST,
             keywords = listOf("tone", "hdr", "dynamic range", "local contrast", "clarity", "details")
         ),
@@ -170,7 +170,7 @@ object ToolSearchCatalog {
             id = "white_point",
             name = "White point",
             description = "Adjust the brightest parts of the image",
-            iconRes = R.drawable.ic_ms_circle,
+            iconRes = R.drawable.ic_ms_thin_circle,
             tab = EditorTab.ADJUST,
             keywords = listOf("white point", "white", "peak brightness", "blown out", "clipping")
         ),
@@ -178,7 +178,7 @@ object ToolSearchCatalog {
             id = "highlights",
             name = "Highlights",
             description = "Recover or boost bright details",
-            iconRes = R.drawable.ic_ms_brightness_medium,
+            iconRes = R.drawable.ic_ms_thin_brightness_medium,
             tab = EditorTab.ADJUST,
             keywords = listOf("highlights", "bright details", "sky", "recover", "glare")
         ),
@@ -186,7 +186,7 @@ object ToolSearchCatalog {
             id = "shadows",
             name = "Shadows",
             description = "Lighten or deepen dark details",
-            iconRes = R.drawable.ic_ms_brightness_low,
+            iconRes = R.drawable.ic_ms_thin_brightness_low,
             tab = EditorTab.ADJUST,
             keywords = listOf("shadows", "dark details", "lift shadows", "underexposed")
         ),
@@ -194,7 +194,7 @@ object ToolSearchCatalog {
             id = "black_point",
             name = "Black point",
             description = "Adjust the darkest parts of the image",
-            iconRes = R.drawable.ic_ms_circle,
+            iconRes = R.drawable.ic_ms_thin_circle,
             tab = EditorTab.ADJUST,
             keywords = listOf("black point", "black", "pure black", "shadow floor", "crush")
         ),
@@ -202,7 +202,7 @@ object ToolSearchCatalog {
             id = "saturation",
             name = "Saturation",
             description = "Make colors more or less vibrant",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.ADJUST,
             keywords = listOf("saturation", "vibrancy", "color intensity", "vivid", "colorful")
         ),
@@ -210,7 +210,7 @@ object ToolSearchCatalog {
             id = "warmth",
             name = "Warmth",
             description = "Make the image appear warmer or cooler",
-            iconRes = R.drawable.ic_ms_wb_twilight,
+            iconRes = R.drawable.ic_ms_thin_wb_twilight,
             tab = EditorTab.ADJUST,
             keywords = listOf("warmth", "temperature", "cool", "kelvin", "golden", "amber", "blue")
         ),
@@ -218,7 +218,7 @@ object ToolSearchCatalog {
             id = "tint",
             name = "Tint",
             description = "Adjust color balance between magenta and green",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.ADJUST,
             keywords = listOf("tint", "green", "magenta", "color balance", "white balance")
         ),
@@ -226,7 +226,7 @@ object ToolSearchCatalog {
             id = "skin_tone",
             name = "Skin tone",
             description = "Adjust warmth and exposure specifically for skin tones",
-            iconRes = R.drawable.ic_ms_person,
+            iconRes = R.drawable.ic_ms_thin_person,
             tab = EditorTab.ADJUST,
             keywords = listOf("skin tone", "skin", "portrait", "face", "complexion")
         ),
@@ -234,7 +234,7 @@ object ToolSearchCatalog {
             id = "blue_tone",
             name = "Blue tone",
             description = "Make skies and blues more vivid or softened",
-            iconRes = R.drawable.ic_ms_cloud,
+            iconRes = R.drawable.ic_ms_thin_cloud,
             tab = EditorTab.ADJUST,
             keywords = listOf("blue tone", "sky", "water", "ocean", "blue", "cyan")
         ),
@@ -242,7 +242,7 @@ object ToolSearchCatalog {
             id = "vignette",
             name = "Vignette",
             description = "Darken the edges of the image",
-            iconRes = R.drawable.ic_ms_center_focus_strong,
+            iconRes = R.drawable.ic_ms_thin_center_focus_strong,
             tab = EditorTab.ADJUST,
             keywords = listOf("vignette", "edges", "border", "radial", "fade", "corner darkening")
         ),
@@ -252,7 +252,7 @@ object ToolSearchCatalog {
             id = "filters_overview",
             name = "Filters",
             description = "Apply color grading presets with adjustable strength",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("filters", "presets", "styles", "color grade", "lut")
         ),
@@ -260,7 +260,7 @@ object ToolSearchCatalog {
             id = "filter_original",
             name = "Original",
             description = "Unfiltered natural photo",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("original", "none", "natural", "reset filter")
         ),
@@ -268,7 +268,7 @@ object ToolSearchCatalog {
             id = "filter_lite",
             name = "Lite",
             description = "Subtle exposure lift, slight desaturation, clean film look",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("lite", "film", "clean", "subtle", "soft")
         ),
@@ -276,7 +276,7 @@ object ToolSearchCatalog {
             id = "filter_playa",
             name = "Playa",
             description = "Warm golden hour warmth, amber highlights, gentle fade",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("playa", "warm", "golden hour", "amber", "beach")
         ),
@@ -284,7 +284,7 @@ object ToolSearchCatalog {
             id = "filter_honey",
             name = "Honey",
             description = "Rich warm tones, deep contrast, honey-tinted midtones",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("honey", "warm", "rich", "golden", "contrast")
         ),
@@ -292,7 +292,7 @@ object ToolSearchCatalog {
             id = "filter_isla",
             name = "Isla",
             description = "Vibrant tropical blues, crisp contrast, saturated greens",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("isla", "tropical", "vibrant", "blue", "green", "vacation")
         ),
@@ -300,7 +300,7 @@ object ToolSearchCatalog {
             id = "filter_desert",
             name = "Desert",
             description = "Muted greens, boosted ochre/sand tones, matte shadows",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("desert", "sand", "ochre", "muted", "matte")
         ),
@@ -308,7 +308,7 @@ object ToolSearchCatalog {
             id = "filter_clay",
             name = "Clay",
             description = "Earthy terracotta reds, softened highlights",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("clay", "terracotta", "red", "earthy")
         ),
@@ -316,7 +316,7 @@ object ToolSearchCatalog {
             id = "filter_palma",
             name = "Palma",
             description = "Clean Mediterranean light, balanced contrast, vivid cyan sky",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("palma", "mediterranean", "cyan", "sky", "clean")
         ),
@@ -324,7 +324,7 @@ object ToolSearchCatalog {
             id = "filter_metro",
             name = "Metro",
             description = "Urban cool tones, blue cast in shadows, punchy contrast",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("metro", "urban", "cool", "city", "blue shadows")
         ),
@@ -332,7 +332,7 @@ object ToolSearchCatalog {
             id = "filter_eiffel",
             name = "Eiffel",
             description = "Classic moody French film, gentle magenta/sepia warmth",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("eiffel", "film", "sepia", "paris", "vintage", "moody")
         ),
@@ -340,7 +340,7 @@ object ToolSearchCatalog {
             id = "filter_modena",
             name = "Modena",
             description = "High contrast, deep blacks, saturated primaries",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("modena", "high contrast", "deep blacks", "saturated", "bold")
         ),
@@ -348,7 +348,7 @@ object ToolSearchCatalog {
             id = "filter_breeze",
             name = "Breeze",
             description = "Airy pastel tones, lifted shadows, soft highlight glow",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("breeze", "pastel", "airy", "soft", "glow")
         ),
@@ -356,7 +356,7 @@ object ToolSearchCatalog {
             id = "filter_vogue",
             name = "Vogue",
             description = "Monochrome B&W high fashion contrast, pure whites",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("vogue", "black and white", "monochrome", "bw", "fashion", "grayscale")
         ),
@@ -364,7 +364,7 @@ object ToolSearchCatalog {
             id = "filter_onyx",
             name = "Onyx",
             description = "Deep cinematic B&W, heavy shadows, film grain feel",
-            iconRes = R.drawable.ic_ms_palette,
+            iconRes = R.drawable.ic_ms_thin_palette,
             tab = EditorTab.FILTERS,
             keywords = listOf("onyx", "black and white", "cinematic", "bw", "dark", "grayscale")
         ),
@@ -374,7 +374,7 @@ object ToolSearchCatalog {
             id = "markup_pen",
             name = "Pen",
             description = "Draw freehand strokes with customizable color and width",
-            iconRes = R.drawable.ic_ms_edit,
+            iconRes = R.drawable.ic_ms_thin_edit,
             tab = EditorTab.MARKUP,
             keywords = listOf("pen", "draw", "stroke", "freehand", "doodle", "sketch", "pencil")
         ),
@@ -382,15 +382,31 @@ object ToolSearchCatalog {
             id = "markup_highlighter",
             name = "Highlighter",
             description = "Highlight details with semi-transparent broad strokes",
-            iconRes = R.drawable.ic_ms_edit_note,
+            iconRes = R.drawable.ic_ms_thin_edit_note,
             tab = EditorTab.MARKUP,
             keywords = listOf("highlighter", "highlight", "marker", "semi-transparent", "accent")
+        ),
+        EditorToolItem(
+            id = "markup_arrow",
+            name = "Arrow",
+            description = "Draw directional arrows to point out details",
+            iconRes = R.drawable.ic_ms_thin_north_west,
+            tab = EditorTab.MARKUP,
+            keywords = listOf("arrow", "pointer", "point", "direction", "callout", "annotate")
+        ),
+        EditorToolItem(
+            id = "markup_eraser",
+            name = "Eraser",
+            description = "Erase drawn markup strokes or clear all annotations",
+            iconRes = R.drawable.ic_ms_thin_ink_eraser,
+            tab = EditorTab.MARKUP,
+            keywords = listOf("eraser", "erase", "rub", "delete", "clear", "remove", "stroke", "draw", "brush", "cleanup")
         ),
         EditorToolItem(
             id = "markup_redact",
             name = "Redact",
             description = "Privacy mosaic pixelation or blackout redaction",
-            iconRes = R.drawable.ic_ms_shield,
+            iconRes = R.drawable.ic_ms_thin_shield,
             tab = EditorTab.MARKUP,
             keywords = listOf("redact", "mosaic", "pixelate", "blur", "blackout", "privacy", "hide", "censor")
         ),
@@ -398,7 +414,7 @@ object ToolSearchCatalog {
             id = "markup_text",
             name = "Text",
             description = "Add text captions and labels over the image",
-            iconRes = R.drawable.ic_ms_text_fields,
+            iconRes = R.drawable.ic_ms_thin_text_fields,
             tab = EditorTab.MARKUP,
             keywords = listOf("text", "font", "caption", "label", "write", "type", "title")
         )
@@ -492,7 +508,7 @@ fun ToolSearchSheet(
                     modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_arrow_back),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_arrow_back),
                         contentDescription = "Close search",
                         tint = MaterialTheme.colorScheme.onSurface
                     )
@@ -512,7 +528,7 @@ fun ToolSearchSheet(
                     },
                     leadingIcon = {
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_ms_search),
+                            painter = painterResource(id = R.drawable.ic_ms_thin_search),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
@@ -526,7 +542,7 @@ fun ToolSearchSheet(
                         ) {
                             IconButton(onClick = { searchQuery = "" }) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.ic_ms_close),
+                                    painter = painterResource(id = R.drawable.ic_ms_thin_close),
                                     contentDescription = "Clear search",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
@@ -574,7 +590,7 @@ fun ToolSearchSheet(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.ic_ms_search),
+                                    painter = painterResource(id = R.drawable.ic_ms_thin_search),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(36.dp)

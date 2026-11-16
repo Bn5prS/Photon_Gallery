@@ -3,9 +3,13 @@ package com.inferno.gallery.data
 import android.content.ContentValues
 import android.content.Context
 import android.content.ContentUris
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.CoreMediaEntity
@@ -15,12 +19,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.security.KeyStore
 import java.util.UUID
+import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Handles file operations for Private Space:
- * - hideMedia: copy to app-internal vault dir, delete from MediaStore
- * - unhideMedia: copy back to MediaStore, delete from vault
+ * - hideMedia: encrypt & copy to app-internal vault dir, delete original from storage/MediaStore
+ * - unhideMedia: decrypt & copy back to MediaStore with original dates, delete from vault
  * - deleteFromVault: permanently delete vault files
  */
 class VaultRepository(
@@ -29,6 +42,108 @@ class VaultRepository(
 ) {
     private val vaultDir: File
         get() = File(context.filesDir, "vault").also { it.mkdirs() }
+
+    private val previewCacheDir: File
+        get() = File(context.cacheDir, "vault_preview").also { it.mkdirs() }
+
+    companion object {
+        private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
+        private const val KEY_ALIAS = "photon_vault_aes_key"
+        private val ENC_MAGIC = "PVENC1".toByteArray(Charsets.US_ASCII) // 6 bytes
+        private const val GCM_IV_LEN = 12
+        private const val GCM_TAG_BITS = 128
+    }
+
+    private fun getOrCreateAesKey(): SecretKey {
+        val ks = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
+        (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        val keyGen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
+        val spec = KeyGenParameterSpec.Builder(
+            KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build()
+        keyGen.init(spec)
+        return keyGen.generateKey()
+    }
+
+    private fun writeEncrypted(input: InputStream, destFile: File) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateAesKey())
+        val iv = cipher.iv // 12 bytes
+        destFile.outputStream().use { rawOut ->
+            rawOut.write(ENC_MAGIC)
+            rawOut.write(iv)
+            CipherOutputStream(rawOut, cipher).use { cipherOut ->
+                input.copyTo(cipherOut)
+            }
+        }
+    }
+
+    private fun copyDecrypted(vaultFile: File, output: OutputStream) {
+        vaultFile.inputStream().use { rawIn ->
+            val header = ByteArray(ENC_MAGIC.size)
+            val readMagic = rawIn.read(header)
+            if (readMagic == ENC_MAGIC.size && header.contentEquals(ENC_MAGIC)) {
+                val iv = ByteArray(GCM_IV_LEN)
+                var ivRead = 0
+                while (ivRead < GCM_IV_LEN) {
+                    val r = rawIn.read(iv, ivRead, GCM_IV_LEN - ivRead)
+                    if (r <= 0) break
+                    ivRead += r
+                }
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, getOrCreateAesKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+                CipherInputStream(rawIn, cipher).use { cipherIn ->
+                    cipherIn.copyTo(output)
+                }
+            } else {
+                // Legacy unencrypted file fallback
+                if (readMagic > 0) {
+                    output.write(header, 0, readMagic)
+                }
+                rawIn.copyTo(output)
+            }
+        }
+    }
+
+    fun clearPreviewCache() {
+        try {
+            previewCacheDir.listFiles()?.forEach { it.delete() }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Returns a decrypted File in cacheDir/vault_preview for in-vault viewing/playback.
+     * Legacy unencrypted files are returned directly without copying.
+     */
+    suspend fun getViewableVaultFile(entity: VaultMediaEntity): File? = withContext(Dispatchers.IO) {
+        val vaultFile = File(vaultDir, entity.vaultFileName)
+        if (!vaultFile.exists()) return@withContext null
+
+        val isEncrypted = try {
+            vaultFile.inputStream().use { ins ->
+                val header = ByteArray(ENC_MAGIC.size)
+                ins.read(header) == ENC_MAGIC.size && header.contentEquals(ENC_MAGIC)
+            }
+        } catch (_: Exception) {
+            false
+        }
+        if (!isEncrypted) return@withContext vaultFile
+
+        val cached = File(previewCacheDir, entity.vaultFileName)
+        if (cached.exists() && cached.length() > 0L) return@withContext cached
+        return@withContext try {
+            cached.outputStream().use { out -> copyDecrypted(vaultFile, out) }
+            cached
+        } catch (e: Exception) {
+            cached.delete()
+            null
+        }
+    }
 
     val vaultItems: Flow<List<VaultMediaEntity>> = vaultDao.observeAll()
     val vaultCount: Flow<Int> = vaultDao.observeCount()
@@ -43,7 +158,62 @@ class VaultRepository(
 
         for (uri in uris) {
             try {
-                // Query MediaStore for file info
+                if (uri.scheme == "file") {
+                    val srcFile = File(uri.path ?: continue)
+                    if (!srcFile.exists() || !srcFile.isFile) continue
+
+                    val displayName = srcFile.name
+                    val extension = displayName.substringAfterLast(".", "")
+                    val mimeType = MimeTypeMap.getSingleton()
+                        .getMimeTypeFromExtension(extension.lowercase())
+                        ?: if (extension.lowercase() in listOf("mp4", "mov", "mkv", "3gp", "webm")) "video/mp4" else "image/jpeg"
+                    val isVideo = mimeType.startsWith("video")
+                    val filePath = srcFile.absolutePath
+                    val originalBucket = srcFile.parentFile?.name ?: "Gallery"
+                    val relativePath = filePath.substringAfter("/storage/emulated/0/", "")
+                        .substringBeforeLast("/", "")
+                        .let { if (it.isNotBlank()) "$it/" else "" }
+                    val size = srcFile.length()
+                    val dateModified = srcFile.lastModified() / 1000L
+                    val dateAdded = dateModified
+
+                    val vaultFileName = if (extension.isNotBlank()) "${UUID.randomUUID()}.$extension" else UUID.randomUUID().toString()
+                    val vaultFile = File(vaultDir, vaultFileName)
+                    srcFile.inputStream().use { input ->
+                        writeEncrypted(input, vaultFile)
+                    }
+
+                    if (vaultFile.exists() && vaultFile.length() > 0L) {
+                        val deleted = srcFile.delete()
+                        if (deleted) {
+                            MediaScannerConnection.scanFile(context.applicationContext, arrayOf(filePath), null, null)
+                            entities.add(
+                                VaultMediaEntity(
+                                    originalUri = uri.toString(),
+                                    originalPath = filePath,
+                                    originalBucket = originalBucket,
+                                    originalRelativePath = relativePath,
+                                    fileName = displayName,
+                                    vaultFileName = vaultFileName,
+                                    mimeType = mimeType,
+                                    isVideo = isVideo,
+                                    durationMs = null,
+                                    size = size,
+                                    dateAdded = dateAdded,
+                                    dateModified = dateModified,
+                                    dateHidden = System.currentTimeMillis() / 1000
+                                )
+                            )
+                        } else {
+                            // Never leave a duplicate if original could not be deleted
+                            vaultFile.delete()
+                            android.util.Log.w("VaultRepository", "Aborting hide: could not delete source file $filePath")
+                        }
+                    }
+                    continue
+                }
+
+                // Query MediaStore for content:// URI info
                 val projection = arrayOf(
                     MediaStore.MediaColumns._ID,
                     MediaStore.MediaColumns.DISPLAY_NAME,
@@ -74,41 +244,52 @@ class VaultRepository(
 
                         // Generate vault filename
                         val extension = displayName.substringAfterLast(".", "")
-                        val vaultFileName = "${UUID.randomUUID()}.$extension"
+                        val vaultFileName = if (extension.isNotBlank()) "${UUID.randomUUID()}.$extension" else UUID.randomUUID().toString()
 
-                        // Copy file to vault directory
+                        // Encrypt & copy file to vault directory
                         val vaultFile = File(vaultDir, vaultFileName)
                         context.contentResolver.openInputStream(uri)?.use { input ->
-                            vaultFile.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
+                            writeEncrypted(input, vaultFile)
                         }
 
-                        // Verify copy succeeded
+                        // Verify copy succeeded, then delete original (abort on delete failure to prevent duplicates)
                         if (vaultFile.exists() && vaultFile.length() > 0) {
-                            entities.add(
-                                VaultMediaEntity(
-                                    originalUri = uri.toString(),
-                                    originalPath = filePath,
-                                    originalBucket = originalBucket,
-                                    originalRelativePath = relativePath,
-                                    fileName = displayName,
-                                    vaultFileName = vaultFileName,
-                                    mimeType = mimeType,
-                                    isVideo = isVideo,
-                                    durationMs = duration,
-                                    size = size,
-                                    dateAdded = dateAdded,
-                                    dateModified = dateModified,
-                                    dateHidden = System.currentTimeMillis() / 1000
-                                )
-                            )
-
-                            // Delete from MediaStore so it disappears from gallery
-                            try {
-                                context.contentResolver.delete(uri, null, null)
+                            val deletedFromStore = try {
+                                context.contentResolver.delete(uri, null, null) > 0
                             } catch (e: Exception) {
-                                android.util.Log.w("VaultRepository", "MediaStore delete failed for $uri, trying recoverableSecurityException", e)
+                                android.util.Log.w("VaultRepository", "MediaStore delete failed for $uri, trying direct file delete", e)
+                                false
+                            }
+                            val deletedDirect = if (!deletedFromStore && filePath.isNotBlank()) {
+                                val f = File(filePath)
+                                val ok = f.exists() && f.delete()
+                                if (ok) {
+                                    MediaScannerConnection.scanFile(context.applicationContext, arrayOf(filePath), null, null)
+                                }
+                                ok
+                            } else false
+
+                            if (deletedFromStore || deletedDirect) {
+                                entities.add(
+                                    VaultMediaEntity(
+                                        originalUri = uri.toString(),
+                                        originalPath = filePath,
+                                        originalBucket = originalBucket,
+                                        originalRelativePath = relativePath,
+                                        fileName = displayName,
+                                        vaultFileName = vaultFileName,
+                                        mimeType = mimeType,
+                                        isVideo = isVideo,
+                                        durationMs = duration,
+                                        size = size,
+                                        dateAdded = dateAdded,
+                                        dateModified = dateModified,
+                                        dateHidden = System.currentTimeMillis() / 1000
+                                    )
+                                )
+                            } else {
+                                vaultFile.delete()
+                                android.util.Log.w("VaultRepository", "Aborting hide: original could not be deleted for $uri")
                             }
                         }
                     }
@@ -132,6 +313,8 @@ class VaultRepository(
                     val parsedId = try { ContentUris.parseId(Uri.parse(entity.originalUri)) } catch (_: Exception) { null }
                     if (parsedId != null) {
                         mediaIds.add(parsedId)
+                    } else if (entity.originalPath.isNotBlank()) {
+                        db.mediaDao().getMediaByPath(entity.originalPath)?.id?.let { mediaIds.add(it) }
                     }
                     db.mediaDao().deleteByUri(entity.originalUri)
                 }
@@ -168,9 +351,9 @@ class VaultRepository(
 
                 // Insert back into MediaStore
                 val collection = if (item.isVideo) {
-                    MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                 } else {
-                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                 }
 
                 // Use original relative path if stored, otherwise fall back to bucket
@@ -198,11 +381,9 @@ class VaultRepository(
 
                 val insertUri = context.contentResolver.insert(collection, values)
                 if (insertUri != null) {
-                    // Write file content
+                    // Decrypt & write file content
                     context.contentResolver.openOutputStream(insertUri)?.use { output ->
-                        vaultFile.inputStream().use { input ->
-                            input.copyTo(output)
-                        }
+                        copyDecrypted(vaultFile, output)
                     }
 
                     // Mark as complete, re-set dates (some MediaStore impls reset dates on write)
@@ -219,6 +400,13 @@ class VaultRepository(
                     }
                     context.contentResolver.update(insertUri, finalValues, null, null)
 
+                    // Resolve actual MediaStore filePath so Room record is immediately complete
+                    val resolvedFilePath = try {
+                        context.contentResolver.query(insertUri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { c ->
+                            if (c.moveToFirst()) c.getString(0) else null
+                        }
+                    } catch (_: Exception) { null } ?: ""
+
                     // Pre-insert a CoreMediaEntity with the ORIGINAL dateAdded into Room
                     // so the gallery groups this item correctly (not under "Today")
                     try {
@@ -228,7 +416,7 @@ class VaultRepository(
                             CoreMediaEntity(
                                 id = newId,
                                 uriString = insertUri.toString(),
-                                filePath = "", // Will be filled by next MediaSyncWorker run
+                                filePath = resolvedFilePath,
                                 bucketName = item.originalBucket,
                                 dateAdded = item.dateAdded, // Original date!
                                 dateModified = item.dateModified,

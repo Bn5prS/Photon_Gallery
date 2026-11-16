@@ -63,6 +63,7 @@ import com.inferno.gallery.R
 
 
 private enum class PinSetupStage {
+    VERIFY_CURRENT_PIN,
     ENTER_NEW_PIN,
     CONFIRM_NEW_PIN
 }
@@ -91,13 +92,15 @@ fun PrivateSpaceScreen(
 
     val shakeOffset = remember { Animatable(0f) }
     var showOptionsMenu by remember { mutableStateOf(false) }
+    var viewingItem by remember { mutableStateOf<VaultMediaEntity?>(null) }
 
     // ── Session Invalidation on Exit / Background / Disposal ────────────────
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_PAUSE) {
-                viewModel.vaultAuthManager.lock()
+                viewingItem = null
+                viewModel.lockVault()
                 selectedIds = emptySet()
                 enteredPin = ""
             }
@@ -105,17 +108,20 @@ fun PrivateSpaceScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.vaultAuthManager.lock()
+            viewingItem = null
+            viewModel.lockVault()
             selectedIds = emptySet()
             enteredPin = ""
         }
     }
 
     BackHandler {
-        if (isSelectionMode) {
+        if (viewingItem != null) {
+            viewingItem = null
+        } else if (isSelectionMode) {
             selectedIds = emptySet()
         } else {
-            viewModel.vaultAuthManager.lock()
+            viewModel.lockVault()
             selectedIds = emptySet()
             enteredPin = ""
             onNavigateBack()
@@ -156,7 +162,8 @@ fun PrivateSpaceScreen(
                                     if (isSelectionMode) {
                                         selectedIds = emptySet()
                                     } else {
-                                        viewModel.vaultAuthManager.lock()
+                                        viewingItem = null
+                                        viewModel.lockVault()
                                         selectedIds = emptySet()
                                         enteredPin = ""
                                         onNavigateBack()
@@ -225,7 +232,8 @@ fun PrivateSpaceScreen(
                                             onClick = {
                                                 showOptionsMenu = false
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.vaultAuthManager.lock()
+                                                viewingItem = null
+                                                viewModel.lockVault()
                                                 enteredPin = ""
                                                 selectedIds = emptySet()
                                             }
@@ -238,8 +246,8 @@ fun PrivateSpaceScreen(
                                                 viewModel.vaultAuthManager.lock()
                                                 selectedIds = emptySet()
                                                 isChangingPinMode = true
-                                                isPinConfigured = false
-                                                setupStage = PinSetupStage.ENTER_NEW_PIN
+                                                isPinConfigured = true
+                                                setupStage = PinSetupStage.VERIFY_CURRENT_PIN
                                                 enteredPin = ""
                                                 firstEnteredPin = ""
                                             }
@@ -346,12 +354,14 @@ fun PrivateSpaceScreen(
                         val isSetup = !isPinConfigured
 
                         val headerTitle = when {
-                            !isPinConfigured && setupStage == PinSetupStage.ENTER_NEW_PIN -> "Create Vault PIN"
+                            isChangingPinMode && setupStage == PinSetupStage.VERIFY_CURRENT_PIN -> "Verify Current PIN"
+                            !isPinConfigured && setupStage == PinSetupStage.ENTER_NEW_PIN -> if (isChangingPinMode) "Enter New PIN" else "Create Vault PIN"
                             !isPinConfigured && setupStage == PinSetupStage.CONFIRM_NEW_PIN -> "Confirm Your PIN"
                             else -> "Private Space"
                         }
 
                         val headerSubtitle = when {
+                            isChangingPinMode && setupStage == PinSetupStage.VERIFY_CURRENT_PIN -> "Enter your current 4-digit PIN to continue"
                             !isPinConfigured && setupStage == PinSetupStage.ENTER_NEW_PIN -> "Enter a 4-digit Master PIN to protect hidden photos"
                             !isPinConfigured && setupStage == PinSetupStage.CONFIRM_NEW_PIN -> "Re-enter your 4-digit PIN to confirm"
                             else -> "Enter your 4-digit PIN or tap fingerprint"
@@ -363,7 +373,7 @@ fun PrivateSpaceScreen(
                             isSetup = isSetup,
                             setupStage = setupStage,
                             enteredPin = enteredPin,
-                            showBiometricKey = !isSetup,
+                            showBiometricKey = !isSetup && !isChangingPinMode,
                             shakeOffset = shakeOffset.value,
                             onDigitPress = { digit ->
                                 if (enteredPin.length < 4) {
@@ -386,7 +396,7 @@ fun PrivateSpaceScreen(
                                                     isChangingPinMode = false
                                                     viewModel.vaultAuthManager.unlock()
                                                     enteredPin = ""
-                                                    Toast.makeText(context, "Vault PIN created successfully!", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, "Vault PIN saved successfully!", Toast.LENGTH_SHORT).show()
                                                 } else {
                                                     // Mismatch shake
                                                     coroutineScope.launch {
@@ -403,11 +413,20 @@ fun PrivateSpaceScreen(
                                                 }
                                             }
                                         } else {
-                                            // Handle Existing PIN Verification Flow
-                                            if (viewModel.vaultAuthManager.verifyPin(context, newPin)) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.vaultAuthManager.unlock()
+                                            val lockoutSec = viewModel.vaultAuthManager.getRemainingLockoutSeconds(context)
+                                            if (lockoutSec > 0) {
                                                 enteredPin = ""
+                                                Toast.makeText(context, "Too many attempts. Try again in ${lockoutSec}s", Toast.LENGTH_SHORT).show()
+                                            } else if (viewModel.vaultAuthManager.verifyPin(context, newPin)) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                if (isChangingPinMode && setupStage == PinSetupStage.VERIFY_CURRENT_PIN) {
+                                                    isPinConfigured = false
+                                                    setupStage = PinSetupStage.ENTER_NEW_PIN
+                                                    enteredPin = ""
+                                                } else {
+                                                    viewModel.vaultAuthManager.unlock()
+                                                    enteredPin = ""
+                                                }
                                             } else {
                                                 // Incorrect PIN shake
                                                 coroutineScope.launch {
@@ -417,7 +436,9 @@ fun PrivateSpaceScreen(
                                                     shakeOffset.animateTo(10f, spring(stiffness = Spring.StiffnessHigh))
                                                     shakeOffset.animateTo(0f, spring(stiffness = Spring.StiffnessHigh))
                                                     enteredPin = ""
-                                                    Toast.makeText(context, "Incorrect PIN", Toast.LENGTH_SHORT).show()
+                                                    val newLockout = viewModel.vaultAuthManager.getRemainingLockoutSeconds(context)
+                                                    val msg = if (newLockout > 0) "Too many attempts. Wait ${newLockout}s" else "Incorrect PIN"
+                                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                                 }
                                             }
                                         }
@@ -472,8 +493,8 @@ fun PrivateSpaceScreen(
                                 key = { it.id }
                             ) { item ->
                                 val isSelected = selectedIds.contains(item.id)
-                                val vaultUri = remember(item.vaultFileName) {
-                                    viewModel.getVaultFileUri(item)
+                                val viewableFile by produceState<java.io.File?>(initialValue = null, item.vaultFileName) {
+                                    value = viewModel.getViewableVaultFile(item)
                                 }
 
                                 Box(
@@ -491,6 +512,8 @@ fun PrivateSpaceScreen(
                                                 if (isSelectionMode) {
                                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                     selectedIds = if (isSelected) selectedIds - item.id else selectedIds + item.id
+                                                } else {
+                                                    viewingItem = item
                                                 }
                                             },
                                             onLongClick = {
@@ -501,7 +524,7 @@ fun PrivateSpaceScreen(
                                 ) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data(vaultUri)
+                                            .data(viewableFile)
                                             .size(384)
                                             .crossfade(true)
                                             .build(),
@@ -567,6 +590,131 @@ fun PrivateSpaceScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        val activeViewerItem = viewingItem
+        if (activeViewerItem != null && isUnlocked) {
+            VaultMediaViewerDialog(
+                item = activeViewerItem,
+                viewModel = viewModel,
+                onDismiss = { viewingItem = null },
+                onUnhide = {
+                    viewingItem = null
+                    viewModel.unhideMedia(listOf(activeViewerItem.id))
+                },
+                onDelete = {
+                    viewingItem = null
+                    viewModel.deleteFromVault(listOf(activeViewerItem.id))
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun VaultMediaViewerDialog(
+    item: VaultMediaEntity,
+    viewModel: GalleryViewModel,
+    onDismiss: () -> Unit,
+    onUnhide: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
+    val viewableFile by produceState<java.io.File?>(initialValue = null, item.vaultFileName) {
+        value = viewModel.getViewableVaultFile(item)
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            val file = viewableFile
+            if (file == null) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else if (item.isVideo) {
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { ctx ->
+                        android.widget.VideoView(ctx).apply {
+                            val mc = android.widget.MediaController(ctx)
+                            mc.setAnchorView(this)
+                            setMediaController(mc)
+                            setVideoPath(file.absolutePath)
+                            setOnPreparedListener { mp ->
+                                mp.isLooping = true
+                                start()
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .align(Alignment.Center)
+                )
+            } else {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(file)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.fileName,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .align(Alignment.Center)
+                )
+            }
+
+            // Top overlay bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .align(Alignment.TopCenter),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledTonalIconButton(
+                    onClick = onDismiss,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = Color.Black.copy(alpha = 0.6f),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Close")
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalIconButton(
+                        onClick = onUnhide,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.6f),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility), contentDescription = "Unhide")
+                    }
+                    FilledTonalIconButton(
+                        onClick = onDelete,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.6f),
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete")
                     }
                 }
             }
@@ -728,9 +876,9 @@ private fun ExpressiveVaultKeypad(
                 )
             }
         }
+
     }
 }
-
 @Composable
 private fun KeypadButton(
     digit: String,
@@ -776,9 +924,9 @@ private fun KeypadButton(
                 )
             }
         }
+
     }
 }
-
 @Composable
 private fun KeypadActionButton(
     icon: ImageVector,
@@ -821,4 +969,70 @@ private fun formatVaultDuration(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
+}
+
+@Composable
+fun VaultPinVerifyDialog(
+    vaultAuthManager: com.inferno.gallery.data.VaultAuthManager,
+    onVerified: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var pin by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter Vault PIN", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Enter your 4-digit Private Space PIN to continue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { input ->
+                        if (input.length <= 4 && input.all { it.isDigit() }) {
+                            pin = input
+                            errorMsg = null
+                        }
+                    },
+                    singleLine = true,
+                    label = { Text("4-digit PIN") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword
+                    ),
+                    isError = errorMsg != null,
+                    supportingText = errorMsg?.let { msg -> { Text(msg) } }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = pin.length == 4,
+                onClick = {
+                    val lockout = vaultAuthManager.getRemainingLockoutSeconds(context)
+                    if (lockout > 0) {
+                        errorMsg = "Too many attempts. Wait ${lockout}s"
+                    } else if (vaultAuthManager.verifyPin(context, pin)) {
+                        onVerified()
+                    } else {
+                        val rem = vaultAuthManager.getRemainingLockoutSeconds(context)
+                        errorMsg = if (rem > 0) "Too many attempts. Wait ${rem}s" else "Incorrect PIN"
+                        pin = ""
+                    }
+                }
+            ) {
+                Text("Verify")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

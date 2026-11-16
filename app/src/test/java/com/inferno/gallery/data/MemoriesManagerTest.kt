@@ -73,6 +73,9 @@ class MemoriesManagerTest {
         override suspend fun getAllMedia(): List<CoreMediaEntity> = emptyList()
         override suspend fun getAllMediaCount(): Int = 0
         override suspend fun getMediaById(id: Long): CoreMediaEntity? = null
+        override suspend fun normalizeExternalPrimaryUris(): Int = 0
+        override suspend fun updateDateModifiedByUri(uriString: String, dateModified: Long) {}
+        override suspend fun updateDateModifiedById(id: Long, dateModified: Long) {}
         override suspend fun getMediaByUri(uriString: String): CoreMediaEntity? = null
         override suspend fun getMediaByPath(filePath: String): CoreMediaEntity? = null
         override suspend fun getAllMediaIds(): List<Long> = emptyList()
@@ -125,6 +128,21 @@ class MemoriesManagerTest {
         override suspend fun deleteDocumentClassificationsForMedia(mediaId: Long) {}
         override suspend fun clearDocumentClassifications() {}
         override suspend fun getDocumentClassificationsCount(): Int = 0
+        override suspend fun getMediaByBucket(bucket: String): List<CoreMediaEntity> = emptyList()
+        override suspend fun updateBucketName(oldBucket: String, newBucket: String) {}
+        override suspend fun getOnThisDayRangeMedia(monthDays: List<String>, excludeYear: String): List<CoreMediaEntity> {
+            val exYear = excludeYear.toIntOrNull() ?: -1
+            return mediaList.filter { entity ->
+                val cal = Calendar.getInstance().apply {
+                    timeInMillis = entity.dateAdded * 1000L
+                }
+                val md = String.format("%02d-%02d", cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
+                val y = cal.get(Calendar.YEAR)
+                monthDays.contains(md) && y != exYear
+            }
+        }
+        override suspend fun getPastYearsMonthMedia(month: String, excludeYear: String, limit: Int): List<CoreMediaEntity> = emptyList()
+        override suspend fun getHistoricalMedia(beforeTimestampSec: Long, limit: Int): List<CoreMediaEntity> = emptyList()
     }
 
     @Test

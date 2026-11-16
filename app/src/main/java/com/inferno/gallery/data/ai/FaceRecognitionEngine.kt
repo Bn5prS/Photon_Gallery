@@ -20,8 +20,7 @@ class FaceRecognitionEngine(private val context: Context) {
         private var INSTANCE: FaceRecognitionEngine? = null
 
         fun isSupported(): Boolean {
-            val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: return false
-            return abi == "arm64-v8a" || abi == "x86_64"
+            return Build.SUPPORTED_ABIS.any { it == "arm64-v8a" || it == "x86_64" }
         }
 
         fun getInstance(context: Context): FaceRecognitionEngine {

@@ -6,6 +6,7 @@
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Photos</string>
     <string name="nav_albums">Albums</string>
+    <string name="nav_collections">Collections</string>
     <string name="nav_search">Search</string>
     <string name="nav_settings">Settings</string>
 
@@ -16,10 +17,23 @@
     <string name="action_share">Share</string>
     <string name="action_rotate">Rotate</string>
     <string name="action_rename">Rename</string>
+    <string name="action_print">Print</string>
+    <string name="action_rename_album">Rename album</string>
+    <string name="action_filter_album">Filter album</string>
+    <string name="filter_all_media">All media</string>
+    <string name="filter_photos_only">Photos only</string>
+    <string name="filter_videos_only">Videos only</string>
+    <string name="filter_favorites_only">Favorites only</string>
+    <string name="dialog_rename_album_title">Rename Album</string>
+    <string name="dialog_rename_album_label">Album Name</string>
     <string name="action_edit">Edit</string>
     <string name="action_details">Details</string>
     <string name="action_save">Save</string>
     <string name="action_copy">Copy</string>
+    <string name="action_copy_to_album">Copy to album</string>
+    <string name="action_copy_to_clipboard">Copy to clipboard</string>
+    <string name="toast_copied_to_clipboard">Copied to clipboard</string>
+    <string name="toast_copy_clipboard_failed">Unable to copy image</string>
     <string name="action_move">Move</string>
     <string name="action_select_all">Select All</string>
     <string name="action_deselect_all">Deselect All</string>
@@ -58,7 +72,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Search photos, places, dates, text...</string>
     <string name="smart_search">Smart Search</string>
-    <string name="smart_search_description">Natural language on-device search powered by CLIP ViT-B/16</string>
+    <string name="smart_search_description">Natural language on-device search powered by MobileCLIP2-S2</string>
     <string name="recent_searches">Recent Searches</string>
     <string name="clear_search_history">Clear Search History</string>
     <string name="no_search_results">No results found</string>
@@ -102,7 +116,10 @@
 
     <!-- Onboarding &amp; Language -->
     <string name="onboarding_welcome_to">Welcome to</string>
-    <string name="onboarding_welcome_tagline">A private, beautiful space for all your memories.</string>
+    <string name="onboarding_welcome_tagline">An open-source gallery to browse, organize, and search your media library.</string>
+    <string name="onboarding_action_get_started">Get Started</string>
+    <string name="onboarding_permissions_header">Access Your Media</string>
+    <string name="onboarding_permissions_subtitle">Photon Gallery requires storage access to display and organize your photos and videos. Your media stays strictly on your device.</string>
     <string name="onboarding_required_permissions">Required Permissions</string>
     <string name="onboarding_perm_photos_videos_title">Photos &amp; Videos Access</string>
     <string name="onboarding_perm_photos_videos_desc">Required to view, organize, and manage your photo and video library</string>
@@ -122,6 +139,16 @@
     <string name="section_documents">Documents</string>
     <string name="section_capture_modes">Capture Modes</string>
     <string name="section_utilities">Utilities &amp; Tools</string>
+    <string name="section_smart_folders">Smart Folders</string>
+    <string name="section_creation_studio">Creation Studio</string>
+    <string name="tag_media">Media</string>
+    <string name="tag_actions">Actions</string>
+    <string name="trash_empty_retained">Empty • Retained 30 days</string>
+    <string name="vault_status_protected">Protected</string>
+    <string name="tool_sub_layouts">Layouts</string>
+    <string name="tool_sub_merge">Merge</string>
+    <string name="tool_sub_adjust">Adjust</string>
+    <string name="tool_sub_duplicates">Duplicates</string>
     <string name="action_show_all">Show all</string>
     <string name="settings_category_theme_sub">Theme, colors, AMOLED black, and display preferences</string>
     <string name="settings_category_layout_sub">Grid columns, dock style, and album shapes</string>
@@ -147,6 +174,8 @@
     <string name="setting_dock_classic_sub">Extend the navigation bar across the full screen width instead of a floating pill</string>
     <string name="setting_dock_videos">Show Videos Tab</string>
     <string name="setting_dock_videos_sub">Display a dedicated shortcut for videos in the dock</string>
+    <string name="setting_dock_pill_labels">Show Text in Pill</string>
+    <string name="setting_dock_pill_labels_sub">Display compact labels beneath icons in the floating navigation pill</string>
     <string name="setting_grid_columns">Grid Density</string>
     <string name="setting_timeline_layout">Timeline Layout</string>
     <string name="setting_timeline_mosaic">Expressive Mosaic</string>
@@ -174,7 +203,7 @@
     <string name="setting_memories">Memories Spotlight</string>
     <string name="setting_memories_sub">Show \'On This Day\' throwback memory cards atop timeline</string>
     <string name="setting_smart_search_title">Semantic AI Search</string>
-    <string name="setting_smart_search_desc">On-device CLIP visual search using natural language descriptions</string>
+    <string name="setting_smart_search_desc">On-device MobileCLIP2 visual search using natural language descriptions</string>
     <string name="setting_face_clustering">Face Recognition &amp; People</string>
     <string name="setting_face_clustering_desc">Group similar faces into private on-device people albums</string>
     <string name="setting_ocr_search">On-Device OCR Text Search</string>
@@ -252,6 +281,8 @@
     <string name="editor_adjust_sharpen">Sharpen</string>
     <string name="editor_markup_pen">Pen</string>
     <string name="editor_markup_highlighter">Highlighter</string>
+    <string name="editor_markup_arrow">Arrow</string>
+    <string name="editor_markup_eraser">Eraser</string>
     <string name="editor_markup_redact">Redact</string>
     <string name="editor_markup_text">Text</string>
     <string name="editor_redact_blur">Blur</string>
@@ -306,6 +337,23 @@
     <string name="setting_metadata_privacy_title">Metadata Privacy</string>
     <string name="setting_strip_metadata_title">Strip Metadata Before Sharing</string>
     <string name="setting_strip_metadata_sub">Remove GPS, camera specifications, timestamps, timezone offsets, and author details when sharing</string>
+    <string name="setting_exif_strip_action_title">Strip EXIF Action</string>
+    <string name="setting_exif_strip_action_desc">Default behavior when removing metadata from photos</string>
+    <string name="setting_exif_strip_action_ask">Ask every time</string>
+    <string name="setting_exif_strip_action_copy">Always save as new copy</string>
+    <string name="setting_exif_strip_action_overwrite">Always overwrite original</string>
+    <string name="dialog_exif_strip_title">Strip Photo Metadata?</string>
+    <string name="dialog_exif_strip_desc">This will permanently remove GPS location, camera details, timestamps, and device identifiers.</string>
+    <string name="dialog_exif_strip_option_copy">Save as copy (Recommended)</string>
+    <string name="dialog_exif_strip_option_copy_sub">Creates a new metadata-free photo copy</string>
+    <string name="dialog_exif_strip_option_overwrite">Overwrite original</string>
+    <string name="dialog_exif_strip_option_overwrite_sub">Permanently wipes metadata from original file</string>
+    <string name="dialog_exif_strip_remember">Remember my choice</string>
+    <string name="dialog_exif_strip_button">Strip Metadata</string>
+    <string name="exif_strip_success_copy">Clean copy saved</string>
+    <string name="exif_strip_success_overwrite">Metadata stripped from photo</string>
+    <string name="exif_strip_action_view">View</string>
+    <string name="exif_strip_button_label">Strip EXIF Metadata</string>
     <string name="setting_excluded_folders_title">Excluded Folders</string>
     <string name="setting_folder_visibility_title">Folder Visibility</string>
     <string name="setting_excluded_folders_desc">Excluded folders won\'t appear in the Photos tab or Albums grid. You can still access them by searching.</string>
@@ -329,6 +377,12 @@
     <string name="update_status_uptodate">Installed: v%1$s (Up to date)</string>
     <string name="update_status_downloaded">v%1$s downloaded. Ready to install</string>
     <string name="update_status_build">Installed: v%1$s (Build %2$d)</string>
+    <string name="notification_channel_updates">App Updates</string>
+    <string name="notification_channel_updates_desc">Notifies when a new version of Photon Gallery is available</string>
+    <string name="notification_update_title">Photon Gallery %1$s Available</string>
+    <string name="notification_update_body_named">%1$s • Tap to download and install</string>
+    <string name="notification_update_body_version">Version %1$s is ready to download and install</string>
+    <string name="notification_update_available">Update Available</string>
     <string name="setting_display_preferences_title">Display Preferences</string>
     <string name="setting_media_viewer_title">Media Viewer</string>
     <string name="setting_media_viewer_sub">Blurred backdrop, minimap and brightness</string>
@@ -340,6 +394,7 @@
     <string name="setting_palette_style_sub">Color science profiles via MaterialKolor</string>
     <string name="action_customize">Customize</string>
     <string name="action_change">Change</string>
+    <string name="action_choose">Choose</string>
     <string name="setting_dynamic_ambient_title">Dynamic Ambient Color</string>
     <string name="setting_dynamic_ambient_sub">Tint the viewer background with colors extracted from the current photo</string>
     <string name="setting_blur_viewer_bg_title">Blur Viewer Background</string>
@@ -360,6 +415,18 @@
     <string name="setting_dock_navigation_title">Dock &amp; Navigation</string>
     <string name="setting_restore_spotlight_title">Restore Spotlight Banner</string>
     <string name="setting_restore_spotlight_sub">Re-display the dismissed memories banner on the main feed</string>
+    <string name="setting_memories_style_title">Memories Carousel Layout</string>
+    <string name="setting_memories_style_stories">Stories</string>
+    <string name="setting_memories_style_stories_desc">Row of vertical story cards showing multiple memories side-by-side</string>
+    <string name="setting_memories_style_spotlight">Spotlight</string>
+    <string name="setting_memories_style_spotlight_desc">Wide hero card with adjacent memories peeking in from the sides</string>
+    <string name="setting_pinned_albums_style_title">Pinned Albums Layout</string>
+    <string name="setting_pinned_albums_style_default">Default</string>
+    <string name="setting_pinned_albums_style_default_desc">Horizontal row of shaped album tiles</string>
+    <string name="setting_pinned_albums_style_portrait">Portrait</string>
+    <string name="setting_pinned_albums_style_portrait_desc">Horizontal row of tall vertical album cards</string>
+    <string name="setting_pinned_albums_style_spotlight">Spotlight</string>
+    <string name="setting_pinned_albums_style_spotlight_desc">Wide horizontal carousel with adjacent pinned albums peeking in</string>
     <string name="setting_font_scale_title">Font Scale</string>
     <string name="setting_font_scale_sub">Adjust text size flexibility across the app</string>
     <string name="setting_live_typography_preview">Live Typography Preview</string>
@@ -399,6 +466,8 @@
     <string name="menu_sort_order">Sort Order</string>
     <string name="view_mode_immersive">Immersive View</string>
     <string name="view_mode_grouped">Grouped View</string>
+    <string name="view_mode_with_dates">With Dates</string>
+    <string name="view_mode_clean_grid">Clean Grid</string>
     <string name="layout_grid_view">Grid View</string>
     <string name="layout_list_view">List View</string>
     <string name="sort_date_taken_newest">Date Taken (Newest)</string>
@@ -409,6 +478,19 @@
     <string name="sort_size_small_to_big">Size (Small to Large)</string>
     <string name="sort_name_a_to_z">Name (A - Z)</string>
     <string name="sort_name_z_to_a">Name (Z - A)</string>
+    <string name="sort_cat_date_taken">Date Taken</string>
+    <string name="sort_cat_date_added">Date Added</string>
+    <string name="sort_cat_size">Size</string>
+    <string name="sort_cat_name">Name</string>
+    <string name="sort_cat_count">Items</string>
+    <string name="sort_opt_newest">Newest</string>
+    <string name="sort_opt_oldest">Oldest</string>
+    <string name="sort_opt_large_to_small">Large to small</string>
+    <string name="sort_opt_small_to_large">Small to large</string>
+    <string name="sort_opt_a_to_z">A → Z</string>
+    <string name="sort_opt_z_to_a">Z → A</string>
+    <string name="sort_opt_most">Most</string>
+    <string name="sort_opt_least">Least</string>
     <string name="editor_save_copy">Save as Copy</string>
     <string name="editor_overwrite">Overwrite Original</string>
     <string name="editor_rotate">Rotate</string>
@@ -459,7 +541,7 @@
     <string name="dialog_clear_smart_search_title">Clear Smart Search Index</string>
     <string name="dialog_clear_smart_search_msg">This will wipe out all computed image embeddings for semantic search. You will need to run the indexer again to use smart search. Are you sure you want to proceed?</string>
     <string name="dialog_delete_ai_models_title">Delete AI Model Files</string>
-    <string name="dialog_delete_ai_models_msg">This will delete the local ONNX model files (approx. 150MB). You will not be able to use semantic search or index new images until you download them again. Are you sure?</string>
+    <string name="dialog_delete_ai_models_msg">This will delete the local ONNX model files (approx. 103MB). You will not be able to use semantic search or index new images until you download them again. Are you sure?</string>
     <string name="dialog_delete_files_confirm">Delete Files</string>
     <string name="dialog_rescan_faces_title">Rescan All Faces</string>
     <string name="dialog_rescan_faces_msg">This will reset face scan status and re-analyze all photos in your gallery using the on-device face engine.
@@ -500,7 +582,7 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_pinned">Pinned</string>
     <string name="toast_max_pinned_albums">Maximum 15 albums can be pinned</string>
-    <string name="exif_date_taken">Date Taken / Created</string>
+    <string name="exif_date_taken">Date</string>
     <string name="exif_date_modified">Date Modified</string>
     <string name="exif_file_size">File Size</string>
     <string name="exif_geometry_dimensions">Geometry &amp; Dimensions</string>
@@ -516,6 +598,19 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="exif_coordinates">Coordinates</string>
     <string name="exif_dump">EXIF Dump</string>
     <string name="exif_filter_tags">Filter metadata tags…</string>
+    <string name="exif_storage_location">Storage Location</string>
+    <string name="exif_copy_path">Copy Path</string>
+    <string name="exif_path_copied">Path copied to clipboard</string>
+    <string name="exif_deep_metadata_title">Deep EXIF Metadata</string>
+    <string name="exif_copy_all">Copy All</string>
+    <string name="exif_all_copied">All metadata copied to clipboard!</string>
+    <string name="exif_deep_button">Deep EXIF</string>
+    <string name="exif_strip_button">Strip EXIF</string>
+    <string name="exif_general_specs">General</string>
+    <string name="exif_camera_optics">Camera &amp; Optics</string>
+    <string name="exif_exposure">Exposure</string>
+    <string name="exif_people_in_photo">Person in this photo</string>
+    <string name="exif_people_in_photo_plural">People in this photo</string>
     <string name="preset_enhance">Enhance</string>
     <string name="preset_auto_balanced">Auto balanced</string>
     <string name="preset_warm">Warm</string>
@@ -526,6 +621,8 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="preset_high_pop">High pop</string>
     <string name="setting_auto_index_images">Auto Index New Images</string>
     <string name="setting_auto_index_images_sub">Automatically index new photos with AI in the background</string>
+    <string name="setting_auto_index_ocr">Auto-Index OCR Text</string>
+    <string name="setting_auto_index_ocr_sub">Extract and index text from new photos in the background</string>
     <string name="setting_auto_index_faces">Auto-Index New Faces</string>
     <string name="setting_auto_index_faces_sub">Automatically detect and cluster faces when new photos arrive</string>
     <string name="people_filter_all">All (%1$d)</string>
@@ -547,4 +644,23 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="toast_vault_restored">Restored to gallery</string>
     <string name="toast_vault_deleted">Deleted permanently</string>
     <string name="toast_select_at_least_two_photos">Select at least 2 photos</string>
+
+    <!-- Customizable Toolbars -->
+    <string name="customize_toolbars_title">Customize Toolbars</string>
+    <string name="customize_toolbars_subtitle">Rearrange and choose tools for photo viewer and selection dock</string>
+    <string name="toolbar_target_viewer">Viewer Pill</string>
+    <string name="toolbar_target_selection">Selection Dock</string>
+    <string name="toolbar_live_preview">Live Interactive Preview</string>
+    <string name="toolbar_drag_hint">Long-press and drag horizontally to swap, or drag down to shelf to remove</string>
+    <string name="toolbar_available_shelf">Available Tools Shelf</string>
+    <string name="toolbar_shelf_drop_hint">Drag up into toolbar to add</string>
+    <string name="toolbar_all_tools_active">All available tools are currently added to the toolbar</string>
+    <string name="toolbar_min_limit_toast">At least 2 tools must remain in the toolbar</string>
+    <string name="toolbar_reset_toast">Toolbar reset to default</string>
+    <string name="toolbar_reset_button">Reset to Default</string>
+
+    <!-- Ultra HDR -->
+    <string name="settings_ultra_hdr_title">Ultra HDR Display</string>
+    <string name="settings_ultra_hdr_desc">Render photos in full dynamic range on supported HDR displays</string>
+    <string name="badge_ultra_hdr">Ultra HDR</string>
 </resources>

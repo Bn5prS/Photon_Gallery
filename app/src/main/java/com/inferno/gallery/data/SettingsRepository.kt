@@ -1,5 +1,6 @@
 package com.inferno.gallery.data
 
+import com.inferno.gallery.data.model.ExifStripAction
 import android.content.Context
 import android.os.Build
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -15,6 +16,32 @@ import kotlinx.coroutines.flow.map
 enum class DockStyle { PILL, FULL_WIDTH }
 enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC }
 enum class AlbumLayoutMode { GRID, LIST }
+enum class MemoriesCarouselStyle(val id: String) {
+    STORIES("stories"),
+    SPOTLIGHT("spotlight");
+
+    companion object {
+        fun fromId(id: String?): MemoriesCarouselStyle = when (id) {
+            "stories", "compact" -> STORIES
+            "spotlight", "peek" -> SPOTLIGHT
+            else -> SPOTLIGHT
+        }
+    }
+}
+
+enum class PinnedAlbumsStyle(val id: String) {
+    DEFAULT("default"),
+    PORTRAIT("portrait"),
+    SPOTLIGHT("spotlight");
+
+    companion object {
+        fun fromId(id: String?): PinnedAlbumsStyle = when (id) {
+            "portrait", "vertical" -> PORTRAIT
+            "spotlight", "horizontal" -> SPOTLIGHT
+            else -> DEFAULT
+        }
+    }
+}
 
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
@@ -31,12 +58,17 @@ class SettingsRepository private constructor(private val context: Context) {
 
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val VIEW_MODE = stringPreferencesKey("view_mode")
+        val TIMELINE_GROUP_BY = stringPreferencesKey("timeline_group_by")
         val TIMELINE_LAYOUT_MODE = stringPreferencesKey("timeline_layout_mode")
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val ALBUM_SORT_ORDER = stringPreferencesKey("album_sort_order")
         val ALBUM_LAYOUT_MODE = stringPreferencesKey("album_layout_mode")
+        val PINNED_ALBUMS_STYLE = stringPreferencesKey("pinned_albums_style")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
+        val SHOW_PILL_LABELS = booleanPreferencesKey("show_pill_labels")
+        val VIEWER_TOOLBAR_ACTIONS = stringPreferencesKey("viewer_toolbar_actions")
+        val SELECTION_DOCK_ACTIONS = stringPreferencesKey("selection_dock_actions")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
         val USE_AMOLED_BLACK = booleanPreferencesKey("use_amoled_black")
         val GRID_AUTO_PLAY = booleanPreferencesKey("grid_auto_play")
@@ -47,6 +79,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val ONBOARDING_V210_COMPLETED = booleanPreferencesKey("onboarding_v210_completed")
         val STRIP_METADATA_ON_SHARE = booleanPreferencesKey("strip_metadata_on_share")
+        val PREF_EXIF_STRIP_ACTION = stringPreferencesKey("pref_exif_strip_action")
         val SMART_SEARCH_AUTO_INDEX = booleanPreferencesKey("smart_search_auto_index")
         val FACE_RECOGNITION_ENABLED = booleanPreferencesKey("face_recognition_enabled")
         val FACE_AUTO_INDEX = booleanPreferencesKey("face_auto_index")
@@ -83,9 +116,11 @@ class SettingsRepository private constructor(private val context: Context) {
         val STORY_MUSIC_MUTED = booleanPreferencesKey("story_music_muted")
         val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
         val MEMORIES_DISMISSED = booleanPreferencesKey("memories_dismissed")
+        val MEMORIES_CAROUSEL_STYLE = stringPreferencesKey("memories_carousel_style")
         val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
         val PEOPLE_GRID_CELLS_COUNT = intPreferencesKey("people_grid_cells_count")
         val PERSON_DETAIL_GRID_CELLS_COUNT = intPreferencesKey("person_detail_grid_cells_count")
+        val ALBUMS_GRID_CELLS_COUNT = intPreferencesKey("albums_grid_cells_count")
         val PINNED_PEOPLE_ORDER = stringPreferencesKey("pinned_people_order")
 
         val ALBUMS_EXPANDED_PINNED = booleanPreferencesKey("albums_expanded_pinned")
@@ -222,6 +257,11 @@ class SettingsRepository private constructor(private val context: Context) {
             preferences[VIEW_MODE] ?: "Grouped"
         }
 
+    val timelineGroupByFlow: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[TIMELINE_GROUP_BY] ?: "Day"
+        }
+
     val sortOrderFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[SORT_ORDER] ?: "NewToOld"
@@ -250,6 +290,33 @@ class SettingsRepository private constructor(private val context: Context) {
             preferences[SHOW_VIDEOS_IN_DOCK] ?: false
         }
 
+    val showPillLabelsFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[SHOW_PILL_LABELS] ?: false
+        }
+
+    val viewerToolbarActionsFlow: Flow<List<String>> = context.dataStore.data
+        .map { preferences ->
+            val raw = preferences[VIEWER_TOOLBAR_ACTIONS]
+            if (raw.isNullOrBlank()) {
+                com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS
+            } else {
+                val list = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                com.inferno.gallery.ui.model.ViewerToolbarAction.sanitize(list)
+            }
+        }
+
+    val selectionDockActionsFlow: Flow<List<String>> = context.dataStore.data
+        .map { preferences ->
+            val raw = preferences[SELECTION_DOCK_ACTIONS]
+            if (raw.isNullOrBlank()) {
+                com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS
+            } else {
+                val list = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                com.inferno.gallery.ui.model.SelectionDockAction.sanitize(list)
+            }
+        }
+
     val useMaterialYouFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[USE_MATERIAL_YOU] ?: (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
@@ -267,7 +334,12 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val themePaletteStyleFlow: Flow<String> = context.dataStore.data
         .map { preferences ->
-            preferences[THEME_PALETTE_STYLE] ?: "Expressive"
+            val stored = preferences[THEME_PALETTE_STYLE]
+            if (stored == null || stored.equals("Expressive", ignoreCase = true)) {
+                "TonalSpot"
+            } else {
+                stored
+            }
         }
 
     val themeContrastLevelFlow: Flow<Float> = context.dataStore.data
@@ -336,7 +408,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val showMemoriesFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[SHOW_MEMORIES] ?: true
+            preferences[SHOW_MEMORIES] ?: false
         }
 
     suspend fun updateShowMemories(enabled: Boolean) {
@@ -356,6 +428,28 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateMemoriesDismissed(dismissed: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[MEMORIES_DISMISSED] = dismissed
+        }
+    }
+
+    val memoriesCarouselStyleFlow: Flow<MemoriesCarouselStyle> = context.dataStore.data
+        .map { preferences ->
+            MemoriesCarouselStyle.fromId(preferences[MEMORIES_CAROUSEL_STYLE])
+        }
+
+    suspend fun updateMemoriesCarouselStyle(style: MemoriesCarouselStyle) {
+        context.dataStore.edit { preferences ->
+            preferences[MEMORIES_CAROUSEL_STYLE] = style.id
+        }
+    }
+
+    val pinnedAlbumsStyleFlow: Flow<PinnedAlbumsStyle> = context.dataStore.data
+        .map { preferences ->
+            PinnedAlbumsStyle.fromId(preferences[PINNED_ALBUMS_STYLE])
+        }
+
+    suspend fun updatePinnedAlbumsStyle(style: PinnedAlbumsStyle) {
+        context.dataStore.edit { preferences ->
+            preferences[PINNED_ALBUMS_STYLE] = style.id
         }
     }
 
@@ -450,6 +544,12 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    suspend fun updateTimelineGroupBy(groupBy: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TIMELINE_GROUP_BY] = groupBy
+        }
+    }
+
     val timelineLayoutModeFlow: Flow<TimelineLayoutMode> = context.dataStore.data
         .map { preferences ->
             when (preferences[TIMELINE_LAYOUT_MODE]) {
@@ -492,6 +592,34 @@ class SettingsRepository private constructor(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_VIDEOS_IN_DOCK] = show
         }
+    }
+
+    suspend fun updateShowPillLabels(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_PILL_LABELS] = show
+        }
+    }
+
+    suspend fun updateViewerToolbarActions(actions: List<String>) {
+        val sanitized = com.inferno.gallery.ui.model.ViewerToolbarAction.sanitize(actions)
+        context.dataStore.edit { preferences ->
+            preferences[VIEWER_TOOLBAR_ACTIONS] = sanitized.joinToString(",")
+        }
+    }
+
+    suspend fun updateSelectionDockActions(actions: List<String>) {
+        val sanitized = com.inferno.gallery.ui.model.SelectionDockAction.sanitize(actions)
+        context.dataStore.edit { preferences ->
+            preferences[SELECTION_DOCK_ACTIONS] = sanitized.joinToString(",")
+        }
+    }
+
+    suspend fun resetViewerToolbarActions() {
+        updateViewerToolbarActions(com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS)
+    }
+
+    suspend fun resetSelectionDockActions() {
+        updateSelectionDockActions(com.inferno.gallery.ui.model.SelectionDockAction.DEFAULTS)
     }
 
 
@@ -584,6 +712,17 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    val albumsGridCellsCountFlow: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[ALBUMS_GRID_CELLS_COUNT] ?: 3
+        }
+
+    suspend fun updateAlbumsGridCellsCount(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[ALBUMS_GRID_CELLS_COUNT] = count.coerceIn(2, 4)
+        }
+    }
+
     val pinnedPeopleOrderFlow: Flow<List<Long>> = context.dataStore.data
         .map { preferences ->
             val str = preferences[PINNED_PEOPLE_ORDER] ?: ""
@@ -670,6 +809,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateStripMetadataOnShare(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[STRIP_METADATA_ON_SHARE] = enabled
+        }
+    }
+
+    val exifStripActionFlow: Flow<ExifStripAction> = context.dataStore.data
+        .map { preferences ->
+            ExifStripAction.fromId(preferences[PREF_EXIF_STRIP_ACTION] ?: ExifStripAction.ASK_EVERY_TIME.id)
+        }
+
+    suspend fun setExifStripAction(action: ExifStripAction) {
+        context.dataStore.edit { preferences ->
+            preferences[PREF_EXIF_STRIP_ACTION] = action.id
         }
     }
 
@@ -779,6 +929,23 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    suspend fun renamePinnedFolder(oldName: String, newName: String) {
+        context.dataStore.edit { preferences ->
+            val currentPinned = (preferences[PINNED_FOLDERS] ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+            val idx = currentPinned.indexOf(oldName)
+            if (idx != -1) {
+                currentPinned[idx] = newName
+                preferences[PINNED_FOLDERS] = currentPinned.distinct().joinToString(",")
+            }
+            val currentOrder = (preferences[PINNED_FOLDERS_ORDER] ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+            val orderIdx = currentOrder.indexOf(oldName)
+            if (orderIdx != -1) {
+                currentOrder[orderIdx] = newName
+                preferences[PINNED_FOLDERS_ORDER] = currentOrder.joinToString(",")
+            }
+        }
+    }
+
     val showHiddenAlbumsFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[SHOW_HIDDEN_ALBUMS] ?: false
@@ -839,6 +1006,17 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateViewerZoomMinimapEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[VIEWER_ZOOM_MINIMAP_ENABLED] = enabled
+        }
+    }
+
+    val hdrDisplayEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[HDR_DISPLAY_ENABLED] ?: true
+        }
+
+    suspend fun updateHdrDisplayEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HDR_DISPLAY_ENABLED] = enabled
         }
     }
 
@@ -1000,15 +1178,6 @@ class SettingsRepository private constructor(private val context: Context) {
             }
         }
 
-        context.dataStore.edit { preferences ->
-            val dateHeaderMigrated = preferences[DATE_HEADER_DEFAULT_MIGRATED_V210] ?: false
-            if (!dateHeaderMigrated) {
-                if (preferences[DATE_HEADER_ALIGNMENT] == "CENTER") {
-                    preferences[DATE_HEADER_ALIGNMENT] = "LEFT"
-                }
-                preferences[DATE_HEADER_DEFAULT_MIGRATED_V210] = true
-            }
-        }
     }
 
     suspend fun updateSecondaryColorOverride(color: Int) {
@@ -1046,7 +1215,7 @@ class SettingsRepository private constructor(private val context: Context) {
 
 
     val dateHeaderAlignmentFlow: Flow<String> = context.dataStore.data
-        .map { it[DATE_HEADER_ALIGNMENT] ?: "LEFT" }
+        .map { it[DATE_HEADER_ALIGNMENT] ?: "CENTER" }
 
     suspend fun updateDateHeaderAlignment(alignment: String) {
         context.dataStore.edit { it[DATE_HEADER_ALIGNMENT] = alignment }

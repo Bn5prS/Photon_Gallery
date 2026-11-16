@@ -52,6 +52,7 @@ fun EditorCornerBrackets(
     photoLeft: Float = 0f,
     photoTop: Float = 0f,
     onPhotoPanZoom: (Rect) -> Unit = {},
+    onPhotoPanZoomStateChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val currentCropRect by rememberUpdatedState(cropRect)
@@ -64,6 +65,7 @@ fun EditorCornerBrackets(
     val currentPhotoLeft by rememberUpdatedState(photoLeft)
     val currentPhotoTop by rememberUpdatedState(photoTop)
     val currentOnPhotoPanZoom by rememberUpdatedState(onPhotoPanZoom)
+    val currentOnPhotoPanZoomStateChange by rememberUpdatedState(onPhotoPanZoomStateChange)
 
     val density = LocalDensity.current
     val touchRadiusPx = with(density) { 32.dp.toPx() } // 64dp hit target diameter
@@ -154,7 +156,7 @@ fun EditorCornerBrackets(
                         // ── PHOTO PAN (1-FINGER) & PINCH-TO-ZOOM (2-FINGER) ANYWHERE ON CANVAS ──
                         activeHandle = CornerHandle.INSIDE
                         isInteracting = true
-                        currentOnDragHandleStateChange(true)
+                        currentOnPhotoPanZoomStateChange(true)
                         down.consume()
 
                         var prevPointerCount = 1
@@ -166,6 +168,11 @@ fun EditorCornerBrackets(
                             if (pressedPointers.isEmpty()) break
 
                             val pointerCount = pressedPointers.size
+
+                            val currentPw = if (currentPhotoWidth > 0f) currentPhotoWidth else w
+                            val currentPh = if (currentPhotoHeight > 0f) currentPhotoHeight else h
+                            val currentPl = if (currentPhotoWidth > 0f) currentPhotoLeft else (activeFrame.left - currentCropRect.left * currentPw)
+                            val currentPt = if (currentPhotoHeight > 0f) currentPhotoTop else (activeFrame.top - currentCropRect.top * currentPh)
 
                             if (pointerCount >= 2) {
                                 val p1 = pressedPointers[0]
@@ -186,10 +193,10 @@ fun EditorCornerBrackets(
                                             zoomFactor = zoomFactor,
                                             centroidXPx = currentCentroid.x,
                                             centroidYPx = currentCentroid.y,
-                                            photoLeftPx = pl,
-                                            photoTopPx = pt,
-                                            photoWidthPx = pw,
-                                            photoHeightPx = ph,
+                                            photoLeftPx = currentPl,
+                                            photoTopPx = currentPt,
+                                            photoWidthPx = currentPw,
+                                            photoHeightPx = currentPh,
                                             aspectRatio = currentAspectRatio
                                         )
                                     } else currentCropRect
@@ -199,8 +206,8 @@ fun EditorCornerBrackets(
                                             currentRect = updated,
                                             dragDeltaXPx = panDelta.x,
                                             dragDeltaYPx = panDelta.y,
-                                            photoWidthPx = pw,
-                                            photoHeightPx = ph
+                                            photoWidthPx = currentPw,
+                                            photoHeightPx = currentPh
                                         )
                                     }
                                     currentOnPhotoPanZoom(updated)
@@ -218,8 +225,8 @@ fun EditorCornerBrackets(
                                         currentRect = currentCropRect,
                                         dragDeltaXPx = dragDelta.x,
                                         dragDeltaYPx = dragDelta.y,
-                                        photoWidthPx = pw,
-                                        photoHeightPx = ph
+                                        photoWidthPx = currentPw,
+                                        photoHeightPx = currentPh
                                     )
                                     currentOnPhotoPanZoom(updated)
                                 }
@@ -231,7 +238,7 @@ fun EditorCornerBrackets(
 
                         activeHandle = CornerHandle.NONE
                         isInteracting = false
-                        currentOnDragHandleStateChange(false)
+                        currentOnPhotoPanZoomStateChange(false)
                     }
                 }
             }

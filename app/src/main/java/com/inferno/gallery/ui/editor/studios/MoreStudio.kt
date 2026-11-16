@@ -131,7 +131,7 @@ fun MoreStudio(
                     )
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_share),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_share),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -201,7 +201,7 @@ private fun AppSquircleTile(
                     )
                 } else {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_edit),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_edit),
                         contentDescription = app.label,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
@@ -246,7 +246,7 @@ private fun SystemShareTile(
                 modifier = Modifier.padding(10.dp)
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_ms_share),
+                    painter = painterResource(id = R.drawable.ic_ms_thin_share),
                     contentDescription = "System Share",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(26.dp)

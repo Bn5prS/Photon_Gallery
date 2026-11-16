@@ -62,10 +62,10 @@ enum class AutoSuggestionType(
     val subtitle: String,
     @param:DrawableRes val iconRes: Int
 ) {
-    ENHANCE("Enhance", "Auto levels & balance", R.drawable.ic_ms_auto_fix_high),
-    DYNAMIC("Dynamic", "Shadow lift & vibrance", R.drawable.ic_ms_motion_photos_on),
-    WARM("Warm", "Warmth & saturation", R.drawable.ic_ms_wb_twilight),
-    COOL("Cool", "Cool tint & contrast", R.drawable.ic_ms_cloud)
+    ENHANCE("Enhance", "Auto levels & balance", R.drawable.ic_ms_thin_auto_fix_high),
+    DYNAMIC("Dynamic", "Shadow lift & vibrance", R.drawable.ic_ms_thin_motion_photos_on),
+    WARM("Warm", "Warmth & saturation", R.drawable.ic_ms_thin_wb_twilight),
+    COOL("Cool", "Cool tint & contrast", R.drawable.ic_ms_thin_cloud)
 }
 
 /**
@@ -418,7 +418,7 @@ private fun AutoSuggestionCard(
                         .padding(6.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_check),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_check),
                         contentDescription = "Applied",
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier

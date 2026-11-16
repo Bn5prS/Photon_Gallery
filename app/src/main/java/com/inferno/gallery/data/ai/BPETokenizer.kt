@@ -22,14 +22,23 @@ class BPETokenizer(jsonContent: String) {
         }
         this.vocab = vocabMap
 
-        // Load Merges
+        // Load Merges (supports both legacy "a b" strings and newer ["a", "b"] arrays)
         val mergesJson = model.getJSONArray("merges")
         val ranksMap = mutableMapOf<Pair<String, String>, Int>()
         for (i in 0 until mergesJson.length()) {
-            val mergeStr = mergesJson.getString(i)
-            val parts = mergeStr.split(" ")
-            if (parts.size == 2) {
-                ranksMap[Pair(parts[0], parts[1])] = i
+            val item = mergesJson.get(i)
+            when (item) {
+                is org.json.JSONArray -> {
+                    if (item.length() >= 2) {
+                        ranksMap[Pair(item.getString(0), item.getString(1))] = i
+                    }
+                }
+                is String -> {
+                    val parts = item.split(" ")
+                    if (parts.size == 2) {
+                        ranksMap[Pair(parts[0], parts[1])] = i
+                    }
+                }
             }
         }
         this.bpeRanks = ranksMap

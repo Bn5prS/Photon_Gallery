@@ -71,11 +71,7 @@ class SmartSearchIndexWorker(
     }
 
     private suspend fun safeSetForeground(progress: String) {
-        try {
-            setForeground(createForegroundInfo(progress))
-        } catch (e: Exception) {
-            Log.w(TAG, "Unable to set/update foreground service: ${e.message}")
-        }
+        // Disabled: do not show image processing progress in notifications per user request
     }
 
     private data class LoadedImage(
@@ -174,7 +170,7 @@ class SmartSearchIndexWorker(
             var sampleSize = 1
             val halfHeight = options.outHeight / 2
             val halfWidth = options.outWidth / 2
-            while (halfHeight / sampleSize >= 224 && halfWidth / sampleSize >= 224) {
+            while (halfHeight / sampleSize >= 256 && halfWidth / sampleSize >= 256) {
                 sampleSize *= 2
             }
 
@@ -204,6 +200,7 @@ class SmartSearchIndexWorker(
         try {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
         } catch (_: Throwable) {}
+        (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         com.inferno.gallery.data.IndexingProgressManager.updateClipProgress(
             isIndexing = true,
             progress = 0,
@@ -218,7 +215,7 @@ class SmartSearchIndexWorker(
             }
 
             safeSetForeground("Loading AI model…")
-            searchEngine.loadModel()
+            searchEngine.loadVisionModel()
 
             val db = DatabaseProvider.getDatabase(applicationContext)
 
@@ -357,6 +354,7 @@ class SmartSearchIndexWorker(
 
                 // 2. Inference Stage (Isolated CPU/GPU thread)
                 launch(aiDispatcher) {
+                    val pacer = com.inferno.gallery.workers.utils.ScanThermalPacer(applicationContext, "SmartSearch")
                     for (loaded in loadChannel) {
                         if (isStopped) {
                             loaded.bitmap.recycle()
@@ -380,6 +378,7 @@ class SmartSearchIndexWorker(
                         } finally {
                             loaded.bitmap.recycle()
                         }
+                        pacer.recordItemAndThrottle { isStopped }
                     }
                     embedChannel.close()
                 }
@@ -431,6 +430,7 @@ class SmartSearchIndexWorker(
             Log.e(TAG, "SmartSearchIndexWorker failed fatally: ${e.message}", e)
             return Result.retry()
         } finally {
+            searchEngine.unloadVisionModel()
             val db = DatabaseProvider.getDatabase(applicationContext)
             val total = runCatching { db.mediaDao().getTotalImageCount() }.getOrDefault(0)
             val unindexed = runCatching { db.embeddingDao().getUnindexedMediaIds().size }.getOrDefault(0)

@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.animation.core.Animatable
@@ -67,6 +68,10 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.ripple
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilledIconButton
 import com.inferno.gallery.ui.components.ExpressiveFilledIconButton
@@ -88,6 +93,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.clip
@@ -104,6 +110,7 @@ import androidx.compose.ui.platform.LocalContext
 import coil3.imageLoader
 import coil3.asImage
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -137,6 +144,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import coil3.compose.AsyncImage
+import coil3.toBitmap
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -152,6 +160,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.SettingsRepository
+import com.inferno.gallery.ui.utils.UltraHdrHelper
 import com.inferno.gallery.ui.components.DetailedExifData
 import com.inferno.gallery.ui.components.ExifDetailsSheet
 import com.inferno.gallery.ui.components.extractDetailedExif
@@ -169,6 +178,7 @@ import com.inferno.gallery.data.MotionPhotoHelper
 import com.inferno.gallery.data.MotionPhotoInfo
 import com.inferno.gallery.ui.components.MotionPhotoPlayerOverlay
 import com.inferno.gallery.ui.components.FloatingTipCard
+import com.inferno.gallery.ui.utils.resolveDisplayDateSeconds
 import androidx.activity.compose.BackHandler
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
@@ -196,11 +206,14 @@ fun DetailScreen(
     onBack: () -> Unit,
     onNavigateToEditor: (android.net.Uri) -> Unit = {},
     onNavigateToFrameExtractor: (android.net.Uri) -> Unit = {},
-    onNavigateToPerson: ((Long) -> Unit)? = null
+    onNavigateToPerson: ((Long) -> Unit)? = null,
+    onNavigateToCustomizeToolbars: (() -> Unit)? = null
 ) {
     androidx.compose.runtime.LaunchedEffect(bucketName) {
         viewModel.setBucket(bucketName)
     }
+
+    val viewerToolbarActions by viewModel.viewerToolbarActions.collectAsState()
 
     val context = LocalContext.current
     val settingsRepo = viewModel.settingsRepository
@@ -211,21 +224,76 @@ fun DetailScreen(
         }
     }.value
     val confirmDeleteEnabled by settingsRepo.confirmDeleteEnabledFlow.collectAsState(initial = true)
-    val activity = context as? android.app.Activity
+    val activity = remember(context) { UltraHdrHelper.findActivity(context) ?: (context as? android.app.Activity) }
     val window = activity?.window
     val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
     val coroutineScope = rememberCoroutineScope()
 
-    var hasNavigatedBack by remember { mutableStateOf(false) }
-    val safeOnBack: () -> Unit = remember(onBack) {
-        {
-            if (!hasNavigatedBack) {
-                hasNavigatedBack = true
-                onBack()
+    var pendingRotateItem by remember { mutableStateOf<GalleryItem?>(null) }
+    var pendingRotateDelta by remember { mutableIntStateOf(0) }
+    var pendingRotateJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
+    val targetRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
+
+    val rotateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val item = pendingRotateItem
+            val delta = if (pendingRotateDelta != 0) pendingRotateDelta else 90
+            if (item != null) {
+                pendingRotateDelta = 0
+                viewModel.rotateMedia(context, item, delta, onSecurityException = {}) {
+                    // Success callback
+                }
             }
         }
+        pendingRotateItem = null
     }
-    
+
+    val flushPendingRotation: () -> Unit = {
+        val delta = pendingRotateDelta
+        val item = pendingRotateItem
+        if (delta != 0 && item != null) {
+            pendingRotateDelta = 0
+            pendingRotateJob?.cancel()
+            viewModel.rotateMedia(
+                context = context,
+                item = item,
+                degrees = delta,
+                onSecurityException = { pendingIntent ->
+                    pendingRotateItem = item
+                    rotateLauncher.launch(
+                        androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+                    )
+                }
+            )
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            flushPendingRotation()
+            com.inferno.gallery.ui.components.MediaTransitionRegistry.clear()
+        }
+    }
+
+    val launchBounds = remember { com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds }
+    val containerProgress = remember {
+        androidx.compose.animation.core.Animatable(if (launchBounds != null) 0f else 1f)
+    }
+    var closingTargetRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+
+    LaunchedEffect(launchBounds) {
+        if (launchBounds != null) {
+            containerProgress.animateTo(1f, MotionTokens.sharedElementSpring())
+        }
+    }
+
+    var hasNavigatedBack by remember { mutableStateOf(false) }
+    var safeOnBackDelegate: (() -> Unit)? = null
+    val safeOnBack: () -> Unit = { safeOnBackDelegate?.invoke() }
     val rawGalleryItems by viewModel.detailMedia.collectAsState()
     val initialDetailItem by viewModel.initialDetailItem.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsState()
@@ -328,9 +396,12 @@ fun DetailScreen(
         }
     }
 
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val baseCanvasColor = MaterialTheme.colorScheme.surface
+
     // Ensure we don't crash if items is empty
     if (galleryItems.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+        Box(modifier = Modifier.fillMaxSize().background(baseCanvasColor))
         return
     }
 
@@ -382,16 +453,42 @@ fun DetailScreen(
     }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
+    val isTrashItemExists: suspend (GalleryItem) -> Boolean = { item ->
+        if (bucketName == "Trash" || item.bucketName == "Trash") {
+            try {
+                context.contentResolver.openFileDescriptor(item.uri, "r")?.use { true } ?: false
+            } catch (_: java.io.FileNotFoundException) {
+                false
+            } catch (_: Exception) {
+                true
+            }
+        } else if (item.path.isNotBlank()) {
+            val file = java.io.File(item.path)
+            val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
+            val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
+            file.exists() && !isHidden
+        } else {
+            true
+        }
+    }
+
     DisposableEffect(lifecycleOwner, currentItem) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 val item = currentItem
-                if (item != null && item.path.isNotBlank()) {
+                if (item != null) {
                     coroutineScope.launch(Dispatchers.IO) {
-                        val file = java.io.File(item.path)
-                        val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
-                        val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
-                        if (!file.exists() || isHidden) {
+                        if (!isTrashItemExists(item)) {
+                            if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash") {
+                                try {
+                                    android.media.MediaScannerConnection.scanFile(
+                                        context.applicationContext,
+                                        arrayOf(item.path),
+                                        null,
+                                        null
+                                    )
+                                } catch (_: Exception) {}
+                            }
                             withContext(Dispatchers.Main) {
                                 viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
                                 if (galleryItems.size <= 1) {
@@ -410,14 +507,22 @@ fun DetailScreen(
     }
 
     LaunchedEffect(currentItem) {
-        if (currentItem != null && currentItem.path.isNotBlank()) {
+        val item = currentItem
+        if (item != null) {
             withContext(Dispatchers.IO) {
-                val file = java.io.File(currentItem.path)
-                val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
-                val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(currentItem.path)
-                if (!file.exists() || isHidden) {
+                if (!isTrashItemExists(item)) {
+                    if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash") {
+                        try {
+                            android.media.MediaScannerConnection.scanFile(
+                                context.applicationContext,
+                                arrayOf(item.path),
+                                null,
+                                null
+                            )
+                        } catch (_: Exception) {}
+                    }
                     withContext(Dispatchers.Main) {
-                        viewModel.notifyExternalMediaModifiedOrDeleted(currentItem.uri.toString())
+                        viewModel.notifyExternalMediaModifiedOrDeleted(item.uri.toString())
                         if (galleryItems.size <= 1) {
                             safeOnBack()
                         }
@@ -494,6 +599,25 @@ fun DetailScreen(
                               isVideoScrubbing ||
                               isFilmstripScrolling
 
+    val hdrDisplayEnabled by settingsRepo.hdrDisplayEnabledFlow.collectAsState(initial = true)
+    val ultraHdrMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val isCurrentItemUltraHdr = currentItem?.let { ultraHdrMap[it.uri.toString()] } == true
+    val isHdrSupported = remember(context) { UltraHdrHelper.isHdrSupported(context) }
+    val shouldEnableHdr = isCurrentItemUltraHdr && hdrDisplayEnabled && !isFilmstripOverview && isHdrSupported
+
+    // Dynamically manages Window HDR color mode for Ultra HDR photos per Android 14+ guidance
+    DisposableEffect(shouldEnableHdr, window) {
+        if (shouldEnableHdr) {
+            UltraHdrHelper.setWindowHdrMode(window, true)
+            onDispose {
+                UltraHdrHelper.setWindowHdrMode(window, false)
+            }
+        } else {
+            UltraHdrHelper.setWindowHdrMode(window, false)
+            onDispose {}
+        }
+    }
+
     val overviewProgress by animateFloatAsState(
         targetValue = if (isFilmstripOverview) 1f else 0f,
         animationSpec = spring(
@@ -537,6 +661,7 @@ fun DetailScreen(
     var currentScale by remember { mutableStateOf(1f) }
     var pendingDeleteItem by remember { mutableStateOf<GalleryItem?>(null) }
     var pendingDeletePage by remember { mutableStateOf<Int?>(null) }
+    var pendingDeleteWasPermanent by remember { mutableStateOf(false) }
     
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -545,7 +670,7 @@ fun DetailScreen(
             val itemToDelete = pendingDeleteItem
             val deletedUri = itemToDelete?.uri?.toString()
             if (deletedUri != null) {
-                if (bucketName == "Trash" || itemToDelete?.bucketName == "Trash") {
+                if (pendingDeleteWasPermanent || bucketName == "Trash" || itemToDelete?.bucketName == "Trash") {
                     viewModel.deleteMediaPermanentlyOptimistically(deletedUri)
                 } else {
                     viewModel.removeMediaOptimistically(deletedUri)
@@ -554,6 +679,7 @@ fun DetailScreen(
         }
         pendingDeletePage = null
         pendingDeleteItem = null
+        pendingDeleteWasPermanent = false
     }
 
     val restoreLauncher = rememberLauncherForActivityResult(
@@ -596,31 +722,17 @@ fun DetailScreen(
         }
     }
 
-    var pendingRotateItem by remember { mutableStateOf<GalleryItem?>(null) }
-    val rotateLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val item = pendingRotateItem
-            if (item != null) {
-                viewModel.rotateMedia(context, item, 90, onSecurityException = {}) {
-                    // Success callback
-                }
-            }
-        }
-        pendingRotateItem = null
+    androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
+        flushPendingRotation()
     }
 
-    val animRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>>() }
-    val targetRotationMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
-
-    androidx.compose.runtime.DisposableEffect(useFullScreenGlobal) {
+    androidx.compose.runtime.DisposableEffect(useFullScreenGlobal, isDarkTheme) {
         val prevLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: false
         val prevLightNavBars = insetsController?.isAppearanceLightNavigationBars ?: false
         if (window != null && insetsController != null) {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-            insetsController.isAppearanceLightStatusBars = false
-            insetsController.isAppearanceLightNavigationBars = false
+            insetsController.isAppearanceLightStatusBars = !isDarkTheme
+            insetsController.isAppearanceLightNavigationBars = !isDarkTheme
             
             if (useFullScreenGlobal) {
                 // Global full screen mode is enabled -> hide system bars
@@ -648,10 +760,13 @@ fun DetailScreen(
     }
 
     // Single-tap immersive mode: system bars follow the viewer chrome toggle.
-    // Skipped when the global full-screen setting already keeps system bars hidden.
-    LaunchedEffect(showUi, useFullScreenGlobal) {
+    // Skipped when the global full-screen setting already keeps system bars hidden,
+    // and never hide system bars while closing so underlying top/bottom bars don't jump/blink.
+    LaunchedEffect(showUi, useFullScreenGlobal, isDarkTheme, hasNavigatedBack) {
         if (insetsController != null && !useFullScreenGlobal) {
-            if (showUi) {
+            if (showUi || hasNavigatedBack) {
+                insetsController.isAppearanceLightStatusBars = !isDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !isDarkTheme
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             } else {
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -662,98 +777,142 @@ fun DetailScreen(
     }
 
     if (showDeleteConfirmDialog && pendingDeleteItem != null) {
-        androidx.compose.material3.AlertDialog(
+        val item = pendingDeleteItem!!
+        var dialogSkipConfirm by remember { mutableStateOf(viewModel.sessionSkipDeleteConfirmation) }
+        var dialogSkipRecycleBin by remember { mutableStateOf(viewModel.sessionSkipRecycleBin) }
+        val isPermanent = dialogSkipRecycleBin
+
+        com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_title)) },
-            text = { androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_msg)) },
-            confirmButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        showDeleteConfirmDialog = false
-                        val item = pendingDeleteItem ?: return@TextButton
-                        coroutineScope.launch(Dispatchers.IO) {
-                            try {
-                                val trashIntent = MediaStore.createTrashRequest(
-                                    context.contentResolver, 
-                                    listOf(item.uri), 
-                                    true
-                                )
-                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                withContext(Dispatchers.Main) {
-                                    launcher.launch(request)
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    android.widget.Toast.makeText(
-                                        context, 
-                                        "Unable to trash this item: ${e.message}", 
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+            title = if (isPermanent) "Delete permanently?" else "Move to Trash?",
+            subtitle = if (isPermanent) {
+                "This file will be erased immediately and cannot be recovered."
+            } else {
+                "Kept in Trash for 30 days before permanent removal."
+            },
+            icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_delete),
+            confirmText = if (isPermanent) "Delete Forever" else "Move to Trash",
+            isDanger = isPermanent,
+            onConfirm = {
+                showDeleteConfirmDialog = false
+                pendingDeleteWasPermanent = isPermanent
+                viewModel.setTrashSessionOptions(dialogSkipConfirm, dialogSkipRecycleBin)
+                if (dialogSkipConfirm) {
+                    android.widget.Toast.makeText(
+                        context,
+                        if (dialogSkipRecycleBin) "Direct permanent deletion active for this session" else "Quick trash active for this session",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(item.uri)
+                        val intentSender = if (isPermanent) {
+                            MediaStore.createDeleteRequest(
+                                context.contentResolver,
+                                listOf(normUri)
+                            ).intentSender
+                        } else {
+                            MediaStore.createTrashRequest(
+                                context.contentResolver,
+                                listOf(normUri),
+                                true
+                            ).intentSender
+                        }
+                        val request = IntentSenderRequest.Builder(intentSender).build()
+                        withContext(Dispatchers.Main) {
+                            launcher.launch(request)
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                viewModel.deleteMediaPermanentlyOptimistically(item.uri.toString())
+                                android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Unable to delete: ${e.message}",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.dialog_move_to_trash_confirm))
                 }
             },
-            dismissButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = { showDeleteConfirmDialog = false }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.action_cancel))
-                }
+            dismissText = stringResource(R.string.action_cancel),
+            onDismiss = { showDeleteConfirmDialog = false },
+            content = {
+                com.inferno.gallery.ui.components.TrashSessionOptions(
+                    skipConfirm = dialogSkipConfirm,
+                    onSkipConfirmChange = { dialogSkipConfirm = it },
+                    skipRecycleBin = dialogSkipRecycleBin,
+                    onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
+                )
             }
         )
     }
 
     if (showRenameDialog && currentItem != null) {
-        var renameText by remember(currentItem) { mutableStateOf(currentItem.name) }
-        androidx.compose.material3.AlertDialog(
+        var renameText by remember(currentItem) { mutableStateOf(currentItem.name.substringBeforeLast('.')) }
+        val ext = remember(currentItem) { currentItem.name.substringAfterLast('.', "") }
+        val isChanged = renameText.isNotBlank() && (if (ext.isNotEmpty()) "$renameText.$ext" else renameText) != currentItem.name
+        com.inferno.gallery.ui.components.PhotonDialog(
             onDismissRequest = { showRenameDialog = false },
-            title = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_title)) },
-            text = {
-                androidx.compose.foundation.layout.Column {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = renameText,
-                        onValueChange = { renameText = it },
-                        label = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_label)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            title = stringResource(R.string.dialog_rename_title),
+            subtitle = if (ext.isNotEmpty()) ".$ext" else null,
+            icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_edit),
+            confirmText = stringResource(R.string.action_save),
+            isConfirmEnabled = isChanged,
+            onConfirm = {
+                val trimmed = renameText.trim()
+                if (trimmed.isNotEmpty()) {
+                    val finalNewName = if (ext.isNotEmpty()) "$trimmed.$ext" else trimmed
+                    if (finalNewName != currentItem.name) {
+                        viewModel.renameMedia(context, currentItem, finalNewName) { pendingIntent ->
+                            pendingRenameItem = currentItem
+                            pendingRenameNewName = finalNewName
+                            renameLauncher.launch(
+                                androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+                            )
+                        }
+                    }
                 }
+                showRenameDialog = false
             },
-            confirmButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        val trimmed = renameText.trim()
-                        if (trimmed.isNotEmpty() && trimmed != currentItem.name) {
-                            val oldExt = currentItem.name.substringAfterLast('.', "")
-                            val finalNewName = if (oldExt.isNotEmpty() && !trimmed.endsWith(".$oldExt", ignoreCase = true)) {
-                                if (trimmed.contains('.')) trimmed else "$trimmed.$oldExt"
-                            } else {
-                                trimmed
-                            }
-                            viewModel.renameMedia(context, currentItem, finalNewName) { pendingIntent ->
-                                pendingRenameItem = currentItem
-                                pendingRenameNewName = finalNewName
-                                renameLauncher.launch(
-                                    androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
+            dismissText = stringResource(R.string.action_cancel),
+            onDismiss = { showRenameDialog = false },
+            content = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { androidx.compose.material3.Text(stringResource(R.string.dialog_rename_label)) },
+                    trailingIcon = if (ext.isNotEmpty()) {
+                        {
+                            androidx.compose.material3.Surface(
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                androidx.compose.material3.Text(
+                                    text = ".$ext",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                         }
-                        showRenameDialog = false
-                    }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.action_save))
-                }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = { showRenameDialog = false }
-                ) {
-                    androidx.compose.material3.Text(stringResource(R.string.action_cancel))
-                }
+                    } else null,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         )
     }
@@ -778,6 +937,7 @@ fun DetailScreen(
         )
     }
 
+    var pendingVaultHideAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     if (showMoveSheet && currentItem != null) {
         val allAlbumsList by viewModel.allAlbums.collectAsState()
         AlbumPickerSheet(
@@ -799,19 +959,36 @@ fun DetailScreen(
                 showMoveSheet = false
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 if (activity != null) {
+                    val hideAction: () -> Unit = {
+                        viewModel.hideMedia(listOf(currentItem.uri))
+                        viewModel.lockVault()
+                        safeOnBack()
+                    }
                     viewModel.vaultAuthManager.authenticate(
                         activity = activity,
-                        negativeButtonText = "Cancel",
+                        negativeButtonText = "Use PIN",
                         unlockSession = false,
-                        onSuccess = {
-                            viewModel.hideMedia(listOf(currentItem.uri))
-                            viewModel.vaultAuthManager.lock()
-                            safeOnBack()
+                        onSuccess = hideAction,
+                        onNegativeButton = {
+                            if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                pendingVaultHideAction = hideAction
+                            }
                         },
                         onFailure = {}
                     )
                 }
             }
+        )
+    }
+
+    pendingVaultHideAction?.let { action ->
+        com.inferno.gallery.ui.vault.VaultPinVerifyDialog(
+            vaultAuthManager = viewModel.vaultAuthManager,
+            onVerified = {
+                pendingVaultHideAction = null
+                action()
+            },
+            onDismiss = { pendingVaultHideAction = null }
         )
     }
 
@@ -845,14 +1022,90 @@ fun DetailScreen(
     // 1× zoom, this translates the pager and fades the black scrim.
     val dismissOffsetY = remember { Animatable(0f) }
     val dismissProgress = (kotlin.math.abs(dismissOffsetY.value) / 600f).coerceIn(0f, 1f)
-    val bgAlpha = 1f - dismissProgress          // scrim fades out
+    val transitionProgress = containerProgress.value.coerceIn(0f, 1f)
+    val bgAlpha = (1f - dismissProgress) * transitionProgress          // scrim fades out
     val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
 
-    val baseCanvasColor = Color.Black
+    val latestActiveUri by androidx.compose.runtime.rememberUpdatedState(currentItem?.uri?.toString())
+
+    val safeOnBackImpl: () -> Unit = remember(onBack, launchBounds) {
+        {
+            if (!hasNavigatedBack) {
+                hasNavigatedBack = true
+                showUi = false
+                flushPendingRotation()
+                if (launchBounds != null) {
+                    coroutineScope.launch {
+                        val activeUri = latestActiveUri
+                        val resolved = activeUri?.let {
+                            com.inferno.gallery.ui.components.MediaTransitionRegistry.resolveBounds(it)
+                        } ?: launchBounds.rect
+                        closingTargetRect = resolved
+                        launch {
+                            if (dismissOffsetY.value != 0f) {
+                                dismissOffsetY.animateTo(0f, MotionTokens.sharedElementSpring())
+                            }
+                        }
+                        containerProgress.animateTo(0f, MotionTokens.sharedElementSpring())
+                        onBack()
+                    }
+                } else {
+                    onBack()
+                }
+            }
+        }
+    }
+    safeOnBackDelegate = safeOnBackImpl
+
+    val density = LocalDensity.current
+    val edgeNudgePx = with(density) { 48.dp.toPx() }
+    var isPredictiveBacking by remember { mutableStateOf(false) }
+    var predictiveOffsetX by remember { mutableFloatStateOf(0f) }
+
+    PredictiveBackHandler(enabled = !isFilmstripOverview && !hasNavigatedBack) { progressFlow ->
+        isPredictiveBacking = true
+        if (launchBounds != null) {
+            val activeUri = latestActiveUri
+            closingTargetRect = activeUri?.let {
+                com.inferno.gallery.ui.components.MediaTransitionRegistry.resolveBounds(it)
+            } ?: launchBounds.rect
+        }
+        try {
+            progressFlow.collect { backEvent ->
+                val p = backEvent.progress.coerceIn(0f, 1f)
+                if (launchBounds != null) {
+                    containerProgress.snapTo((1f - p * 0.48f).coerceIn(0.48f, 1f))
+                } else {
+                    val dir = if (backEvent.swipeEdge == androidx.activity.BackEventCompat.EDGE_LEFT) 1f else -1f
+                    predictiveOffsetX = dir * p * edgeNudgePx
+                    dismissOffsetY.snapTo(p * 120f)
+                }
+            }
+            isPredictiveBacking = false
+            predictiveOffsetX = 0f
+            safeOnBack()
+        } catch (e: CancellationException) {
+            closingTargetRect = null
+            // Launch on coroutineScope so the cancelled PredictiveBackHandler job does not abort animateTo.
+            coroutineScope.launch {
+                if (launchBounds != null) {
+                    containerProgress.animateTo(1f, MotionTokens.sharedElementSpring())
+                } else {
+                    dismissOffsetY.animateTo(0f, MotionTokens.snappySpring())
+                }
+            }
+        } finally {
+            isPredictiveBacking = false
+            predictiveOffsetX = 0f
+        }
+    }
+
+    var containerSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { containerSize = it }
             .background(baseCanvasColor.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center
     ) {
@@ -879,23 +1132,86 @@ fun DetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.82f * bgAlpha))
+                        .background(baseCanvasColor.copy(alpha = 0.82f * bgAlpha))
                 )
             }
         }
 
 
 
+        val isContainerMorphing = launchBounds != null &&
+            containerSize.width > 0 &&
+            containerSize.height > 0 &&
+            transitionProgress < 0.999f
+
+        val containerClipModifier = if (isContainerMorphing && launchBounds != null) {
+            val activeRect = closingTargetRect ?: launchBounds.rect
+            val w = containerSize.width.toFloat()
+            val h = containerSize.height.toFloat()
+            val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, transitionProgress)
+            val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, transitionProgress)
+            val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, transitionProgress)
+            val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, transitionProgress)
+            val curRadiusPx = androidx.compose.ui.util.lerp(
+                with(density) { launchBounds.cornerRadiusDp.dp.toPx() },
+                0f,
+                transitionProgress
+            )
+            val clipShape = androidx.compose.foundation.shape.GenericShape { _, _ ->
+                addRoundRect(
+                    androidx.compose.ui.geometry.RoundRect(
+                        left = curLeft,
+                        top = curTop,
+                        right = curRight,
+                        bottom = curBottom,
+                        radiusX = curRadiusPx,
+                        radiusY = curRadiusPx
+                    )
+                )
+            }
+            Modifier.graphicsLayer {
+                shape = clipShape
+                clip = true
+            }
+        } else {
+            Modifier
+        }
+
+        val pagerTransformModifier = if (isContainerMorphing && launchBounds != null) {
+            val activeRect = closingTargetRect ?: launchBounds.rect
+            val w = containerSize.width.toFloat()
+            val h = containerSize.height.toFloat()
+            val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, transitionProgress)
+            val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, transitionProgress)
+            val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, transitionProgress)
+            val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, transitionProgress)
+            val curCenterX = (curLeft + curRight) * 0.5f
+            val curCenterY = (curTop + curBottom) * 0.5f
+            val curW = (curRight - curLeft).coerceAtLeast(1f)
+            val curH = (curBottom - curTop).coerceAtLeast(1f)
+            val uniformScale = maxOf(curW / w, curH / h).coerceAtLeast(0.05f)
+            Modifier.graphicsLayer {
+                translationX = curCenterX - w * 0.5f
+                translationY = curCenterY - h * 0.5f + dismissOffsetY.value
+                scaleX = uniformScale * dismissScale
+                scaleY = uniformScale * dismissScale
+            }
+        } else {
+            Modifier.graphicsLayer {
+                translationX = predictiveOffsetX
+                translationY = dismissOffsetY.value
+                scaleX = dismissScale
+                scaleY = dismissScale
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().then(containerClipModifier)) {
         HorizontalPager(
             state = pagerState,
             userScrollEnabled = (currentScale <= 1.05f && dismissOffsetY.value == 0f) || isFilmstripOverview,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    translationY = dismissOffsetY.value
-                    scaleX = dismissScale
-                    scaleY = dismissScale
-                }
+                .then(pagerTransformModifier)
                 .pointerInput(currentScale) {
                     // Swipe-to-dismiss: only when not zoomed in.
                     if (currentScale > 1.05f) return@pointerInput
@@ -948,15 +1264,17 @@ fun DetailScreen(
                 value = item.uri
             }
 
-            val request: coil3.request.ImageRequest = remember(resolvedUri, item.id, placeholderSizePx) {
+            val request: coil3.request.ImageRequest = remember(resolvedUri, item.id, item.dateModified, placeholderSizePx) {
                 ImageRequest.Builder(context)
                     .data(resolvedUri)
                     .size(coil3.size.Size.ORIGINAL)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
+                    .memoryCacheKey("${resolvedUri}@${item.dateModified}")
+                    .diskCacheKey("${resolvedUri}@${item.dateModified}")
                     // Reuse the exact thumbnail the grid already has cached for this column
                     // count, so the tap-to-detail hand-off shows the image immediately.
-                    .placeholderMemoryCacheKey(thumbnailMemoryKey(item.id, placeholderSizePx))
+                    .placeholderMemoryCacheKey(thumbnailMemoryKey(item.id, placeholderSizePx, item.dateModified))
                     .crossfade(false)
                     .build()
             }
@@ -1036,7 +1354,13 @@ fun DetailScreen(
                                 isCurrentPage = page == pagerState.currentPage,
                                 showControls = showUi && !isFilmstripOverview,
                                 modifier = Modifier.fillMaxSize(),
+                                isFilmstripOverview = isFilmstripOverview,
                                 onScrubbingChanged = { isVideoScrubbing = it },
+                                onScaleChanged = { newScale ->
+                                    if (page == pagerState.currentPage) {
+                                        currentScale = newScale
+                                    }
+                                },
                                 onTap = {
                                     if (isFilmstripOverview) {
                                         coroutineScope.launch {
@@ -1060,8 +1384,10 @@ fun DetailScreen(
                                     showUi = false
                                 },
                                 onPinchExpand = {
-                                    isFilmstripOverview = false
-                                    showUi = true
+                                    if (isFilmstripOverview) {
+                                        isFilmstripOverview = false
+                                        showUi = true
+                                    }
                                 }
                             )
                         }
@@ -1131,6 +1457,13 @@ fun DetailScreen(
                                 val size = state.painter.intrinsicSize
                                 if (size.width > 0f && size.height > 0f && size.width.isFinite() && size.height.isFinite()) {
                                     imageAspectRatio = size.width / size.height
+                                }
+                                if (!item.isVideo) {
+                                    val bitmap = (state.result.image as? BitmapImage)?.bitmap
+                                        ?: (try { state.result.image.toBitmap() } catch (_: Throwable) { null })
+                                    if (UltraHdrHelper.hasGainmap(bitmap)) {
+                                        ultraHdrMap[item.uri.toString()] = true
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -1394,9 +1727,9 @@ fun DetailScreen(
                                     val composableH = parentHeight
                                     val imgW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
                                     val imgH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imgW / imageAspectRatio else composableH
-                                    val fitScale = if (imgH > composableW && imgH > 0f && composableH > 0f && composableW > 0f) {
-                                        val maxRotScale = minOf(composableW / imgH, composableH / imgW, 1f)
-                                        1f - (1f - maxRotScale) * sinSq
+                                    val fitScale = if (imgW > 0f && imgH > 0f && composableW > 0f && composableH > 0f) {
+                                        val targetRotScale = minOf(composableW / imgH, composableH / imgW)
+                                        1f + (targetRotScale - 1f) * sinSq
                                     } else {
                                         1f
                                     }
@@ -1417,10 +1750,24 @@ fun DetailScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        scaleX = scale.floatValue
-                                        scaleY = scale.floatValue
+                                        val rotZ = animRotation.value
+                                        val theta = Math.toRadians(rotZ.toDouble())
+                                        val sinSq = (kotlin.math.sin(theta) * kotlin.math.sin(theta)).toFloat()
+                                        val composableW = parentWidth
+                                        val composableH = parentHeight
+                                        val imgW = if (imageAspectRatio > 0f) minOf(composableW, composableH * imageAspectRatio) else composableW
+                                        val imgH = if (imageAspectRatio > 0f && imageAspectRatio.isFinite()) imgW / imageAspectRatio else composableH
+                                        val targetRotScale = if (imgW > 0f && imgH > 0f && composableW > 0f && composableH > 0f) {
+                                            minOf(composableW / imgH, composableH / imgW)
+                                        } else {
+                                            1f
+                                        }
+                                        val fitScale = 1f + (targetRotScale - 1f) * sinSq
+                                        scaleX = scale.floatValue * fitScale
+                                        scaleY = scale.floatValue * fitScale
                                         translationX = offsetX.floatValue
                                         translationY = offsetY.floatValue
+                                        rotationZ = rotZ
                                     },
                                 onPlaybackEnded = {
                                     if (!isMotionLooping) isMotionPlaying = false
@@ -1615,6 +1962,220 @@ fun DetailScreen(
             } // end wrapper Box
         }
         }
+        } // end containerClipModifier Box
+
+        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
+        val heartView = androidx.compose.ui.platform.LocalView.current
+
+        val onRestoreAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (isMediaStoreUri) {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(normUri), false)
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                restoreLauncher.launch(request)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Unable to restore: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val onPermanentDeleteAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (isMediaStoreUri) {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    pendingDeleteWasPermanent = true
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(normUri))
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                launcher.launch(request)
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                    viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
+                                    android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val onShareAction = {
+            val item = currentItem
+            if (item != null) {
+                coroutineScope.launch {
+                    val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                    com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
+                }
+            }
+        }
+
+        val onEditAction = {
+            if (currentItem != null) {
+                flushPendingRotation()
+                val uri = resolvedCurrentUri ?: currentItem.uri
+                if (!currentItem.isVideo) {
+                    onNavigateToEditor(uri)
+                } else {
+                    val editIntent = Intent(Intent.ACTION_EDIT).apply {
+                        setDataAndType(uri, "video/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    }
+                    try {
+                        context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        val onFavoriteAction = {
+            if (currentItem != null) {
+                heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                viewModel.toggleFavorite(currentItem.id)
+            }
+        }
+
+        val onDeleteAction = {
+            if (currentItem != null) {
+                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
+                if (!isMediaStoreUri) {
+                    android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingDeleteItem = currentItem
+                    pendingDeletePage = pagerState.currentPage
+                    pendingDeleteWasPermanent = false
+                    val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
+                    val isSessionPermanent = viewModel.sessionSkipRecycleBin
+
+                    if (isSessionSkipConfirm || !confirmDeleteEnabled) {
+                        if (isSessionPermanent) {
+                            onPermanentDeleteAction()
+                        } else {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val normUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(currentItem.uri)
+                                    val trashIntent = MediaStore.createTrashRequest(
+                                        context.contentResolver,
+                                        listOf(normUri),
+                                        true
+                                    )
+                                    val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                    withContext(Dispatchers.Main) {
+                                        launcher.launch(request)
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                            viewModel.deleteMediaPermanentlyOptimistically(currentItem.uri.toString())
+                                            android.widget.Toast.makeText(context, "Item no longer exists", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Unable to trash this item: ${e.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        showDeleteConfirmDialog = true
+                    }
+                }
+            }
+        }
+
+        val onWallpaperAction = {
+            if (currentItem != null) {
+                val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
+                    setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    putExtra("mimeType", "image/*")
+                }
+                try {
+                    context.startActivity(Intent.createChooser(intent, "Set as..."))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        val onRotateAction = {
+            if (currentItem != null) {
+                val target = currentItem
+                pendingRotateItem = target
+                val currentTarget = targetRotationMap[target.id] ?: 0f
+                val nextTarget = currentTarget + 90f
+                targetRotationMap[target.id] = nextTarget
+                pendingRotateDelta = (pendingRotateDelta + 90) % 360
+                val anim = animRotationMap[target.id]
+
+                coroutineScope.launch {
+                    anim?.animateTo(
+                        targetValue = nextTarget,
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                        )
+                    )
+                }
+
+                pendingRotateJob?.cancel()
+                pendingRotateJob = coroutineScope.launch {
+                    kotlinx.coroutines.delay(650)
+                    flushPendingRotation()
+                }
+            }
+        }
+
+        val onVaultAction = {
+            if (currentItem != null) {
+                val act = context as? androidx.fragment.app.FragmentActivity
+                if (act != null) {
+                    val hideAction: () -> Unit = {
+                        viewModel.hideMedia(listOf(currentItem.uri))
+                        viewModel.lockVault()
+                        safeOnBack()
+                    }
+                    viewModel.vaultAuthManager.authenticate(
+                        activity = act,
+                        negativeButtonText = "Use PIN",
+                        unlockSession = false,
+                        onSuccess = hideAction,
+                        onNegativeButton = {
+                            if (viewModel.vaultAuthManager.isPinConfigured(act)) {
+                                pendingVaultHideAction = hideAction
+                            }
+                        },
+                        onFailure = {}
+                    )
+                }
+            }
+        }
 
         val onLensAction = {
             if (currentItem != null) {
@@ -1625,14 +2186,15 @@ fun DetailScreen(
 
         // ── Floating Top Islands ──
         AnimatedVisibility(
-            visible = showUi,
+            visible = showUi && !hasNavigatedBack && !isPredictiveBacking && (launchBounds == null || transitionProgress > 0.65f),
             enter = fadeIn(MotionTokens.gentleSpring()) +
                     slideInVertically(MotionTokens.gentleSpring()) { -it },
-            exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    slideOutVertically(MotionTokens.gentleSpring()) { -it },
+            exit  = fadeOut(MotionTokens.fastEffectsSpec()) +
+                    slideOutVertically(MotionTokens.fastEffectsSpec()) { -it },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
+                .graphicsLayer { alpha = bgAlpha }
         ) {
             Box(
                 modifier = Modifier
@@ -1657,8 +2219,8 @@ fun DetailScreen(
                         onClick = safeOnBack,
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.78f),
-                            contentColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         modifier = Modifier.size(40.dp)
                     ) {
@@ -1672,7 +2234,7 @@ fun DetailScreen(
                     // Center Island: Floating metadata pill
                     if (currentItem != null) {
                         val timestamp = remember(currentItem) {
-                            val raw = if (currentItem.dateModified > 0) currentItem.dateModified else currentItem.dateAdded
+                            val raw = resolveDisplayDateSeconds(currentItem.dateAdded, currentItem.dateModified)
                             if (raw > 1_000_000_000_000L) raw else raw * 1000L
                         }
                         val formattedDate = remember(timestamp) {
@@ -1682,10 +2244,11 @@ fun DetailScreen(
 
                         Surface(
                             shape = ShapeFull,
-                            color = Color.Black.copy(alpha = 0.78f),
-                            contentColor = Color.White,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
                             tonalElevation = 0.dp,
                             shadowElevation = 0.dp,
+                            border = null,
                             modifier = Modifier
                                 .weight(1f, fill = false)
                                 .padding(horizontal = 8.dp)
@@ -1701,7 +2264,7 @@ fun DetailScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 13.sp
                                     ),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1711,7 +2274,7 @@ fun DetailScreen(
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 11.sp
                                     ),
-                                    color = Color.White.copy(alpha = 0.75f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -1720,76 +2283,34 @@ fun DetailScreen(
                         }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (motionPhotoInfo?.isMotionPhoto == true) {
-                            Surface(
-                                onClick = {
-                                    isMotionLooping = !isMotionLooping
-                                    isMotionPlaying = isMotionLooping
-                                },
-                                shape = ShapeFull,
-                                color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.78f),
-                                contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
-                                        contentDescription = "Motion Photo",
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = "LIVE",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        // Right Island: Circular more button
-                        Box {
+                    // Right Island: Circular more button
+                    Box {
                             FilledTonalIconButton(
                                 onClick = { showMoreMenu = true },
                                 shape = CircleShape,
                                 colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = Color.Black.copy(alpha = 0.78f),
-                                    contentColor = Color.White
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
                                 ),
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_horiz),
                                     contentDescription = stringResource(R.string.cd_more_options),
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
 
                             androidx.compose.material3.DropdownMenu(
                                 expanded = showMoreMenu,
-                                onDismissRequest = { showMoreMenu = false },
+                                onDismissRequest = { 
+                                    showMoreMenu = false 
+                                    flushPendingRotation()
+                                },
                                 shape = MaterialTheme.shapes.large,
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.detail_details)) },
-                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
-                                    onClick = {
-                                        showMoreMenu = false
-                                        showInfoCard = true
-                                    }
-                                )
                                 if (currentItem != null && !currentItem.isVideo) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text("Google Lens") },
@@ -1839,30 +2360,38 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null && !currentItem.isVideo) {
+                                if (currentItem != null && !currentItem.isVideo && "wallpaper" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.detail_set_wallpaper)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_image), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
                                             showMoreMenu = false
-                                            val intent = Intent(Intent.ACTION_ATTACH_DATA).apply {
-                                                setDataAndType(resolvedCurrentUri ?: currentItem.uri, "image/*")
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                putExtra("mimeType", "image/*")
-                                            }
-                                            try {
-                                                context.startActivity(Intent.createChooser(intent, "Set as..."))
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "No app available to set wallpaper", Toast.LENGTH_SHORT).show()
+                                            onWallpaperAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && !currentItem.isVideo && "copy_clipboard" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_copy_to_clipboard)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            coroutineScope.launch {
+                                                com.inferno.gallery.ui.utils.ClipboardImageHelper.copyImageToClipboard(
+                                                    context = context,
+                                                    uri = uri
+                                                )
                                             }
                                         }
                                     )
                                 }
-                                if (currentItem != null) {
+                                if (currentItem != null && "copy" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.action_copy)) },
-                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_content_copy), contentDescription = null) },
+                                        text = { Text(stringResource(R.string.action_copy_to_album)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_folder_copy), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
                                             showMoreMenu = false
@@ -1870,7 +2399,7 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null) {
+                                if (currentItem != null && "move" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_move)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = null) },
@@ -1881,43 +2410,17 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                if (currentItem != null && !currentItem.isVideo) {
+                                if (currentItem != null && !currentItem.isVideo && "rotate" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_rotate)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_rotate_right), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
-                                            // Keep 3-dot menu open so the user can tap Rotate repeatedly
-                                            val target = currentItem
-                                            pendingRotateItem = target
-                                            val currentTarget = targetRotationMap[target.id] ?: 0f
-                                            val nextTarget = currentTarget + 90f
-                                            targetRotationMap[target.id] = nextTarget
-                                            val anim = animRotationMap[target.id]
-                                            coroutineScope.launch {
-                                                anim?.animateTo(
-                                                    targetValue = nextTarget,
-                                                    animationSpec = androidx.compose.animation.core.spring(
-                                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                                                    )
-                                                )
-                                            }
-                                            viewModel.rotateMedia(
-                                                context = context,
-                                                item = target,
-                                                degrees = 90,
-                                                onSecurityException = { pendingIntent ->
-                                                    pendingRotateItem = target
-                                                    rotateLauncher.launch(
-                                                        androidx.activity.result.IntentSenderRequest.Builder(pendingIntent).build()
-                                                    )
-                                                }
-                                            )
+                                            onRotateAction()
                                         }
                                     )
                                 }
-                                if (currentItem != null) {
+                                if (currentItem != null && "rename" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_rename)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_edit), contentDescription = null) },
@@ -1925,6 +2428,22 @@ fun DetailScreen(
                                         onClick = {
                                             showMoreMenu = false
                                             showRenameDialog = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && !currentItem.isVideo && "print" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_print)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_print), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            com.inferno.gallery.ui.utils.PhotoPrintHelper.printPhoto(
+                                                context = context,
+                                                uri = uri,
+                                                jobName = currentItem.name
+                                            )
                                         }
                                     )
                                 }
@@ -1940,44 +2459,103 @@ fun DetailScreen(
                                         }
                                     )
                                 }
-                                // Hide (Private Space)
-                                if (currentItem != null) {
+                                if (currentItem != null && "share" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_share)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onShareAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "favorite" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(if (isFavorite) R.string.detail_unfavorite else R.string.detail_favorite)) },
+                                        leadingIcon = { Icon(if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite), contentDescription = null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onFavoriteAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "edit" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(if (currentItem.isVideo) R.string.action_edit else R.string.detail_edit)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(if (currentItem.isVideo) R.drawable.ic_ms_edit else R.drawable.ic_ms_tune), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onEditAction()
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "info" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_details)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_info), contentDescription = null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            showInfoCard = true
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && "vault" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.detail_move_vault)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = null) },
                                         enabled = currentItem.localExists,
                                         onClick = {
                                             showMoreMenu = false
-                                            val activity = context as? androidx.fragment.app.FragmentActivity
-                                            if (activity != null) {
-                                                viewModel.vaultAuthManager.authenticate(
-                                                    activity = activity,
-                                                    negativeButtonText = "Cancel",
-                                                    unlockSession = false,
-                                                    onSuccess = {
-                                                        viewModel.hideMedia(listOf(currentItem.uri))
-                                                        viewModel.vaultAuthManager.lock()
-                                                        safeOnBack()
-                                                    },
-                                                    onFailure = {}
-                                                )
-                                            }
+                                            onVaultAction()
                                         }
                                     )
                                 }
+                                if (currentItem != null && "delete" !in viewerToolbarActions) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.detail_delete), color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onDeleteAction()
+                                        }
+                                    )
+                                }
+                                androidx.compose.material3.HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.customize_toolbars_title)) },
+                                    leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_settings), contentDescription = null) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        onNavigateToCustomizeToolbars?.invoke()
+                                    }
+                                )
                             }
                         }
                 }
             }
         }
-    }
 
         ExifDetailsSheet(
             isOpen = showInfoCard,
             onDismiss = { showInfoCard = false },
             galleryItem = galleryItems.getOrNull(pagerState.currentPage),
             exifData = currentExif,
-            onPersonClick = onNavigateToPerson
+            isUltraHdr = isCurrentItemUltraHdr,
+            onPersonClick = onNavigateToPerson,
+            onStripComplete = { _, isCopy ->
+                if (!isCopy) {
+                    coroutineScope.launch {
+                        galleryItems.getOrNull(pagerState.currentPage)?.let { item ->
+                            currentExif = extractDetailedExif(context, item)
+                        }
+                    }
+                }
+            }
         )
 
         val tipMotionDismissed by settingsRepo.tipMotionPhotoDismissedFlow.collectAsState(initial = true)
@@ -1994,170 +2572,111 @@ fun DetailScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = if (viewerFilmstripEnabled && galleryItems.size > 1) 136.dp else 84.dp)
+                    .padding(bottom = if (viewerFilmstripEnabled && galleryItems.size > 1) 180.dp else 130.dp)
             )
         }
 
-        val currentItem = galleryItems.getOrNull(pagerState.currentPage)
-        val isFavorite = currentItem?.id?.let { favoriteIds.contains(it) } ?: false
-        val heartView = androidx.compose.ui.platform.LocalView.current
-
-        val onRestoreAction = {
-            if (currentItem != null) {
-                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                if (isMediaStoreUri) {
-                    pendingDeleteItem = currentItem
-                    pendingDeletePage = pagerState.currentPage
-                    coroutineScope.launch(Dispatchers.IO) {
-                        try {
-                            val restoreIntent = MediaStore.createTrashRequest(context.contentResolver, listOf(currentItem.uri), false)
-                            val request = androidx.activity.result.IntentSenderRequest.Builder(restoreIntent.intentSender).build()
-                            withContext(Dispatchers.Main) {
-                                restoreLauncher.launch(request)
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "Unable to restore: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        val onPermanentDeleteAction = {
-            if (currentItem != null) {
-                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                if (isMediaStoreUri) {
-                    pendingDeleteItem = currentItem
-                    pendingDeletePage = pagerState.currentPage
-                    coroutineScope.launch(Dispatchers.IO) {
-                        try {
-                            val deleteIntent = MediaStore.createDeleteRequest(context.contentResolver, listOf(currentItem.uri))
-                            val request = androidx.activity.result.IntentSenderRequest.Builder(deleteIntent.intentSender).build()
-                            withContext(Dispatchers.Main) {
-                                launcher.launch(request)
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                android.widget.Toast.makeText(context, "Unable to delete: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        val onShareAction = {
-            val item = currentItem
-            if (item != null) {
-                coroutineScope.launch {
-                    val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
-                    com.inferno.gallery.ui.utils.ShareUtils.shareMedia(context, listOf(item.uri), strip)
-                }
-            }
-        }
-
-        val onEditAction = {
-            if (currentItem != null) {
-                val uri = resolvedCurrentUri ?: currentItem.uri
-                if (!currentItem.isVideo) {
-                    onNavigateToEditor(uri)
-                } else {
-                    val editIntent = Intent(Intent.ACTION_EDIT).apply {
-                        setDataAndType(uri, "video/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                    }
-                    try {
-                        context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
-                    } catch (e: Exception) {
-                        android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-
-        val onFavoriteAction = {
-            if (currentItem != null) {
-                heartView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                viewModel.toggleFavorite(currentItem.id)
-            }
-        }
-
-        val onDeleteAction = {
-            if (currentItem != null) {
-                val isMediaStoreUri = currentItem.uri.toString().startsWith("content://")
-                if (!isMediaStoreUri) {
-                    android.widget.Toast.makeText(context, "Cannot delete this item", android.widget.Toast.LENGTH_SHORT).show()
-                } else {
-                    pendingDeleteItem = currentItem
-                    pendingDeletePage = pagerState.currentPage
-                    if (confirmDeleteEnabled) {
-                        showDeleteConfirmDialog = true
-                    } else {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            try {
-                                val trashIntent = MediaStore.createTrashRequest(
-                                    context.contentResolver,
-                                    listOf(currentItem.uri),
-                                    true
-                                )
-                                val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
-                                withContext(Dispatchers.Main) {
-                                    launcher.launch(request)
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "Unable to trash this item: ${e.message}",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-
-
-        // ── Floating Action Dock ──
+        // ── Floating Action Dock & Motion Photo Control ──
         AnimatedVisibility(
-            visible = showUi,
+            visible = showUi && !hasNavigatedBack && !isPredictiveBacking && (launchBounds == null || transitionProgress > 0.65f),
             enter = fadeIn(MotionTokens.gentleSpring()) +
                     slideInVertically(MotionTokens.gentleSpring()) { it } +
                     scaleIn(MotionTokens.snappySpring()),
-            exit  = fadeOut(MotionTokens.gentleSpring()) +
-                    slideOutVertically(MotionTokens.gentleSpring()) { it } +
-                    scaleOut(MotionTokens.gentleSpring()),
+            exit  = fadeOut(MotionTokens.fastEffectsSpec()) +
+                    slideOutVertically(MotionTokens.fastEffectsSpec()) { it } +
+                    scaleOut(MotionTokens.fastEffectsSpec()),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
+                .graphicsLayer { alpha = bgAlpha }
                 .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
         ) {
-            ViewerActionButtonsRow(
-                currentItem = currentItem,
-                isTrash = bucketName == "Trash",
-                isFavorite = isFavorite,
-                onRestore = onRestoreAction,
-                onPermanentDelete = onPermanentDeleteAction,
-                onShare = onShareAction,
-                onEdit = onEditAction,
-                onFavorite = onFavoriteAction,
-                onDelete = onDeleteAction,
-                onInfo = { showInfoCard = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 380.dp)
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            userInteractionTrigger++
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (motionPhotoInfo?.isMotionPhoto == true) {
+                    Surface(
+                        onClick = {
+                            isMotionLooping = !isMotionLooping
+                            isMotionPlaying = isMotionLooping
+                        },
+                        shape = ShapeFull,
+                        color = if (isMotionPlaying) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                        contentColor = if (isMotionPlaying) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_motion_photos_on),
+                                contentDescription = "Motion Photo",
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "LIVE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    fontSize = 11.sp
+                                )
+                            )
                         }
                     }
-            )
+                }
+
+                ViewerActionButtonsRow(
+                    currentItem = currentItem,
+                    isTrash = bucketName == "Trash",
+                    isFavorite = isFavorite,
+                    actions = viewerToolbarActions,
+                    onRestore = onRestoreAction,
+                    onPermanentDelete = onPermanentDeleteAction,
+                    onShare = onShareAction,
+                    onEdit = onEditAction,
+                    onFavorite = onFavoriteAction,
+                    onDelete = onDeleteAction,
+                    onInfo = { showInfoCard = true },
+                    onMove = { showMoveSheet = true },
+                    onVault = onVaultAction,
+                    onWallpaper = onWallpaperAction,
+                    onRotate = onRotateAction,
+                    onCopy = { showCopySheet = true },
+                    onCopyClipboard = {
+                        val item = currentItem ?: return@ViewerActionButtonsRow
+                        val uri = resolvedCurrentUri ?: item.uri
+                        coroutineScope.launch {
+                            com.inferno.gallery.ui.utils.ClipboardImageHelper.copyImageToClipboard(
+                                context = context,
+                                uri = uri
+                            )
+                        }
+                    },
+                    onRename = { showRenameDialog = true },
+                    onPrint = {
+                        val item = currentItem ?: return@ViewerActionButtonsRow
+                        val uri = resolvedCurrentUri ?: item.uri
+                        com.inferno.gallery.ui.utils.PhotoPrintHelper.printPhoto(
+                            context = context,
+                            uri = uri,
+                            jobName = item.name
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 380.dp)
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                userInteractionTrigger++
+                            }
+                        }
+                )
+            }
         }
     }
 }
@@ -2260,6 +2779,7 @@ private fun ViewerActionButtonsRow(
     currentItem: GalleryItem?,
     isTrash: Boolean,
     isFavorite: Boolean,
+    actions: List<String> = com.inferno.gallery.ui.model.ViewerToolbarAction.DEFAULTS,
     onRestore: () -> Unit,
     onPermanentDelete: () -> Unit,
     onShare: () -> Unit,
@@ -2267,143 +2787,246 @@ private fun ViewerActionButtonsRow(
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
     onInfo: () -> Unit,
+    onMove: () -> Unit = {},
+    onVault: () -> Unit = {},
+    onWallpaper: () -> Unit = {},
+    onRotate: () -> Unit = {},
+    onCopy: () -> Unit = {},
+    onCopyClipboard: () -> Unit = {},
+    onRename: () -> Unit = {},
+    onPrint: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+    // Outer Pill container for bottom controls pill:
+    // Stadium capsule (CircleShape), height 64.dp, 6.dp padding on all sides,
+    // pure solid tonal layering with zero outlines, shadows, or elevations.
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = null,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier.height(64.dp)
     ) {
-        Surface(
-            shape = ShapeFull,
-            color = Color.Black.copy(alpha = 0.78f),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            modifier = Modifier.height(52.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             if (isTrash) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onRestore,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                            contentDescription = "Restore",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+                // 1. Restore
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                    contentDescription = "Restore",
+                    onClick = onRestore,
+                    tileShape = getViewerSegmentShape(index = 0, total = 2),
+                    modifier = Modifier.weight(1f)
+                )
 
-                    IconButton(
-                        onClick = onPermanentDelete,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                            contentDescription = "Permanently Delete",
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
+                // 2. Permanently Delete
+                ViewerToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    contentDescription = "Permanently Delete",
+                    onClick = onPermanentDelete,
+                    tileShape = getViewerSegmentShape(index = 1, total = 2),
+                    modifier = Modifier.weight(1f)
+                )
             } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Share
-                    IconButton(
-                        onClick = onShare,
-                        enabled = currentItem?.localExists == true,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                val total = actions.size
+                actions.forEachIndexed { index, actionId ->
+                    val tileShape = getViewerSegmentShape(index = index, total = total)
+                    when (actionId) {
+                        "share" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
                             contentDescription = stringResource(R.string.detail_share),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
+                            enabled = currentItem?.localExists == true,
+                            onClick = onShare,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-
-                    // Favorite with spring bounce animation
-                    val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
-                    var heartBounce by remember { mutableStateOf(false) }
-                    val heartScale by animateFloatAsState(
-                        targetValue = if (heartBounce) 1.45f else 1f,
-                        animationSpec = MotionTokens.bouncySpring(),
-                        label = "heartScale",
-                        finishedListener = { if (heartBounce) heartBounce = false }
-                    )
-                    IconButton(
-                        onClick = {
-                            heartBounce = true
-                            onFavorite()
-                        },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
-                            contentDescription = stringResource(R.string.detail_favorite),
-                            tint = if (isFavorite) favoriteHarmonized else Color.White,
-                            modifier = Modifier
-                                .size(22.dp)
-                                .graphicsLayer {
+                        "favorite" -> {
+                            val favoriteHarmonized = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.favorite
+                            var heartBounce by remember { mutableStateOf(false) }
+                            val heartScale by animateFloatAsState(
+                                targetValue = if (heartBounce) 1.45f else 1f,
+                                animationSpec = MotionTokens.bouncySpring(),
+                                label = "heartScale",
+                                finishedListener = { if (heartBounce) heartBounce = false }
+                            )
+                            ViewerToolTile(
+                                icon = if (isFavorite) ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled) else ImageVector.vectorResource(R.drawable.ic_ms_favorite),
+                                contentDescription = stringResource(R.string.detail_favorite),
+                                tint = if (isFavorite) favoriteHarmonized else MaterialTheme.colorScheme.onSurface,
+                                iconModifier = Modifier.graphicsLayer {
                                     scaleX = heartScale
                                     scaleY = heartScale
-                                }
-                        )
-                    }
-
-                    // Info / Details
-                    IconButton(
-                        onClick = onInfo,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_info),
-                            contentDescription = stringResource(R.string.detail_details),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Edit / Tune
-                    IconButton(
-                        enabled = currentItem?.localExists == true,
-                        onClick = onEdit,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_photo_camera else R.drawable.ic_ms_tune),
+                                },
+                                onClick = {
+                                    heartBounce = true
+                                    onFavorite()
+                                },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        "edit" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(if (currentItem?.isVideo == true) R.drawable.ic_ms_edit else R.drawable.ic_ms_tune),
                             contentDescription = stringResource(if (currentItem?.isVideo == true) R.string.action_edit else R.string.detail_edit),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
+                            enabled = currentItem?.localExists == true,
+                            onClick = onEdit,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-
-                    // Delete
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        "info" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_info),
+                            contentDescription = stringResource(R.string.detail_details),
+                            onClick = onInfo,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "delete" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
                             contentDescription = stringResource(R.string.detail_delete),
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(22.dp)
+                            onClick = onDelete,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "move" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                            contentDescription = stringResource(R.string.action_move),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onMove,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "vault" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
+                            contentDescription = stringResource(R.string.detail_move_vault),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onVault,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "wallpaper" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                            contentDescription = stringResource(R.string.detail_set_wallpaper),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onWallpaper,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "rotate" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_rotate_right),
+                            contentDescription = stringResource(R.string.action_rotate),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onRotate,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "copy" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_copy),
+                            contentDescription = stringResource(R.string.action_copy_to_album),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onCopy,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "copy_clipboard" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
+                            contentDescription = stringResource(R.string.action_copy_to_clipboard),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onCopyClipboard,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "rename" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_edit),
+                            contentDescription = stringResource(R.string.action_rename),
+                            enabled = currentItem?.localExists == true,
+                            onClick = onRename,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        "print" -> ViewerToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_print),
+                            contentDescription = stringResource(R.string.action_print),
+                            enabled = currentItem?.localExists == true && currentItem?.isVideo != true,
+                            onClick = onPrint,
+                            tileShape = tileShape,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Calculates connected segmented button shapes for concentric capsule design:
+ * - Start tile: Outer corner follows concentric capsule curve (26.dp), inner corner has subtle radius (6.dp).
+ * - Middle tiles: All corners subtle radius (6.dp).
+ * - End tile: Inner corner subtle radius (6.dp), outer corner follows concentric capsule curve (26.dp).
+ */
+private fun getViewerSegmentShape(index: Int, total: Int, outerCorner: Dp = 26.dp, innerCorner: Dp = 6.dp): Shape =
+    com.inferno.gallery.ui.theme.getSegmentShape(index, total, outerCorner, innerCorner)
+
+/**
+ * Individual tool tile inside the Pixel-style controls pill.
+ * Features independent spring touch scale, tonal surface, and subtle border.
+ */
+@Composable
+private fun ViewerToolTile(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+    iconModifier: Modifier = Modifier,
+    tileShape: Shape = RoundedCornerShape(6.dp),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.92f else 1f,
+        animationSpec = MotionTokens.bouncySpring(),
+        label = "toolTileScale"
+    )
+
+    Surface(
+        modifier = modifier
+            .fillMaxHeight()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(tileShape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+                onClick = onClick
+            ),
+        shape = tileShape,
+        color = if (enabled) containerColor else containerColor.copy(alpha = 0.38f),
+        border = null,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (enabled) tint else tint.copy(alpha = 0.38f),
+                modifier = iconModifier.size(22.dp)
+            )
         }
     }
 }

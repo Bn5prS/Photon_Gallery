@@ -542,6 +542,11 @@ object DatabaseProvider {
 
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
+                    // Normalize any legacy non-standard external_primary URIs to canonical external URIs
+                    try {
+                        db.execSQL("UPDATE core_media SET uriString = REPLACE(uriString, 'content://media/external_primary/', 'content://media/external/') WHERE uriString LIKE 'content://media/external_primary/%'")
+                        db.execSQL("UPDATE vault_media SET originalUri = REPLACE(originalUri, 'content://media/external_primary/', 'content://media/external/') WHERE originalUri LIKE 'content://media/external_primary/%'")
+                    } catch (_: Exception) {}
                     // Create FTS table if it doesn't exist — in onOpen (not just onCreate)
                     // so that users who upgraded through migrations also get the table.
                     db.execSQL(

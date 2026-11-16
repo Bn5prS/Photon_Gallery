@@ -75,6 +75,7 @@ import com.inferno.gallery.data.NativeTimelineItem
 import com.inferno.gallery.data.ThumbnailScrollThrottle
 import com.inferno.gallery.ui.GalleryItem
 import com.inferno.gallery.ui.GalleryListItem
+import com.inferno.gallery.ui.GalleryViewModel
 import com.inferno.gallery.ui.StableUriSet
 import com.inferno.gallery.ui.formatDuration
 import com.inferno.gallery.ui.theme.MotionTokens
@@ -187,7 +188,8 @@ fun NativePhotonGrid(
     onScrolledAwayFromTop: ((Boolean) -> Unit)? = null,
     initialFirstVisibleItemIndex: Int = 0,
     initialFirstVisibleItemScrollOffset: Int = 0,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    onScrollDateStateChanged: ((visible: Boolean, dateText: String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val imageLoader = remember(context) { context.imageLoader }
@@ -258,6 +260,7 @@ fun NativePhotonGrid(
     var targetRecyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var hasRestoredScroll by remember(scrollToTopKey) { mutableStateOf(initialFirstVisibleItemIndex <= 0) }
     var lastScrollToTopKey by remember { mutableStateOf(scrollToTopKey) }
+    var lastSubmittedKey by remember { mutableStateOf(scrollToTopKey) }
 
     android.util.Log.d("NativePhotonGrid", "NativePhotonGrid recomposed: initialIndex=$initialFirstVisibleItemIndex offset=$initialFirstVisibleItemScrollOffset hasRestoredScroll=$hasRestoredScroll")
 
@@ -279,15 +282,6 @@ fun NativePhotonGrid(
             targetRecyclerView?.scrollToPosition(0)
             currentOnSaveScrollPosition?.invoke(0, 0)
         }
-    }
-
-    var showHudPill by remember { mutableStateOf(false) }
-    var hudSpanCount by remember { mutableIntStateOf(safeSpanCount) }
-    LaunchedEffect(safeSpanCount) {
-        hudSpanCount = safeSpanCount
-        showHudPill = true
-        delay(650)
-        showHudPill = false
     }
 
     DisposableEffect(Unit) {
@@ -318,7 +312,7 @@ fun NativePhotonGrid(
                     itemAnimator = null // Maximum scroll throughput without layout animator hitches
                     setRecycledViewPool(recycledViewPool)
 
-                    val gridLayoutManager = GridLayoutManager(ctx, safeSpanCount).apply {
+                    val gridLayoutManager = SafeGridLayoutManager(ctx, safeSpanCount).apply {
                         isItemPrefetchEnabled = true
                         initialPrefetchItemCount = safeSpanCount * 2
                     }
@@ -384,9 +378,47 @@ fun NativePhotonGrid(
                     addItemDecoration(GridSpacingItemDecoration(spacingPx) { gridLayoutManager.spanCount })
 
                     // Scroll state and position tracking
+                    var lastEmittedDate = ""
+                    var lastEmittedVisible = false
+                    var hideDatePillRunnable: Runnable? = null
+                    fun updateDatePill(rv: RecyclerView, visible: Boolean) {
+                        val callback = onScrollDateStateChanged ?: return
+                        if (!visible) {
+                            if (lastEmittedVisible) {
+                                lastEmittedVisible = false
+                                callback(false, lastEmittedDate)
+                            }
+                            return
+                        }
+                        val lm = rv.layoutManager as? GridLayoutManager ?: return
+                        val adapterRef = rv.adapter as? NativePhotonAdapter ?: return
+                        val firstPos = lm.findFirstVisibleItemPosition()
+                        if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                            val date = when (val item = adapterRef.getItem(firstPos)) {
+                                is NativeTimelineItem.Header -> item.title
+                                is NativeTimelineItem.Media -> com.inferno.gallery.ui.GalleryViewModel.formatGroupHeader(item.dateAdded)
+                                null -> ""
+                            }
+                            if (date.isNotEmpty() && (!lastEmittedVisible || date != lastEmittedDate)) {
+                                lastEmittedVisible = true
+                                lastEmittedDate = date
+                                callback(true, date)
+                            }
+                        }
+                    }
+
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
                         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                             super.onScrollStateChanged(recyclerView, newState)
+                            if (newState == RecyclerView.SCROLL_STATE_DRAGGING || newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                                hideDatePillRunnable?.let { recyclerView.removeCallbacks(it) }
+                                updateDatePill(recyclerView, true)
+                            } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                                hideDatePillRunnable?.let { recyclerView.removeCallbacks(it) }
+                                val r = Runnable { updateDatePill(recyclerView, false) }
+                                hideDatePillRunnable = r
+                                recyclerView.postDelayed(r, 900L)
+                            }
                             if (hasRestoredScroll && (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING)) {
                                 val lm = recyclerView.layoutManager as? GridLayoutManager
                                 if (lm != null) {
@@ -405,6 +437,9 @@ fun NativePhotonGrid(
                             val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
                             val isScrolled = lm.findFirstVisibleItemPosition() > 0 || recyclerView.computeVerticalScrollOffset() > 32
                             currentOnScrolledAwayFromTop?.invoke(isScrolled)
+                            if (recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
+                                updateDatePill(recyclerView, true)
+                            }
                             if (hasRestoredScroll && recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
                                 val firstPos = lm.findFirstVisibleItemPosition()
                                 if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
@@ -469,6 +504,9 @@ fun NativePhotonGrid(
                 scroller.addView(rv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
                 scroller.attachRecyclerView(rv)
                 scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
+                scroller.onFastScrollSettled = { firstPos, topOffset ->
+                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                }
 
                 targetRecyclerView = rv
                 scroller
@@ -481,6 +519,16 @@ fun NativePhotonGrid(
                 targetRecyclerView = recyclerView
 
                 scroller.timelineItems = items
+                scroller.dateLookup = { pos ->
+                    when (val item = adapter.getItem(pos)) {
+                        is NativeTimelineItem.Header -> item.title
+                        is NativeTimelineItem.Media -> GalleryViewModel.formatGroupHeader(item.dateAdded)
+                        null -> null
+                    }
+                }
+                scroller.onFastScrollSettled = { firstPos, topOffset ->
+                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
+                }
                 scroller.setThemeColors(
                     primary = currentColorScheme.primary,
                     onPrimary = currentColorScheme.onPrimary,
@@ -497,12 +545,96 @@ fun NativePhotonGrid(
                     adapter.notifyItemRangeChanged(0, adapter.itemCount)
                 }
 
-                // Update span count
+                // Update span count with smooth FLIP shuffle/resize animation
                 if (layoutManager.spanCount != safeSpanCount) {
+                    data class ChildBounds(val left: Int, val top: Int, val width: Int, val height: Int)
+                    val previousBounds = HashMap<String, ChildBounds>(recyclerView.childCount * 2)
+                    for (i in 0 until recyclerView.childCount) {
+                        val child = recyclerView.getChildAt(i) ?: continue
+                        child.animate().cancel()
+                        child.translationX = 0f
+                        child.translationY = 0f
+                        child.scaleX = 1f
+                        child.scaleY = 1f
+                        child.alpha = 1f
+                        val pos = recyclerView.getChildAdapterPosition(child)
+                        if (pos != RecyclerView.NO_POSITION) {
+                            val key = when (val item = adapter.getItem(pos)) {
+                                is NativeTimelineItem.Media -> "M_${item.id}"
+                                is NativeTimelineItem.Header -> "H_${item.id}"
+                                null -> if (adapter.getItemViewType(pos) == VIEW_TYPE_COMPOSE_HEADER) "COMPOSE_HEADER" else null
+                            }
+                            if (key != null && child.width > 0 && child.height > 0) {
+                                previousBounds[key] = ChildBounds(child.left, child.top, child.width, child.height)
+                            }
+                        }
+                    }
+
                     layoutManager.spanCount = safeSpanCount
+                    layoutManager.spanSizeLookup.invalidateSpanIndexCache()
                     adapter.currentSpanCount = safeSpanCount
                     recyclerView.invalidateItemDecorations()
                     adapter.notifyItemRangeChanged(0, adapter.itemCount, PAYLOAD_SPAN_COUNT)
+
+                    val interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
+                    val vto = recyclerView.viewTreeObserver
+                    if (vto.isAlive && previousBounds.isNotEmpty()) {
+                        vto.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                if (recyclerView.viewTreeObserver.isAlive) {
+                                    recyclerView.viewTreeObserver.removeOnPreDrawListener(this)
+                                }
+                                for (i in 0 until recyclerView.childCount) {
+                                    val child = recyclerView.getChildAt(i) ?: continue
+                                    val pos = recyclerView.getChildAdapterPosition(child)
+                                    if (pos == RecyclerView.NO_POSITION) continue
+                                    val key = when (val item = adapter.getItem(pos)) {
+                                        is NativeTimelineItem.Media -> "M_${item.id}"
+                                        is NativeTimelineItem.Header -> "H_${item.id}"
+                                        null -> if (adapter.getItemViewType(pos) == VIEW_TYPE_COMPOSE_HEADER) "COMPOSE_HEADER" else null
+                                    } ?: continue
+
+                                    val prev = previousBounds[key]
+                                    if (prev != null && child.width > 0 && child.height > 0) {
+                                        val dx = (prev.left - child.left).toFloat()
+                                        val dy = (prev.top - child.top).toFloat()
+                                        val sx = prev.width.toFloat() / child.width.toFloat()
+                                        val sy = prev.height.toFloat() / child.height.toFloat()
+                                        child.pivotX = 0f
+                                        child.pivotY = 0f
+                                        child.translationX = dx
+                                        child.translationY = dy
+                                        child.scaleX = sx
+                                        child.scaleY = sy
+                                        child.animate()
+                                            .translationX(0f)
+                                            .translationY(0f)
+                                            .scaleX(1f)
+                                            .scaleY(1f)
+                                            .setDuration(260L)
+                                            .setInterpolator(interpolator)
+                                            .withEndAction {
+                                                child.pivotX = child.width * 0.5f
+                                                child.pivotY = child.height * 0.5f
+                                            }
+                                            .start()
+                                    } else if (child.width > 0 && child.height > 0) {
+                                        child.alpha = 0f
+                                        child.scaleX = 0.88f
+                                        child.scaleY = 0.88f
+                                        child.animate()
+                                            .alpha(1f)
+                                            .scaleX(1f)
+                                            .scaleY(1f)
+                                            .setDuration(260L)
+                                            .setInterpolator(interpolator)
+                                            .start()
+                                    }
+                                }
+                                return true
+                            }
+                        })
+                    }
                 }
 
                 // Update corner radius
@@ -516,9 +648,16 @@ fun NativePhotonGrid(
                 adapter.updateSelection(selectedUris)
                 adapter.updateFavorites(favoriteIds)
 
+                val isKeyChanged = (lastSubmittedKey != scrollToTopKey)
+                if (isKeyChanged) {
+                    lastSubmittedKey = scrollToTopKey
+                }
+
                 // Update items
                 if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
-                    adapter.submitList(items) {
+                    adapter.submitList(items, isFullReset = isKeyChanged) {
+                        layoutManager.spanSizeLookup.invalidateSpanIndexCache()
+                        recyclerView.invalidateItemDecorations()
                         val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
                         android.util.Log.d("NativePhotonGrid", "submitList commitCallback: restoring to targetPos=$targetPos offset=$initialFirstVisibleItemScrollOffset (itemCount=${adapter.itemCount})")
                         layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
@@ -533,12 +672,21 @@ fun NativePhotonGrid(
                         }
                     }
                 } else {
-                    adapter.submitList(items)
+                    adapter.submitList(items, isFullReset = isKeyChanged) {
+                        layoutManager.spanSizeLookup.invalidateSpanIndexCache()
+                        recyclerView.invalidateItemDecorations()
+                    }
                 }
 
-                // Update padding
-                recyclerView.setPadding(leftPaddingPx, topPaddingPx, rightPaddingPx, bottomPaddingPx)
-                scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
+                // Update padding only when changed to avoid redundant layout passes
+                if (recyclerView.paddingLeft != leftPaddingPx ||
+                    recyclerView.paddingTop != topPaddingPx ||
+                    recyclerView.paddingRight != rightPaddingPx ||
+                    recyclerView.paddingBottom != bottomPaddingPx
+                ) {
+                    recyclerView.setPadding(leftPaddingPx, topPaddingPx, rightPaddingPx, bottomPaddingPx)
+                    scroller.setTrackPadding(topPaddingPx, bottomPaddingPx)
+                }
             },
             onRelease = { scroller ->
                 dragSelectHelper.detach()
@@ -562,32 +710,37 @@ fun NativePhotonGrid(
             }
         )
 
-        // Floating Material 3 Expressive Column Count HUD Badge
-        AnimatedVisibility(
-            visible = showHudPill,
-            enter = fadeIn(MotionTokens.snappySpring()) + scaleIn(MotionTokens.bouncySpring()),
-            exit = fadeOut(MotionTokens.snappySpring()) + scaleOut(MotionTokens.snappySpring()),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-        ) {
-            Surface(
-                shape = ShapeFull,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
-                tonalElevation = 6.dp,
-                shadowElevation = 4.dp
-            ) {
-                Text(
-                    text = "$hudSpanCount columns",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+        androidx.compose.runtime.DisposableEffect(targetRecyclerView) {
+            val rv = targetRecyclerView
+            if (rv != null) {
+                val resolver: (String) -> androidx.compose.ui.geometry.Rect? = { mediaKey ->
+                    var found: androidx.compose.ui.geometry.Rect? = null
+                    for (i in 0 until rv.childCount) {
+                        val child = rv.getChildAt(i) ?: continue
+                        val holder = rv.getChildViewHolder(child) as? MediaViewHolder
+                        if (holder?.boundMediaKey == mediaKey && child.width > 0 && child.height > 0) {
+                            val loc = IntArray(2)
+                            child.getLocationInWindow(loc)
+                            found = androidx.compose.ui.geometry.Rect(
+                                loc[0].toFloat(),
+                                loc[1].toFloat(),
+                                (loc[0] + child.width).toFloat(),
+                                (loc[1] + child.height).toFloat()
+                            )
+                            break
+                        }
+                    }
+                    found
+                }
+                MediaTransitionRegistry.registerResolver(resolver)
+                onDispose {
+                    MediaTransitionRegistry.unregisterResolver(resolver)
+                }
+            } else {
+                onDispose {}
             }
         }
+
     }
 }
 
@@ -618,7 +771,8 @@ fun NativePhotonGrid(
     onScrolledAwayFromTop: ((Boolean) -> Unit)? = null,
     initialFirstVisibleItemIndex: Int = 0,
     initialFirstVisibleItemScrollOffset: Int = 0,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    onScrollDateStateChanged: ((visible: Boolean, dateText: String) -> Unit)? = null
 ) = NativePhotonGrid(
     items = items,
     modifier = modifier,
@@ -642,8 +796,23 @@ fun NativePhotonGrid(
     onScrolledAwayFromTop = onScrolledAwayFromTop,
     initialFirstVisibleItemIndex = initialFirstVisibleItemIndex,
     initialFirstVisibleItemScrollOffset = initialFirstVisibleItemScrollOffset,
-    onSaveScrollPosition = onSaveScrollPosition
+    onSaveScrollPosition = onSaveScrollPosition,
+    onScrollDateStateChanged = onScrollDateStateChanged
 )
+
+/**
+ * Defensive GridLayoutManager that intercepts RecyclerView inconsistency exceptions
+ * during rapid dataset swaps or tab transitions.
+ */
+private class SafeGridLayoutManager(context: Context, spanCount: Int) : GridLayoutManager(context, spanCount) {
+    override fun onLayoutChildren(recycler: RecyclerView.Recycler?, state: RecyclerView.State?) {
+        try {
+            super.onLayoutChildren(recycler, state)
+        } catch (e: IndexOutOfBoundsException) {
+            android.util.Log.e("SafeGridLayoutManager", "Inconsistency caught in onLayoutChildren: ${e.message}")
+        }
+    }
+}
 
 /**
  * High-performance RecyclerView Adapter for Photon Gallery timeline.
@@ -687,6 +856,8 @@ private class NativePhotonAdapter(
         }
     }
 
+    private var currentDataset: List<NativeTimelineItem> = emptyList()
+
     private val differ = AsyncListDiffer(this, object : DiffUtil.ItemCallback<NativeTimelineItem>() {
         override fun areItemsTheSame(oldItem: NativeTimelineItem, newItem: NativeTimelineItem): Boolean {
             return oldItem.key == newItem.key
@@ -697,18 +868,30 @@ private class NativePhotonAdapter(
         }
     })
 
-    fun submitList(list: List<NativeTimelineItem>, commitCallback: (() -> Unit)? = null) {
-        differ.submitList(list, commitCallback)
+    fun submitList(list: List<NativeTimelineItem>, isFullReset: Boolean = false, commitCallback: (() -> Unit)? = null) {
+        if (isFullReset) {
+            currentDataset = list
+            differ.submitList(null)
+            notifyDataSetChanged()
+            commitCallback?.invoke()
+        } else {
+            currentDataset = emptyList()
+            differ.submitList(list, commitCallback)
+        }
     }
+
+    private val activeItems: List<NativeTimelineItem>
+        get() = if (currentDataset.isNotEmpty()) currentDataset else differ.currentList
 
     fun getItem(position: Int): NativeTimelineItem? {
         val actualPos = if (hasHeader) position - 1 else position
-        return if (actualPos in 0 until differ.currentList.size) {
-            differ.currentList[actualPos]
+        val list = activeItems
+        return if (actualPos in 0 until list.size) {
+            list[actualPos]
         } else null
     }
 
-    override fun getItemCount(): Int = differ.currentList.size + (if (hasHeader) 1 else 0)
+    override fun getItemCount(): Int = activeItems.size + (if (hasHeader) 1 else 0)
 
     override fun getItemViewType(position: Int): Int {
         if (hasHeader && position == 0) return VIEW_TYPE_COMPOSE_HEADER
@@ -723,10 +906,11 @@ private class NativePhotonAdapter(
         if (selectedUris == newSelection) return
         val oldSelection = selectedUris
         selectedUris = newSelection
+        val list = activeItems
         val diff = (oldSelection - newSelection) + (newSelection - oldSelection)
         if (diff.size <= 24) {
-            for (i in 0 until differ.currentList.size) {
-                val item = differ.currentList[i]
+            for (i in 0 until list.size) {
+                val item = list[i]
                 if (item is NativeTimelineItem.Media && item.uriString in diff) {
                     val pos = if (hasHeader) i + 1 else i
                     notifyItemChanged(pos, PAYLOAD_SELECTION_ONLY)
@@ -734,7 +918,7 @@ private class NativePhotonAdapter(
             }
         } else {
             val start = if (hasHeader) 1 else 0
-            notifyItemRangeChanged(start, differ.currentList.size, PAYLOAD_SELECTION_ONLY)
+            notifyItemRangeChanged(start, list.size, PAYLOAD_SELECTION_ONLY)
         }
     }
 
@@ -742,10 +926,11 @@ private class NativePhotonAdapter(
         if (favoriteIds == newFavorites) return
         val oldFavorites = favoriteIds
         favoriteIds = newFavorites
+        val list = activeItems
         val diff = (oldFavorites - newFavorites) + (newFavorites - oldFavorites)
         if (diff.size <= 24) {
-            for (i in 0 until differ.currentList.size) {
-                val item = differ.currentList[i]
+            for (i in 0 until list.size) {
+                val item = list[i]
                 if (item is NativeTimelineItem.Media && item.id in diff) {
                     val pos = if (hasHeader) i + 1 else i
                     notifyItemChanged(pos, PAYLOAD_FAVORITE_ONLY)
@@ -753,7 +938,7 @@ private class NativePhotonAdapter(
             }
         } else {
             val start = if (hasHeader) 1 else 0
-            notifyItemRangeChanged(start, differ.currentList.size, PAYLOAD_FAVORITE_ONLY)
+            notifyItemRangeChanged(start, list.size, PAYLOAD_FAVORITE_ONLY)
         }
     }
 
@@ -773,8 +958,8 @@ private class NativePhotonAdapter(
                 val textView = TextView(parent.context).apply {
                     val density = resources.displayMetrics.density
                     val padH = (16 * density).toInt()
-                    val padTop = (16 * density).toInt()
-                    val padBottom = (12 * density).toInt()
+                    val padTop = (20 * density).toInt()
+                    val padBottom = (16 * density).toInt()
                     setPadding(padH, padTop, padH, padBottom)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 15.5f)
                     typeface = Typeface.create("sans-serif", Typeface.BOLD)
@@ -792,7 +977,7 @@ private class NativePhotonAdapter(
                     components = components,
                     imageLoader = imageLoader,
                     colorSchemeProvider = colorSchemeProvider,
-                    onItemClick = { position ->
+                    onItemClick = { position, rect, cornerRadiusDp ->
                         val actualPos = if (hasHeader) position - 1 else position
                         if (actualPos in 0 until differ.currentList.size) {
                             val item = differ.currentList[actualPos] as? NativeTimelineItem.Media
@@ -800,6 +985,13 @@ private class NativePhotonAdapter(
                                 if (isSelectionMode) {
                                     onToggleSelection(item)
                                 } else {
+                                    if (rect != null) {
+                                        MediaTransitionRegistry.setLaunchBounds(
+                                            mediaKey = item.uriString,
+                                            rect = rect,
+                                            cornerRadiusDp = cornerRadiusDp
+                                        )
+                                    }
                                     onMediaClick(item)
                                 }
                             }
@@ -889,6 +1081,12 @@ private class NativePhotonAdapter(
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
+        holder.itemView.animate().cancel()
+        holder.itemView.translationX = 0f
+        holder.itemView.translationY = 0f
+        holder.itemView.scaleX = 1f
+        holder.itemView.scaleY = 1f
+        holder.itemView.alpha = 1f
         if (holder is MediaViewHolder) {
             holder.unbind()
         }
@@ -935,18 +1133,31 @@ private class MediaViewHolder(
     private val components: MediaViewComponents,
     private val imageLoader: ImageLoader,
     private val colorSchemeProvider: () -> GridColorScheme,
-    private val onItemClick: (Int) -> Unit,
+    private val onItemClick: (Int, androidx.compose.ui.geometry.Rect?, Float) -> Unit,
     private val onItemLongClick: (Int) -> Unit
 ) : RecyclerView.ViewHolder(components.container) {
 
     private var currentDisposable: Disposable? = null
     private var loadedUri: Uri? = null
+    var boundMediaKey: String? = null
+        private set
+    private var boundCornerRadiusDp: Float = 0f
 
     init {
         itemView.setOnClickListener {
             val pos = bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION) {
-                onItemClick(pos)
+                val rect = if (itemView.width > 0 && itemView.height > 0) {
+                    val loc = IntArray(2)
+                    itemView.getLocationInWindow(loc)
+                    androidx.compose.ui.geometry.Rect(
+                        loc[0].toFloat(),
+                        loc[1].toFloat(),
+                        (loc[0] + itemView.width).toFloat(),
+                        (loc[1] + itemView.height).toFloat()
+                    )
+                } else null
+                onItemClick(pos, rect, boundCornerRadiusDp)
             }
         }
         itemView.setOnLongClickListener {
@@ -968,6 +1179,8 @@ private class MediaViewHolder(
         spanCount: Int,
         thumbnailCornerRadius: Float
     ) {
+        boundMediaKey = item.uriString
+        boundCornerRadiusDp = thumbnailCornerRadius
         updateColors()
         applyCornerRadius(thumbnailCornerRadius)
         updateSpan(spanCount)
@@ -1074,7 +1287,7 @@ private class MediaViewHolder(
 
     fun bindThumbnail(item: NativeTimelineItem.Media, spanCount: Int) {
         val targetPx = thumbnailTargetPx(spanCount)
-        val cacheKey = thumbnailMemoryKey(item.id, targetPx)
+        val cacheKey = thumbnailMemoryKey(item.id, targetPx, item.dateModified)
 
         if (loadedUri == item.uri && components.thumbnailView.drawable != null) {
             return

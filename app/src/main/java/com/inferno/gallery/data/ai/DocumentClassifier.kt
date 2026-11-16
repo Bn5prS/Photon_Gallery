@@ -33,19 +33,19 @@ object DocumentClassifier {
         "payment completed", "transaction complete", "upi transaction", "upi ref", "transaction id",
         "reference no", "utr no", "google transaction id", "paid to", "money transferred to",
         "debited from", "credited to", "account balance", "available balance", "bank transfer",
-        "credit card statement", "debit card statement", "card ending in", "bhim upi", "google pay",
-        "phonepe", "paytm", "gpay", "apple pay", "paypal", "venmo", "cash app", "money sent"
+        "credit card statement", "debit card statement", "card ending in", "bhim upi", "money sent"
     )
 
     private val PAYMENT_SECONDARY_WORDS = listOf(
-        "upi", "utr", "rrn", "gpay", "phonepe", "paytm", "bhim", "neft", "imps", "rtgs"
+        "upi", "utr", "rrn", "gpay", "phonepe", "paytm", "bhim", "neft", "imps", "rtgs",
+        "google pay", "apple pay", "paypal", "venmo", "cash app"
     )
 
     private val PAYMENT_PATHS = listOf("gpay", "phonepe", "paytm", "payments", "bhim", "googlepay")
 
     // --- 3. ID KEYWORDS ---
     private val ID_HIGH_CONFIDENCE = listOf(
-        "driving licence", "driving license", "driver license", "driver license", "motor vehicles",
+        "driving licence", "driving license", "driver license", "motor vehicles",
         "dl no", "passport", "republic of india", "republic of", "passport no", "permanent account number",
         "income tax department", "pan card", "pan no", "unique identification authority", "aadhaar",
         "aadhar", "uidai", "voter id", "election commission", "electoral photo", "epic no",
@@ -65,7 +65,7 @@ object DocumentClassifier {
 
     // --- 4. EVENT / TICKET KEYWORDS ---
     private val EVENT_HIGH_CONFIDENCE = listOf(
-        "boarding pass", "flight no", "flight", "gate no", "seat no", "terminal", "boarding time",
+        "boarding pass", "flight no", "gate no", "seat no", "boarding time",
         "departure time", "arrival time", "admit one", "e ticket", "eticket", "event ticket",
         "ticket no", "pnr", "movie ticket", "cinema", "showtime", "box office", "bookmyshow",
         "concert pass", "festival pass", "conference pass", "stadium entry", "cordially invited",
@@ -73,7 +73,7 @@ object DocumentClassifier {
     )
 
     private val EVENT_SECONDARY_WORDS = listOf(
-        "boarding", "airline", "cinema", "showtime", "concert", "invitation", "rsvp", "ticket", "tickets"
+        "boarding", "airline", "flight", "terminal", "cinema", "showtime", "concert", "invitation", "rsvp", "ticket", "tickets"
     )
 
     private val EVENT_PATHS = listOf("tickets", "ticket", "boarding_pass", "passes", "events")
@@ -81,21 +81,21 @@ object DocumentClassifier {
     // --- 5. NOTE KEYWORDS ---
     private val NOTE_HIGH_CONFIDENCE = listOf(
         "study notes", "chapter notes", "class notes", "lecture notes", "homework assignment",
-        "to do list", "todo list", "action items", "key formula", "definition", "lecture",
-        "homework", "assignment"
+        "to do list", "todo list", "action items", "key formula"
     )
 
     private val NOTE_SECONDARY_WORDS = listOf(
-        "whiteboard", "notebook", "checklist", "formula", "theorem", "derivation"
+        "whiteboard", "notebook", "checklist", "formula", "theorem", "derivation",
+        "definition", "lecture", "homework", "assignment"
     )
 
     private val NOTE_PATHS = listOf("samsung notes", "keep", "camscanner", "notability", "onenote", "goodnotes", "notes")
 
     // --- 6. BOOK / MAGAZINE KEYWORDS ---
     private val BOOK_HIGH_CONFIDENCE = listOf(
-        "table of contents", "published by", "all rights reserved", "university press",
+        "table of contents", "published by", "university press",
         "publishing group", "first edition", "second edition", "third edition", "bibliography",
-        "prologue", "epilogue", "isbn 10", "isbn 13", "isbn"
+        "prologue", "epilogue", "isbn 10", "isbn 13"
     )
 
     private val BOOK_SECONDARY_WORDS = listOf(
@@ -106,20 +106,26 @@ object DocumentClassifier {
 
     // --- 7. SOCIAL MEDIA KEYWORDS & PATHS ---
     private val SOCIAL_HIGH_CONFIDENCE = listOf(
-        "retweet", "retweeted", "quote tweet", "tweet your reply", "replying to", "reply to",
+        "retweet", "retweeted", "quote tweet", "tweet your reply", "replying to",
         "view replies", "share post", "add a comment", "view all comments", "liked by",
-        "share to reddit", "upvote", "downvote", "direct message", "typing", "voice message",
-        "instagram", "facebook", "twitter", "threads net", "tiktok"
+        "share to reddit", "upvote", "downvote", "direct message", "voice message"
     )
 
     private val SOCIAL_SECONDARY_WORDS = listOf(
-        "repost", "replies", "comments", "followers", "following", "likes"
+        "repost", "replies", "comments", "followers", "following", "likes",
+        "instagram", "facebook", "twitter", "threads", "tiktok"
     )
 
     private val SOCIAL_PATHS = listOf(
         "facebook", "facebook pics", "instagram", "twitter", "reddit", "threads", "tiktok",
         "snapchat", "telegram"
     )
+
+    private val PAN_REGEX = Regex("\\b[A-Z]{5}[0-9]{4}[A-Z]\\b")
+    private val AADHAAR_REGEX = Regex("\\b\\d{4}\\s\\d{4}\\s\\d{4}\\b")
+    private val ISBN_REGEX = Regex("(?i)\\bisbn[\\s:-]*(?:97[89][\\s-]?)?\\d[\\d\\s-]{8,}[\\dx]\\b")
+    private val REDDIT_HANDLE_REGEX = Regex("(?i)(?:^|\\s)[ru]/[a-z0-9_]{2,}")
+    private val CURRENCY_AMOUNT_REGEX = Regex("(?i)(?:₹|rs\\.?|inr|\\$|€|£)\\s*\\d+(?:[.,]\\d{1,2})?|\\b\\d+\\.\\d{2}\\b")
 
     /**
      * Normalizes text by converting to lowercase and collapsing all newlines, tabs,
@@ -146,15 +152,19 @@ object DocumentClassifier {
         val categories = mutableSetOf<String>()
         val rawText = extractedText?.trim() ?: ""
         val paddedText = normalize(rawText)
+        if (paddedText.isEmpty()) {
+            return categories
+        }
 
-        val pathLower = filePath?.lowercase() ?: ""
-        val bucketLower = bucketName?.lowercase() ?: ""
+        val pathLower = filePath?.lowercase()?.replace('\\', '/') ?: ""
+        val pathSegments = pathLower.split('/').filter { it.isNotBlank() }
+        val bucketLower = bucketName?.lowercase()?.trim() ?: ""
 
         fun hasPathHint(hints: List<String>): Boolean {
             return hints.any { hint ->
-                bucketLower.contains(hint) ||
-                pathLower.contains("/$hint/") ||
-                pathLower.contains("/$hint")
+                bucketLower == hint ||
+                Regex("\\b${Regex.escape(hint)}\\b").containsMatchIn(bucketLower) ||
+                pathSegments.any { seg -> seg == hint }
             }
         }
 
@@ -186,6 +196,12 @@ object DocumentClassifier {
         if (containsToken("valid thru") || containsToken("valid till") || containsToken("valid upto")) {
             idScore += 2
         }
+        if (PAN_REGEX.containsMatchIn(rawText)) idScore += 4
+        if (AADHAAR_REGEX.containsMatchIn(rawText) &&
+            (containsToken("aadhaar") || containsToken("aadhar") || containsToken("uidai") || containsToken("india"))
+        ) {
+            idScore += 3
+        }
 
         // 2. Payments evaluation
         for (phrase in PAYMENT_HIGH_CONFIDENCE) {
@@ -195,6 +211,10 @@ object DocumentClassifier {
             if (containsToken(word)) paymentScore += 2
         }
         if (hasPathHint(PAYMENT_PATHS)) paymentScore += 3
+        val hasCurrencyAmount = CURRENCY_AMOUNT_REGEX.containsMatchIn(rawText)
+        val hasPaymentVerb = containsToken("paid") || containsToken("debited") || containsToken("credited") ||
+            containsToken("transferred") || containsToken("received") || containsToken("sent")
+        if (hasCurrencyAmount && hasPaymentVerb) paymentScore += 3
 
         // 3. Receipts evaluation
         for (phrase in RECEIPT_HIGH_CONFIDENCE) {
@@ -205,6 +225,10 @@ object DocumentClassifier {
         }
         if (hasPathHint(RECEIPT_PATHS)) receiptScore += 3
         if (containsToken("total") && (containsToken("cash") || containsToken("change") || containsToken("card") || containsToken("bill"))) {
+            receiptScore += 3
+        }
+        val priceMatches = CURRENCY_AMOUNT_REGEX.findAll(rawText).count()
+        if (priceMatches >= 2 && (containsToken("total") || containsToken("subtotal") || containsToken("tax") || containsToken("gst") || containsToken("invoice") || containsToken("bill"))) {
             receiptScore += 3
         }
 
@@ -235,6 +259,7 @@ object DocumentClassifier {
         }
         if (hasPathHint(BOOK_PATHS)) bookScore += 3
         if (paddedText.contains(Regex("\\bchapter\\s+\\d+\\b"))) bookScore += 4
+        if (ISBN_REGEX.containsMatchIn(rawText)) bookScore += 4
 
         // 7. Social Media evaluation
         for (phrase in SOCIAL_HIGH_CONFIDENCE) {
@@ -243,53 +268,31 @@ object DocumentClassifier {
         for (word in SOCIAL_SECONDARY_WORDS) {
             if (containsToken(word)) socialScore += 2
         }
-        if (paddedText.contains(" r ") || paddedText.contains(" u ")) socialScore += 3
+        if (REDDIT_HANDLE_REGEX.containsMatchIn(rawText)) socialScore += 4
         if (hasPathHint(SOCIAL_PATHS)) {
-            // Dedicated social folder (Facebook pics, Instagram, Reddit, Twitter, etc.)
             socialScore += 4
         }
 
-        // --- DISAMBIGUATION & DECISION RULES ---
-        val THRESHOLD = 3
+        // --- DISAMBIGUATION & WINNER-TAKE-ALL DECISION ---
+        val threshold = 4
 
-        // A. IDs: Absolute highest priority. If it's an ID, it is NEVER Social, Notes, or Receipt.
-        val isId = idScore >= THRESHOLD
-        if (isId) {
-            categories.add(BucketNames.DOC_IDS)
-        }
+        // Priority order for tie-breaking: ID > Payment > Receipt > Event > Book > Note > Social
+        val candidates = listOf(
+            BucketNames.DOC_IDS to idScore,
+            BucketNames.DOC_PAYMENTS to paymentScore,
+            BucketNames.DOC_RECEIPTS to receiptScore,
+            BucketNames.DOC_EVENTS to eventScore,
+            BucketNames.DOC_BOOKS_MAGAZINES to bookScore,
+            BucketNames.DOC_NOTES to noteScore,
+            BucketNames.DOC_SOCIAL to socialScore
+        )
 
-        // B. Digital Payments vs Store Receipts
-        val isPayment = paymentScore >= THRESHOLD && !isId
-        val isReceipt = receiptScore >= THRESHOLD && !isId
+        val winner = candidates
+            .filter { it.second >= threshold }
+            .maxByOrNull { it.second }
 
-        if (isPayment && paymentScore >= receiptScore) {
-            categories.add(BucketNames.DOC_PAYMENTS)
-        } else if (isReceipt) {
-            categories.add(BucketNames.DOC_RECEIPTS)
-        } else if (isPayment) {
-            categories.add(BucketNames.DOC_PAYMENTS)
-        }
-
-        // C. Events & Tickets
-        if (eventScore >= THRESHOLD && !isId && !isPayment) {
-            categories.add(BucketNames.DOC_EVENTS)
-        }
-
-        // D. Notes & Whiteboards
-        if (noteScore >= THRESHOLD && !isId && !isPayment && !isReceipt) {
-            categories.add(BucketNames.DOC_NOTES)
-        }
-
-        // E. Books & Magazines
-        if (bookScore >= THRESHOLD && !isId && !isPayment && !isReceipt) {
-            categories.add(BucketNames.DOC_BOOKS_MAGAZINES)
-        }
-
-        // F. Social Media:
-        // Strictly barred if image is an ID card, payment transaction, store receipt, or ticket.
-        val hasSpecificDoc = isId || isPayment || isReceipt || categories.contains(BucketNames.DOC_EVENTS)
-        if (socialScore >= THRESHOLD && !hasSpecificDoc) {
-            categories.add(BucketNames.DOC_SOCIAL)
+        if (winner != null) {
+            categories.add(winner.first)
         }
 
         return categories

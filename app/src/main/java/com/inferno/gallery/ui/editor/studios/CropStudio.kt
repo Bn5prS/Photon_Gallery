@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -307,8 +309,9 @@ private fun CropCarouselView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 1. Crop / Aspect ratio
@@ -316,7 +319,7 @@ private fun CropCarouselView(
                     cropState.cropRect != androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)
             CropToolTile(
                 label = cropState.aspectOption.label,
-                iconRes = R.drawable.ic_ms_crop,
+                iconRes = R.drawable.ic_ms_thin_crop,
                 isActive = hasCustomAspect,
                 hasActiveDot = hasCustomAspect,
                 onClick = onOpenAspect
@@ -326,7 +329,7 @@ private fun CropCarouselView(
             val hasStraighten = cropState.straightenAngle != 0f
             CropToolTile(
                 label = if (hasStraighten) "${cropState.straightenAngle.toInt()}°" else stringResource(R.string.editor_crop_straighten),
-                iconRes = R.drawable.ic_ms_straighten,
+                iconRes = R.drawable.ic_ms_thin_straighten,
                 isActive = hasStraighten,
                 hasActiveDot = hasStraighten,
                 onClick = onOpenStraighten
@@ -336,7 +339,7 @@ private fun CropCarouselView(
             val hasRotation = cropState.rotation != 0
             CropToolTile(
                 label = if (hasRotation) "${cropState.rotation}°" else stringResource(R.string.editor_crop_rotate),
-                iconRes = R.drawable.ic_ms_rotate_90_degrees_ccw,
+                iconRes = R.drawable.ic_ms_thin_rotate_90_degrees_ccw,
                 isActive = hasRotation,
                 hasActiveDot = hasRotation,
                 onClick = onRotate90
@@ -346,7 +349,7 @@ private fun CropCarouselView(
             val hasMirror = cropState.flipH
             CropToolTile(
                 label = stringResource(R.string.editor_crop_mirror),
-                iconRes = R.drawable.ic_ms_flip,
+                iconRes = R.drawable.ic_ms_thin_flip,
                 isActive = hasMirror,
                 hasActiveDot = hasMirror,
                 onClick = onMirror
@@ -356,7 +359,7 @@ private fun CropCarouselView(
             val hasPerspective = cropState.verticalTilt != 0f || cropState.horizontalTilt != 0f
             CropToolTile(
                 label = "Perspective",
-                iconRes = R.drawable.ic_ms_perspective,
+                iconRes = R.drawable.ic_ms_thin_perspective,
                 isActive = hasPerspective,
                 hasActiveDot = hasPerspective,
                 onClick = onOpenPerspective
@@ -365,7 +368,7 @@ private fun CropCarouselView(
             // 6. Reset
             CropToolTile(
                 label = stringResource(R.string.editor_action_reset),
-                iconRes = R.drawable.ic_ms_refresh,
+                iconRes = R.drawable.ic_ms_thin_refresh,
                 isActive = false,
                 isEnabled = cropState.isModified,
                 hasActiveDot = false,
@@ -396,7 +399,7 @@ private fun CropCarouselView(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_close),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_close),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -434,7 +437,7 @@ private fun CropCarouselView(
                     contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_ms_check),
+                        painter = painterResource(id = R.drawable.ic_ms_thin_check),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -450,7 +453,8 @@ private fun CropCarouselView(
 }
 
 /**
- * Individual squircle tool button for editor design.
+ * Individual rounded-rectangle tool button for Google Photos-style pitch-black editor studio.
+ * Label sits above the wide rounded tile (`72.dp x 52.dp`).
  */
 @Composable
 private fun CropToolTile(
@@ -464,52 +468,11 @@ private fun CropToolTile(
 ) {
     Column(
         modifier = modifier
-            .width(54.dp)
+            .width(72.dp)
             .clickable(enabled = isEnabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    if (!isEnabled) {
-                        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f)
-                    } else if (isActive) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHighest
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = label,
-                tint = if (!isEnabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                } else if (isActive) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(24.dp)
-            )
-
-            // Active dot in corner
-            if (hasActiveDot) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 5.dp, bottom = 5.dp)
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
-        }
-
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
@@ -522,8 +485,50 @@ private fun CropToolTile(
             },
             textAlign = TextAlign.Center,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
         )
+
+        Box(
+            modifier = Modifier
+                .size(width = 72.dp, height = 52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    if (!isEnabled) {
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.38f)
+                    } else if (isActive) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = label,
+                tint = if (!isEnabled) {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                } else if (isActive) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.size(24.dp)
+            )
+
+            // Active dot in corner
+            if (hasActiveDot) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 6.dp, bottom = 6.dp)
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+        }
     }
 }
 
@@ -571,7 +576,7 @@ private fun FramingSubModeView(
             range = -45f..45f,
             step = 1f,
             defaultValue = 0f,
-            iconRes = R.drawable.ic_ms_straighten,
+            iconRes = R.drawable.ic_ms_thin_straighten,
             valueFormatter = { "${it.toInt()}°" },
             onReset = { onStraightenChange(0f) },
             showDoneButton = false
@@ -642,7 +647,7 @@ private fun PerspectiveSubModeView(
             range = -30f..30f,
             step = 1f,
             defaultValue = 0f,
-            iconRes = R.drawable.ic_ms_perspective,
+            iconRes = R.drawable.ic_ms_thin_perspective,
             valueFormatter = { "${it.toInt()}°" },
             onReset = { onTiltChange(0f) },
             showDoneButton = false
@@ -779,7 +784,7 @@ private fun SubModeActionButtons(
             )
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_ms_close),
+                painter = painterResource(id = R.drawable.ic_ms_thin_close),
                 contentDescription = "Cancel",
                 modifier = Modifier.size(22.dp)
             )
@@ -796,7 +801,7 @@ private fun SubModeActionButtons(
             )
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_ms_check),
+                painter = painterResource(id = R.drawable.ic_ms_thin_check),
                 contentDescription = "Apply",
                 modifier = Modifier.size(22.dp)
             )
@@ -920,7 +925,7 @@ fun AspectRatioPickerSheet(
                         // Checkmark indicator
                         if (isSelected) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_ms_check),
+                                painter = painterResource(id = R.drawable.ic_ms_thin_check),
                                 contentDescription = "Selected",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(22.dp)

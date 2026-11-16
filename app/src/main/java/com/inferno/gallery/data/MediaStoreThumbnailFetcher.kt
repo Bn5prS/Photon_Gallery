@@ -48,7 +48,8 @@ class MediaStoreThumbnailFetcher(
             coroutineContext.ensureActive()
         }
 
-        val isVideo = uri.toString().contains("video", ignoreCase = true)
+        val effectiveUri = MediaUriUtils.normalizeMediaUri(uri)
+        val isVideo = effectiveUri.toString().contains("video", ignoreCase = true)
         
         // Dynamically resolve target dimension based on Coil request size (clamped 128..512)
         val reqWidth = (options.size.width as? Dimension.Pixels)?.px
@@ -69,21 +70,21 @@ class MediaStoreThumbnailFetcher(
         // Fetch from system MediaProvider / MediaMetadataRetriever under concurrency limit
         var isFromSystem = false
         val bitmap: Bitmap? = try {
-            if (uri.scheme == "file") {
+            if (effectiveUri.scheme == "file") {
                 // Direct file URI: decode downsampled under semaphore with HARDWARE bitmap
                 mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
-                    if (com.inferno.gallery.data.decoder.RawImageHelper.isRawUri(context, uri)) {
-                        com.inferno.gallery.data.decoder.RawImageHelper.decodeRawBitmap(context, uri, targetDim)
+                    if (com.inferno.gallery.data.decoder.RawImageHelper.isRawUri(context, effectiveUri)) {
+                        com.inferno.gallery.data.decoder.RawImageHelper.decodeRawBitmap(context, effectiveUri, targetDim)
                     } else {
-                        decodeDownsampledBitmap(context, uri, targetDim)
+                        decodeDownsampledBitmap(context, effectiveUri, targetDim)
                     }
                 }
             } else if (isVideo) {
                 var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
                     try {
-                        context.contentResolver.loadThumbnail(uri, targetSize, signal)
+                        context.contentResolver.loadThumbnail(effectiveUri, targetSize, signal)
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (_: android.os.OperationCanceledException) {
@@ -97,7 +98,7 @@ class MediaStoreThumbnailFetcher(
                     coroutineContext.ensureActive()
                     tempBitmap = videoDecodeSemaphore.withPermit {
                         coroutineContext.ensureActive()
-                        getVideoFrameFallback(context, uri, targetDim)
+                        getVideoFrameFallback(context, effectiveUri, targetDim)
                     }
                 } else if (tempBitmap != null) {
                     isFromSystem = true
@@ -107,7 +108,7 @@ class MediaStoreThumbnailFetcher(
                 var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()
                     try {
-                        context.contentResolver.loadThumbnail(uri, targetSize, signal)
+                        context.contentResolver.loadThumbnail(effectiveUri, targetSize, signal)
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (_: android.os.OperationCanceledException) {

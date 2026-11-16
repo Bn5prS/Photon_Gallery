@@ -6,6 +6,7 @@
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Photos</string>
     <string name="nav_albums">Albums</string>
+    <string name="nav_collections">Collections</string>
     <string name="nav_search">Recherche</string>
     <string name="nav_settings">Paramètres</string>
 
@@ -58,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Rechercher photos, lieux, dates, texte...</string>
     <string name="smart_search">Recherche intelligente</string>
-    <string name="smart_search_description">Recherche en langage naturel sur l’appareil optimisée par CLIP ViT-B/16</string>
+    <string name="smart_search_description">Recherche en langage naturel sur l’appareil optimisée par SigLIP 2 Base</string>
     <string name="recent_searches">Recherches récentes</string>
     <string name="clear_search_history">Effacer l’historique de recherche</string>
     <string name="no_search_results">Aucun résultat trouvé</string>
@@ -102,7 +103,10 @@
 
     <!-- Onboarding &amp; Language -->
     <string name="onboarding_welcome_to">Bienvenue sur</string>
-    <string name="onboarding_welcome_tagline">Un espace privé et élégant pour tous vos souvenirs.</string>
+    <string name="onboarding_welcome_tagline">Une galerie open-source pour parcourir, organiser et rechercher votre médiathèque.</string>
+    <string name="onboarding_action_get_started">Commencer</string>
+    <string name="onboarding_permissions_header">Accès aux médias</string>
+    <string name="onboarding_permissions_subtitle">Photon Gallery a besoin de l\'accès au stockage pour afficher et organiser vos photos et vidéos. Vos médias restent strictement sur votre appareil.</string>
     <string name="onboarding_required_permissions">Autorisations requises</string>
     <string name="onboarding_perm_photos_videos_title">Accès aux photos et vidéos</string>
     <string name="onboarding_perm_photos_videos_desc">Nécessaire pour afficher, organiser et gérer votre bibliothèque de photos et vidéos</string>
@@ -174,7 +178,7 @@
     <string name="setting_memories">Souvenirs en vedette</string>
     <string name="setting_memories_sub">Afficher les cartes souvenirs \'Ce jour-là\' en haut de la galerie</string>
     <string name="setting_smart_search_title">Recherche sémantique IA</string>
-    <string name="setting_smart_search_desc">Recherche visuelle CLIP sur l\'appareil avec description en langage naturel</string>
+    <string name="setting_smart_search_desc">Recherche visuelle SigLIP 2 sur l\'appareil avec description en langage naturel</string>
     <string name="setting_face_clustering">Reconnaissance faciale et personnes</string>
     <string name="setting_face_clustering_desc">Regrouper les visages similaires dans des albums de personnes hors ligne</string>
     <string name="setting_ocr_search">Recherche de texte OCR sur l\'appareil</string>
@@ -190,7 +194,7 @@
     <string name="setting_trash_retention">Vider la corbeille automatiquement</string>
     <string name="setting_trash_retention_sub">Supprimer définitivement les éléments de la corbeille après 30 jours</string>
     <string name="setting_privacy_policy">Politique de confidentialité</string>
-    <string name="setting_privacy_policy_sub">100% hors ligne, zéro traceur, zéro télémétrie, respect total de la vie privée</string>
+    <string name="setting_privacy_policy_sub">Entièrement hors ligne, zéro traceur, zéro télémétrie, respect total de la vie privée</string>
     <string name="setting_app_version">Version de l\'application</string>
     <string name="setting_github_repo">Dépôt GitHub</string>
     <string name="setting_github_repo_sub">Consulter le code source, soutenir le projet ou contribuer</string>
@@ -329,6 +333,12 @@
     <string name="update_status_uptodate">Installé : v%1$s (À jour)</string>
     <string name="update_status_downloaded">v%1$s téléchargée. Prête à être installée</string>
     <string name="update_status_build">Installé : v%1$s (Version %2$d)</string>
+    <string name="notification_channel_updates">Mises à jour de l\'app</string>
+    <string name="notification_channel_updates_desc">Prévient lorsqu\'une nouvelle version de Photon Gallery est disponible</string>
+    <string name="notification_update_title">Photon Gallery %1$s disponible</string>
+    <string name="notification_update_body_named">%1$s • Appuyez pour télécharger et installer</string>
+    <string name="notification_update_body_version">La version %1$s est prête à être téléchargée et installée</string>
+    <string name="notification_update_available">Mise à jour disponible</string>
     <string name="setting_display_preferences_title">Préférences d\'affichage</string>
     <string name="setting_media_viewer_title">Visionneuse de médias</string>
     <string name="setting_media_viewer_sub">Arrière-plan flou, mini-carte et luminosité</string>
@@ -459,7 +469,7 @@
     <string name="dialog_clear_smart_search_title">Effacer l\'index de recherche intelligente</string>
     <string name="dialog_clear_smart_search_msg">Cela effacera tous les plongements d\'images pour la recherche sémantique. Vous devrez réindexer pour utiliser la recherche. Continuer ?</string>
     <string name="dialog_delete_ai_models_title">Supprimer les modèles d\'IA</string>
-    <string name="dialog_delete_ai_models_msg">Cela supprimera les fichiers modèles ONNX locaux (~150 Mo). Vous ne pourrez plus utiliser la recherche sémantique sans les retélécharger. Continuer ?</string>
+    <string name="dialog_delete_ai_models_msg">Cela supprimera les fichiers modèles ONNX locaux (~103 Mo). Vous ne pourrez plus utiliser la recherche sémantique sans les retélécharger. Continuer ?</string>
     <string name="dialog_delete_files_confirm">Supprimer les fichiers</string>
     <string name="dialog_rescan_faces_title">Rebalayer tous les visages</string>
     <string name="dialog_rescan_faces_msg">Cela réinitialisera l\'analyse faciale et réanalysera toutes les photos.
@@ -526,6 +536,8 @@ Vous ne pourrez plus détecter de nouveaux visages sans le retélécharger. Les 
     <string name="preset_high_pop">Contraste élevé</string>
     <string name="setting_auto_index_images">Indexation automatique des nouvelles images</string>
     <string name="setting_auto_index_images_sub">Indexation IA automatique des nouvelles photos en arrière-plan</string>
+    <string name="setting_auto_index_ocr">Indexation automatique du texte OCR</string>
+    <string name="setting_auto_index_ocr_sub">Extraire et indexer automatiquement le texte des nouvelles photos en arrière-plan</string>
     <string name="setting_auto_index_faces">Détection automatique des nouveaux visages</string>
     <string name="setting_auto_index_faces_sub">Détecter et regrouper automatiquement les visages lors de nouvelles photos</string>
     <string name="people_filter_all">Tous (%1$d)</string>

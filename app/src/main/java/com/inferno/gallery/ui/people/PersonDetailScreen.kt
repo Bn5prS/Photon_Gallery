@@ -152,6 +152,18 @@ fun PersonDetailScreen(
     val confirmDeleteEnabled by viewModel.settingsRepository.confirmDeleteEnabledFlow.collectAsState(initial = true)
     var showCopySheet by remember { mutableStateOf(false) }
     var showMoveSheet by remember { mutableStateOf(false) }
+    var pendingVaultHideAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    pendingVaultHideAction?.let { action ->
+        com.inferno.gallery.ui.vault.VaultPinVerifyDialog(
+            vaultAuthManager = galleryViewModel.vaultAuthManager,
+            onVerified = {
+                pendingVaultHideAction = null
+                action()
+            },
+            onDismiss = { pendingVaultHideAction = null }
+        )
+    }
     var createMenuExpanded by remember { mutableStateOf(false) }
     var moreMenuExpanded by remember { mutableStateOf(false) }
 
@@ -164,7 +176,7 @@ fun PersonDetailScreen(
     }
 
     val performTrash: () -> Unit = {
-        val uris = selectedMedia.map { Uri.parse(it.uriString) }
+        val uris = selectedMedia.map { com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(Uri.parse(it.uriString)) }
         if (uris.isNotEmpty()) {
             coroutineScope.launch(Dispatchers.IO) {
                 try {
@@ -437,14 +449,20 @@ fun PersonDetailScreen(
                 showMoveSheet = false
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 if (activity != null) {
+                    val hideAction: () -> Unit = {
+                        galleryViewModel.hideMedia(uris)
+                        galleryViewModel.lockVault()
+                        selectedMediaIds = emptySet()
+                    }
                     galleryViewModel.vaultAuthManager.authenticate(
                         activity = activity,
-                        negativeButtonText = "Cancel",
+                        negativeButtonText = "Use PIN",
                         unlockSession = false,
-                        onSuccess = {
-                            galleryViewModel.hideMedia(uris)
-                            galleryViewModel.vaultAuthManager.lock()
-                            selectedMediaIds = emptySet()
+                        onSuccess = hideAction,
+                        onNegativeButton = {
+                            if (galleryViewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                pendingVaultHideAction = hideAction
+                            }
                         },
                         onFailure = {}
                     )
@@ -456,7 +474,7 @@ fun PersonDetailScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = {
@@ -660,7 +678,7 @@ fun PersonDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         }
@@ -697,7 +715,9 @@ fun PersonDetailScreen(
                     }
                 )
         ) {
+            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Fixed(gridCols),
                 contentPadding = PaddingValues(
                     start = SpacingTokens.XS,
@@ -833,6 +853,17 @@ fun PersonDetailScreen(
                 )
             }
         }
+
+        com.inferno.gallery.ui.components.ExpressiveScrollBar(
+            gridState = gridState,
+            totalItemsCount = mediaList.size + 1,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + (if (isSelectionMode) 72.dp else 0.dp)
+                )
+        )
 
         AnimatedVisibility(
             visible = isPinching,
@@ -1021,15 +1052,21 @@ fun PersonDetailScreen(
                                 moreMenuExpanded = false
                                 val activity = context as? androidx.fragment.app.FragmentActivity
                                 if (activity != null) {
+                                    val hideAction: () -> Unit = {
+                                        val uris = selectedMedia.map { Uri.parse(it.uriString) }
+                                        galleryViewModel.hideMedia(uris)
+                                        galleryViewModel.lockVault()
+                                        selectedMediaIds = emptySet()
+                                    }
                                     galleryViewModel.vaultAuthManager.authenticate(
                                         activity = activity,
-                                        negativeButtonText = "Cancel",
+                                        negativeButtonText = "Use PIN",
                                         unlockSession = false,
-                                        onSuccess = {
-                                            val uris = selectedMedia.map { Uri.parse(it.uriString) }
-                                            galleryViewModel.hideMedia(uris)
-                                            galleryViewModel.vaultAuthManager.lock()
-                                            selectedMediaIds = emptySet()
+                                        onSuccess = hideAction,
+                                        onNegativeButton = {
+                                            if (galleryViewModel.vaultAuthManager.isPinConfigured(activity)) {
+                                                pendingVaultHideAction = hideAction
+                                            }
                                         },
                                         onFailure = {}
                                     )

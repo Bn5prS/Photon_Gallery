@@ -346,15 +346,23 @@ fun MemoryReelViewer(
                         else -> 0f
                     }
 
-                    LinearProgressIndicator(
-                        progress = { segmentProgress },
+                    Box(
                         modifier = Modifier
                             .weight(1f)
                             .height(2.5.dp)
-                            .clip(ShapeFull),
-                        color = Color.White,
-                        trackColor = Color.White.copy(alpha = 0.30f)
-                    )
+                            .clip(ShapeFull)
+                            .background(Color.White.copy(alpha = 0.30f))
+                    ) {
+                        if (segmentProgress > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(segmentProgress.coerceIn(0f, 1f))
+                                    .clip(ShapeFull)
+                                    .background(Color.White)
+                            )
+                        }
+                    }
                 }
             }
 

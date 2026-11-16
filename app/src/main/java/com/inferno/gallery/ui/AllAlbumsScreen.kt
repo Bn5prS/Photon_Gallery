@@ -82,6 +82,7 @@ fun AllAlbumsScreen(
     val userPinnedNames by galleryViewModel.userPinnedFolderNames.collectAsState()
     val albumSortOrder by galleryViewModel.albumSortOrder.collectAsState()
     val albumLayoutMode by galleryViewModel.albumLayoutMode.collectAsState()
+    val albumsGridCellsCount by galleryViewModel.albumsGridCellsCount.collectAsState()
     val showAlbumSize by galleryViewModel.showAlbumSize.collectAsState()
     val customCovers by galleryViewModel.albumCustomCovers.collectAsState()
     val customShapes by galleryViewModel.albumCustomShapes.collectAsState()
@@ -166,7 +167,7 @@ fun AllAlbumsScreen(
                 }
 
                 LazyVerticalGrid(
-                    columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(3),
+                    columns = if (albumLayoutMode == AlbumLayoutMode.LIST) GridCells.Fixed(1) else GridCells.Fixed(albumsGridCellsCount),
                     state = gridState,
                     contentPadding = PaddingValues(
                         start = SpacingTokens.L,
@@ -228,9 +229,10 @@ fun AllAlbumsScreen(
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                             bucket = bucket.copy(bucketName = displayBucketName),
-                            showAlbumSize = showAlbumSize,
+                            sharedKey = "album_container_${bucket.bucketName}",
+                            showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                             customShape = albumShape,
-                            isCompact = true,
+                            isCompact = albumsGridCellsCount >= 3,
                             isPinned = isPinned,
                             onClick = { onAlbumClick(bucket.bucketName) },
                             onLongPress = {
@@ -331,6 +333,17 @@ fun AllAlbumsScreen(
                 }
             }
         }
+
+            com.inferno.gallery.ui.components.ExpressiveScrollBar(
+                gridState = gridState,
+                totalItemsCount = allDisplayAlbums.size,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(
+                        top = paddingValues.calculateTopPadding(),
+                        bottom = paddingValues.calculateBottomPadding()
+                    )
+            )
         }
         }
     }

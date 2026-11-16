@@ -6,6 +6,7 @@
     <!-- Navigation &amp; Tabs -->
     <string name="nav_photos">Fotos</string>
     <string name="nav_albums">Alben</string>
+    <string name="nav_collections">Sammlungen</string>
     <string name="nav_search">Suche</string>
     <string name="nav_settings">Einstellungen</string>
 
@@ -58,7 +59,7 @@
     <!-- Search &amp; AI -->
     <string name="search_hint">Fotos, Orte, Daten, Texte suchen...</string>
     <string name="smart_search">Intelligente Suche</string>
-    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by CLIP ViT-B/16</string>
+    <string name="smart_search_description">Natürliche Sprachsuche auf dem Gerät powered by SigLIP 2 Base</string>
     <string name="recent_searches">Letzte Suchanfragen</string>
     <string name="clear_search_history">Suchverlauf löschen</string>
     <string name="no_search_results">Keine Ergebnisse gefunden</string>
@@ -102,7 +103,10 @@
 
     <!-- Onboarding &amp; Language -->
     <string name="onboarding_welcome_to">Willkommen bei</string>
-    <string name="onboarding_welcome_tagline">Ein privater, schöner Ort für all deine Erinnerungen.</string>
+    <string name="onboarding_welcome_tagline">Eine Open-Source-Galerie zum Durchsuchen, Organisieren und Finden Ihrer Medienbibliothek.</string>
+    <string name="onboarding_action_get_started">Loslegen</string>
+    <string name="onboarding_permissions_header">Medienzugriff</string>
+    <string name="onboarding_permissions_subtitle">Photon Gallery benötigt Zugriff auf Ihren Speicher, um Ihre Fotos und Videos anzuzeigen und zu organisieren. Ihre Daten bleiben vollständig auf Ihrem Gerät.</string>
     <string name="onboarding_required_permissions">Erforderliche Berechtigungen</string>
     <string name="onboarding_perm_photos_videos_title">Zugriff auf Fotos und Videos</string>
     <string name="onboarding_perm_photos_videos_desc">Erforderlich zum Anzeigen, Verwalten und Organisieren deiner Foto- und Videogalerie</string>
@@ -174,7 +178,7 @@
     <string name="setting_memories">Erinnerungs-Highlights</string>
     <string name="setting_memories_sub">Karten mit Erinnerungen an diesen Tag oben in der Galerie anzeigen</string>
     <string name="setting_smart_search_title">Semantische KI-Suche</string>
-    <string name="setting_smart_search_desc">Lokale CLIP-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
+    <string name="setting_smart_search_desc">Lokale SigLIP 2-Bildersuche anhand natürlicher Sprachbeschreibungen</string>
     <string name="setting_face_clustering">Gesichtserkennung &amp; Personen</string>
     <string name="setting_face_clustering_desc">Ähnliche Gesichter in privaten Personenalben auf dem Gerät gruppieren</string>
     <string name="setting_ocr_search">Lokale OCR-Textsuche</string>
@@ -329,6 +333,12 @@
     <string name="update_status_uptodate">Installiert: v%1$s (Auf dem neuesten Stand)</string>
     <string name="update_status_downloaded">v%1$s heruntergeladen. Bereit zur Installation</string>
     <string name="update_status_build">Installiert: v%1$s (Build %2$d)</string>
+    <string name="notification_channel_updates">App-Updates</string>
+    <string name="notification_channel_updates_desc">Benachrichtigt, wenn eine neue Version von Photon Gallery verfügbar ist</string>
+    <string name="notification_update_title">Photon Gallery %1$s verfügbar</string>
+    <string name="notification_update_body_named">%1$s • Zum Herunterladen und Installieren tippen</string>
+    <string name="notification_update_body_version">Version %1$s steht zum Herunterladen und Installieren bereit</string>
+    <string name="notification_update_available">Update verfügbar</string>
     <string name="setting_display_preferences_title">Anzeigeeinstellungen</string>
     <string name="setting_media_viewer_title">Medienbetrachter</string>
     <string name="setting_media_viewer_sub">Unscharfer Hintergrund, Minimap und Helligkeit</string>
@@ -459,7 +469,7 @@
     <string name="dialog_clear_smart_search_title">Smart-Search-Index löschen</string>
     <string name="dialog_clear_smart_search_msg">Dadurch werden alle Bild-Embeddings für die semantische Suche gelöscht. Sie müssen den Index neu erstellen. Fortfahren?</string>
     <string name="dialog_delete_ai_models_title">KI-Modelldateien löschen</string>
-    <string name="dialog_delete_ai_models_msg">Dadurch werden die lokalen ONNX-Modelldateien (~150 MB) gelöscht. Sie können die semantische Suche erst nach erneutem Download nutzen. Fortfahren?</string>
+    <string name="dialog_delete_ai_models_msg">Dadurch werden die lokalen ONNX-Modelldateien (~103 MB) gelöscht. Sie können die semantische Suche erst nach erneutem Download nutzen. Fortfahren?</string>
     <string name="dialog_delete_files_confirm">Dateien löschen</string>
     <string name="dialog_rescan_faces_title">Alle Gesichter neu scannen</string>
     <string name="dialog_rescan_faces_msg">Dies setzt den Gesichts-Scan zurück und analysiert alle Fotos neu.
@@ -526,6 +536,8 @@ Neue Gesichter können erst nach erneutem Download erkannt werden. Vorhandene Pe
     <string name="preset_high_pop">Hoher Pop</string>
     <string name="setting_auto_index_images">Neue Bilder automatisch indexieren</string>
     <string name="setting_auto_index_images_sub">Neue Fotos automatisch mit KI im Hintergrund indexieren</string>
+    <string name="setting_auto_index_ocr">OCR-Text automatisch indexieren</string>
+    <string name="setting_auto_index_ocr_sub">Text aus neuen Fotos automatisch im Hintergrund extrahieren und indexieren</string>
     <string name="setting_auto_index_faces">Neue Gesichter automatisch erkennen</string>
     <string name="setting_auto_index_faces_sub">Gesichter beim Eingang neuer Fotos automatisch erkennen und gruppieren</string>
     <string name="people_filter_all">Alle (%1$d)</string>
