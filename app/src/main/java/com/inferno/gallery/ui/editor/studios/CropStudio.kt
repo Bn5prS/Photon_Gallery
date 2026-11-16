@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -307,8 +309,9 @@ private fun CropCarouselView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 1. Crop / Aspect ratio
@@ -450,7 +453,8 @@ private fun CropCarouselView(
 }
 
 /**
- * Individual squircle tool button for editor design.
+ * Individual rounded-rectangle tool button for Google Photos-style pitch-black editor studio.
+ * Label sits above the wide rounded tile (`72.dp x 52.dp`).
  */
 @Composable
 private fun CropToolTile(
@@ -464,52 +468,11 @@ private fun CropToolTile(
 ) {
     Column(
         modifier = modifier
-            .width(54.dp)
+            .width(72.dp)
             .clickable(enabled = isEnabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    if (!isEnabled) {
-                        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f)
-                    } else if (isActive) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHighest
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = label,
-                tint = if (!isEnabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                } else if (isActive) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(24.dp)
-            )
-
-            // Active dot in corner
-            if (hasActiveDot) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 5.dp, bottom = 5.dp)
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
-        }
-
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
@@ -522,8 +485,50 @@ private fun CropToolTile(
             },
             textAlign = TextAlign.Center,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
         )
+
+        Box(
+            modifier = Modifier
+                .size(width = 72.dp, height = 52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    if (!isEnabled) {
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.38f)
+                    } else if (isActive) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = label,
+                tint = if (!isEnabled) {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                } else if (isActive) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.size(24.dp)
+            )
+
+            // Active dot in corner
+            if (hasActiveDot) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 6.dp, bottom = 6.dp)
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+        }
     }
 }
 

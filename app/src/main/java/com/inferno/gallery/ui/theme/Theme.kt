@@ -16,13 +16,17 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import kotlinx.coroutines.delay
@@ -227,4 +231,98 @@ private fun animateColorScheme(
         primaryContainer = primaryContainer,
         onPrimaryContainer = onPrimaryContainer,
     )
+}
+
+/**
+ * Immersive Pitch-Black (#000000) Studio Theme for Photo Editor, Collage, and Stitch.
+ * Always uses a pure black canvas and Google Photos-style dark charcoal tonal surfaces (#282228),
+ * even when the main gallery is in Light Mode.
+ */
+@Composable
+fun PhotonStudioTheme(
+    content: @Composable () -> Unit
+) {
+    val currentScheme = androidx.compose.material3.MaterialTheme.colorScheme
+    val studioScheme = remember(currentScheme) {
+        // Ensure primary accents are dark-theme friendly (high luminance on dark surfaces)
+        val isCurrentlyLight = currentScheme.background.luminance() > 0.5f
+        val studioPrimary = if (isCurrentlyLight) {
+            currentScheme.inversePrimary
+        } else {
+            currentScheme.primary
+        }
+        val studioPrimaryContainer = if (isCurrentlyLight) {
+            Color(0xFF3B2D4A)
+        } else {
+            currentScheme.primaryContainer
+        }
+        val studioOnPrimaryContainer = if (isCurrentlyLight) {
+            Color(0xFFF2DAFF)
+        } else {
+            currentScheme.onPrimaryContainer
+        }
+        currentScheme.copy(
+            primary = studioPrimary,
+            onPrimary = Color(0xFF1E162B),
+            primaryContainer = studioPrimaryContainer,
+            onPrimaryContainer = studioOnPrimaryContainer,
+            secondaryContainer = Color(0xFF332C33),
+            onSecondaryContainer = Color(0xFFF2EFF2),
+            background = Color.Black,
+            onBackground = Color(0xFFF2EFF2),
+            surface = Color.Black,
+            onSurface = Color(0xFFF2EFF2),
+            surfaceVariant = Color(0xFF282228),
+            onSurfaceVariant = Color(0xFFC8C2C8),
+            surfaceDim = Color.Black,
+            surfaceBright = Color(0xFF383238),
+            surfaceContainerLowest = Color.Black,
+            surfaceContainerLow = Color.Black,
+            surfaceContainer = Color(0xFF1C191D),
+            surfaceContainerHigh = Color(0xFF282228),
+            surfaceContainerHighest = Color(0xFF332C33),
+            outline = Color(0xFF8E888E),
+            outlineVariant = Color(0xFF484248),
+        )
+    }
+
+    val view = LocalView.current
+    DisposableEffect(view) {
+        var ctx = view.context
+        var window: android.view.Window? = null
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is android.app.Activity) {
+                window = ctx.window
+                break
+            }
+            ctx = ctx.baseContext
+        }
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
+        val prevLightStatus = insetsController?.isAppearanceLightStatusBars
+        val prevLightNav = insetsController?.isAppearanceLightNavigationBars
+        if (insetsController != null) {
+            insetsController.isAppearanceLightStatusBars = false
+            insetsController.isAppearanceLightNavigationBars = false
+        }
+        onDispose {
+            if (insetsController != null) {
+                if (prevLightStatus != null) insetsController.isAppearanceLightStatusBars = prevLightStatus
+                if (prevLightNav != null) insetsController.isAppearanceLightNavigationBars = prevLightNav
+            }
+        }
+    }
+
+    MaterialExpressiveTheme(
+        colorScheme = studioScheme,
+        shapes = AppShapes,
+        typography = androidx.compose.material3.MaterialTheme.typography,
+        motionScheme = androidx.compose.material3.MaterialTheme.motionScheme,
+    ) {
+        val harmonized = harmonizedColors()
+        CompositionLocalProvider(
+            LocalHarmonizedColors provides harmonized,
+            LocalPhotonColors provides AmoledPhotonColors,
+            content = content
+        )
+    }
 }

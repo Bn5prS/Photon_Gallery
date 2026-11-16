@@ -120,6 +120,7 @@ import com.inferno.gallery.ui.editor.studios.FiltersStudio
 import com.inferno.gallery.ui.editor.studios.MarkupStudio
 import com.inferno.gallery.ui.editor.studios.MoreStudio
 import com.inferno.gallery.ui.editor.studios.ToolSearchSheet
+import com.inferno.gallery.ui.theme.PhotonStudioTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -379,6 +380,7 @@ fun PhotonEditorScreen(
         if (isComparingOriginal) null else ColorFilter.colorMatrix(combinedMatrix)
     }
 
+    PhotonStudioTheme {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = Color.Black,
@@ -882,12 +884,7 @@ fun PhotonEditorScreen(
             // ── BOTTOM STUDIOS CONTAINER ──────────────────────────────────
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-                )
+                color = Color.Black
             ) {
                 val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                 AnimatedContent(
@@ -1217,6 +1214,7 @@ fun PhotonEditorScreen(
             }
 
         }
+    }
     }
 }
 
