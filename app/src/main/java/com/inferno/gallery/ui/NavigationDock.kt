@@ -131,8 +131,8 @@ fun FloatingNavigationPill(
     )
     val slotWidth by animateDpAsState(
         targetValue = when {
-            showLabels && showVideosTab -> 60.dp
-            showLabels -> 70.dp
+            showLabels && showVideosTab -> 64.dp
+            showLabels -> 74.dp
             showVideosTab -> 56.dp
             else -> 70.dp
         },
@@ -646,7 +646,7 @@ private fun PillDockSlotItem(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(horizontal = 4.dp)
+                    modifier = Modifier.padding(horizontal = 2.dp)
                 ) {
                     Box(
                         modifier = Modifier.graphicsLayer {
@@ -658,16 +658,22 @@ private fun PillDockSlotItem(
                         icon()
                     }
                     Spacer(modifier = Modifier.height(2.dp))
+                    var labelFontSizeSp by remember(label, slotWidth) { androidx.compose.runtime.mutableFloatStateOf(10f) }
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            lineHeight = 11.sp,
+                            fontSize = labelFontSizeSp.sp,
+                            lineHeight = (labelFontSizeSp + 1f).sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         ),
                         maxLines = 1,
                         softWrap = false,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { result ->
+                            if (result.hasVisualOverflow && labelFontSizeSp > 8.5f) {
+                                labelFontSizeSp = (labelFontSizeSp - 0.4f).coerceAtLeast(8.5f)
+                            }
+                        }
                     )
                 }
             } else {
