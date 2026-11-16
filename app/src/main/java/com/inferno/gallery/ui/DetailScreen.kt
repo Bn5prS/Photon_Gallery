@@ -1354,7 +1354,13 @@ fun DetailScreen(
                                 isCurrentPage = page == pagerState.currentPage,
                                 showControls = showUi && !isFilmstripOverview,
                                 modifier = Modifier.fillMaxSize(),
+                                isFilmstripOverview = isFilmstripOverview,
                                 onScrubbingChanged = { isVideoScrubbing = it },
+                                onScaleChanged = { newScale ->
+                                    if (page == pagerState.currentPage) {
+                                        currentScale = newScale
+                                    }
+                                },
                                 onTap = {
                                     if (isFilmstripOverview) {
                                         coroutineScope.launch {
@@ -1378,8 +1384,10 @@ fun DetailScreen(
                                     showUi = false
                                 },
                                 onPinchExpand = {
-                                    isFilmstripOverview = false
-                                    showUi = true
+                                    if (isFilmstripOverview) {
+                                        isFilmstripOverview = false
+                                        showUi = true
+                                    }
                                 }
                             )
                         }

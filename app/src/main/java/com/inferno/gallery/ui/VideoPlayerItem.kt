@@ -58,6 +58,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,20 +87,24 @@ fun VideoPlayerItem(
     isCurrentPage: Boolean,
     showControls: Boolean,
     modifier: Modifier = Modifier,
+    isFilmstripOverview: Boolean = false,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
     onPinchExpand: (() -> Unit)? = null,
-    onScrubbingChanged: ((Boolean) -> Unit)? = null
+    onScrubbingChanged: ((Boolean) -> Unit)? = null,
+    onScaleChanged: ((Float) -> Unit)? = null
 ) {
     VideoPlayerItemWithResolvedUri(
         uri = uri,
         isCurrentPage = isCurrentPage,
         showControls = showControls,
         modifier = modifier,
+        isFilmstripOverview = isFilmstripOverview,
         onTap = onTap,
         onPinchOverview = onPinchOverview,
         onPinchExpand = onPinchExpand,
-        onScrubbingChanged = onScrubbingChanged
+        onScrubbingChanged = onScrubbingChanged,
+        onScaleChanged = onScaleChanged
     )
 }
 
@@ -110,10 +115,12 @@ fun VideoPlayerItemWithResolvedUri(
     isCurrentPage: Boolean,
     showControls: Boolean,
     modifier: Modifier = Modifier,
+    isFilmstripOverview: Boolean = false,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
     onPinchExpand: (() -> Unit)? = null,
-    onScrubbingChanged: ((Boolean) -> Unit)? = null
+    onScrubbingChanged: ((Boolean) -> Unit)? = null,
+    onScaleChanged: ((Float) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val exoPlayer = remember(uri) {
@@ -141,10 +148,20 @@ fun VideoPlayerItemWithResolvedUri(
     val offsetY = remember { mutableFloatStateOf(0f) }
     val animJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val currentIsOverview by rememberUpdatedState(isFilmstripOverview)
+    val currentOnPinchOverview by rememberUpdatedState(onPinchOverview)
+    val currentOnPinchExpand by rememberUpdatedState(onPinchExpand)
+    val currentOnScaleChanged by rememberUpdatedState(onScaleChanged)
 
-    // Reset zoom when switching pages
-    LaunchedEffect(isCurrentPage) {
-        if (!isCurrentPage) {
+    LaunchedEffect(scale.floatValue, isCurrentPage) {
+        if (isCurrentPage) {
+            currentOnScaleChanged?.invoke(scale.floatValue)
+        }
+    }
+
+    // Reset zoom when switching pages or entering filmstrip overview
+    LaunchedEffect(isCurrentPage, isFilmstripOverview) {
+        if (!isCurrentPage || isFilmstripOverview) {
             animJob.value?.cancel()
             scale.floatValue = 1f
             offsetX.floatValue = 0f
@@ -332,6 +349,7 @@ fun VideoPlayerItemWithResolvedUri(
                     }
 
                     if (shouldStartZoomPan) {
+                        val gestureStartScale = scale.floatValue
                         var accumulatedZoom = 1f
                         var accumulatedPan = Offset.Zero
                         var pastTouchSlop = false
@@ -355,6 +373,7 @@ fun VideoPlayerItemWithResolvedUri(
 
                             val zoomChange = event.calculateZoom()
                             val panChange = event.calculatePan()
+                            val isMultiTouch = pressedCount >= 2
 
                             if (!pastTouchSlop) {
                                 accumulatedZoom *= zoomChange
@@ -362,26 +381,35 @@ fun VideoPlayerItemWithResolvedUri(
                                 val centroidSize = event.calculateCentroidSize(useCurrent = false)
                                 val zoomMotion = kotlin.math.abs(1 - accumulatedZoom) * centroidSize
                                 val panMotion = accumulatedPan.getDistance()
-                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                if (zoomMotion > touchSlop || panMotion > touchSlop || isMultiTouch) {
                                     pastTouchSlop = true
                                 }
+                            } else if (isMultiTouch) {
+                                accumulatedZoom *= zoomChange
                             }
 
-                            if (pastTouchSlop && scale.floatValue <= 1.05f && maxPointerCount == 1) {
+                            if (pastTouchSlop && !isMultiTouch && scale.floatValue <= 1.05f && maxPointerCount == 1) {
                                 break
                             }
 
-                            if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero)) {
+                            if (pastTouchSlop && currentIsOverview) {
+                                // In filmstrip overview: pinch out exits overview without zooming video
+                                if (isMultiTouch && accumulatedZoom > 1.15f) {
+                                    currentOnPinchExpand?.invoke()
+                                }
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            } else if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero || isMultiTouch)) {
                                 val centroid = event.calculateCentroid(useCurrent = false)
                                 animJob.value?.cancel()
-                                val newScale = (scale.floatValue * zoomChange).coerceIn(0.85f, 6f)
+                                val oldScale = scale.floatValue
+                                val newScale = (oldScale * zoomChange).coerceIn(0.85f, 6f)
 
                                 val maxX = (composableW * (newScale - 1)).coerceAtLeast(0f) / 2f
                                 val maxY = (composableH * (newScale - 1)).coerceAtLeast(0f) / 2f
 
                                 val focalX = centroid.x - composableW / 2f
                                 val focalY = centroid.y - composableH / 2f
-                                val effectiveZoom = if (scale.floatValue > 0f) newScale / scale.floatValue else 1f
+                                val effectiveZoom = if (oldScale > 0f) newScale / oldScale else 1f
                                 var newOffsetX = (offsetX.floatValue - focalX) * effectiveZoom + focalX + panChange.x
                                 var newOffsetY = (offsetY.floatValue - focalY) * effectiveZoom + focalY + panChange.y
 
@@ -392,102 +420,94 @@ fun VideoPlayerItemWithResolvedUri(
                                 offsetX.floatValue = newOffsetX
                                 offsetY.floatValue = newOffsetY
 
-                                if (newScale > 1f) {
+                                // Pinch-in from unzoomed normal view enters filmstrip overview
+                                if (isMultiTouch && gestureStartScale <= 1.05f && oldScale <= 1.05f && accumulatedZoom < 0.85f) {
+                                    currentOnPinchOverview?.invoke()
+                                }
+
+                                if (isMultiTouch) {
+                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                } else if (newScale > 1f) {
                                     val hittingLeft = newOffsetX >= maxX && panChange.x > 0
                                     val hittingRight = newOffsetX <= -maxX && panChange.x < 0
                                     if (!hittingLeft && !hittingRight) {
                                         event.changes.forEach { if (it.positionChanged()) it.consume() }
                                     }
                                 }
-                            } // end if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero))
-
-                            // Pinch-in threshold check on every multitouch frame
-                            if (pastTouchSlop && event.changes.count { it.pressed } >= 2) {
-                                accumulatedZoom *= zoomChange
-                                if (accumulatedZoom < 0.85f && scale.floatValue <= 1.05f) {
-                                    onPinchOverview?.invoke()
-                                } else if (accumulatedZoom > 1.15f) {
-                                    onPinchExpand?.invoke()
-                                }
                             }
 
                             if (!event.changes.any { it.pressed }) break
                         }
 
-                        // If pinched in past threshold or released below 0.90x, trigger overview
-                        if (pastTouchSlop && maxPointerCount >= 2) {
-                            if (scale.floatValue < 0.90f || accumulatedZoom < 0.88f) {
-                                onPinchOverview?.invoke()
+                        if (!currentIsOverview) {
+                            // Only enter overview if pinch started unzoomed and pinched inward past threshold
+                            if (pastTouchSlop && maxPointerCount >= 2 && gestureStartScale <= 1.05f &&
+                                (scale.floatValue < 0.90f || accumulatedZoom < 0.85f)
+                            ) {
+                                currentOnPinchOverview?.invoke()
                                 scale.floatValue = 1f
                                 offsetX.floatValue = 0f
                                 offsetY.floatValue = 0f
-                            } else if (accumulatedZoom > 1.15f) {
-                                onPinchExpand?.invoke()
-                                scale.floatValue = 1f
-                                offsetX.floatValue = 0f
-                                offsetY.floatValue = 0f
-                            }
-                        }
-
-                        // Snap back if released below 1.05x
-                        if (scale.floatValue < 1.05f && scale.floatValue != 1f) {
-                            animJob.value?.cancel()
-                            animJob.value = coroutineScope.launch {
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = scale.floatValue,
-                                        targetValue = 1f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> scale.floatValue = v }
+                            } else if (scale.floatValue < 1.05f && (scale.floatValue != 1f || offsetX.floatValue != 0f || offsetY.floatValue != 0f)) {
+                                // Snap back cleanly if released below 1.05x
+                                animJob.value?.cancel()
+                                animJob.value = coroutineScope.launch {
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = scale.floatValue,
+                                            targetValue = 1f,
+                                            animationSpec = MotionTokens.gentleSpring()
+                                        ) { v, _ -> scale.floatValue = v }
+                                    }
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetX.floatValue,
+                                            targetValue = 0f,
+                                            animationSpec = MotionTokens.gentleSpring()
+                                        ) { v, _ -> offsetX.floatValue = v }
+                                    }
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetY.floatValue,
+                                            targetValue = 0f,
+                                            animationSpec = MotionTokens.gentleSpring()
+                                        ) { v, _ -> offsetY.floatValue = v }
+                                    }
                                 }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetX.floatValue,
-                                        targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> offsetX.floatValue = v }
-                                }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetY.floatValue,
-                                        targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> offsetY.floatValue = v }
-                                }
-                            }
-                        } else if (pastTouchSlop && scale.floatValue >= 1.05f && maxPointerCount == 1) {
-                            // Fling momentum when panning while zoomed
-                            val velocity = velocityTracker.calculateVelocity()
-                            val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
-                            val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
-                            val flingFactor = 0.35f
-                            val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
-                                .coerceIn(-currentMaxX, currentMaxX)
-                            val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
-                                .coerceIn(-currentMaxY, currentMaxY)
-                            animJob.value?.cancel()
-                            animJob.value = coroutineScope.launch {
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetX.floatValue,
-                                        targetValue = targetFlingX,
-                                        initialVelocity = velocity.x,
-                                        animationSpec = androidx.compose.animation.core.spring(
-                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                            stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
-                                        )
-                                    ) { v, _ -> offsetX.floatValue = v }
-                                }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetY.floatValue,
-                                        targetValue = targetFlingY,
-                                        initialVelocity = velocity.y,
-                                        animationSpec = androidx.compose.animation.core.spring(
-                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                            stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
-                                        )
-                                    ) { v, _ -> offsetY.floatValue = v }
+                            } else if (pastTouchSlop && scale.floatValue >= 1.05f && maxPointerCount == 1) {
+                                // Fling momentum when panning while zoomed
+                                val velocity = velocityTracker.calculateVelocity()
+                                val currentMaxX = (composableW * (scale.floatValue - 1)) / 2f
+                                val currentMaxY = (composableH * (scale.floatValue - 1)) / 2f
+                                val flingFactor = 0.35f
+                                val targetFlingX = (offsetX.floatValue + velocity.x * flingFactor)
+                                    .coerceIn(-currentMaxX, currentMaxX)
+                                val targetFlingY = (offsetY.floatValue + velocity.y * flingFactor)
+                                    .coerceIn(-currentMaxY, currentMaxY)
+                                animJob.value?.cancel()
+                                animJob.value = coroutineScope.launch {
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetX.floatValue,
+                                            targetValue = targetFlingX,
+                                            initialVelocity = velocity.x,
+                                            animationSpec = androidx.compose.animation.core.spring(
+                                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
+                                            )
+                                        ) { v, _ -> offsetX.floatValue = v }
+                                    }
+                                    launch {
+                                        androidx.compose.animation.core.animate(
+                                            initialValue = offsetY.floatValue,
+                                            targetValue = targetFlingY,
+                                            initialVelocity = velocity.y,
+                                            animationSpec = androidx.compose.animation.core.spring(
+                                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                stiffness = androidx.compose.animation.core.Spring.StiffnessVeryLow
+                                            )
+                                        ) { v, _ -> offsetY.floatValue = v }
+                                    }
                                 }
                             }
                         }
