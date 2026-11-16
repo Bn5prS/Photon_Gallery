@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -145,7 +146,9 @@ fun AboutScreenContent(
                                 imageVector = ImageVector.vectorResource(R.drawable.ic_launcher_monochrome),
                                 contentDescription = "Photon Gallery Logo",
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(88.dp)
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .graphicsLayer(scaleX = 1.55f, scaleY = 1.55f)
                             )
                         }
                     }

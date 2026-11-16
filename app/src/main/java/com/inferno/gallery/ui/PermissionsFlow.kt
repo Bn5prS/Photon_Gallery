@@ -1017,7 +1017,9 @@ private fun ExpressiveOnboardingHero(
                     imageVector = ImageVector.vectorResource(R.drawable.ic_launcher_monochrome),
                     contentDescription = "Photon Gallery",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(128.dp)
+                    modifier = Modifier
+                        .size(128.dp)
+                        .graphicsLayer(scaleX = 1.55f, scaleY = 1.55f)
                 )
             }
         }
