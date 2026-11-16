@@ -42,6 +42,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _useAmoledBlack = MutableStateFlow(false)
+    val useAmoledBlack: StateFlow<Boolean> = _useAmoledBlack.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.migrateThemeDefaultsIfNeeded()
@@ -242,9 +245,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             repository.updateColorPresetName(name)
         }
     }
-
-    private val _useAmoledBlack = MutableStateFlow(false)
-    val useAmoledBlack: StateFlow<Boolean> = _useAmoledBlack.asStateFlow()
 
     fun setUseAmoledBlack(use: Boolean) {
         _useAmoledBlack.value = use
