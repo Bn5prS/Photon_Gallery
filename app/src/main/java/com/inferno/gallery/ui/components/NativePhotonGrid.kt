@@ -545,23 +545,96 @@ fun NativePhotonGrid(
                     adapter.notifyItemRangeChanged(0, adapter.itemCount)
                 }
 
-                // Update span count with smooth shuffle/resize transition
+                // Update span count with smooth FLIP shuffle/resize animation
                 if (layoutManager.spanCount != safeSpanCount) {
-                    android.transition.TransitionManager.endTransitions(recyclerView)
-                    android.transition.TransitionManager.beginDelayedTransition(
-                        recyclerView,
-                        android.transition.TransitionSet().apply {
-                            ordering = android.transition.TransitionSet.ORDERING_TOGETHER
-                            addTransition(android.transition.ChangeBounds())
-                            addTransition(android.transition.Fade(android.transition.Fade.IN))
-                            duration = 280L
-                            interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
+                    data class ChildBounds(val left: Int, val top: Int, val width: Int, val height: Int)
+                    val previousBounds = HashMap<String, ChildBounds>(recyclerView.childCount * 2)
+                    for (i in 0 until recyclerView.childCount) {
+                        val child = recyclerView.getChildAt(i) ?: continue
+                        child.animate().cancel()
+                        child.translationX = 0f
+                        child.translationY = 0f
+                        child.scaleX = 1f
+                        child.scaleY = 1f
+                        child.alpha = 1f
+                        val pos = recyclerView.getChildAdapterPosition(child)
+                        if (pos != RecyclerView.NO_POSITION) {
+                            val key = when (val item = adapter.getItem(pos)) {
+                                is NativeTimelineItem.Media -> "M_${item.id}"
+                                is NativeTimelineItem.Header -> "H_${item.id}"
+                                null -> if (adapter.getItemViewType(pos) == VIEW_TYPE_COMPOSE_HEADER) "COMPOSE_HEADER" else null
+                            }
+                            if (key != null && child.width > 0 && child.height > 0) {
+                                previousBounds[key] = ChildBounds(child.left, child.top, child.width, child.height)
+                            }
                         }
-                    )
+                    }
+
                     layoutManager.spanCount = safeSpanCount
+                    layoutManager.spanSizeLookup.invalidateSpanIndexCache()
                     adapter.currentSpanCount = safeSpanCount
                     recyclerView.invalidateItemDecorations()
                     adapter.notifyItemRangeChanged(0, adapter.itemCount, PAYLOAD_SPAN_COUNT)
+
+                    val interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
+                    val vto = recyclerView.viewTreeObserver
+                    if (vto.isAlive && previousBounds.isNotEmpty()) {
+                        vto.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                if (recyclerView.viewTreeObserver.isAlive) {
+                                    recyclerView.viewTreeObserver.removeOnPreDrawListener(this)
+                                }
+                                for (i in 0 until recyclerView.childCount) {
+                                    val child = recyclerView.getChildAt(i) ?: continue
+                                    val pos = recyclerView.getChildAdapterPosition(child)
+                                    if (pos == RecyclerView.NO_POSITION) continue
+                                    val key = when (val item = adapter.getItem(pos)) {
+                                        is NativeTimelineItem.Media -> "M_${item.id}"
+                                        is NativeTimelineItem.Header -> "H_${item.id}"
+                                        null -> if (adapter.getItemViewType(pos) == VIEW_TYPE_COMPOSE_HEADER) "COMPOSE_HEADER" else null
+                                    } ?: continue
+
+                                    val prev = previousBounds[key]
+                                    if (prev != null && child.width > 0 && child.height > 0) {
+                                        val dx = (prev.left - child.left).toFloat()
+                                        val dy = (prev.top - child.top).toFloat()
+                                        val sx = prev.width.toFloat() / child.width.toFloat()
+                                        val sy = prev.height.toFloat() / child.height.toFloat()
+                                        child.pivotX = 0f
+                                        child.pivotY = 0f
+                                        child.translationX = dx
+                                        child.translationY = dy
+                                        child.scaleX = sx
+                                        child.scaleY = sy
+                                        child.animate()
+                                            .translationX(0f)
+                                            .translationY(0f)
+                                            .scaleX(1f)
+                                            .scaleY(1f)
+                                            .setDuration(260L)
+                                            .setInterpolator(interpolator)
+                                            .withEndAction {
+                                                child.pivotX = child.width * 0.5f
+                                                child.pivotY = child.height * 0.5f
+                                            }
+                                            .start()
+                                    } else if (child.width > 0 && child.height > 0) {
+                                        child.alpha = 0f
+                                        child.scaleX = 0.88f
+                                        child.scaleY = 0.88f
+                                        child.animate()
+                                            .alpha(1f)
+                                            .scaleX(1f)
+                                            .scaleY(1f)
+                                            .setDuration(260L)
+                                            .setInterpolator(interpolator)
+                                            .start()
+                                    }
+                                }
+                                return true
+                            }
+                        })
+                    }
                 }
 
                 // Update corner radius
@@ -1008,6 +1081,12 @@ private class NativePhotonAdapter(
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
+        holder.itemView.animate().cancel()
+        holder.itemView.translationX = 0f
+        holder.itemView.translationY = 0f
+        holder.itemView.scaleX = 1f
+        holder.itemView.scaleY = 1f
+        holder.itemView.alpha = 1f
         if (holder is MediaViewHolder) {
             holder.unbind()
         }
