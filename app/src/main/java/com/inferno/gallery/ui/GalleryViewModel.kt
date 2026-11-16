@@ -3152,6 +3152,106 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun deleteAlbum(
+        bucketName: String,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        if (!com.inferno.gallery.data.BucketNames.isRenameableAlbum(bucketName)) {
+            showToast("This album cannot be deleted")
+            onComplete?.invoke(false)
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val context = getApplication<android.app.Application>()
+                val resolver = context.contentResolver
+                val entities = database.mediaDao().getMediaByBucket(bucketName)
+
+                val candidateDirs = linkedSetOf<java.io.File>()
+                val deletedUris = mutableListOf<String>()
+
+                for (entity in entities) {
+                    val file = java.io.File(entity.filePath)
+                    file.parentFile?.let { candidateDirs.add(it) }
+
+                    var deletedOnDisk = false
+                    if (file.exists()) {
+                        deletedOnDisk = runCatching { file.delete() }.getOrDefault(false)
+                    }
+                    val deletedInStore = runCatching {
+                        resolver.delete(android.net.Uri.parse(entity.uriString), null, null) > 0
+                    }.getOrDefault(false)
+
+                    if (deletedOnDisk || deletedInStore || !file.exists()) {
+                        deletedUris.add(entity.uriString)
+                        com.inferno.gallery.data.MediaUriUtils.normalizeUriString(entity.uriString)
+                            .takeIf { it != entity.uriString }
+                            ?.let { deletedUris.add(it) }
+                    }
+                }
+
+                // Also check Pictures/<bucketName> in case it was an empty album folder
+                val picturesDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_PICTURES
+                )
+                val emptyAlbumDir = java.io.File(picturesDir, bucketName)
+                if (emptyAlbumDir.exists() && emptyAlbumDir.isDirectory) {
+                    candidateDirs.add(emptyAlbumDir)
+                }
+
+                // Remove emptied directories (including any .nomedia file inside)
+                for (dir in candidateDirs) {
+                    if (dir.exists() && dir.isDirectory) {
+                        val children = dir.listFiles() ?: emptyArray()
+                        if (children.isEmpty() || children.all { it.name == ".nomedia" }) {
+                            children.forEach { runCatching { it.delete() } }
+                            runCatching { dir.delete() }
+                        }
+                    }
+                }
+
+                if (deletedUris.isNotEmpty()) {
+                    database.mediaDao().deleteByUrisChunked(deletedUris.distinct())
+                }
+
+                // Clean up album metadata & preferences
+                if (albumCustomShapes.value.containsKey(bucketName)) {
+                    removeAlbumCustomShape(bucketName)
+                }
+                if (albumCustomCovers.value.containsKey(bucketName)) {
+                    removeAlbumCustomCover(bucketName)
+                }
+                if (userPinnedAlbums.value.any { it.bucketName == bucketName }) {
+                    settingsRepository.togglePinnedFolder(bucketName)
+                }
+
+                refreshEmptyAlbums()
+                if (_currentBucket.value == bucketName) {
+                    _currentBucket.value = null
+                }
+
+                val syncWorkRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
+                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                    "MediaSyncWorker",
+                    androidx.work.ExistingWorkPolicy.REPLACE,
+                    syncWorkRequest
+                )
+
+                withContext(Dispatchers.Main) {
+                    showToast("Deleted album \"$bucketName\"")
+                    onComplete?.invoke(true)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GalleryViewModel", "Error deleting album: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    showToast("Error deleting album: ${e.message}")
+                    onComplete?.invoke(false)
+                }
+            }
+        }
+    }
+
     fun moveSelectedMediaToPath(targetDirectoryPath: String) {
         val selected = _selectedUris.value.toList()
         if (selected.isEmpty()) return

@@ -65,14 +65,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.inferno.gallery.data.AlbumLayoutMode
@@ -169,6 +173,7 @@ fun AlbumsScreen(
     val customShapes by viewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
     var albumToRename by remember { mutableStateOf<String?>(null) }
+    var albumToDelete by remember { mutableStateOf<AlbumBucket?>(null) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsState()
@@ -314,7 +319,8 @@ fun AlbumsScreen(
                             onDeleteCover = { bucketName -> onDeleteCover(bucketName) },
                             onChangeShape = { bucket -> shapePickerBucket = bucket },
                             onResetShape = { bucketName -> viewModel.removeAlbumCustomShape(bucketName) },
-                            onRename = { bucketName -> albumToRename = bucketName }
+                            onRename = { bucketName -> albumToRename = bucketName },
+                            onDelete = { bucket -> albumToDelete = bucket }
                         )
                     }
 
@@ -392,7 +398,8 @@ fun AlbumsScreen(
                                 onDeleteCover = { onDeleteCover(bucket.bucketName) },
                                 onChangeShape = { shapePickerBucket = bucket },
                                 onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
-                                onRename = { albumToRename = bucket.bucketName }
+                                onRename = { albumToRename = bucket.bucketName },
+                                onDelete = { albumToDelete = bucket }
                             )
                         }
                     }
@@ -447,7 +454,8 @@ fun AlbumsScreen(
                                 onDeleteCover = { onDeleteCover(bucket.bucketName) },
                                 onChangeShape = { shapePickerBucket = bucket },
                                 onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
-                                onRename = { albumToRename = bucket.bucketName }
+                                onRename = { albumToRename = bucket.bucketName },
+                                onDelete = { albumToDelete = bucket }
                             )
                         }
                     }
@@ -480,6 +488,17 @@ fun AlbumsScreen(
             onDismissRequest = { albumToRename = null },
             onConfirm = { newName ->
                 viewModel.renameAlbum(targetAlbum, newName)
+            }
+        )
+    }
+
+    albumToDelete?.let { targetAlbum ->
+        DeleteAlbumConfirmationDialog(
+            bucket = targetAlbum,
+            onDismissRequest = { albumToDelete = null },
+            onConfirm = {
+                viewModel.deleteAlbum(targetAlbum.bucketName)
+                albumToDelete = null
             }
         )
     }
@@ -1164,6 +1183,7 @@ fun PinnedAlbumsShelf(
     onChangeShape: (AlbumBucket) -> Unit,
     onResetShape: (String) -> Unit,
     onRename: ((String) -> Unit)? = null,
+    onDelete: ((AlbumBucket) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val cardWidth = when (gridCellsCount) {
@@ -1361,7 +1381,8 @@ fun PinnedAlbumsShelf(
                         onDeleteCover = { onDeleteCover(bucket.bucketName) },
                         onChangeShape = { onChangeShape(bucket) },
                         onResetShape = { onResetShape(bucket.bucketName) },
-                        onRename = onRename?.let { cb -> { cb(bucket.bucketName) } }
+                        onRename = onRename?.let { cb -> { cb(bucket.bucketName) } },
+                        onDelete = onDelete?.let { cb -> { cb(bucket) } }
                     )
                 }
             }
@@ -1385,6 +1406,7 @@ private fun PinnedAlbumOverlayCard(
     onChangeShape: (AlbumBucket) -> Unit,
     onResetShape: (String) -> Unit,
     onRename: ((String) -> Unit)?,
+    onDelete: ((AlbumBucket) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1493,7 +1515,8 @@ private fun PinnedAlbumOverlayCard(
             onDeleteCover = { onDeleteCover(bucket.bucketName) },
             onChangeShape = { onChangeShape(bucket) },
             onResetShape = { onResetShape(bucket.bucketName) },
-            onRename = onRename?.let { cb -> { cb(bucket.bucketName) } }
+            onRename = onRename?.let { cb -> { cb(bucket.bucketName) } },
+            onDelete = onDelete?.let { cb -> { cb(bucket) } }
         )
     }
 }
@@ -1841,7 +1864,8 @@ fun AlbumDropdownMenu(
     onDeleteCover: () -> Unit,
     onChangeShape: () -> Unit,
     onResetShape: () -> Unit,
-    onRename: (() -> Unit)? = null
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -1941,7 +1965,91 @@ fun AlbumDropdownMenu(
                 }
             )
         }
+        if (com.inferno.gallery.data.BucketNames.isRenameableAlbum(bucketName) && onDelete != null) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Delete album",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(IconSizeTokens.M)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onDelete()
+                }
+            )
+        }
     }
+}
+
+@Composable
+fun DeleteAlbumConfirmationDialog(
+    bucket: AlbumBucket,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        shape = ShapeExtraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        icon = {
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Delete \"${bucket.bucketName}\"?",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            val contentsDesc = if (bucket.itemCount > 0) {
+                "all ${bucket.itemCount} item${if (bucket.itemCount == 1) "" else "s"} inside it"
+            } else {
+                "its contents"
+            }
+            Text(
+                text = "This will permanently delete this folder and $contentsDesc from your device. You cannot recover them.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = ShapeFull,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
+            ) {
+                Text("Delete permanently", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest, shape = ShapeFull) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 // ── Albums Control Bar (Layout Switcher & Custom Sorting) ──

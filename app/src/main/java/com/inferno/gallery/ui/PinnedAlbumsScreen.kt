@@ -80,6 +80,8 @@ fun PinnedAlbumsScreen(
     val customCovers by galleryViewModel.albumCustomCovers.collectAsState()
     val customShapes by galleryViewModel.albumCustomShapes.collectAsState()
     var shapePickerBucket by remember { mutableStateOf<AlbumBucket?>(null) }
+    var albumToDelete by remember { mutableStateOf<AlbumBucket?>(null) }
+    var showDisplaySortSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
@@ -125,6 +127,23 @@ fun PinnedAlbumsScreen(
                             contentDescription = stringResource(R.string.action_close),
                             modifier = Modifier.size(IconSizeTokens.L)
                         )
+                    }
+                },
+                actions = {
+                    if (userPinnedAlbums.isNotEmpty()) {
+                        ExpressiveFilledIconButton(
+                            onClick = { showDisplaySortSheet = true },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
+                                contentDescription = stringResource(R.string.menu_sort_order),
+                                modifier = Modifier.size(IconSizeTokens.L)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -210,22 +229,6 @@ fun PinnedAlbumsScreen(
                 horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Layout switcher & sort control bar
-                item(key = "pinned_albums_controls_bar", span = { GridItemSpan(maxLineSpan) }) {
-                    AlbumsControlBar(
-                        currentLayout = albumLayoutMode,
-                        onLayoutChange = { newLayout ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            galleryViewModel.setAlbumLayoutMode(newLayout)
-                        },
-                        currentSort = albumSortOrder,
-                        onSortChange = { newSort ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            galleryViewModel.setAlbumSortOrder(newSort)
-                        }
-                    )
-                }
-
                 items(
                     items = userPinnedAlbums,
                     key = { "pinned_${it.bucketName}" }
@@ -289,7 +292,8 @@ fun PinnedAlbumsScreen(
                             onChangeCover = { onChangeCover(bucket.bucketName) },
                             onDeleteCover = { onDeleteCover(bucket.bucketName) },
                             onChangeShape = { shapePickerBucket = bucket },
-                            onResetShape = { galleryViewModel.removeAlbumCustomShape(bucket.bucketName) }
+                            onResetShape = { galleryViewModel.removeAlbumCustomShape(bucket.bucketName) },
+                            onDelete = { albumToDelete = bucket }
                         )
                     }
                 }
@@ -325,6 +329,28 @@ fun PinnedAlbumsScreen(
                 onDismissRequest = {
                     shapePickerBucket = null
                 }
+            )
+        }
+
+        albumToDelete?.let { targetAlbum ->
+            DeleteAlbumConfirmationDialog(
+                bucket = targetAlbum,
+                onDismissRequest = { albumToDelete = null },
+                onConfirm = {
+                    galleryViewModel.deleteAlbum(targetAlbum.bucketName)
+                    albumToDelete = null
+                }
+            )
+        }
+
+        if (showDisplaySortSheet) {
+            com.inferno.gallery.ui.components.DisplayAndSortBottomSheet(
+                isAlbumsScreen = true,
+                albumLayoutMode = albumLayoutMode,
+                onAlbumLayoutModeChange = { galleryViewModel.setAlbumLayoutMode(it) },
+                albumSortOrder = albumSortOrder,
+                onAlbumSortOrderChange = { galleryViewModel.setAlbumSortOrder(it) },
+                onDismissRequest = { showDisplaySortSheet = false }
             )
         }
     }
