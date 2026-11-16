@@ -960,101 +960,10 @@ fun SettingsScreen(
                                 )
                             )
 
-                            // ── Card 2: Media Viewer ──
+                            // ── Card 2: Typography ──
                             SettingsGroupCard(
-                                title = stringResource(R.string.setting_media_viewer_title),
+                                title = "Typography",
                                 items = listOf(
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_blur_viewer_bg_title),
-                                            subtitle = stringResource(R.string.setting_blur_viewer_bg_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
-                                            checked = viewerBlurEffect,
-                                            onCheckedChange = { viewModel.setViewerBlurEffect(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_zoom_navigator_title),
-                                            subtitle = stringResource(R.string.setting_zoom_navigator_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
-                                            checked = viewerZoomMinimapEnabled,
-                                            onCheckedChange = { viewModel.setViewerZoomMinimapEnabled(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_max_brightness_title),
-                                            subtitle = stringResource(R.string.setting_max_brightness_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
-                                            checked = maxBrightnessEnabled,
-                                            onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
-                                        )
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.settings_ultra_hdr_title),
-                                            subtitle = stringResource(R.string.settings_ultra_hdr_desc),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
-                                            checked = hdrDisplayEnabled,
-                                            onCheckedChange = { viewModel.setHdrDisplayEnabled(it) },
-                                            enabled = isHdrSupported
-                                        )
-                                    }
-                                )
-                            )
-
-                            // ── Card 3: Typography & Layout ──
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_typography_layout_title),
-                                items = listOf(
-                                    {
-                                        Column(modifier = Modifier.padding(16.dp)) {
-                                            Text(
-                                                text = stringResource(R.string.setting_date_header_align),
-                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = if (dateHeaderAlignment == "LEFT") {
-                                                    "Left-aligned timeline date headers and floating scroll badge"
-                                                } else {
-                                                    "Center-aligned timeline date headers and floating scroll badge (Center-aligned style)"
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            SingleChoiceSegmentedButtonRow(
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                                    onClick = { viewModel.setDateHeaderAlignment("LEFT") },
-                                                    selected = dateHeaderAlignment == "LEFT",
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_left), contentDescription = null) },
-                                                    label = { Text(stringResource(R.string.align_left), style = MaterialTheme.typography.labelMedium) }
-                                                )
-                                                SegmentedButton(
-                                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                                    onClick = { viewModel.setDateHeaderAlignment("CENTER") },
-                                                    selected = dateHeaderAlignment == "CENTER",
-                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_center), contentDescription = null) },
-                                                    label = { Text(stringResource(R.string.align_center), style = MaterialTheme.typography.labelMedium) }
-                                                )
-                                            }
-                                        }
-                                    },
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_show_album_size),
-                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
-                                            checked = showAlbumSize,
-                                            onCheckedChange = { viewModel.setShowAlbumSize(it) }
-                                        )
-                                    },
                                     {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_use_system_font_title),
@@ -1076,10 +985,11 @@ fun SettingsScreen(
                         }
 
                         "Layout & Navigation" -> {
+                            // ── Card 1: Timeline Grid & Memories ──
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_timeline_grid_title),
-                                items = listOf(
-                                    {
+                                items = buildList<@Composable () -> Unit> {
+                                    add {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -1206,43 +1116,43 @@ fun SettingsScreen(
                                             }
                                         }
                                     }
-                                )
-                            )
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_dock_navigation_title),
-                                items = buildList<@Composable () -> Unit> {
                                     add {
-                                        val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_dock_classic),
-                                            subtitle = stringResource(R.string.setting_dock_classic_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
-                                            checked = isDockFullWidth,
-                                            onCheckedChange = { isChecked ->
-                                                viewModel.setDockStyle(if (isChecked) com.inferno.gallery.data.DockStyle.FULL_WIDTH else com.inferno.gallery.data.DockStyle.PILL)
-                                            }
-                                        )
-                                    }
-                                    if (dockStyle == com.inferno.gallery.data.DockStyle.PILL) {
-                                        add {
-                                            SwitchSettingItem(
-                                                title = stringResource(R.string.setting_dock_pill_labels),
-                                                subtitle = stringResource(R.string.setting_dock_pill_labels_sub),
-                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
-                                                checked = showPillLabels,
-                                                onCheckedChange = { viewModel.setShowPillLabels(it) }
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Text(
+                                                text = stringResource(R.string.setting_date_header_align),
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = if (dateHeaderAlignment == "LEFT") {
+                                                    "Left-aligned timeline date headers and floating scroll badge"
+                                                } else {
+                                                    "Center-aligned timeline date headers and floating scroll badge (Center-aligned style)"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            SingleChoiceSegmentedButtonRow(
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                SegmentedButton(
+                                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                                    onClick = { viewModel.setDateHeaderAlignment("LEFT") },
+                                                    selected = dateHeaderAlignment == "LEFT",
+                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_left), contentDescription = null) },
+                                                    label = { Text(stringResource(R.string.align_left), style = MaterialTheme.typography.labelMedium) }
+                                                )
+                                                SegmentedButton(
+                                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                                    onClick = { viewModel.setDateHeaderAlignment("CENTER") },
+                                                    selected = dateHeaderAlignment == "CENTER",
+                                                    icon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_format_align_center), contentDescription = null) },
+                                                    label = { Text(stringResource(R.string.align_center), style = MaterialTheme.typography.labelMedium) }
+                                                )
+                                            }
                                         }
-                                    }
-                                    add {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_dock_videos),
-                                            subtitle = stringResource(R.string.setting_dock_videos_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
-                                            checked = showVideosInDock,
-                                            onCheckedChange = { viewModel.setShowVideosInDock(it) }
-                                        )
                                     }
                                     add {
                                         SwitchSettingItem(
@@ -1348,7 +1258,68 @@ fun SettingsScreen(
                                             )
                                         }
                                     }
+                                }
+                            )
+
+                            // ── Card 2: Navigation Dock ──
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_dock_navigation_title),
+                                items = buildList<@Composable () -> Unit> {
                                     add {
+                                        val isDockFullWidth = dockStyle == com.inferno.gallery.data.DockStyle.FULL_WIDTH
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_dock_classic),
+                                            subtitle = stringResource(R.string.setting_dock_classic_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_list),
+                                            checked = isDockFullWidth,
+                                            onCheckedChange = { isChecked ->
+                                                viewModel.setDockStyle(if (isChecked) com.inferno.gallery.data.DockStyle.FULL_WIDTH else com.inferno.gallery.data.DockStyle.PILL)
+                                            }
+                                        )
+                                    }
+                                    if (dockStyle == com.inferno.gallery.data.DockStyle.PILL) {
+                                        add {
+                                            SwitchSettingItem(
+                                                title = stringResource(R.string.setting_dock_pill_labels),
+                                                subtitle = stringResource(R.string.setting_dock_pill_labels_sub),
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_text_fields),
+                                                checked = showPillLabels,
+                                                onCheckedChange = { viewModel.setShowPillLabels(it) }
+                                            )
+                                        }
+                                    }
+                                    add {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_dock_videos),
+                                            subtitle = stringResource(R.string.setting_dock_videos_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                                            checked = showVideosInDock,
+                                            onCheckedChange = { viewModel.setShowVideosInDock(it) }
+                                        )
+                                    }
+                                }
+                            )
+
+                            // ── Card 3: Customize Toolbars ──
+                            SettingsGroupCard(
+                                title = stringResource(R.string.customize_toolbars_title),
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.customize_toolbars_title),
+                                            subtitle = stringResource(R.string.customize_toolbars_subtitle),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                                            onClick = { onActiveSectionChange("Customize Toolbars") }
+                                        )
+                                    }
+                                )
+                            )
+
+                            // ── Card 4: Albums & Collections ──
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_albums_library_title),
+                                items = listOf(
+                                    {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -1432,37 +1403,16 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
-                                    }
-                                }
-                            )
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.customize_toolbars_title),
-                                items = listOf(
+                                    },
                                     {
-                                        ClickableSettingItem(
-                                            title = stringResource(R.string.customize_toolbars_title),
-                                            subtitle = stringResource(R.string.customize_toolbars_subtitle),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_tune),
-                                            onClick = { onActiveSectionChange("Customize Toolbars") }
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_show_album_size),
+                                            subtitle = stringResource(R.string.setting_show_album_size_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                            checked = showAlbumSize,
+                                            onCheckedChange = { viewModel.setShowAlbumSize(it) }
                                         )
-                                    }
-                                )
-                            )
-                        }
-
-                        "Customize Toolbars" -> {
-                            com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
-                                onBackClick = { onActiveSectionChange("Layout & Navigation") },
-                                settingsViewModel = viewModel,
-                                showTopBar = false
-                            )
-                        }
-
-                        "General" -> {
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_albums_library_title),
-                                items = listOf(
+                                    },
                                     {
                                         SwitchSettingItem(
                                             title = stringResource(R.string.setting_show_hidden),
@@ -1483,7 +1433,146 @@ fun SettingsScreen(
                                     }
                                 )
                             )
+                        }
 
+                        "Customize Toolbars" -> {
+                            com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
+                                onBackClick = { onActiveSectionChange("Layout & Navigation") },
+                                settingsViewModel = viewModel,
+                                showTopBar = false
+                            )
+                        }
+
+                        "General" -> {
+                            // ── Card 1: Media Viewer & Playback ──
+                            SettingsGroupCard(
+                                title = "${stringResource(R.string.setting_media_viewer_title)} & Playback",
+                                items = listOf(
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_blur_viewer_bg_title),
+                                            subtitle = stringResource(R.string.setting_blur_viewer_bg_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_image),
+                                            checked = viewerBlurEffect,
+                                            onCheckedChange = { viewModel.setViewerBlurEffect(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_zoom_navigator_title),
+                                            subtitle = stringResource(R.string.setting_zoom_navigator_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_center_focus_strong),
+                                            checked = viewerZoomMinimapEnabled,
+                                            onCheckedChange = { viewModel.setViewerZoomMinimapEnabled(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_max_brightness_title),
+                                            subtitle = stringResource(R.string.setting_max_brightness_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_light_mode),
+                                            checked = maxBrightnessEnabled,
+                                            onCheckedChange = { viewModel.setMaxBrightnessEnabled(it) }
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.settings_ultra_hdr_title),
+                                            subtitle = stringResource(R.string.settings_ultra_hdr_desc),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_hdr_on),
+                                            checked = hdrDisplayEnabled,
+                                            onCheckedChange = { viewModel.setHdrDisplayEnabled(it) },
+                                            enabled = isHdrSupported
+                                        )
+                                    },
+                                    {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_video_autoplay),
+                                            subtitle = stringResource(R.string.setting_video_autoplay_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
+                                            checked = autoplayWithSound,
+                                            onCheckedChange = { viewModel.setAutoplayWithSoundEnabled(it) }
+                                        )
+                                    }
+                                )
+                            )
+
+                            // ── Card 2: Recycle Bin ──
+                            val recycleBinItems = mutableListOf<@Composable () -> Unit>(
+                                {
+                                    SwitchSettingItem(
+                                        title = stringResource(R.string.setting_confirm_delete),
+                                        subtitle = stringResource(R.string.setting_confirm_delete_sub),
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                        checked = confirmDelete,
+                                        onCheckedChange = { viewModel.setConfirmDeleteEnabled(it) }
+                                    )
+                                },
+                                {
+                                    SwitchSettingItem(
+                                        title = stringResource(R.string.auto_clean_trash),
+                                        subtitle = stringResource(R.string.auto_clean_trash_desc),
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                        checked = autoCleanTrash,
+                                        onCheckedChange = { viewModel.setAutoCleanTrashEnabled(it) }
+                                    )
+                                }
+                            )
+
+                            if (autoCleanTrash) {
+                                recycleBinItems.add {
+                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(text = stringResource(R.string.setting_retention_period), style = MaterialTheme.typography.bodyLarge)
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.secondaryContainer
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.days_count, autoCleanDays),
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        SingleChoiceSegmentedButtonRow(
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            SegmentedButton(
+                                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                                                onClick = { viewModel.setAutoCleanTrashDays(7) },
+                                                selected = autoCleanDays == 7,
+                                                label = { Text(stringResource(R.string.days_count, 7)) }
+                                            )
+                                            SegmentedButton(
+                                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                                                onClick = { viewModel.setAutoCleanTrashDays(14) },
+                                                selected = autoCleanDays == 14,
+                                                label = { Text(stringResource(R.string.days_count, 14)) }
+                                            )
+                                            SegmentedButton(
+                                                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                                                onClick = { viewModel.setAutoCleanTrashDays(30) },
+                                                selected = autoCleanDays == 30,
+                                                label = { Text(stringResource(R.string.days_count, 30)) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_recycle_bin_title),
+                                items = recycleBinItems
+                            )
+
+                            // ── Card 3: Haptics ──
                             val hapticsItems = mutableListOf<@Composable () -> Unit>(
                                 {
                                     SwitchSettingItem(
@@ -1533,22 +1622,7 @@ fun SettingsScreen(
                                 items = hapticsItems
                             )
 
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_media_playback_title),
-                                items = listOf(
-                                    {
-                                        SwitchSettingItem(
-                                            title = stringResource(R.string.setting_video_autoplay),
-                                            subtitle = stringResource(R.string.setting_video_autoplay_sub),
-                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_volume_up),
-                                            checked = autoplayWithSound,
-                                            onCheckedChange = { viewModel.setAutoplayWithSoundEnabled(it) }
-                                        )
-                                    }
-                                )
-                            )
-
+                            // ── Card 4: Language ──
                             val activeLang = getActiveLanguage(context, currentLanguageTag)
                             val langSubtitle = if (currentLanguageTag.isEmpty()) {
                                 "${stringResource(R.string.language_system_default)} (${activeLang.displayName})"
@@ -2458,80 +2532,6 @@ fun SettingsScreen(
                         }
 
                         "Privacy & Security" -> {
-                            val recycleBinItems = mutableListOf<@Composable () -> Unit>(
-                                {
-                                    SwitchSettingItem(
-                                        title = stringResource(R.string.setting_confirm_delete),
-                                        subtitle = stringResource(R.string.setting_confirm_delete_sub),
-                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                        checked = confirmDelete,
-                                        onCheckedChange = { viewModel.setConfirmDeleteEnabled(it) }
-                                    )
-                                },
-                                {
-                                    SwitchSettingItem(
-                                        title = stringResource(R.string.auto_clean_trash),
-                                        subtitle = stringResource(R.string.auto_clean_trash_desc),
-                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                                        checked = autoCleanTrash,
-                                        onCheckedChange = { viewModel.setAutoCleanTrashEnabled(it) }
-                                    )
-                                }
-                            )
-
-                            if (autoCleanTrash) {
-                                recycleBinItems.add {
-                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(text = stringResource(R.string.setting_retention_period), style = MaterialTheme.typography.bodyLarge)
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.secondaryContainer
-                                            ) {
-                                                Text(
-                                                    text = stringResource(R.string.days_count, autoCleanDays),
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        SingleChoiceSegmentedButtonRow(
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            SegmentedButton(
-                                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                                                onClick = { viewModel.setAutoCleanTrashDays(7) },
-                                                selected = autoCleanDays == 7,
-                                                label = { Text(stringResource(R.string.days_count, 7)) }
-                                            )
-                                            SegmentedButton(
-                                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                                                onClick = { viewModel.setAutoCleanTrashDays(14) },
-                                                selected = autoCleanDays == 14,
-                                                label = { Text(stringResource(R.string.days_count, 14)) }
-                                            )
-                                            SegmentedButton(
-                                                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                                                onClick = { viewModel.setAutoCleanTrashDays(30) },
-                                                selected = autoCleanDays == 30,
-                                                label = { Text(stringResource(R.string.days_count, 30)) }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            SettingsGroupCard(
-                                title = stringResource(R.string.setting_recycle_bin_title),
-                                items = recycleBinItems
-                            )
-
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_recents_security_title),
                                 items = listOf(
@@ -2570,6 +2570,20 @@ fun SettingsScreen(
                                             subtitle = actionSubtitle,
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_cleaning_services),
                                             onClick = { showExifStripActionDialog = true }
+                                        )
+                                    }
+                                )
+                            )
+
+                            SettingsGroupCard(
+                                title = stringResource(R.string.setting_folder_visibility_title),
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = stringResource(R.string.setting_excluded_folders_category),
+                                            subtitle = stringResource(R.string.setting_excluded_folders_category_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_off),
+                                            onClick = { onActiveSectionChange("Excluded Folders") }
                                         )
                                     }
                                 )
