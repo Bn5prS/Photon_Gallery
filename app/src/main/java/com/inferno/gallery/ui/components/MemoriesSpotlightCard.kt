@@ -2,6 +2,8 @@ package com.inferno.gallery.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -9,6 +11,8 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,7 +37,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,12 +49,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,18 +71,57 @@ import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.SpacingTokens
 import com.inferno.gallery.ui.utils.pressScale
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Material 3 Memories Spotlight supporting two clean layout styles:
- * 1. STORIES: Space-saving vertical story cards (~116.dp x 160.dp) in a LazyRow.
- * 2. SPOTLIGHT: Wide hero card (~80% width) with adjacent memories peeking in.
+ * 1. STORIES: Tall Google Photos–style portrait story cards (~2 full cards + peek) in a snapped LazyRow with section indicator pills.
+ * 2. SPOTLIGHT: Wide hero card (~80% width, 196.dp height) with adjacent memories peeking in and section indicator pills.
  *
  * Design Refinements:
  * - No heavy solid blocks covering the photos.
- * - Clean, non-cluttered typography directly over a soft bottom gradient scrim.
+ * - Clean typography directly over a soft bottom gradient scrim.
  * - Zero artificial outlines or drop shadows (shadowElevation = 0.dp, tonalElevation = 0.dp).
  * - Smooth collapse/restore animation into ambient timeline banner.
  */
+
+internal fun computeStoryCardWidthDp(screenWidthDp: Float): Float {
+    return ((screenWidthDp - 42f) / 2.15f).coerceIn(148f, 188f)
+}
+
+internal fun computeStoryCardHeightDp(cardWidthDp: Float): Float {
+    return (cardWidthDp * 1.35f).coerceIn(220f, 244f)
+}
+
+internal fun computeStoriesIndicatorIndex(
+    totalItems: Int,
+    firstVisibleIndex: Int,
+    scrolledFromStartPx: Int,
+    itemSizePx: Int,
+    itemSpacingPx: Int,
+    beforeContentPaddingPx: Int,
+    afterContentPaddingPx: Int,
+    viewportWidthPx: Int,
+    canScrollForward: Boolean
+): Int {
+    if (totalItems <= 1) return 0
+    if (!canScrollForward) {
+        return if (firstVisibleIndex == 0 && scrolledFromStartPx <= 0) 0 else totalItems - 1
+    }
+    if (itemSizePx <= 0 || viewportWidthPx <= 0) {
+        return firstVisibleIndex.coerceIn(0, totalItems - 1)
+    }
+    val stepPx = (itemSizePx + itemSpacingPx).coerceAtLeast(1)
+    val totalContentPx = beforeContentPaddingPx +
+        (totalItems * itemSizePx) +
+        ((totalItems - 1) * itemSpacingPx) +
+        afterContentPaddingPx
+    val maxScrollPx = (totalContentPx - viewportWidthPx).coerceAtLeast(1)
+    val currentScrollPx = (firstVisibleIndex * stepPx + scrolledFromStartPx).coerceIn(0, maxScrollPx)
+    val ratio = (currentScrollPx.toFloat() / maxScrollPx.toFloat()).coerceIn(0f, 1f)
+    return (ratio * (totalItems - 1)).roundToInt().coerceIn(0, totalItems - 1)
+}
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MemoriesSpotlightCard(
@@ -225,7 +274,7 @@ fun MemoriesSpotlightCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. STYLE: Compact Story Reels (LazyRow of vertical cards with soft bottom scrim)
+// 1. STYLE: Portrait Story Reels (Snapped LazyRow of tall portrait cards + centered text + indicators)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun CompactStoryReelsContent(
@@ -234,21 +283,75 @@ private fun CompactStoryReelsContent(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState, snapPosition = SnapPosition.Start)
+    val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
 
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = SpacingTokens.M),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = modifier.fillMaxWidth()
+    val cardWidth: Dp = remember(configuration.screenWidthDp) {
+        computeStoryCardWidthDp(configuration.screenWidthDp.toFloat()).dp
+    }
+    val cardHeight: Dp = remember(cardWidth) {
+        computeStoryCardHeightDp(cardWidth.value).dp
+    }
+
+    val activeIndicatorIndex by remember(memoryGroups.size, listState) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val firstInfo = layoutInfo.visibleItemsInfo.firstOrNull()
+            computeStoriesIndicatorIndex(
+                totalItems = memoryGroups.size,
+                firstVisibleIndex = firstInfo?.index ?: listState.firstVisibleItemIndex,
+                scrolledFromStartPx = if (firstInfo != null) -firstInfo.offset else listState.firstVisibleItemScrollOffset,
+                itemSizePx = firstInfo?.size ?: 0,
+                itemSpacingPx = layoutInfo.mainAxisItemSpacing,
+                beforeContentPaddingPx = layoutInfo.beforeContentPadding,
+                afterContentPaddingPx = layoutInfo.afterContentPadding,
+                viewportWidthPx = layoutInfo.viewportSize.width,
+                canScrollForward = listState.canScrollForward
+            )
+        }
+    }
+
+    val isScrollable by remember(listState) {
+        derivedStateOf { listState.canScrollForward || listState.canScrollBackward }
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(
-            items = memoryGroups,
-            key = { it.key }
-        ) { group ->
-            CompactMemoryReelCard(
-                group = group,
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onOpenMemory(group)
+        LazyRow(
+            state = listState,
+            flingBehavior = snapFlingBehavior,
+            contentPadding = PaddingValues(horizontal = SpacingTokens.M),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(
+                items = memoryGroups,
+                key = { it.key }
+            ) { group ->
+                CompactMemoryReelCard(
+                    group = group,
+                    cardWidth = cardWidth,
+                    cardHeight = cardHeight,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenMemory(group)
+                    }
+                )
+            }
+        }
+
+        if (memoryGroups.size > 1 && isScrollable) {
+            CarouselPageIndicators(
+                count = memoryGroups.size,
+                activeIndex = activeIndicatorIndex,
+                onSelectIndex = { targetIndex ->
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(targetIndex)
+                    }
                 }
             )
         }
@@ -259,6 +362,8 @@ private fun CompactStoryReelsContent(
 @Composable
 private fun CompactMemoryReelCard(
     group: MemoryDayGroup,
+    cardWidth: Dp,
+    cardHeight: Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -266,7 +371,7 @@ private fun CompactMemoryReelCard(
     val imageRequest = remember(group.coverItem.uri) {
         ImageRequest.Builder(context)
             .data(if (group.coverItem.localExists) group.coverItem.resolvedUri else group.coverItem.uri)
-            .size(400, 600)
+            .size(640, 900)
             .crossfade(true)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
@@ -274,15 +379,15 @@ private fun CompactMemoryReelCard(
     }
 
     Surface(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = modifier
-            .width(116.dp)
-            .height(160.dp)
+            .width(cardWidth)
+            .height(cardHeight)
             .pressScale(pressedScale = 0.96f)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -293,37 +398,37 @@ private fun CompactMemoryReelCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Soft bottom gradient scrim (no heavy solid block)
+            // Soft bottom gradient scrim for clean editorial text legibility
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(68.dp)
+                    .height(92.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.72f)
+                                Color.Black.copy(alpha = 0.78f)
                             )
                         )
                     )
             )
 
-            // Clean typography directly over scrim
+            // Centered editorial typography directly over scrim
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(1.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = group.title,
-                    style = MaterialTheme.typography.labelMedium.copy(
+                    style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        lineHeight = 14.sp
+                        fontSize = 15.sp,
+                        lineHeight = 18.sp
                     ),
                     color = Color.White,
                     textAlign = TextAlign.Center,
@@ -333,10 +438,10 @@ private fun CompactMemoryReelCard(
                 Text(
                     text = "${group.items.size} photos",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Normal
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     ),
-                    color = Color.White.copy(alpha = 0.82f),
+                    color = Color.White.copy(alpha = 0.85f),
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -358,6 +463,7 @@ private fun MultiBrowsePeekContent(
 ) {
     val haptic = LocalHapticFeedback.current
     val pagerState = rememberPagerState(pageCount = { memoryGroups.size })
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -383,23 +489,63 @@ private fun MultiBrowsePeekContent(
 
         // Tonal Indicator Dots if multi-page
         if (memoryGroups.size > 1) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                memoryGroups.forEachIndexed { index, _ ->
-                    val isSelected = pagerState.currentPage == index
-                    Surface(
-                        shape = ShapeFull,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                        tonalElevation = 0.dp,
-                        shadowElevation = 0.dp,
-                        modifier = Modifier
-                            .padding(horizontal = 3.dp)
-                            .size(width = if (isSelected) 18.dp else 6.dp, height = 6.dp)
-                    ) {}
+            CarouselPageIndicators(
+                count = memoryGroups.size,
+                activeIndex = pagerState.currentPage,
+                onSelectIndex = { page ->
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(page)
+                    }
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CarouselPageIndicators(
+    count: Int,
+    activeIndex: Int,
+    onSelectIndex: ((Int) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (index in 0 until count) {
+            val isSelected = activeIndex == index
+            val pillWidth by animateDpAsState(
+                targetValue = if (isSelected) 18.dp else 6.dp,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "carouselIndicatorWidth"
+            )
+            val pillColor by animateColorAsState(
+                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                animationSpec = MotionTokens.fastEffectsSpec(),
+                label = "carouselIndicatorColor"
+            )
+            Box(
+                modifier = Modifier
+                    .clip(ShapeFull)
+                    .then(
+                        if (onSelectIndex != null) {
+                            Modifier.clickable { onSelectIndex(index) }
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .padding(horizontal = 3.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = ShapeFull,
+                    color = pillColor,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.size(width = pillWidth, height = 6.dp)
+                ) {}
             }
         }
     }
