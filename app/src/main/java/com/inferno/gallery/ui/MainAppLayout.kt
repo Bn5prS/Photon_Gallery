@@ -216,6 +216,10 @@ fun MainAppLayout(
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
     val showPillLabels by viewModel.showPillLabels.collectAsState()
+    val defaultStartupTab by settingsViewModel.defaultStartupTab.collectAsState()
+    val initialStartDestination = remember {
+        SettingsRepository.sanitizeStartupTab(defaultStartupTab, showVideosInDock)
+    }
     val nestedNavController = rememberNavController()
 
     var showMenu by remember { mutableStateOf(false) }
@@ -223,7 +227,7 @@ fun MainAppLayout(
     var showDisplaySortSheet by remember { mutableStateOf(false) }
     var newAlbumName by remember { mutableStateOf("") }
     val navBackStackEntry by nestedNavController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = navBackStackEntry?.destination?.route ?: initialStartDestination
 
     LaunchedEffect(currentRoute) {
         viewModel.setTopBarCollapsed(false)
@@ -869,7 +873,7 @@ fun MainAppLayout(
                                         PhotonHeaderIconButton(
                                             onClick = {
                                                 nestedNavController.navigate("settings") {
-                                                    popUpTo("photos") { saveState = true }
+                                                    popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                                     launchSingleTop = true
                                                     restoreState = true
                                                 }
@@ -1013,7 +1017,7 @@ fun MainAppLayout(
         }
         NavHost(
             navController = nestedNavController,
-            startDestination = "photos",
+            startDestination = initialStartDestination,
             enterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
             exitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) },
             popEnterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
@@ -1034,7 +1038,7 @@ fun MainAppLayout(
                     },
                     onNavigateToSettings = {
                         nestedNavController.navigate("settings") {
-                            popUpTo("photos") { saveState = true }
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -1057,7 +1061,7 @@ fun MainAppLayout(
                     },
                     onNavigateToSettings = {
                         nestedNavController.navigate("settings") {
-                            popUpTo("photos") { saveState = true }
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }

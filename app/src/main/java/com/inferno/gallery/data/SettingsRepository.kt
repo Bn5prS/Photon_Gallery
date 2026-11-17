@@ -7,11 +7,15 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class DockStyle { PILL, FULL_WIDTH }
 enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC }
@@ -46,6 +50,15 @@ enum class PinnedAlbumsStyle(val id: String) {
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
 class SettingsRepository private constructor(private val context: Context) {
+    sealed interface TypedSettingValue {
+        data class BoolVal(val value: Boolean) : TypedSettingValue
+        data class IntVal(val value: Int) : TypedSettingValue
+        data class LongVal(val value: Long) : TypedSettingValue
+        data class FloatVal(val value: Float) : TypedSettingValue
+        data class StringVal(val value: String) : TypedSettingValue
+        data class StringSetVal(val value: Set<String>) : TypedSettingValue
+    }
+
     companion object {
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -67,6 +80,8 @@ class SettingsRepository private constructor(private val context: Context) {
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
         val SHOW_PILL_LABELS = booleanPreferencesKey("show_pill_labels")
+        val DEFAULT_STARTUP_TAB = stringPreferencesKey("default_startup_tab")
+        val VALID_STARTUP_TABS = setOf("photos", "videos", "albums", "collections")
         val VIEWER_TOOLBAR_ACTIONS = stringPreferencesKey("viewer_toolbar_actions")
         val SELECTION_DOCK_ACTIONS = stringPreferencesKey("selection_dock_actions")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
@@ -165,6 +180,90 @@ class SettingsRepository private constructor(private val context: Context) {
         const val TIP_PEOPLE_COVER = "tip_people_cover"
         const val TIP_MOTION_PHOTO = "tip_motion_photo"
         const val TIP_MARKUP_GESTURES = "tip_markup_gestures"
+
+        val EXCLUDED_BACKUP_KEYS = setOf(
+            ONBOARDING_COMPLETED.name,
+            ONBOARDING_V210_COMPLETED.name,
+            LAST_UPDATE_CHECK_TIMESTAMP.name,
+            DOC_CLASSIFIER_VERSION.name,
+            THEME_DEFAULT_MIGRATED_V210.name,
+            DATE_HEADER_DEFAULT_MIGRATED_V210.name,
+            APP_LOCK_ENABLED.name
+        )
+
+        fun sanitizeStartupTab(tab: String?, showVideosInDock: Boolean = true): String {
+            val normalized = tab?.trim()?.lowercase() ?: "photos"
+            if (normalized !in VALID_STARTUP_TABS) return "photos"
+            if (normalized == "videos" && !showVideosInDock) return "photos"
+            return normalized
+        }
+
+        fun encodeSettingsMapToJson(entries: Map<String, Any?>, exportedAtMs: Long = System.currentTimeMillis()): String {
+            val settingsObj = JSONObject()
+            for ((key, rawVal) in entries.entries.sortedBy { it.key }) {
+                if (key in EXCLUDED_BACKUP_KEYS || rawVal == null) continue
+                val itemObj = when (rawVal) {
+                    is Boolean -> JSONObject().put("type", "boolean").put("value", rawVal)
+                    is Int -> JSONObject().put("type", "int").put("value", rawVal)
+                    is Long -> JSONObject().put("type", "long").put("value", rawVal)
+                    is Float -> JSONObject().put("type", "float").put("value", rawVal.toDouble())
+                    is Double -> JSONObject().put("type", "float").put("value", rawVal)
+                    is String -> JSONObject().put("type", "string").put("value", rawVal)
+                    is Set<*> -> {
+                        val arr = JSONArray()
+                        rawVal.filterIsInstance<String>().sorted().forEach { arr.put(it) }
+                        JSONObject().put("type", "string_set").put("value", arr)
+                    }
+                    else -> null
+                }
+                if (itemObj != null) {
+                    settingsObj.put(key, itemObj)
+                }
+            }
+            return JSONObject()
+                .put("schemaVersion", 1)
+                .put("app", "PhotonGallery")
+                .put("exportedAt", exportedAtMs)
+                .put("settings", settingsObj)
+                .toString(2)
+        }
+
+        fun decodeSettingsJsonToTypedMap(jsonString: String): Map<String, TypedSettingValue> {
+            val root = try {
+                JSONObject(jsonString)
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Invalid JSON backup file", e)
+            }
+            if (root.optString("app") != "PhotonGallery" || !root.has("settings")) {
+                throw IllegalArgumentException("Not a valid Photon Gallery settings backup file")
+            }
+            val settingsObj = root.getJSONObject("settings")
+            val result = LinkedHashMap<String, TypedSettingValue>()
+            val keys = settingsObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key in EXCLUDED_BACKUP_KEYS) continue
+                val itemObj = settingsObj.optJSONObject(key) ?: continue
+                when (itemObj.optString("type")) {
+                    "boolean" -> if (itemObj.has("value")) result[key] = TypedSettingValue.BoolVal(itemObj.getBoolean("value"))
+                    "int" -> if (itemObj.has("value")) result[key] = TypedSettingValue.IntVal(itemObj.getInt("value"))
+                    "long" -> if (itemObj.has("value")) result[key] = TypedSettingValue.LongVal(itemObj.getLong("value"))
+                    "float" -> if (itemObj.has("value")) result[key] = TypedSettingValue.FloatVal(itemObj.getDouble("value").toFloat())
+                    "string" -> if (itemObj.has("value")) result[key] = TypedSettingValue.StringVal(itemObj.getString("value"))
+                    "string_set" -> {
+                        val arr = itemObj.optJSONArray("value")
+                        if (arr != null) {
+                            val set = LinkedHashSet<String>(arr.length())
+                            for (i in 0 until arr.length()) {
+                                set.add(arr.optString(i))
+                            }
+                            result[key] = TypedSettingValue.StringSetVal(set)
+                        }
+                    }
+                }
+            }
+            return result
+        }
     }
 
     fun isTipDismissed(tipKey: String): Flow<Boolean> = context.dataStore.data
@@ -1245,5 +1344,38 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateAppLockTimeoutSeconds(seconds: Int) {
         context.dataStore.edit { it[APP_LOCK_TIMEOUT_SECONDS] = seconds.coerceAtLeast(0) }
+    }
+
+    val defaultStartupTabFlow: Flow<String> = context.dataStore.data
+        .map { sanitizeStartupTab(it[DEFAULT_STARTUP_TAB], it[SHOW_VIDEOS_IN_DOCK] ?: false) }
+
+    suspend fun updateDefaultStartupTab(tab: String) {
+        context.dataStore.edit { prefs ->
+            val showVideos = prefs[SHOW_VIDEOS_IN_DOCK] ?: false
+            prefs[DEFAULT_STARTUP_TAB] = sanitizeStartupTab(tab, showVideos)
+        }
+    }
+
+    suspend fun exportSettingsToJson(): String {
+        val prefs = context.dataStore.data.first()
+        val rawMap = prefs.asMap().entries.associate { (k, v) -> k.name to v }
+        return encodeSettingsMapToJson(rawMap)
+    }
+
+    suspend fun importSettingsFromJson(jsonString: String): Int {
+        val decoded = decodeSettingsJsonToTypedMap(jsonString)
+        context.dataStore.edit { prefs ->
+            for ((key, typedVal) in decoded) {
+                when (typedVal) {
+                    is TypedSettingValue.BoolVal -> prefs[booleanPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.IntVal -> prefs[intPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.LongVal -> prefs[longPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.FloatVal -> prefs[floatPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.StringVal -> prefs[stringPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.StringSetVal -> prefs[stringSetPreferencesKey(key)] = typedVal.value
+                }
+            }
+        }
+        return decoded.size
     }
 }

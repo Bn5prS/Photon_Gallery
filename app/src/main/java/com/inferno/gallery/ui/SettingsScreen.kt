@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -116,7 +118,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.Density
 import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
@@ -201,6 +205,7 @@ fun SettingsScreen(
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
     val showPillLabels by viewModel.showPillLabels.collectAsState()
+    val defaultStartupTab by viewModel.defaultStartupTab.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
@@ -249,6 +254,44 @@ fun SettingsScreen(
     val faceAutoIndex by viewModel.faceAutoIndex.collectAsState()
 
     val context = LocalContext.current
+    val settingsCoroutineScope = rememberCoroutineScope()
+    val exportSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            settingsCoroutineScope.launch {
+                try {
+                    val json = viewModel.exportSettingsJson()
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            out.write(json.toByteArray(Charsets.UTF_8))
+                        } ?: throw IllegalStateException("Could not open destination file")
+                    }
+                    Toast.makeText(context, "Settings backed up successfully", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "Failed to back up settings", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+    val importSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            settingsCoroutineScope.launch {
+                try {
+                    val json = withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                            ?: throw IllegalStateException("Could not read backup file")
+                    }
+                    val restoredCount = viewModel.importSettingsJson(json)
+                    Toast.makeText(context, "Restored $restoredCount settings", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "Failed to restore settings", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
     val isHdrSupported = remember(context) { UltraHdrHelper.isHdrSupported(context) }
     val uriHandler = LocalUriHandler.current
     val haptic = LocalHapticFeedback.current
@@ -1356,6 +1399,92 @@ fun SettingsScreen(
                                             onCheckedChange = { viewModel.setShowVideosInDock(it) }
                                         )
                                     }
+                                    add {
+                                        val tabOptions = buildList {
+                                            add("photos" to stringResource(R.string.nav_photos))
+                                            if (showVideosInDock) {
+                                                add("videos" to stringResource(R.string.album_videos))
+                                            }
+                                            add("albums" to stringResource(R.string.nav_albums))
+                                            add("collections" to stringResource(R.string.nav_collections))
+                                        }
+                                        val activeStartupTab = com.inferno.gallery.data.SettingsRepository.sanitizeStartupTab(
+                                            defaultStartupTab,
+                                            showVideosInDock
+                                        )
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Default Startup Tab",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Surface(
+                                                shape = ShapeFull,
+                                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 0.dp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(44.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(4.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    tabOptions.forEachIndexed { index, (tabId, tabLabel) ->
+                                                        val isSelected = tabId == activeStartupTab
+                                                        val shape = com.inferno.gallery.ui.theme.getSegmentShape(
+                                                            index = index,
+                                                            total = tabOptions.size,
+                                                            outerCorner = 20.dp,
+                                                            innerCorner = 6.dp
+                                                        )
+                                                        Surface(
+                                                            shape = shape,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                            tonalElevation = 0.dp,
+                                                            shadowElevation = 0.dp,
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .fillMaxHeight()
+                                                                .clip(shape)
+                                                                .clickable { viewModel.setDefaultStartupTab(tabId) }
+                                                        ) {
+                                                            Box(
+                                                                contentAlignment = Alignment.Center,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .padding(horizontal = 4.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = tabLabel,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                                    ),
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = "Choose which tab opens first when launching Photon Gallery",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
                             )
 
@@ -1699,6 +1828,33 @@ fun SettingsScreen(
                                             icon = ImageVector.vectorResource(R.drawable.ic_ms_menu_book),
                                             onClick = {
                                                 showLanguageDialog = true
+                                            }
+                                        )
+                                    }
+                                )
+                            )
+
+                            // ── Card 5: Backup & Restore ──
+                            SettingsGroupCard(
+                                title = "Backup & Restore",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Backup Settings",
+                                            subtitle = "Export preferences, theme, and layout choices to a JSON file",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_save),
+                                            onClick = {
+                                                exportSettingsLauncher.launch("photon_gallery_settings.json")
+                                            }
+                                        )
+                                    },
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Restore Settings",
+                                            subtitle = "Import preferences from a saved Photon Gallery backup file",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                            onClick = {
+                                                importSettingsLauncher.launch(arrayOf("application/json", "*/*"))
                                             }
                                         )
                                     }

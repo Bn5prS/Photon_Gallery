@@ -54,6 +54,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _appLockTimeoutSeconds = MutableStateFlow(0)
     val appLockTimeoutSeconds: StateFlow<Int> = _appLockTimeoutSeconds.asStateFlow()
 
+    private val _defaultStartupTab = MutableStateFlow("photos")
+    val defaultStartupTab: StateFlow<String> = _defaultStartupTab.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.migrateThemeDefaultsIfNeeded()
@@ -67,6 +70,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _appLockEnabled.value = repository.appLockEnabledFlow.first()
             _appLockBiometricEnabled.value = repository.appLockBiometricEnabledFlow.first()
             _appLockTimeoutSeconds.value = repository.appLockTimeoutSecondsFlow.first()
+            _defaultStartupTab.value = repository.defaultStartupTabFlow.first()
             repository.themeModeFlow.first()
             repository.useMaterialYouFlow.first()
             repository.colorPresetNameFlow.first()
@@ -74,6 +78,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             repository.motionStyleFlow.first()
             repository.dateHeaderAlignmentFlow.first()
             _isLoading.value = false
+        }
+
+        viewModelScope.launch {
+            repository.defaultStartupTabFlow.collect {
+                _defaultStartupTab.value = it
+            }
         }
 
         viewModelScope.launch {
@@ -479,6 +489,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setShowVideosInDock(show: Boolean) {
         viewModelScope.launch {
             repository.updateShowVideosInDock(show)
+            if (!show && _defaultStartupTab.value == "videos") {
+                _defaultStartupTab.value = "photos"
+                repository.updateDefaultStartupTab("photos")
+            }
         }
     }
 
@@ -1072,6 +1086,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.updateAppLockTimeoutSeconds(safeSeconds)
         }
+    }
+
+    fun setDefaultStartupTab(tab: String) {
+        val clean = SettingsRepository.sanitizeStartupTab(tab, showVideosInDock.value)
+        _defaultStartupTab.value = clean
+        viewModelScope.launch {
+            repository.updateDefaultStartupTab(clean)
+        }
+    }
+
+    suspend fun exportSettingsJson(): String = withContext(Dispatchers.IO) {
+        repository.exportSettingsToJson()
+    }
+
+    suspend fun importSettingsJson(jsonString: String): Int = withContext(Dispatchers.IO) {
+        repository.importSettingsFromJson(jsonString)
     }
 }
 
