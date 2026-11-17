@@ -239,6 +239,19 @@ fun VideoPlayerItemWithResolvedUri(
         }
     }
 
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     LaunchedEffect(isCurrentPage) {
         if (!isCurrentPage) {
             exoPlayer.pause()
@@ -276,26 +289,26 @@ fun VideoPlayerItemWithResolvedUri(
                             val composableW = size.width.toFloat()
                             val composableH = size.height.toFloat()
                             if (scale.floatValue > 1.05f) {
-                                // Zoom out back to 1x fit
+                                // Zoom out back to 1x fit (critically damped — no bounce or negative-scale flip)
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = scale.floatValue,
                                         targetValue = 1f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> scale.floatValue = v }
+                                        animationSpec = MotionTokens.sharedElementSpring()
+                                    ) { v, _ -> scale.floatValue = v.coerceAtLeast(1f) }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetX.floatValue,
                                         targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetX.floatValue = v }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetY.floatValue,
                                         targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetY.floatValue = v }
                                 }
                             } else {
@@ -309,21 +322,21 @@ fun VideoPlayerItemWithResolvedUri(
                                     androidx.compose.animation.core.animate(
                                         initialValue = scale.floatValue,
                                         targetValue = targetScale,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> scale.floatValue = v }
+                                        animationSpec = MotionTokens.sharedElementSpring()
+                                    ) { v, _ -> scale.floatValue = v.coerceAtLeast(0.05f) }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetX.floatValue,
                                         targetValue = targetX.coerceIn(-maxX, maxX),
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetX.floatValue = v }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetY.floatValue,
                                         targetValue = targetY.coerceIn(-maxY, maxY),
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetY.floatValue = v }
                                 }
                             }
@@ -520,8 +533,9 @@ fun VideoPlayerItemWithResolvedUri(
                 .fillMaxSize()
                 .clipToBounds()
                 .graphicsLayer {
-                    scaleX = scale.floatValue
-                    scaleY = scale.floatValue
+                    val safeScale = scale.floatValue.coerceAtLeast(0.05f)
+                    scaleX = safeScale
+                    scaleY = safeScale
                     translationX = offsetX.floatValue
                     translationY = offsetY.floatValue
                 },

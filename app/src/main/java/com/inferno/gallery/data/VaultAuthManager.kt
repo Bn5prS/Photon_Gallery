@@ -26,11 +26,16 @@ class VaultAuthManager {
         private const val PREFS_NAME = "photon_vault_prefs"
         private const val KEY_PIN_HASH = "vault_pin_hash"
         private const val KEY_PIN_SALT = "vault_pin_salt"
+        private const val KEY_RECOVERY_HASH = "vault_recovery_hash"
+        private const val KEY_RECOVERY_SALT = "vault_recovery_salt"
+        private const val KEY_BIO_DEK_IV = "vault_bio_dek_iv"
+        private const val KEY_BIO_DEK_CIPHER = "vault_bio_dek_cipher"
         private const val KEY_FAILED_ATTEMPTS = "vault_failed_attempts"
         private const val KEY_LOCKOUT_UNTIL_MS = "vault_lockout_until_ms"
         private const val MAX_ATTEMPTS = 5
         private const val LOCKOUT_DURATION_MS = 30_000L
         private const val PBKDF2_ITERATIONS = 10_000
+        private const val RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
     }
 
     private fun hashPinLegacy(pin: String): String {
@@ -54,13 +59,41 @@ class VaultAuthManager {
 
     fun isPinConfigured(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.contains(KEY_PIN_HASH)
+        return prefs.contains(KEY_PIN_HASH) || VaultPersistentStorage.hasPersistentAuth()
+    }
+
+    private fun storeBioWrappedDek(prefs: android.content.SharedPreferences, dek: javax.crypto.SecretKey) {
+        val bioWrapped = VaultPersistentStorage.wrapDekForBiometrics(dek) ?: return
+        prefs.edit()
+            .putString(KEY_BIO_DEK_IV, bioWrapped.ivBase64)
+            .putString(KEY_BIO_DEK_CIPHER, bioWrapped.cipherBase64)
+            .apply()
+    }
+
+    private fun restoreBioWrappedDek(context: Context): javax.crypto.SecretKey? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val iv = prefs.getString(KEY_BIO_DEK_IV, null) ?: return null
+        val cipher = prefs.getString(KEY_BIO_DEK_CIPHER, null) ?: return null
+        return VaultPersistentStorage.unwrapDekFromBiometrics(iv, cipher)
     }
 
     fun savePin(context: Context, pin: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val saltHex = generateSaltHex()
         val hash = hashPinPbkdf2(pin, saltHex)
+        val dek = VaultPersistentStorage.activeDek ?: VaultPersistentStorage.generateDek().also {
+            VaultPersistentStorage.activeDek = it
+        }
+        val wrappedForPin = VaultPersistentStorage.wrapDekWithSecret(pin, dek)
+        val existingPersistent = VaultPersistentStorage.readAuthRecord()
+        VaultPersistentStorage.writeAuthRecord(
+            (existingPersistent ?: VaultPersistentStorage.PersistentAuthRecord()).copy(
+                pinHash = hash,
+                pinSalt = saltHex,
+                pinWrappedDek = wrappedForPin
+            )
+        )
+        storeBioWrappedDek(prefs, dek)
         prefs.edit()
             .putString(KEY_PIN_SALT, saltHex)
             .putString(KEY_PIN_HASH, hash)
@@ -76,23 +109,7 @@ class VaultAuthManager {
         return if (remainingMs > 0L) ((remainingMs + 999L) / 1000L).toInt() else 0
     }
 
-    fun verifyPin(context: Context, pin: String): Boolean {
-        if (getRemainingLockoutSeconds(context) > 0) return false
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val storedHash = prefs.getString(KEY_PIN_HASH, null) ?: return false
-        val saltHex = prefs.getString(KEY_PIN_SALT, null)
-
-        val matched = if (saltHex != null) {
-            hashPinPbkdf2(pin, saltHex) == storedHash
-        } else {
-            val legacyMatch = hashPinLegacy(pin) == storedHash
-            if (legacyMatch) {
-                // Transparently upgrade legacy unsalted SHA-256 PIN to salted PBKDF2
-                savePin(context, pin)
-            }
-            legacyMatch
-        }
-
+    private fun recordAuthOutcome(prefs: android.content.SharedPreferences, matched: Boolean): Boolean {
         if (matched) {
             prefs.edit()
                 .remove(KEY_FAILED_ATTEMPTS)
@@ -110,11 +127,139 @@ class VaultAuthManager {
         return matched
     }
 
+    fun verifyPin(context: Context, pin: String): Boolean {
+        if (getRemainingLockoutSeconds(context) > 0) return false
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val localHash = prefs.getString(KEY_PIN_HASH, null)
+        val localSalt = prefs.getString(KEY_PIN_SALT, null)
+        val persistent = VaultPersistentStorage.readAuthRecord()
+
+        val storedHash = localHash ?: persistent?.pinHash ?: return false
+        val saltHex = localSalt ?: persistent?.pinSalt
+
+        val matched = if (saltHex != null) {
+            hashPinPbkdf2(pin, saltHex) == storedHash
+        } else {
+            val legacyMatch = hashPinLegacy(pin) == storedHash
+            if (legacyMatch) {
+                // Transparently upgrade legacy unsalted SHA-256 PIN to salted PBKDF2
+                savePin(context, pin)
+            }
+            legacyMatch
+        }
+
+        if (matched) {
+            // Restore DEK into memory from persistent auth or bio wrapper, or create if upgrading
+            val unwrapped = persistent?.pinWrappedDek?.let {
+                VaultPersistentStorage.unwrapDekWithSecret(pin, it)
+            } ?: restoreBioWrappedDek(context)
+
+            if (unwrapped != null) {
+                VaultPersistentStorage.activeDek = unwrapped
+                storeBioWrappedDek(prefs, unwrapped)
+                if (localHash == null) {
+                    // Sync persistent auth back into local prefs after Clear Data / Reinstall
+                    prefs.edit()
+                        .putString(KEY_PIN_HASH, storedHash)
+                        .apply {
+                            if (saltHex != null) putString(KEY_PIN_SALT, saltHex)
+                            if (!persistent?.recoveryHash.isNullOrBlank() && !persistent?.recoverySalt.isNullOrBlank()) {
+                                putString(KEY_RECOVERY_HASH, persistent?.recoveryHash)
+                                putString(KEY_RECOVERY_SALT, persistent?.recoverySalt)
+                            }
+                        }
+                        .apply()
+                }
+            } else if (saltHex != null && persistent?.pinWrappedDek == null) {
+                // First upgrade from pre-persistent v4.0.0: generate DEK and wrap for persistent storage
+                val freshDek = VaultPersistentStorage.generateDek()
+                VaultPersistentStorage.activeDek = freshDek
+                storeBioWrappedDek(prefs, freshDek)
+                VaultPersistentStorage.writeAuthRecord(
+                    (persistent ?: VaultPersistentStorage.PersistentAuthRecord()).copy(
+                        pinHash = storedHash,
+                        pinSalt = saltHex,
+                        pinWrappedDek = VaultPersistentStorage.wrapDekWithSecret(pin, freshDek),
+                        recoveryHash = prefs.getString(KEY_RECOVERY_HASH, null),
+                        recoverySalt = prefs.getString(KEY_RECOVERY_SALT, null)
+                    )
+                )
+            }
+        }
+
+        return recordAuthOutcome(prefs, matched)
+    }
+
+    fun hasRecoveryCode(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return (prefs.contains(KEY_RECOVERY_HASH) && prefs.contains(KEY_RECOVERY_SALT)) ||
+            VaultPersistentStorage.hasPersistentRecoveryCode()
+    }
+
+    /**
+     * Generates a 16-character recovery code formatted as XXXX-XXXX-XXXX-XXXX,
+     * stores its salted PBKDF2 hash, and returns the plaintext code once for the user to save.
+     */
+    fun generateAndSaveRecoveryCode(context: Context): String {
+        val rng = SecureRandom()
+        val raw = StringBuilder(16)
+        repeat(16) {
+            raw.append(RECOVERY_ALPHABET[rng.nextInt(RECOVERY_ALPHABET.length)])
+        }
+        val normalized = raw.toString()
+        val formatted = normalized.chunked(4).joinToString("-")
+
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val saltHex = generateSaltHex()
+        val hash = hashPinPbkdf2(normalized, saltHex)
+        val dek = VaultPersistentStorage.activeDek ?: restoreBioWrappedDek(context)
+        val wrappedForRecovery = dek?.let { VaultPersistentStorage.wrapDekWithSecret(normalized, it) }
+        val existingPersistent = VaultPersistentStorage.readAuthRecord()
+        VaultPersistentStorage.writeAuthRecord(
+            (existingPersistent ?: VaultPersistentStorage.PersistentAuthRecord()).copy(
+                recoveryHash = hash,
+                recoverySalt = saltHex,
+                recoveryWrappedDek = wrappedForRecovery ?: existingPersistent?.recoveryWrappedDek
+            )
+        )
+        prefs.edit()
+            .putString(KEY_RECOVERY_SALT, saltHex)
+            .putString(KEY_RECOVERY_HASH, hash)
+            .apply()
+
+        return formatted
+    }
+
+    fun verifyRecoveryCode(context: Context, input: String): Boolean {
+        if (getRemainingLockoutSeconds(context) > 0) return false
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val persistent = VaultPersistentStorage.readAuthRecord()
+        val storedHash = prefs.getString(KEY_RECOVERY_HASH, null) ?: persistent?.recoveryHash ?: return false
+        val saltHex = prefs.getString(KEY_RECOVERY_SALT, null) ?: persistent?.recoverySalt ?: return false
+
+        val normalized = input.uppercase().replace("-", "").replace(" ", "").trim()
+        if (normalized.isEmpty()) return false
+
+        val matched = hashPinPbkdf2(normalized, saltHex) == storedHash
+        if (matched) {
+            val unwrapped = persistent?.recoveryWrappedDek?.let {
+                VaultPersistentStorage.unwrapDekWithSecret(normalized, it)
+            } ?: restoreBioWrappedDek(context)
+            if (unwrapped != null) {
+                VaultPersistentStorage.activeDek = unwrapped
+                storeBioWrappedDek(prefs, unwrapped)
+            }
+        }
+        return recordAuthOutcome(prefs, matched)
+    }
+
     fun resetPin(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .remove(KEY_PIN_HASH)
             .remove(KEY_PIN_SALT)
+            .remove(KEY_BIO_DEK_IV)
+            .remove(KEY_BIO_DEK_CIPHER)
             .remove(KEY_FAILED_ATTEMPTS)
             .remove(KEY_LOCKOUT_UNTIL_MS)
             .apply()
@@ -127,6 +272,7 @@ class VaultAuthManager {
     /** Lock the vault manually. */
     fun lock() {
         _isAuthenticated.value = false
+        VaultPersistentStorage.clearActiveDek()
     }
 
     /**
@@ -183,6 +329,14 @@ class VaultAuthManager {
         val biometricPrompt = BiometricPrompt(activity, executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    if (VaultPersistentStorage.activeDek == null) {
+                        VaultPersistentStorage.activeDek = restoreBioWrappedDek(activity)
+                    }
+                    if (hasCustomPin && VaultPersistentStorage.activeDek == null) {
+                        // DEK cannot be unwrapped with biometrics alone (e.g. after Clear Data or biometric re-enrollment)
+                        onNegativeButton()
+                        return
+                    }
                     if (unlockSession) {
                         _isAuthenticated.value = true
                     }
@@ -243,6 +397,41 @@ class VaultAuthManager {
             onSuccess = onSuccess,
             onNegativeButton = onNegativeButton,
             onFailure = onFailure
+        )
+    }
+
+    /**
+     * Requires a configured Private Space PIN before hiding media, then authenticates with
+     * biometrics or delegates to the PIN dialog. Never unlocks the full UI session.
+     */
+    fun authenticateForHide(
+        activity: FragmentActivity,
+        itemCount: Int,
+        onAuthenticated: () -> Unit,
+        onRequirePinDialog: (() -> Unit) -> Unit
+    ) {
+        if (!isPinConfigured(activity)) {
+            android.widget.Toast.makeText(
+                activity,
+                "Set up your Private Space PIN first in Collections → Private Space",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val countLabel = "$itemCount item${if (itemCount != 1) "s" else ""}"
+        authenticateWithBiometrics(
+            activity = activity,
+            title = "Move to Private Space",
+            subtitle = "Authenticate to move $countLabel to Private Space",
+            negativeButtonText = "Use PIN",
+            unlockSession = false,
+            onSuccess = onAuthenticated,
+            onNegativeButton = { onRequirePinDialog(onAuthenticated) },
+            onFailure = { err ->
+                if (err.isNotBlank()) {
+                    android.widget.Toast.makeText(activity, err, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
         )
     }
 }

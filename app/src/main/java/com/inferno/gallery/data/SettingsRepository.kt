@@ -153,6 +153,11 @@ class SettingsRepository private constructor(private val context: Context) {
 
         // Migration flags
         val THEME_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("theme_default_migrated_v210")
+
+        // App Lock
+        val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
+        val APP_LOCK_BIOMETRIC_ENABLED = booleanPreferencesKey("app_lock_biometric_enabled")
+        val APP_LOCK_TIMEOUT_SECONDS = intPreferencesKey("app_lock_timeout_seconds")
         val DATE_HEADER_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("date_header_default_migrated_v210")
 
         // One-time Feature Discovery Tips
@@ -1219,5 +1224,26 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateDateHeaderAlignment(alignment: String) {
         context.dataStore.edit { it[DATE_HEADER_ALIGNMENT] = alignment }
+    }
+
+    val appLockEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { it[APP_LOCK_ENABLED] ?: false }
+
+    suspend fun updateAppLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[APP_LOCK_ENABLED] = enabled }
+    }
+
+    val appLockBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { it[APP_LOCK_BIOMETRIC_ENABLED] ?: true }
+
+    suspend fun updateAppLockBiometricEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[APP_LOCK_BIOMETRIC_ENABLED] = enabled }
+    }
+
+    val appLockTimeoutSecondsFlow: Flow<Int> = context.dataStore.data
+        .map { it[APP_LOCK_TIMEOUT_SECONDS] ?: 0 }
+
+    suspend fun updateAppLockTimeoutSeconds(seconds: Int) {
+        context.dataStore.edit { it[APP_LOCK_TIMEOUT_SECONDS] = seconds.coerceAtLeast(0) }
     }
 }

@@ -40,8 +40,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -108,10 +110,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Density
 import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
@@ -123,10 +128,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
@@ -208,6 +218,12 @@ fun SettingsScreen(
     val useSystemFont by viewModel.useSystemFont.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val secureRecentsEnabled by viewModel.secureRecentsEnabled.collectAsState()
+    val appLockEnabled by viewModel.appLockEnabled.collectAsState()
+    val appLockBiometricEnabled by viewModel.appLockBiometricEnabled.collectAsState()
+    val appLockTimeoutSeconds by viewModel.appLockTimeoutSeconds.collectAsState()
+    val appLockAuthManager = remember { com.inferno.gallery.data.AppLockAuthManager() }
+    var activeAppLockDialogMode by remember { mutableStateOf<com.inferno.gallery.ui.components.AppLockDialogMode?>(null) }
+    var showAppLockTimeoutDialog by remember { mutableStateOf(false) }
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val hapticsStrength by viewModel.hapticsStrength.collectAsState()
     val viewerBlurEffect by viewModel.viewerBlurEffect.collectAsState()
@@ -604,31 +620,73 @@ fun SettingsScreen(
     }
 
 
-    androidx.activity.compose.BackHandler(enabled = activeSection != null) {
-        onActiveSectionChange(
-            when (activeSection) {
-                "Update Log" -> "About"
-                "Customize Toolbars" -> "Layout & Navigation"
-                else -> null
-            }
-        )
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val allowInteractions = if (activeSection == null) {
+        lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    } else {
+        lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     }
 
-    Column(
+    Surface(
         modifier = Modifier
-            .padding(contentPadding)
             .fillMaxSize()
-    ) {
-        AnimatedContent(
-            targetState = activeSection,
-            transitionSpec = {
-                fadeIn(animationSpec = MotionTokens.snappySpring()) togetherWith
-                        fadeOut(animationSpec = MotionTokens.snappySpring())
+            .pointerInput(allowInteractions) {
+                if (!allowInteractions) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
             },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            label = "SettingsSectionContent"
-        ) { section ->
-            if (section == null) {
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(contentPadding)
+                .fillMaxSize()
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PhotonBackButton(onClick = onBackClick)
+                    val settingsHeaderTitle = when (activeSection) {
+                        "Look & Feel" -> stringResource(R.string.category_theme_display)
+                        "Layout & Navigation" -> stringResource(R.string.category_layout_navigation)
+                        "Customize Toolbars" -> stringResource(R.string.customize_toolbars_title)
+                        "General" -> stringResource(R.string.category_general)
+                        "Smart Search & OCR" -> stringResource(R.string.smart_search)
+                        "Privacy & Security" -> stringResource(R.string.category_security_privacy)
+                        "About" -> stringResource(R.string.category_about)
+                        null -> stringResource(R.string.settings_title)
+                        else -> activeSection
+                    }
+                    Text(
+                        settingsHeaderTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(start = 12.dp)
+                            .weight(1f)
+                    )
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val section = activeSection
+                if (section == null) {
                 // ── Main Settings Categories View (Grouped Cards) ──────────────
                 Column(
                     modifier = Modifier
@@ -731,6 +789,7 @@ fun SettingsScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(28.dp))
+                    Spacer(modifier = Modifier.navigationBarsPadding())
                 }
             } else {
                 // ── Sub-Screens (Connected Segmented Cards) ────────────────────
@@ -1437,7 +1496,7 @@ fun SettingsScreen(
 
                         "Customize Toolbars" -> {
                             com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
-                                onBackClick = { onActiveSectionChange("Layout & Navigation") },
+                                onBackClick = onBackClick,
                                 settingsViewModel = viewModel,
                                 showTopBar = false
                             )
@@ -2532,6 +2591,84 @@ fun SettingsScreen(
                         }
 
                         "Privacy & Security" -> {
+                            val appLockItems = mutableListOf<@Composable () -> Unit>(
+                                {
+                                    SwitchSettingItem(
+                                        title = "App Lock",
+                                        subtitle = "Require PIN or fingerprint to open Photon Gallery",
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_lock),
+                                        checked = appLockEnabled,
+                                        onCheckedChange = { enable ->
+                                            if (enable) {
+                                                if (appLockAuthManager.isPinConfigured(context)) {
+                                                    viewModel.setAppLockEnabled(true)
+                                                } else {
+                                                    activeAppLockDialogMode = com.inferno.gallery.ui.components.AppLockDialogMode.SETUP
+                                                }
+                                            } else {
+                                                if (appLockAuthManager.isPinConfigured(context)) {
+                                                    activeAppLockDialogMode = com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE
+                                                } else {
+                                                    viewModel.setAppLockEnabled(false)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+
+                            if (appLockEnabled) {
+                                val biometricsAvailable = appLockAuthManager.canAuthenticateWithBiometrics(context)
+                                appLockItems.add {
+                                    SwitchSettingItem(
+                                        title = "Biometric Unlock",
+                                        subtitle = "Use fingerprint or face to unlock the app",
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_fingerprint),
+                                        checked = appLockBiometricEnabled && biometricsAvailable,
+                                        onCheckedChange = { enable ->
+                                            if (enable && !biometricsAvailable) {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "No biometrics enrolled on this device",
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else if (appLockAuthManager.isPinConfigured(context)) {
+                                                activeAppLockDialogMode = if (enable) {
+                                                    com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_ENABLE_BIOMETRIC
+                                                } else {
+                                                    com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE_BIOMETRIC
+                                                }
+                                            } else {
+                                                viewModel.setAppLockBiometricEnabled(enable)
+                                            }
+                                        }
+                                    )
+                                }
+                                appLockItems.add {
+                                    ClickableSettingItem(
+                                        title = "Auto-lock Timeout",
+                                        subtitle = formatAppLockTimeoutLabel(appLockTimeoutSeconds),
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
+                                        onClick = { showAppLockTimeoutDialog = true }
+                                    )
+                                }
+                                appLockItems.add {
+                                    ClickableSettingItem(
+                                        title = "Change App Lock PIN",
+                                        subtitle = "Update your 4-digit App Lock PIN",
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_key),
+                                        onClick = {
+                                            activeAppLockDialogMode = com.inferno.gallery.ui.components.AppLockDialogMode.CHANGE_PIN
+                                        }
+                                    )
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "App Lock",
+                                items = appLockItems
+                            )
+
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_recents_security_title),
                                 items = listOf(
@@ -2642,6 +2779,85 @@ fun SettingsScreen(
                                     }
                                 )
                             }
+
+                            activeAppLockDialogMode?.let { dialogMode ->
+                                com.inferno.gallery.ui.components.AppLockPinFlowDialog(
+                                    mode = dialogMode,
+                                    authManager = appLockAuthManager,
+                                    onSuccess = {
+                                        when (dialogMode) {
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.SETUP -> {
+                                                viewModel.setAppLockEnabled(true)
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.CHANGE_PIN -> {
+                                                // PIN saved inside dialog
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE -> {
+                                                viewModel.setAppLockEnabled(false)
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_ENABLE_BIOMETRIC -> {
+                                                viewModel.setAppLockBiometricEnabled(true)
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE_BIOMETRIC -> {
+                                                viewModel.setAppLockBiometricEnabled(false)
+                                            }
+                                        }
+                                        activeAppLockDialogMode = null
+                                    },
+                                    onDismiss = {
+                                        activeAppLockDialogMode = null
+                                    }
+                                )
+                            }
+
+                            if (showAppLockTimeoutDialog) {
+                                val timeoutOptions = listOf(
+                                    0 to "Immediately (on exit)",
+                                    20 to "After 20 seconds",
+                                    60 to "After 1 minute",
+                                    300 to "After 5 minutes",
+                                    900 to "After 15 minutes"
+                                )
+                                AlertDialog(
+                                    onDismissRequest = { showAppLockTimeoutDialog = false },
+                                    title = { Text("Auto-lock Timeout", fontWeight = FontWeight.Bold) },
+                                    text = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            timeoutOptions.forEach { (seconds, label) ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .clickable {
+                                                            viewModel.setAppLockTimeoutSeconds(seconds)
+                                                            showAppLockTimeoutDialog = false
+                                                        }
+                                                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    RadioButton(
+                                                        selected = appLockTimeoutSeconds == seconds,
+                                                        onClick = {
+                                                            viewModel.setAppLockTimeoutSeconds(seconds)
+                                                            showAppLockTimeoutDialog = false
+                                                        }
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyLarge
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { showAppLockTimeoutDialog = false }) {
+                                            Text("Close")
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         "Excluded Folders" -> {
@@ -2733,7 +2949,9 @@ fun SettingsScreen(
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.navigationBarsPadding())
                 }
+            }
             }
         }
     }
@@ -3943,4 +4161,13 @@ private fun getSampleColor(seed: Int): Color {
         3 -> MaterialTheme.colorScheme.surfaceContainerHighest
         else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
     }
+}
+
+private fun formatAppLockTimeoutLabel(seconds: Int): String = when (seconds) {
+    0 -> "Immediately (on exit)"
+    20 -> "After 20 seconds"
+    60 -> "After 1 minute"
+    300 -> "After 5 minutes"
+    900 -> "After 15 minutes"
+    else -> if (seconds < 60) "After $seconds seconds" else "After ${seconds / 60} minutes"
 }

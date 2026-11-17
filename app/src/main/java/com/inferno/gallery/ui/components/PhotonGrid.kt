@@ -220,8 +220,25 @@ fun PhotonGrid(
             }
     }
 
+    val visibleCellBounds = remember { mutableMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    val onCellBoundsChanged = remember {
+        { key: String, rect: androidx.compose.ui.geometry.Rect ->
+            visibleCellBounds[key] = rect
+        }
+    }
+    val onCellBoundsDisposed = remember {
+        { key: String ->
+            visibleCellBounds.remove(key)
+            Unit
+        }
+    }
+
     DisposableEffect(Unit) {
+        val resolver: (String) -> androidx.compose.ui.geometry.Rect? = { key -> visibleCellBounds[key] }
+        MediaTransitionRegistry.registerResolver(resolver)
         onDispose {
+            MediaTransitionRegistry.unregisterResolver(resolver)
+            visibleCellBounds.clear()
             isPinching = false
             com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = false
         }
@@ -316,7 +333,11 @@ fun PhotonGrid(
                                         favoriteIconVector = favoriteIconVector,
                                         isFavorite = isFav,
                                         showMatchBadge = showMatchBadge,
-                                        targetPxOverride = 720
+                                        targetPxOverride = 720,
+                                        useContainerTransform = true,
+                                        recordLaunchBounds = !isSelectionMode,
+                                        onBoundsChanged = onCellBoundsChanged,
+                                        onBoundsDisposed = onCellBoundsDisposed
                                     )
                                 }
                                 is MosaicDisplayItem.QuadTileItem -> {
@@ -355,7 +376,11 @@ fun PhotonGrid(
                                                             checkIconVector = checkIconVector,
                                                             favoriteIconVector = favoriteIconVector,
                                                             isFavorite = isSubFav,
-                                                            showMatchBadge = showMatchBadge
+                                                            showMatchBadge = showMatchBadge,
+                                                            useContainerTransform = true,
+                                                            recordLaunchBounds = !isSelectionMode,
+                                                            onBoundsChanged = onCellBoundsChanged,
+                                                            onBoundsDisposed = onCellBoundsDisposed
                                                         )
                                                     } else {
                                                         Spacer(modifier = Modifier.weight(1f))
@@ -387,7 +412,11 @@ fun PhotonGrid(
                                                             checkIconVector = checkIconVector,
                                                             favoriteIconVector = favoriteIconVector,
                                                             isFavorite = isSubFav,
-                                                            showMatchBadge = showMatchBadge
+                                                            showMatchBadge = showMatchBadge,
+                                                            useContainerTransform = true,
+                                                            recordLaunchBounds = !isSelectionMode,
+                                                            onBoundsChanged = onCellBoundsChanged,
+                                                            onBoundsDisposed = onCellBoundsDisposed
                                                         )
                                                     } else {
                                                         Spacer(modifier = Modifier.weight(1f))
@@ -429,7 +458,11 @@ fun PhotonGrid(
                                                         checkIconVector = checkIconVector,
                                                         favoriteIconVector = favoriteIconVector,
                                                         isFavorite = isSubFav,
-                                                        showMatchBadge = showMatchBadge
+                                                        showMatchBadge = showMatchBadge,
+                                                        useContainerTransform = true,
+                                                        recordLaunchBounds = !isSelectionMode,
+                                                        onBoundsChanged = onCellBoundsChanged,
+                                                        onBoundsDisposed = onCellBoundsDisposed
                                                     )
                                                 } else {
                                                     Spacer(modifier = Modifier.weight(1f))
@@ -459,7 +492,11 @@ fun PhotonGrid(
                                         favoriteIconVector = favoriteIconVector,
                                         isFavorite = isFav,
                                         showMatchBadge = showMatchBadge,
-                                        targetPxOverride = 720
+                                        targetPxOverride = 720,
+                                        useContainerTransform = true,
+                                        recordLaunchBounds = !isSelectionMode,
+                                        onBoundsChanged = onCellBoundsChanged,
+                                        onBoundsDisposed = onCellBoundsDisposed
                                     )
                                 }
                             }
@@ -538,7 +575,11 @@ fun PhotonGrid(
                                 checkIconVector = checkIconVector,
                                 favoriteIconVector = favoriteIconVector,
                                 isFavorite = isFav,
-                                showMatchBadge = showMatchBadge
+                                showMatchBadge = showMatchBadge,
+                                useContainerTransform = true,
+                                recordLaunchBounds = !isSelectionMode,
+                                onBoundsChanged = onCellBoundsChanged,
+                                onBoundsDisposed = onCellBoundsDisposed
                             )
                         } else {
                             val placeholderShape = remember(thumbnailCornerRadius) {
@@ -617,7 +658,9 @@ fun OptimizedThumbnailCell(
     showMatchBadge: Boolean = false,
     targetPxOverride: Int? = null,
     useContainerTransform: Boolean = false,
-    onBoundsChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null
+    recordLaunchBounds: Boolean = true,
+    onBoundsChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null,
+    onBoundsDisposed: ((String) -> Unit)? = null
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var cellBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -626,9 +669,9 @@ fun OptimizedThumbnailCell(
     // gridDragSelectGesture on the grid itself, so cells stay on plain clickable and don't add
     // a second long-press detector competing for the pointer stream). SearchScreen, which has
     // no grid-level drag-select, does supply one.
-    val clickHandler = remember(item, onClick, useContainerTransform, thumbnailCornerRadius) {
+    val clickHandler = remember(item, onClick, useContainerTransform, recordLaunchBounds, thumbnailCornerRadius) {
         {
-            if (useContainerTransform) {
+            if (useContainerTransform && recordLaunchBounds) {
                 cellBounds?.let { rect ->
                     MediaTransitionRegistry.setLaunchBounds(
                         mediaKey = item.uriString,
@@ -664,6 +707,12 @@ fun OptimizedThumbnailCell(
         }
     } else {
         Modifier
+    }
+
+    if (useContainerTransform && onBoundsDisposed != null) {
+        DisposableEffect(item.uriString) {
+            onDispose { onBoundsDisposed(item.uriString) }
+        }
     }
 
     // Shared bounds transition is active for standard grid densities (1-5 columns)

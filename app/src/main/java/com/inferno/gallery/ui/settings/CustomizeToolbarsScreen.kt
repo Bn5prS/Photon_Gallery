@@ -354,20 +354,35 @@ fun CustomizeToolbarsScreen(
                                 }
                             }
                         } else {
-                            // Selection Dock Rounded Container
+                            // Selection Dock Layered Pill (matches MainAppLayout selection pill & Viewer pill)
                             Surface(
-                                shape = ShapeExtraLarge,
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                tonalElevation = 6.dp,
-                                shadowElevation = 8.dp
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = null,
+                                tonalElevation = 0.dp,
+                                shadowElevation = 2.dp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 380.dp)
+                                    .height(64.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(6.dp),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val total = currentActiveIds.size
                                     currentActiveIds.forEachIndexed { index, id ->
                                         val action = SelectionDockAction.fromId(id) ?: return@forEachIndexed
+                                        val tileShape = getSegmentShape(
+                                            index = index,
+                                            total = total,
+                                            outerCorner = 26.dp,
+                                            innerCorner = 6.dp
+                                        )
+
                                         val isBeingDragged = dragDropState.isDragging &&
                                                 dragDropState.dragSourceZone == DragDropTargetZone.TOOLBAR &&
                                                 dragDropState.draggedId == id
@@ -378,7 +393,7 @@ fun CustomizeToolbarsScreen(
 
                                         val slotScale by animateFloatAsState(
                                             targetValue = when {
-                                                isSlotHovered && !isBeingDragged -> 1.15f
+                                                isSlotHovered && !isBeingDragged -> 1.08f
                                                 else -> 1f
                                             },
                                             animationSpec = MotionTokens.bouncySpring(),
@@ -387,9 +402,10 @@ fun CustomizeToolbarsScreen(
 
                                         var itemPositionInRoot by remember { mutableStateOf(Offset.Zero) }
 
-                                        Box(
+                                        Surface(
                                             modifier = Modifier
-                                                .size(44.dp)
+                                                .weight(1f)
+                                                .fillMaxHeight()
                                                 .onGloballyPositioned { coords ->
                                                     itemPositionInRoot = coords.positionInRoot()
                                                     slotCenters[index] = coords.boundsInRoot().center.x
@@ -433,22 +449,30 @@ fun CustomizeToolbarsScreen(
                                                         },
                                                         onDragCancel = { dragDropState.reset() }
                                                     )
-                                                }
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(
-                                                    if (isSlotHovered && !isBeingDragged)
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                                    else
-                                                        Color.Transparent
-                                                ),
-                                            contentAlignment = Alignment.Center
+                                                },
+                                            shape = tileShape,
+                                            color = if (isSlotHovered && !isBeingDragged)
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            border = null,
+                                            tonalElevation = 0.dp,
+                                            shadowElevation = 0.dp
                                         ) {
-                                            Icon(
-                                                imageVector = ImageVector.vectorResource(action.iconRes),
-                                                contentDescription = stringResource(action.labelRes),
-                                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.size(24.dp)
-                                            )
+                                            Box(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = ImageVector.vectorResource(action.iconRes),
+                                                    contentDescription = stringResource(action.labelRes),
+                                                    tint = if (isSlotHovered && !isBeingDragged)
+                                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else
+                                                        MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }

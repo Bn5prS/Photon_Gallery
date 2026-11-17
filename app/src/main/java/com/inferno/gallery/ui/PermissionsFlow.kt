@@ -863,6 +863,7 @@ private fun SetupPermissionsPage(
     } else {
         photosGranted
     }
+    val showAllFilesCard = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
 
     Column(
         modifier = Modifier
@@ -926,7 +927,6 @@ private fun SetupPermissionsPage(
                     Spacer(modifier = Modifier.height(SpacingTokens.XL))
 
                     // Two-layer segmented tonal Permission Tray (matches viewer toolbar pill)
-                    val showAllFilesCard = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
                     val permTotal = if (showAllFilesCard) 2 else 1
                     val permTileColor = onboardingInnerTileColor()
                     OnboardingCausticTray(
@@ -973,18 +973,18 @@ private fun SetupPermissionsPage(
         OnboardingNavigationDock(
             onBack = onBack,
             onNext = {
-                if (mediaGranted) {
-                    onContinue()
-                } else {
-                    onGrantMediaClick()
+                when {
+                    !mediaGranted -> onGrantMediaClick()
+                    showAllFilesCard && !allFilesGranted -> onGrantAllFilesClick()
+                    else -> onContinue()
                 }
             },
-            nextText = if (mediaGranted) {
+            nextText = if (allGranted) {
                 stringResource(R.string.onboarding_action_next)
             } else {
                 stringResource(R.string.onboarding_action_grant)
             },
-            nextIconRes = if (mediaGranted) R.drawable.ic_ms_chevron_right else null
+            nextIconRes = if (allGranted) R.drawable.ic_ms_chevron_right else null
         )
     }
 }

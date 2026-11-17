@@ -1,50 +1,35 @@
-# Release Notes — v4.0.0
+# Release Notes — v4.1.0
 
 ### New Features
-* Added customizable viewer and multi-select toolbars in Settings (#32).
-* Added a dedicated Collections tab with collapsible People, Places, Documents, and Utilities & Tools sections.
-* Added Pinned Albums at the top of the Albums screen with an All Pinned Albums view.
-* Added long-press Delete Album with permanent deletion confirmation.
-* Added Day, Month, and Year timeline grouping in the Sort & View sheet.
-* Added Collage Studio presets (Bento, Polaroid, 35mm Film, Scrapbook, Arch, Capsule, Geometric), frame sliders, backdrops, and 4:5, 3:2, and 2:3 ratios.
-* Added Stitch Studio presets, per-clip rotate/flip/screenshot-bar trim, frame sliders, and backdrops.
-* Added a pitch-black (`#000000`) studio theme across Photo Editor, Collage, and Stitch.
-* Added markup drawing, text tools, blur redaction, freeform crop, mirror, and overwrite-save in the Photo Editor (#20, #24).
-* Added Ultra HDR display support in the photo viewer (#37).
-* Added Motion Photo playback and frame extraction in the viewer.
-* Added EXIF metadata stripping (copy or overwrite), quick rotate, rename, copy to clipboard, and print actions in the viewer (#23, #36).
-* Added an in-vault photo and video viewer in Secret Vault.
-* Added pull-to-refresh on the main gallery timeline (#27).
-* Added Stories and Spotlight views for Memories.
-* Added session toggles in the delete dialog to skip confirmation or delete permanently.
+* Added **App Lock** in Settings → Privacy & Security to protect Photon Gallery and the media picker with Fingerprint / Biometrics or a 4-digit PIN, with configurable auto-lock timeouts (#42).
+* Added **persistent Private Space storage (`.PhotonPrivateSpace`)** with a PIN-wrapped encryption key and encrypted manifest so hidden photos, videos, and your PIN survive app data clears and reinstalls.
+* Upgraded the **Private Space grid** with two-finger pinch-to-zoom column sizing (`1–8`), Day / Month / Year date section headers, long-press drag-to-select with edge auto-scroll, Select All / Deselect All, and custom thumbnail corner radius.
+* Upgraded the **Private Space viewer** with horizontal swipe paging, pinch & double-tap zoom, vertical swipe-to-dismiss, ambient blur background, and `FLAG_SECURE` window protection.
 
 ---
 
 ### Improvements
-* Improved the theme picker with a 4-column color palette grid and custom color picker.
-* Improved the bottom navigation dock with a separate Search button and auto-fitted tab labels.
-* Improved timeline pinch-to-zoom with smooth animated column transitions and a draggable fast-scroll pill (#41).
-* Improved Sort & View controls with a unified bottom sheet across Photos, Albums, and Pinned Albums.
-* Improved Settings organization across Look & Feel, Layout & Navigation, General, and Privacy & Security.
-* Improved the About screen, Update dialog, EXIF details sheet, and Onboarding screen.
-* Improved Smart Search with MobileCLIP2-S2 FP32, better document sorting, and a 50-image indexing cooldown.
-* Improved default gallery app and supported link handling in system settings (#26).
+* Redesigned **Blur Viewer Background** into a smooth ambient color glow (`96×96` downsample + `72.dp` rectangle blur + vertical vignette scrim) so it elevates the photo without ghosting or mirroring edges (#45).
+* Added smooth hero container-transform open/close animations to the **Editorial Mosaic** timeline grid.
+* Updated the **Private Space** and **Person Detail** multi-selection bars to use segmented **Layered Tool Pills**.
+* Added a Settings shortcut icon to the Search tab top bar.
+* Added `v4.0.0` and `v3.0.0` release history to the in-app Update Log screen.
 
 ---
 
 ### Bug Fixes
-* Fixed Secret Vault accepting the device lockscreen PIN instead of the custom Vault PIN and added failed-attempt lockout (#30).
-* Fixed the photo viewer showing file modification date instead of the original EXIF capture date (#39, #40).
-* Fixed crop handle dragging, pan direction, and aspect-ratio bounds in the Photo Editor (#29).
-* Fixed Recycle Bin deletion, trashed video handling, and items disappearing on tap or sync (#25, #34).
-* Fixed blank thumbnails after modifying or syncing media (#28).
-* Fixed video player pinch-to-zoom resetting back to normal scale when lifting fingers.
-* Fixed crashes when opening Settings, scanning faces in the background, or dragging studio frame sliders to zero.
+* Fixed horizontal swiping not working in the image viewer when opening the first photo in Photos or Albums (#44).
+* Fixed **Blur Viewer Background** appearing almost pure black in the full-screen viewer (#45).
+* Fixed the Onboarding **Grant** button skipping the All Files Access permission prompt after granting media access.
+* Fixed hiding media into Private Space under Scoped Storage when All Files Access is not granted by staging items for MediaStore delete confirmation.
+* Fixed Settings category pages (including the About card) opening with a split/delayed transition and fixed predictive back navigation across Settings and Update Log.
+* Fixed TopBar background glow and title flicker when opening and closing albums.
+* Fixed video playback continuing in the background when the app is stopped and clamped double-tap zoom-out bounce.
 
 ---
 
 ### Translations
-* Added Italian (#33) and Spanish (es-ES) (#38) translations, and improved French, German, and Portuguese (BR) strings.
+* Updated Italian translations (#43).
 
 ---
 

@@ -58,6 +58,44 @@ data class UpdateLogEntry(
 
 val UpdateLogEntries = listOf(
     UpdateLogEntry(
+        versionName = "4.1.0",
+        buildCode = 13,
+        date = "Nov 17, 2026",
+        changes = listOf(
+            "App Lock with Fingerprint / Biometrics and 4-digit PIN protection (#42)",
+            "Persistent Private Space storage (.PhotonPrivateSpace) across data resets & reinstalls",
+            "Private Space timeline pinch-to-zoom, date headers, drag-to-select & paging viewer",
+            "Redesigned smooth ambient viewer blur background (#45) and Mosaic hero transitions",
+            "Fixed viewer horizontal swipe stalling on first photo in Photos & Albums (#44)",
+            "Unified Settings category navigation, predictive back, and Layered Tool Pills"
+        )
+    ),
+    UpdateLogEntry(
+        versionName = "4.0.0",
+        buildCode = 12,
+        date = "Nov 16, 2026",
+        changes = listOf(
+            "Dedicated Collections tab with People, Places, Documents, and Utilities",
+            "Customizable viewer & multi-select toolbars with layered concentric pills",
+            "Day, Month, and Year timeline grouping, Pinned Albums shelf, and album deletion",
+            "Ultra HDR display, Motion Photos & frame extraction, and in-vault Private Space viewer",
+            "Collage & Stitch Studio presets, frames, backdrops, and pitch-black studio theme",
+            "Smart Search upgraded to MobileCLIP2-S2 with Spanish & Italian translations"
+        )
+    ),
+    UpdateLogEntry(
+        versionName = "3.0.0",
+        buildCode = 11,
+        date = "Oct 31, 2026",
+        changes = listOf(
+            "Offline People & Face Grouping with automatic clustering and merge suggestions",
+            "Documents smart classification hub across 7 document categories",
+            "Photo Editor markup paint, blur redaction, text annotations, and crop overhaul",
+            "Byte-level EXIF/XMP/IPTC metadata sanitization and orientation normalization",
+            "Viewer filmstrip pinch-to-overview gesture and adaptive themed icon"
+        )
+    ),
+    UpdateLogEntry(
         versionName = "2.1.3",
         buildCode = 10,
         date = "Oct 23, 2026",

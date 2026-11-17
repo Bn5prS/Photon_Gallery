@@ -45,6 +45,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _useAmoledBlack = MutableStateFlow(false)
     val useAmoledBlack: StateFlow<Boolean> = _useAmoledBlack.asStateFlow()
 
+    private val _appLockEnabled = MutableStateFlow(false)
+    val appLockEnabled: StateFlow<Boolean> = _appLockEnabled.asStateFlow()
+
+    private val _appLockBiometricEnabled = MutableStateFlow(true)
+    val appLockBiometricEnabled: StateFlow<Boolean> = _appLockBiometricEnabled.asStateFlow()
+
+    private val _appLockTimeoutSeconds = MutableStateFlow(0)
+    val appLockTimeoutSeconds: StateFlow<Int> = _appLockTimeoutSeconds.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.migrateThemeDefaultsIfNeeded()
@@ -53,8 +62,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val autoClean = repository.autoCleanTrashEnabledFlow.first()
             val days = repository.autoCleanTrashDaysFlow.first()
             setupAutoCleanTrashWorker(autoClean, days)
-            // Pre-warm theme preferences so UI doesn't experience cold-start theme flips
+            // Pre-warm theme and lock preferences so UI doesn't experience cold-start flips or flashes
             _useAmoledBlack.value = repository.useAmoledBlackFlow.first()
+            _appLockEnabled.value = repository.appLockEnabledFlow.first()
+            _appLockBiometricEnabled.value = repository.appLockBiometricEnabledFlow.first()
+            _appLockTimeoutSeconds.value = repository.appLockTimeoutSecondsFlow.first()
             repository.themeModeFlow.first()
             repository.useMaterialYouFlow.first()
             repository.colorPresetNameFlow.first()
@@ -67,6 +79,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.useAmoledBlackFlow.collect {
                 _useAmoledBlack.value = it
+            }
+        }
+
+        viewModelScope.launch {
+            repository.appLockEnabledFlow.collect {
+                _appLockEnabled.value = it
+            }
+        }
+
+        viewModelScope.launch {
+            repository.appLockBiometricEnabledFlow.collect {
+                _appLockBiometricEnabled.value = it
+            }
+        }
+
+        viewModelScope.launch {
+            repository.appLockTimeoutSecondsFlow.collect {
+                _appLockTimeoutSeconds.value = it
             }
         }
 
@@ -1020,6 +1050,28 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun checkForUpdates() {
         UpdateManager.checkForUpdates(viewModelScope, manual = true, context = getApplication())
+    }
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        _appLockEnabled.value = enabled
+        viewModelScope.launch {
+            repository.updateAppLockEnabled(enabled)
+        }
+    }
+
+    fun setAppLockBiometricEnabled(enabled: Boolean) {
+        _appLockBiometricEnabled.value = enabled
+        viewModelScope.launch {
+            repository.updateAppLockBiometricEnabled(enabled)
+        }
+    }
+
+    fun setAppLockTimeoutSeconds(seconds: Int) {
+        val safeSeconds = seconds.coerceAtLeast(0)
+        _appLockTimeoutSeconds.value = safeSeconds
+        viewModelScope.launch {
+            repository.updateAppLockTimeoutSeconds(safeSeconds)
+        }
     }
 }
 

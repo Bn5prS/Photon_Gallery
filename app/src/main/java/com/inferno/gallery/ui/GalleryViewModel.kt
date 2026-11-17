@@ -697,20 +697,107 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         vaultRepository.clearPreviewCache()
     }
 
-    fun hideMedia(uris: List<Uri>) {
+    data class PendingVaultHideDelete(
+        val intentSender: android.content.IntentSender,
+        val staged: List<com.inferno.gallery.data.VaultRepository.StagedVaultItem>,
+        val immediateCount: Int,
+        val lockAfter: Boolean
+    )
+
+    private val _pendingVaultHideDelete = MutableStateFlow<PendingVaultHideDelete?>(null)
+    val pendingVaultHideDelete: StateFlow<PendingVaultHideDelete?> = _pendingVaultHideDelete.asStateFlow()
+
+    fun hideMedia(uris: List<Uri>, lockAfter: Boolean = false) {
+        if (uris.isEmpty()) {
+            if (lockAfter) lockVault()
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
-            val count = vaultRepository.hideMedia(uris).size
-            if (count > 0) {
-                showToast("$count item${if (count != 1) "s" else ""} hidden")
-            } else {
-                showToast("Could not move item(s) to Private Space")
+            var deferredLock = false
+            try {
+                val res = vaultRepository.hideMediaWithStaging(uris)
+                val immediateCount = res.hiddenIds.size
+                if (immediateCount > 0) {
+                    nativeTimelineRepository.refresh()
+                }
+                if (res.stagedForDelete.isNotEmpty()) {
+                    val intentSender = try {
+                        android.provider.MediaStore.createDeleteRequest(
+                            getApplication<Application>().contentResolver,
+                            res.stagedForDelete.map { it.deleteUri }
+                        ).intentSender
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (intentSender != null) {
+                        deferredLock = lockAfter
+                        _pendingVaultHideDelete.value = PendingVaultHideDelete(
+                            intentSender = intentSender,
+                            staged = res.stagedForDelete,
+                            immediateCount = immediateCount,
+                            lockAfter = lockAfter
+                        )
+                        return@launch
+                    } else {
+                        vaultRepository.rollbackStagedHide(res.stagedForDelete)
+                    }
+                }
+                if (immediateCount > 0) {
+                    showToast("$immediateCount item${if (immediateCount != 1) "s" else ""} moved to Private Space")
+                } else {
+                    showToast("Could not move item(s) to Private Space")
+                }
+            } finally {
+                if (lockAfter && !deferredLock) {
+                    lockVault()
+                }
             }
         }
     }
 
+    fun resolvePendingVaultHideDelete(approved: Boolean) {
+        val pending = _pendingVaultHideDelete.value ?: return
+        _pendingVaultHideDelete.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (approved) {
+                    val stagedCount = vaultRepository.commitStagedHide(pending.staged).size
+                    val total = pending.immediateCount + stagedCount
+                    if (total > 0) {
+                        nativeTimelineRepository.refresh()
+                        showToast("$total item${if (total != 1) "s" else ""} moved to Private Space")
+                    } else {
+                        showToast("Could not move item(s) to Private Space")
+                    }
+                } else {
+                    vaultRepository.rollbackStagedHide(pending.staged)
+                    if (pending.immediateCount > 0) {
+                        showToast("${pending.immediateCount} item(s) moved to Private Space")
+                    } else {
+                        showToast("Move to Private Space cancelled")
+                    }
+                }
+            } finally {
+                if (pending.lockAfter) {
+                    lockVault()
+                }
+            }
+        }
+    }
+
+    fun syncVaultOnUnlock() {
+        viewModelScope.launch(Dispatchers.IO) {
+            vaultRepository.syncAndMigrateOnUnlock()
+        }
+    }
+
     fun unhideMedia(ids: List<Long>) {
+        if (ids.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             val count = vaultRepository.unhideMedia(ids)
+            if (count > 0) {
+                nativeTimelineRepository.refresh()
+            }
             showToast("$count item${if (count != 1) "s" else ""} restored")
         }
     }
@@ -732,6 +819,32 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearVaultPreviewCache() {
         vaultRepository.clearPreviewCache()
+    }
+
+    fun exportVaultBackup(
+        outputUri: Uri,
+        password: String,
+        onResult: (Result<Int>) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { vaultRepository.exportEncryptedBackup(outputUri, password) }
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                onResult(result)
+            }
+        }
+    }
+
+    fun importVaultBackup(
+        inputUri: Uri,
+        password: String,
+        onResult: (Result<Int>) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { vaultRepository.importEncryptedBackup(inputUri, password) }
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                onResult(result)
+            }
+        }
     }
 
     private val _isScrollDockVisible = MutableStateFlow(true)
@@ -1057,19 +1170,84 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _initialDetailItem = MutableStateFlow<GalleryItem?>(null)
     val initialDetailItem: StateFlow<GalleryItem?> = _initialDetailItem.asStateFlow()
 
-    private var currentDetailBucket: String? = "\u0000_INIT_"
-    private var currentDetailFilter: Int = -1
-    private var currentDetailOrder: SortOrder? = null
+    private data class DetailQueryKey(
+        val bucket: String?,
+        val filterIndex: Int,
+        val order: SortOrder,
+        val albumMediaFilter: com.inferno.gallery.data.AlbumMediaFilter,
+        val excluded: Set<String>
+    )
+
+    private var currentDetailQueryKey: DetailQueryKey? = null
+    private var inFlightDetailQueryKey: DetailQueryKey? = null
+    private var inFlightDetailMediaId: String? = null
     private var loadDetailJob: kotlinx.coroutines.Job? = null
+
+    private fun seedDetailFromTimelineCache(
+        targetId: String,
+        bucketName: String?,
+        queryKey: DetailQueryKey
+    ): Boolean {
+        val snapshot = nativeTimelineRepository.timelineSnapshot.value
+        val snapshotExact = snapshot.isLoaded &&
+            snapshot.bucket == bucketName &&
+            nativeTimelineRepository.currentBucket.value == bucketName &&
+            nativeTimelineRepository.filterIndex.value == queryKey.filterIndex &&
+            nativeTimelineRepository.sortOrder.value == queryKey.order &&
+            nativeTimelineRepository.albumMediaFilter.value == queryKey.albumMediaFilter &&
+            nativeTimelineRepository.excludedFolders.value == queryKey.excluded
+
+        val timelineSource = when {
+            snapshotExact -> snapshot.items
+            else -> nativeTimelineRepository.getCachedItems(bucketName)
+        }
+        if (timelineSource.isEmpty()) return false
+
+        val seeded = ArrayList<GalleryItem>(timelineSource.size)
+        var containsTarget = false
+        for (entry in timelineSource) {
+            if (entry is com.inferno.gallery.data.NativeTimelineItem.Media) {
+                val item = GalleryItem(
+                    id = entry.id,
+                    uri = entry.uri,
+                    bucketName = entry.bucketName,
+                    dateAdded = entry.dateAdded,
+                    size = entry.size,
+                    name = entry.path.substringAfterLast('/').ifEmpty { entry.id },
+                    dateModified = entry.dateModified,
+                    path = entry.path,
+                    isVideo = entry.isVideo,
+                    durationMs = entry.durationMs,
+                    localExists = true,
+                    resolvedUri = entry.uri,
+                    uriString = entry.uriString.ifEmpty { entry.uri.toString() }
+                )
+                if (item.id == targetId || item.uri.toString() == targetId) {
+                    containsTarget = true
+                }
+                seeded.add(item)
+            }
+        }
+        if (!containsTarget || seeded.isEmpty()) return false
+
+        _detailMedia.value = seeded
+        if (snapshotExact) {
+            currentDetailQueryKey = queryKey
+        }
+        return true
+    }
 
     fun setInitialDetailItem(item: GalleryItem, bucketName: String? = null) {
         _initialDetailItem.value = item
 
-        val filterIndex = selectedFilterIndex.value
-        val order = sortOrder.value
-        val isSameQuery = (currentDetailBucket == bucketName) &&
-                (currentDetailFilter == filterIndex) &&
-                (currentDetailOrder == order)
+        val queryKey = DetailQueryKey(
+            bucket = bucketName,
+            filterIndex = selectedFilterIndex.value,
+            order = sortOrder.value,
+            albumMediaFilter = albumMediaFilter.value,
+            excluded = excludedFolders.value
+        )
+        val isSameQuery = currentDetailQueryKey == queryKey
 
         if (isSameQuery && _detailMedia.value.any { it.id == item.id || it.uri.toString() == item.id }) {
             return
@@ -1079,76 +1257,81 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             BucketNames.SEARCH_TEXT -> {
                 if (_ftsSearchResults.value.isNotEmpty()) {
                     _detailMedia.value = _ftsSearchResults.value
-                    currentDetailBucket = bucketName
-                    currentDetailFilter = filterIndex
-                    currentDetailOrder = order
+                    currentDetailQueryKey = queryKey
                     return
                 }
             }
             BucketNames.SEARCH_SMART -> {
                 if (_smartSearchResults.value.isNotEmpty()) {
                     _detailMedia.value = _smartSearchResults.value
-                    currentDetailBucket = bucketName
-                    currentDetailFilter = filterIndex
-                    currentDetailOrder = order
+                    currentDetailQueryKey = queryKey
                     return
                 }
             }
             BucketNames.FAVORITES -> {
                 if (favoriteMedia.value.isNotEmpty()) {
                     _detailMedia.value = favoriteMedia.value
-                    currentDetailBucket = bucketName
-                    currentDetailFilter = filterIndex
-                    currentDetailOrder = order
+                    currentDetailQueryKey = queryKey
                     return
                 }
             }
             "geotagged" -> {
                 if (_geotaggedMedia.value.isNotEmpty()) {
                     _detailMedia.value = _geotaggedMedia.value
-                    currentDetailBucket = bucketName
-                    currentDetailFilter = filterIndex
-                    currentDetailOrder = order
+                    currentDetailQueryKey = queryKey
                     return
                 }
             }
         }
-        _detailMedia.value = emptyList()
+
+        val seededFromTimeline = seedDetailFromTimelineCache(item.id, bucketName, queryKey)
+        if (seededFromTimeline && currentDetailQueryKey == queryKey) {
+            return
+        }
+        if (!seededFromTimeline) {
+            _detailMedia.value = emptyList()
+        }
         loadDetailMedia(item.id, bucketName)
     }
 
     fun loadDetailMedia(mediaId: String? = null, bucketName: String? = null) {
         val filterIndex = selectedFilterIndex.value
         val order = sortOrder.value
-        val isSameQuery = (currentDetailBucket == bucketName) &&
-                (currentDetailFilter == filterIndex) &&
-                (currentDetailOrder == order)
+        val albumFilter = albumMediaFilter.value
+        val excluded = excludedFolders.value
+        val queryKey = DetailQueryKey(
+            bucket = bucketName,
+            filterIndex = filterIndex,
+            order = order,
+            albumMediaFilter = albumFilter,
+            excluded = excluded
+        )
+        val isSameQuery = currentDetailQueryKey == queryKey
 
         if (isSameQuery && _detailMedia.value.isNotEmpty() && (mediaId == null || _detailMedia.value.any { it.id == mediaId || it.uri.toString() == mediaId })) {
             return
         }
+        if (loadDetailJob?.isActive == true && inFlightDetailQueryKey == queryKey && (mediaId == null || inFlightDetailMediaId == mediaId)) {
+            return
+        }
 
+        inFlightDetailQueryKey = queryKey
+        inFlightDetailMediaId = mediaId
         loadDetailJob?.cancel()
         loadDetailJob = viewModelScope.launch(Dispatchers.IO) {
             if (bucketName == BucketNames.SEARCH_TEXT) {
                 _detailMedia.value = _ftsSearchResults.value
-                currentDetailBucket = bucketName
-                currentDetailFilter = filterIndex
-                currentDetailOrder = order
+                currentDetailQueryKey = queryKey
                 return@launch
             }
             if (bucketName == BucketNames.SEARCH_SMART) {
                 _detailMedia.value = _smartSearchResults.value
-                currentDetailBucket = bucketName
-                currentDetailFilter = filterIndex
-                currentDetailOrder = order
+                currentDetailQueryKey = queryKey
                 return@launch
             }
             if (bucketName == BucketNames.FAVORITES) {
                 _detailMedia.value = favoriteMedia.value
-                currentDetailBucket = bucketName
-                currentDetailFilter = filterIndex
-                currentDetailOrder = order
+                currentDetailQueryKey = queryKey
                 return@launch
             }
             if (bucketName == "geotagged") {
@@ -1214,27 +1397,22 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         )
                     }
                     _detailMedia.value = items
-                    currentDetailBucket = bucketName
-                    currentDetailFilter = filterIndex
-                    currentDetailOrder = order
+                    currentDetailQueryKey = queryKey
                     return@launch
                 }
             }
 
             // Build the SQLite query for the bucket
-            val filterIndex = selectedFilterIndex.value
-            val order = sortOrder.value
-
             val smartIds = smartSearchResults.value.map { it.id }
             val ftsIds = ftsSearchResults.value.map { it.id }
             val qc = buildMediaConditions(
                 bucket = bucketName, 
                 filterIndex = filterIndex, 
-                excluded = excludedFolders.value,
+                excluded = excluded,
                 favIds = favoriteIds.value,
                 ftsIds = ftsIds,
                 smartIds = smartIds,
-                albumMediaFilter = albumMediaFilter.value
+                albumMediaFilter = albumFilter
             )
             val queryString = "SELECT cm.* FROM core_media cm " +
                 buildWhereClause(qc) + buildOrderClause(order, bucketName, smartIds)
@@ -1247,7 +1425,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
             val items = entities.map { entity ->
                 val uri = Uri.parse(entity.uriString)
-                val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
                 GalleryItem(
                     id = entity.id.toString(),
                     uri = uri,
@@ -1259,8 +1436,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     path = entity.filePath,
                     isVideo = entity.isVideo,
                     durationMs = entity.durationMs,
-                    localExists = exists,
-                    resolvedUri = resolved
+                    localExists = true,
+                    resolvedUri = uri
                 )
             }
 
@@ -1269,9 +1446,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val containsTarget = if (mediaId != null) finalItems.any { it.id == mediaId || it.uri.toString() == mediaId } else true
             if (finalItems.isNotEmpty() && containsTarget) {
                 _detailMedia.value = finalItems
-                currentDetailBucket = bucketName
-                currentDetailFilter = filterIndex
-                currentDetailOrder = order
+                currentDetailQueryKey = queryKey
             } else if (mediaId != null) {
                 // Fetch the clicked item as a fallback
                 val idLong = mediaId.toLongOrNull()
@@ -1320,9 +1495,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 }
             } else if (finalItems.isNotEmpty()) {
                 _detailMedia.value = finalItems
-                currentDetailBucket = bucketName
-                currentDetailFilter = filterIndex
-                currentDetailOrder = order
+                currentDetailQueryKey = queryKey
             }
         }
     }

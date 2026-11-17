@@ -46,12 +46,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -430,7 +432,7 @@ fun PersonDetailScreen(
             title = stringResource(R.string.sheet_move_to_album),
             itemCount = uris.size,
             albums = allAlbumsList,
-            showPrivateSpaceOption = true,
+            showPrivateSpaceOption = false,
             confirmPathButtonText = stringResource(R.string.sheet_move_here),
             onDismissRequest = { showMoveSheet = false },
             onSelectAlbum = { bucket ->
@@ -449,22 +451,14 @@ fun PersonDetailScreen(
                 showMoveSheet = false
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 if (activity != null) {
-                    val hideAction: () -> Unit = {
-                        galleryViewModel.hideMedia(uris)
-                        galleryViewModel.lockVault()
-                        selectedMediaIds = emptySet()
-                    }
-                    galleryViewModel.vaultAuthManager.authenticate(
+                    galleryViewModel.vaultAuthManager.authenticateForHide(
                         activity = activity,
-                        negativeButtonText = "Use PIN",
-                        unlockSession = false,
-                        onSuccess = hideAction,
-                        onNegativeButton = {
-                            if (galleryViewModel.vaultAuthManager.isPinConfigured(activity)) {
-                                pendingVaultHideAction = hideAction
-                            }
+                        itemCount = uris.size,
+                        onAuthenticated = {
+                            galleryViewModel.hideMedia(uris, lockAfter = true)
+                            selectedMediaIds = emptySet()
                         },
-                        onFailure = {}
+                        onRequirePinDialog = { pendingVaultHideAction = it }
                     )
                 }
             }
@@ -902,144 +896,138 @@ fun PersonDetailScreen(
         val isCreateEnabled = selectedMediaIds.size in 1..8
         val isStitchEnabled = selectedMediaIds.size in 2..10
 
-        Surface(
-            shape = ShapeExtraLarge,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            tonalElevation = 6.dp,
-            shadowElevation = 8.dp
+        com.inferno.gallery.ui.components.LayeredToolPill(
+            shadowElevation = 3.dp,
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .fillMaxWidth()
+                .widthIn(max = 380.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Share
+            com.inferno.gallery.ui.components.LayeredToolTile(
+                icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                contentDescription = "Share",
+                onClick = {
+                    if (selectedMedia.isNotEmpty()) {
+                        coroutineScope.launch {
+                            val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
+                            val uris = selectedMedia.map { Uri.parse(it.uriString) }
+                            ShareUtils.shareMedia(context, uris, strip)
+                        }
+                    }
+                },
+                tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(0, 6),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Copy
+            com.inferno.gallery.ui.components.LayeredToolTile(
+                icon = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
+                contentDescription = "Copy",
+                onClick = { showCopySheet = true },
+                tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(1, 6),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Move
+            com.inferno.gallery.ui.components.LayeredToolTile(
+                icon = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                contentDescription = "Move",
+                onClick = { showMoveSheet = true },
+                tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(2, 6),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Create (Collage/Stitch)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
             ) {
-                // Share
-                IconButton(
-                    onClick = {
-                        if (selectedMedia.isNotEmpty()) {
-                            coroutineScope.launch {
-                                val strip = viewModel.settingsRepository.stripMetadataOnShareFlow.first()
-                                val uris = selectedMedia.map { Uri.parse(it.uriString) }
-                                ShareUtils.shareMedia(context, uris, strip)
+                com.inferno.gallery.ui.components.LayeredToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                    contentDescription = "Create",
+                    onClick = { createMenuExpanded = true },
+                    tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(3, 6),
+                    modifier = Modifier.fillMaxSize()
+                )
+                DropdownMenu(
+                    expanded = createMenuExpanded,
+                    onDismissRequest = { createMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_collage)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            createMenuExpanded = false
+                            if (isCreateEnabled) {
+                                val uris = selectedMedia.map { it.uriString }
+                                onCreateCollage?.invoke(uris)
+                            } else {
+                                Toast.makeText(context, "Collage supports up to 8 images", Toast.LENGTH_SHORT).show()
                             }
                         }
-                    }
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(IconSizeTokens.L)
                     )
-                }
-
-                // Copy
-                IconButton(onClick = { showCopySheet = true }) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_content_copy),
-                        contentDescription = "Copy",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(IconSizeTokens.L)
-                    )
-                }
-
-                // Move
-                IconButton(onClick = { showMoveSheet = true }) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
-                        contentDescription = "Move",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(IconSizeTokens.L)
-                    )
-                }
-
-                // Create (Collage/Stitch)
-                Box {
-                    IconButton(onClick = { createMenuExpanded = true }) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_add),
-                            contentDescription = "Create",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(IconSizeTokens.L)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = createMenuExpanded,
-                        onDismissRequest = { createMenuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_collage)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                createMenuExpanded = false
-                                if (isCreateEnabled) {
-                                    val uris = selectedMedia.map { it.uriString }
-                                    onCreateCollage?.invoke(uris)
-                                } else {
-                                    Toast.makeText(context, "Collage supports up to 8 images", Toast.LENGTH_SHORT).show()
-                                }
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_stitch)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            createMenuExpanded = false
+                            if (isStitchEnabled) {
+                                val uris = selectedMedia.map { it.uriString }
+                                onCreateStitch?.invoke(uris)
+                            } else {
+                                Toast.makeText(context, "Select between 2 and 10 images to stitch", Toast.LENGTH_SHORT).show()
                             }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_stitch)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_sort),
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                createMenuExpanded = false
-                                if (isStitchEnabled) {
-                                    val uris = selectedMedia.map { it.uriString }
-                                    onCreateStitch?.invoke(uris)
-                                } else {
-                                    Toast.makeText(context, "Select between 2 and 10 images to stitch", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        )
-                    }
-                }
-
-                // Delete
-                IconButton(
-                    onClick = {
-                        if (confirmDeleteEnabled) {
-                            showMultiDeleteConfirmDialog = true
-                        } else {
-                            performTrash()
                         }
-                    }
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(IconSizeTokens.L)
                     )
                 }
+            }
 
-                // More options
-                Box {
-                    IconButton(onClick = { moreMenuExpanded = true }) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
-                            contentDescription = "More",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(IconSizeTokens.L)
-                        )
+            // Delete
+            com.inferno.gallery.ui.components.LayeredToolTile(
+                icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                contentDescription = "Delete",
+                tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error,
+                onClick = {
+                    if (confirmDeleteEnabled) {
+                        showMultiDeleteConfirmDialog = true
+                    } else {
+                        performTrash()
                     }
-                    DropdownMenu(
+                },
+                tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(4, 6),
+                modifier = Modifier.weight(1f)
+            )
+
+            // More options
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                com.inferno.gallery.ui.components.LayeredToolTile(
+                    icon = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                    contentDescription = "More",
+                    onClick = { moreMenuExpanded = true },
+                    tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(5, 6),
+                    modifier = Modifier.fillMaxSize()
+                )
+                DropdownMenu(
                         expanded = moreMenuExpanded,
                         onDismissRequest = { moreMenuExpanded = false }
                     ) {
-                        // Hide (Private Space)
+                        // Private Space
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_hide)) },
                             leadingIcon = {
@@ -1050,25 +1038,19 @@ fun PersonDetailScreen(
                             },
                             onClick = {
                                 moreMenuExpanded = false
-                                val activity = context as? androidx.fragment.app.FragmentActivity
-                                if (activity != null) {
-                                    val hideAction: () -> Unit = {
-                                        val uris = selectedMedia.map { Uri.parse(it.uriString) }
-                                        galleryViewModel.hideMedia(uris)
-                                        galleryViewModel.lockVault()
-                                        selectedMediaIds = emptySet()
-                                    }
-                                    galleryViewModel.vaultAuthManager.authenticate(
+                                val urisSnapshot = selectedMedia.map { Uri.parse(it.uriString) }
+                                val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+                                    .filterIsInstance<androidx.fragment.app.FragmentActivity>()
+                                    .firstOrNull()
+                                if (activity != null && urisSnapshot.isNotEmpty()) {
+                                    galleryViewModel.vaultAuthManager.authenticateForHide(
                                         activity = activity,
-                                        negativeButtonText = "Use PIN",
-                                        unlockSession = false,
-                                        onSuccess = hideAction,
-                                        onNegativeButton = {
-                                            if (galleryViewModel.vaultAuthManager.isPinConfigured(activity)) {
-                                                pendingVaultHideAction = hideAction
-                                            }
+                                        itemCount = urisSnapshot.size,
+                                        onAuthenticated = {
+                                            galleryViewModel.hideMedia(urisSnapshot, lockAfter = true)
+                                            selectedMediaIds = emptySet()
                                         },
-                                        onFailure = {}
+                                        onRequirePinDialog = { pendingVaultHideAction = it }
                                     )
                                 }
                             }
@@ -1078,7 +1060,6 @@ fun PersonDetailScreen(
             }
         }
     }
-}
 }
 
 @OptIn(ExperimentalFoundationApi::class)

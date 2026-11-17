@@ -164,4 +164,23 @@ class VaultAuthManagerTest {
         authManager.lock()
         assertFalse(authManager.isAuthenticated.value)
     }
+
+    @Test
+    fun testRecoveryCodeGenerationAndVerification() {
+        assertFalse(authManager.hasRecoveryCode(fakeContext))
+
+        val code = authManager.generateAndSaveRecoveryCode(fakeContext)
+        assertTrue(authManager.hasRecoveryCode(fakeContext))
+        assertEquals(19, code.length) // XXXX-XXXX-XXXX-XXXX
+        assertEquals(3, code.count { it == '-' })
+
+        // Exact match, lowercase, and stripped dashes should all verify cleanly
+        assertTrue(authManager.verifyRecoveryCode(fakeContext, code))
+        assertTrue(authManager.verifyRecoveryCode(fakeContext, code.lowercase()))
+        assertTrue(authManager.verifyRecoveryCode(fakeContext, code.replace("-", "")))
+
+        // Invalid or blank codes must fail
+        assertFalse(authManager.verifyRecoveryCode(fakeContext, "AAAA-BBBB-CCCC-DDDD"))
+        assertFalse(authManager.verifyRecoveryCode(fakeContext, ""))
+    }
 }

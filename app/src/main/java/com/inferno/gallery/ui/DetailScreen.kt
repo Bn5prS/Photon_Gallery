@@ -272,14 +272,15 @@ fun DetailScreen(
         }
     }
 
-    androidx.compose.runtime.DisposableEffect(Unit) {
+    val launchBounds = remember { com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds }
+    androidx.compose.runtime.DisposableEffect(launchBounds) {
         onDispose {
             flushPendingRotation()
-            com.inferno.gallery.ui.components.MediaTransitionRegistry.clear()
+            if (com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds === launchBounds) {
+                com.inferno.gallery.ui.components.MediaTransitionRegistry.clear()
+            }
         }
     }
-
-    val launchBounds = remember { com.inferno.gallery.ui.components.MediaTransitionRegistry.activeLaunchBounds }
     val containerProgress = remember {
         androidx.compose.animation.core.Animatable(if (launchBounds != null) 0f else 1f)
     }
@@ -959,22 +960,14 @@ fun DetailScreen(
                 showMoveSheet = false
                 val activity = context as? androidx.fragment.app.FragmentActivity
                 if (activity != null) {
-                    val hideAction: () -> Unit = {
-                        viewModel.hideMedia(listOf(currentItem.uri))
-                        viewModel.lockVault()
-                        safeOnBack()
-                    }
-                    viewModel.vaultAuthManager.authenticate(
+                    viewModel.vaultAuthManager.authenticateForHide(
                         activity = activity,
-                        negativeButtonText = "Use PIN",
-                        unlockSession = false,
-                        onSuccess = hideAction,
-                        onNegativeButton = {
-                            if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
-                                pendingVaultHideAction = hideAction
-                            }
+                        itemCount = 1,
+                        onAuthenticated = {
+                            viewModel.hideMedia(listOf(currentItem.uri), lockAfter = true)
+                            safeOnBack()
                         },
-                        onFailure = {}
+                        onRequirePinDialog = { pendingVaultHideAction = it }
                     )
                 }
             }
@@ -1022,9 +1015,14 @@ fun DetailScreen(
     // 1× zoom, this translates the pager and fades the black scrim.
     val dismissOffsetY = remember { Animatable(0f) }
     val dismissProgress = (kotlin.math.abs(dismissOffsetY.value) / 600f).coerceIn(0f, 1f)
+    var isPredictiveBacking by remember { mutableStateOf(false) }
+    var predictiveProgress by remember { mutableFloatStateOf(0f) }
+    var predictiveOffsetX by remember { mutableFloatStateOf(0f) }
+    val predictiveOffsetYAnim = remember { Animatable(0f) }
     val transitionProgress = containerProgress.value.coerceIn(0f, 1f)
-    val bgAlpha = (1f - dismissProgress) * transitionProgress          // scrim fades out
-    val dismissScale = 1f - dismissProgress * 0.15f // subtle shrink
+    val predictiveFade = if (launchBounds == null) (1f - predictiveProgress * 0.42f) else 1f
+    val bgAlpha = ((1f - dismissProgress) * transitionProgress * predictiveFade).coerceIn(0f, 1f)
+    val dismissScale = (1f - dismissProgress * 0.15f) * (if (launchBounds == null) (1f - predictiveProgress * 0.14f) else 1f)
 
     val latestActiveUri by androidx.compose.runtime.rememberUpdatedState(currentItem?.uri?.toString())
 
@@ -1058,12 +1056,12 @@ fun DetailScreen(
     safeOnBackDelegate = safeOnBackImpl
 
     val density = LocalDensity.current
-    val edgeNudgePx = with(density) { 48.dp.toPx() }
-    var isPredictiveBacking by remember { mutableStateOf(false) }
-    var predictiveOffsetX by remember { mutableFloatStateOf(0f) }
+    val edgeNudgePx = with(density) { 40.dp.toPx() }
+    val verticalNudgePx = with(density) { 18.dp.toPx() }
 
     PredictiveBackHandler(enabled = !isFilmstripOverview && !hasNavigatedBack) { progressFlow ->
         isPredictiveBacking = true
+        predictiveProgress = 0f
         if (launchBounds != null) {
             val activeUri = latestActiveUri
             closingTargetRect = activeUri?.let {
@@ -1073,30 +1071,48 @@ fun DetailScreen(
         try {
             progressFlow.collect { backEvent ->
                 val p = backEvent.progress.coerceIn(0f, 1f)
+                predictiveProgress = p
                 if (launchBounds != null) {
                     containerProgress.snapTo((1f - p * 0.48f).coerceIn(0.48f, 1f))
                 } else {
                     val dir = if (backEvent.swipeEdge == androidx.activity.BackEventCompat.EDGE_LEFT) 1f else -1f
                     predictiveOffsetX = dir * p * edgeNudgePx
-                    dismissOffsetY.snapTo(p * 120f)
+                    predictiveOffsetYAnim.snapTo(p * verticalNudgePx)
                 }
             }
             isPredictiveBacking = false
+            predictiveProgress = 0f
             predictiveOffsetX = 0f
+            coroutineScope.launch { predictiveOffsetYAnim.snapTo(0f) }
             safeOnBack()
         } catch (e: CancellationException) {
             closingTargetRect = null
+            val startP = predictiveProgress
+            val startX = predictiveOffsetX
             // Launch on coroutineScope so the cancelled PredictiveBackHandler job does not abort animateTo.
             coroutineScope.launch {
+                launch {
+                    androidx.compose.animation.core.animate(
+                        initialValue = startP,
+                        targetValue = 0f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) { v, _ -> predictiveProgress = v }
+                }
+                launch {
+                    androidx.compose.animation.core.animate(
+                        initialValue = startX,
+                        targetValue = 0f,
+                        animationSpec = MotionTokens.snappySpring()
+                    ) { v, _ -> predictiveOffsetX = v }
+                }
                 if (launchBounds != null) {
-                    containerProgress.animateTo(1f, MotionTokens.sharedElementSpring())
+                    launch { containerProgress.animateTo(1f, MotionTokens.sharedElementSpring()) }
                 } else {
-                    dismissOffsetY.animateTo(0f, MotionTokens.snappySpring())
+                    launch { predictiveOffsetYAnim.animateTo(0f, MotionTokens.snappySpring()) }
                 }
             }
         } finally {
             isPredictiveBacking = false
-            predictiveOffsetX = 0f
         }
     }
 
@@ -1111,14 +1127,20 @@ fun DetailScreen(
     ) {
 
         if (viewerBlurEffect && currentItem != null) {
-            val blurRequest = remember(currentItem.uri) {
+            val blurRequest = remember(currentItem.uri, currentItem.id, currentItem.dateModified, placeholderSizePx) {
                 ImageRequest.Builder(context)
                     .data(currentItem.uri)
-                    .size(300, 300)
+                    .size(96, 96)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .diskCachePolicy(CachePolicy.ENABLED)
+                    .placeholderMemoryCacheKey(thumbnailMemoryKey(currentItem.id, placeholderSizePx, currentItem.dateModified))
+                    .crossfade(true)
                     .build()
             }
+            val centerScrimAlpha = if (isDarkTheme) 0.44f else 0.52f
+            val topScrimAlpha = if (isDarkTheme) 0.62f else 0.68f
+            val bottomScrimAlpha = if (isDarkTheme) 0.64f else 0.70f
+            val imageAlpha = (if (isDarkTheme) 0.90f else 0.88f) * bgAlpha
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = blurRequest,
@@ -1126,46 +1148,75 @@ fun DetailScreen(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .blur(36.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                        .alpha(0.40f * bgAlpha)
+                        .graphicsLayer {
+                            scaleX = 1.28f
+                            scaleY = 1.28f
+                        }
+                        .blur(72.dp, edgeTreatment = BlurredEdgeTreatment.Rectangle)
+                        .alpha(imageAlpha)
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(baseCanvasColor.copy(alpha = 0.82f * bgAlpha))
+                        .background(
+                            Brush.verticalGradient(
+                                0f to baseCanvasColor.copy(alpha = topScrimAlpha * bgAlpha),
+                                0.28f to baseCanvasColor.copy(alpha = centerScrimAlpha * bgAlpha),
+                                0.72f to baseCanvasColor.copy(alpha = centerScrimAlpha * bgAlpha),
+                                1f to baseCanvasColor.copy(alpha = bottomScrimAlpha * bgAlpha)
+                            )
+                        )
                 )
             }
         }
 
 
 
-        val isContainerMorphing = launchBounds != null &&
-            containerSize.width > 0 &&
-            containerSize.height > 0 &&
-            transitionProgress < 0.999f
+        // NOTE: geometry is computed from the layer/shape's own draw-time `size`, NOT from
+        // `containerSize` (which is only known after the first layout pass via onSizeChanged).
+        // Depending on containerSize caused a one-frame full-screen "blink" before the morph began.
+        val isContainerMorphing = launchBounds != null && transitionProgress < 0.999f
 
         val containerClipModifier = if (isContainerMorphing && launchBounds != null) {
             val activeRect = closingTargetRect ?: launchBounds.rect
-            val w = containerSize.width.toFloat()
-            val h = containerSize.height.toFloat()
-            val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, transitionProgress)
-            val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, transitionProgress)
-            val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, transitionProgress)
-            val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, transitionProgress)
-            val curRadiusPx = androidx.compose.ui.util.lerp(
-                with(density) { launchBounds.cornerRadiusDp.dp.toPx() },
-                0f,
-                transitionProgress
-            )
-            val clipShape = androidx.compose.foundation.shape.GenericShape { _, _ ->
+            val startRadiusPx = with(density) { launchBounds.cornerRadiusDp.dp.toPx() }
+            val progress = transitionProgress
+            val clipShape = androidx.compose.foundation.shape.GenericShape { size, _ ->
+                val w = size.width
+                val h = size.height
+                val curRadiusPx = androidx.compose.ui.util.lerp(startRadiusPx, 0f, progress)
                 addRoundRect(
                     androidx.compose.ui.geometry.RoundRect(
-                        left = curLeft,
-                        top = curTop,
-                        right = curRight,
-                        bottom = curBottom,
+                        left = androidx.compose.ui.util.lerp(activeRect.left, 0f, progress),
+                        top = androidx.compose.ui.util.lerp(activeRect.top, 0f, progress),
+                        right = androidx.compose.ui.util.lerp(activeRect.right, w, progress),
+                        bottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, progress),
                         radiusX = curRadiusPx,
                         radiusY = curRadiusPx
+                    )
+                )
+            }
+            Modifier.graphicsLayer {
+                shape = clipShape
+                clip = true
+            }
+        } else if (launchBounds == null && predictiveProgress > 0.001f) {
+            val radius = with(density) { (28.dp * predictiveProgress).toPx() }
+            val p = predictiveProgress
+            val clipShape = androidx.compose.foundation.shape.GenericShape { size, _ ->
+                val cardScale = (1f - p * 0.14f) * (1f - dismissProgress * 0.15f)
+                val cx = size.width * 0.5f + predictiveOffsetX
+                val cy = size.height * 0.5f + dismissOffsetY.value + predictiveOffsetYAnim.value
+                val halfW = size.width * 0.5f * cardScale
+                val halfH = size.height * 0.5f * cardScale
+                addRoundRect(
+                    androidx.compose.ui.geometry.RoundRect(
+                        left = cx - halfW,
+                        top = cy - halfH,
+                        right = cx + halfW,
+                        bottom = cy + halfH,
+                        radiusX = radius,
+                        radiusY = radius
                     )
                 )
             }
@@ -1179,27 +1230,30 @@ fun DetailScreen(
 
         val pagerTransformModifier = if (isContainerMorphing && launchBounds != null) {
             val activeRect = closingTargetRect ?: launchBounds.rect
-            val w = containerSize.width.toFloat()
-            val h = containerSize.height.toFloat()
-            val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, transitionProgress)
-            val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, transitionProgress)
-            val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, transitionProgress)
-            val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, transitionProgress)
-            val curCenterX = (curLeft + curRight) * 0.5f
-            val curCenterY = (curTop + curBottom) * 0.5f
-            val curW = (curRight - curLeft).coerceAtLeast(1f)
-            val curH = (curBottom - curTop).coerceAtLeast(1f)
-            val uniformScale = maxOf(curW / w, curH / h).coerceAtLeast(0.05f)
+            val progress = transitionProgress
             Modifier.graphicsLayer {
-                translationX = curCenterX - w * 0.5f
-                translationY = curCenterY - h * 0.5f + dismissOffsetY.value
+                val w = size.width
+                val h = size.height
+                if (w <= 0f || h <= 0f) {
+                    alpha = 0f
+                    return@graphicsLayer
+                }
+                val curLeft = androidx.compose.ui.util.lerp(activeRect.left, 0f, progress)
+                val curTop = androidx.compose.ui.util.lerp(activeRect.top, 0f, progress)
+                val curRight = androidx.compose.ui.util.lerp(activeRect.right, w, progress)
+                val curBottom = androidx.compose.ui.util.lerp(activeRect.bottom, h, progress)
+                val curW = (curRight - curLeft).coerceAtLeast(1f)
+                val curH = (curBottom - curTop).coerceAtLeast(1f)
+                val uniformScale = maxOf(curW / w, curH / h).coerceAtLeast(0.05f)
+                translationX = (curLeft + curRight) * 0.5f - w * 0.5f
+                translationY = (curTop + curBottom) * 0.5f - h * 0.5f + dismissOffsetY.value
                 scaleX = uniformScale * dismissScale
                 scaleY = uniformScale * dismissScale
             }
         } else {
             Modifier.graphicsLayer {
                 translationX = predictiveOffsetX
-                translationY = dismissOffsetY.value
+                translationY = dismissOffsetY.value + predictiveOffsetYAnim.value
                 scaleX = dismissScale
                 scaleY = dismissScale
             }
@@ -1208,7 +1262,7 @@ fun DetailScreen(
         Box(modifier = Modifier.fillMaxSize().then(containerClipModifier)) {
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = (currentScale <= 1.05f && dismissOffsetY.value == 0f) || isFilmstripOverview,
+            userScrollEnabled = (currentScale <= 1.05f && kotlin.math.abs(dismissOffsetY.value) < 4f) || isFilmstripOverview,
             modifier = Modifier
                 .fillMaxSize()
                 .then(pagerTransformModifier)
@@ -1533,19 +1587,20 @@ fun DetailScreen(
                                                 val composableW = size.width.toFloat()
                                                 val composableH = size.height.toFloat()
                                                 if (scale.floatValue > 1f) {
-                                                    // Zoom out to fit
+                                                    // Zoom out to fit (critically damped — no bounce or negative-scale flip)
                                                     launch {
                                                         androidx.compose.animation.core.animate(
                                                             initialValue = scale.floatValue,
                                                             targetValue = 1f,
-                                                            animationSpec = MotionTokens.gentleSpring()
+                                                            animationSpec = MotionTokens.sharedElementSpring()
                                                         ) { v, _ ->
-                                                            scale.floatValue = v
-                                                            currentScale = v
+                                                            val clamped = v.coerceAtLeast(1f)
+                                                            scale.floatValue = clamped
+                                                            currentScale = clamped
                                                         }
                                                     }
-                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetX.floatValue = v } }
-                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetY.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> offsetX.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> offsetY.floatValue = v } }
                                                 } else {
                                                     // Zoom in to tapped point
                                                     val targetScale = 3.0f
@@ -1560,14 +1615,15 @@ fun DetailScreen(
                                                         androidx.compose.animation.core.animate(
                                                             initialValue = scale.floatValue,
                                                             targetValue = targetScale,
-                                                            animationSpec = MotionTokens.gentleSpring()
+                                                            animationSpec = MotionTokens.sharedElementSpring()
                                                         ) { v, _ ->
-                                                            scale.floatValue = v
-                                                            currentScale = v
+                                                            val clamped = v.coerceAtLeast(0.05f)
+                                                            scale.floatValue = clamped
+                                                            currentScale = clamped
                                                         }
                                                     }
-                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, targetX.coerceIn(-maxX, maxX), animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetX.floatValue = v } }
-                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, targetY.coerceIn(-maxY, maxY), animationSpec = MotionTokens.gentleSpring()) { v, _ -> offsetY.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetX.floatValue, targetX.coerceIn(-maxX, maxX), animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> offsetX.floatValue = v } }
+                                                    launch { androidx.compose.animation.core.animate(offsetY.floatValue, targetY.coerceIn(-maxY, maxY), animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> offsetY.floatValue = v } }
                                                 }
                                             }
                                         }
@@ -1712,9 +1768,9 @@ fun DetailScreen(
                                         } else if (scale.floatValue in 1.0f..1.05f && (offsetX.floatValue != 0f || offsetY.floatValue != 0f || scale.floatValue != 1f)) {
                                             animJob.value?.cancel()
                                             animJob.value = coroutineScope.launch {
-                                                launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = MotionTokens.snappySpring()) { v, _ -> scale.floatValue = v; currentScale = v } }
-                                                launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = MotionTokens.snappySpring()) { v, _ -> offsetX.floatValue = v } }
-                                                launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = MotionTokens.snappySpring()) { v, _ -> offsetY.floatValue = v } }
+                                                launch { androidx.compose.animation.core.animate(scale.floatValue, 1f, animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> val clamped = v.coerceAtLeast(1f); scale.floatValue = clamped; currentScale = clamped } }
+                                                launch { androidx.compose.animation.core.animate(offsetX.floatValue, 0f, animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> offsetX.floatValue = v } }
+                                                launch { androidx.compose.animation.core.animate(offsetY.floatValue, 0f, animationSpec = MotionTokens.sharedElementSpring()) { v, _ -> offsetY.floatValue = v } }
                                             }
                                         }
                                     }
@@ -1733,8 +1789,9 @@ fun DetailScreen(
                                     } else {
                                         1f
                                     }
-                                    scaleX = scale.floatValue * fitScale
-                                    scaleY = scale.floatValue * fitScale
+                                    val safeScale = scale.floatValue.coerceAtLeast(0.05f)
+                                    scaleX = safeScale * fitScale
+                                    scaleY = safeScale * fitScale
                                     translationX = offsetX.floatValue
                                     translationY = offsetY.floatValue
                                     rotationZ = rotZ
@@ -2156,22 +2213,14 @@ fun DetailScreen(
             if (currentItem != null) {
                 val act = context as? androidx.fragment.app.FragmentActivity
                 if (act != null) {
-                    val hideAction: () -> Unit = {
-                        viewModel.hideMedia(listOf(currentItem.uri))
-                        viewModel.lockVault()
-                        safeOnBack()
-                    }
-                    viewModel.vaultAuthManager.authenticate(
+                    viewModel.vaultAuthManager.authenticateForHide(
                         activity = act,
-                        negativeButtonText = "Use PIN",
-                        unlockSession = false,
-                        onSuccess = hideAction,
-                        onNegativeButton = {
-                            if (viewModel.vaultAuthManager.isPinConfigured(act)) {
-                                pendingVaultHideAction = hideAction
-                            }
+                        itemCount = 1,
+                        onAuthenticated = {
+                            viewModel.hideMedia(listOf(currentItem.uri), lockAfter = true)
+                            safeOnBack()
                         },
-                        onFailure = {}
+                        onRequirePinDialog = { pendingVaultHideAction = it }
                     )
                 }
             }
@@ -2797,24 +2846,9 @@ private fun ViewerActionButtonsRow(
     onPrint: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Outer Pill container for bottom controls pill:
-    // Stadium capsule (CircleShape), height 64.dp, 6.dp padding on all sides,
-    // pure solid tonal layering with zero outlines, shadows, or elevations.
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = null,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        modifier = modifier.height(64.dp)
+    com.inferno.gallery.ui.components.LayeredToolPill(
+        modifier = modifier
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             if (isTrash) {
                 // 1. Restore
                 ViewerToolTile(
@@ -2962,21 +2996,10 @@ private fun ViewerActionButtonsRow(
             }
         }
     }
-}
 
-/**
- * Calculates connected segmented button shapes for concentric capsule design:
- * - Start tile: Outer corner follows concentric capsule curve (26.dp), inner corner has subtle radius (6.dp).
- * - Middle tiles: All corners subtle radius (6.dp).
- * - End tile: Inner corner subtle radius (6.dp), outer corner follows concentric capsule curve (26.dp).
- */
 private fun getViewerSegmentShape(index: Int, total: Int, outerCorner: Dp = 26.dp, innerCorner: Dp = 6.dp): Shape =
     com.inferno.gallery.ui.theme.getSegmentShape(index, total, outerCorner, innerCorner)
 
-/**
- * Individual tool tile inside the Pixel-style controls pill.
- * Features independent spring touch scale, tonal surface, and subtle border.
- */
 @Composable
 private fun ViewerToolTile(
     icon: ImageVector,
@@ -2989,44 +3012,15 @@ private fun ViewerToolTile(
     tileShape: Shape = RoundedCornerShape(6.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed && enabled) 0.92f else 1f,
-        animationSpec = MotionTokens.bouncySpring(),
-        label = "toolTileScale"
+    com.inferno.gallery.ui.components.LayeredToolTile(
+        icon = icon,
+        contentDescription = contentDescription,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        tint = tint,
+        iconModifier = iconModifier,
+        tileShape = tileShape,
+        containerColor = containerColor
     )
-
-    Surface(
-        modifier = modifier
-            .fillMaxHeight()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(tileShape)
-            .clickable(
-                enabled = enabled,
-                interactionSource = interactionSource,
-                indication = ripple(bounded = true, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
-                onClick = onClick
-            ),
-        shape = tileShape,
-        color = if (enabled) containerColor else containerColor.copy(alpha = 0.38f),
-        border = null,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = if (enabled) tint else tint.copy(alpha = 0.38f),
-                modifier = iconModifier.size(22.dp)
-            )
-        }
-    }
 }
