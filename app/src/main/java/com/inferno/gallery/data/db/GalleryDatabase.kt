@@ -34,8 +34,33 @@ interface MediaDao {
     @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class])
     suspend fun getUrisRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<String>
 
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, VaultMediaEntity::class])
+    fun observeIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int>
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, VaultMediaEntity::class])
+    suspend fun getIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Int
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, VaultMediaEntity::class])
+    suspend fun getLongListRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<Long>
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, VaultMediaEntity::class])
+    suspend fun getMediaEntitiesRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<CoreMediaEntity>
+
     @Query("SELECT DISTINCT bucketName FROM core_media WHERE bucketName != 'Trash' AND bucketName IS NOT NULL")
     fun observeAllBucketNames(): Flow<List<String>>
+
+    @Query("""
+        SELECT bucketName, COUNT(*) as photoCount
+        FROM core_media
+        WHERE isVideo = 0
+          AND bucketName != 'Trash'
+          AND bucketName IS NOT NULL
+          AND uriString NOT IN (SELECT originalUri FROM vault_media)
+          AND filePath NOT IN (SELECT originalPath FROM vault_media)
+        GROUP BY bucketName
+        ORDER BY photoCount DESC, bucketName ASC
+    """)
+    fun observeImageBucketCounts(): Flow<List<com.inferno.gallery.data.db.BucketImageCount>>
 
     @Query("""
         SELECT bucketName, COUNT(*) as itemCount, MAX(uriString) as representativeUri 
@@ -182,6 +207,16 @@ interface MediaDao {
 
     @Query("UPDATE core_media SET is_indexed_ocr = 0")
     suspend fun resetOcrIndexStatus()
+
+    @Query("UPDATE core_media SET is_indexed_ocr = 0 WHERE id IN (:ids)")
+    suspend fun resetOcrIndexStatusByIds(ids: List<Long>)
+
+    @androidx.room.Transaction
+    suspend fun resetOcrIndexStatusByIdsChunked(ids: List<Long>) {
+        ids.chunked(500).forEach { chunk ->
+            resetOcrIndexStatusByIds(chunk)
+        }
+    }
 
     @Query("SELECT * FROM core_media WHERE isVideo = 0 AND is_indexed_ocr = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media)")
     suspend fun getUnindexedOcrMedia(): List<CoreMediaEntity>
@@ -449,6 +484,16 @@ interface MediaDao {
 
     @Query("DELETE FROM document_classifications WHERE mediaId = :mediaId")
     suspend fun deleteDocumentClassificationsForMedia(mediaId: Long)
+
+    @Query("DELETE FROM document_classifications WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteDocumentClassificationsByMediaIds(mediaIds: List<Long>)
+
+    @androidx.room.Transaction
+    suspend fun deleteDocumentClassificationsByMediaIdsChunked(mediaIds: List<Long>) {
+        mediaIds.chunked(500).forEach { chunk ->
+            deleteDocumentClassificationsByMediaIds(chunk)
+        }
+    }
 
     @Query("DELETE FROM document_classifications")
     suspend fun clearDocumentClassifications()

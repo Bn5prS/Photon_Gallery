@@ -22,7 +22,13 @@ import kotlinx.coroutines.delay
 import com.inferno.gallery.workers.OcrIndexWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import com.inferno.gallery.data.ai.AiIndexCleanupManager
+import com.inferno.gallery.data.ai.AiIndexingFeature
+import com.inferno.gallery.data.ai.AiIndexingFolderConfig
+import com.inferno.gallery.data.ai.AiIndexingSupport
+import com.inferno.gallery.data.ai.ExcludedAiDataSummary
 import com.inferno.gallery.data.db.DatabaseProvider
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -520,13 +526,116 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val aiIndexingConfig: StateFlow<AiIndexingFolderConfig> = repository.aiIndexingFolderConfigFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AiIndexingFolderConfig()
+    )
+
+    val galleryExcludedFolders: StateFlow<Set<String>> = repository.excludedFoldersFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptySet()
+    )
+
+    val imageBucketCounts: StateFlow<Map<String, Int>> = db.mediaDao().observeImageBucketCounts()
+        .map { list -> list.associate { it.bucketName to it.photoCount } }
+        .flowOn(Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
+    private val _cleanupRefreshTick = MutableStateFlow(0)
+
+    val excludedAiDataSummary: StateFlow<ExcludedAiDataSummary> = combine(
+        aiIndexingConfig,
+        galleryExcludedFolders,
+        _cleanupRefreshTick
+    ) { config, excluded, _ ->
+        config to excluded
+    }.map { (config, excluded) ->
+        AiIndexCleanupManager.getExcludedIndexedSummary(db, config, excluded)
+    }.flowOn(Dispatchers.IO).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ExcludedAiDataSummary()
+    )
+
+    fun setAiRespectGalleryExcluded(respect: Boolean) {
+        viewModelScope.launch {
+            repository.updateAiRespectGalleryExcluded(respect)
+        }
+    }
+
+    fun setAiFolderIncluded(feature: AiIndexingFeature?, folderName: String, included: Boolean) {
+        viewModelScope.launch {
+            repository.setAiFolderIncluded(feature, folderName, included)
+        }
+    }
+
+    fun setAiAutoScanNewFolders(enabled: Boolean, knownBuckets: Collection<String>) {
+        viewModelScope.launch {
+            repository.updateAiAutoScanNewFolders(enabled, knownBuckets)
+        }
+    }
+
+    fun setAllAiFoldersSelection(scanAll: Boolean) {
+        viewModelScope.launch {
+            repository.setAllAiFoldersSelection(scanAll)
+        }
+    }
+
+    fun purgeExcludedAiData(feature: AiIndexingFeature? = null, onComplete: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val wm = WorkManager.getInstance(getApplication())
+            if (feature == null || feature == AiIndexingFeature.SMART_SEARCH) {
+                wm.cancelUniqueWork("SmartSearchIndexWorker")
+            }
+            if (feature == null || feature == AiIndexingFeature.FACE_RECOGNITION) {
+                wm.cancelUniqueWork("FaceIndexWorker")
+            }
+            if (feature == null || feature == AiIndexingFeature.OCR_TEXT) {
+                wm.cancelUniqueWork("OcrIndexWorker")
+            }
+            val config = repository.aiIndexingFolderConfigFlow.first()
+            val excluded = repository.excludedFoldersFlow.first()
+            val removed = AiIndexCleanupManager.purgeExcludedAiData(
+                context = getApplication(),
+                db = db,
+                config = config,
+                galleryExcluded = excluded,
+                feature = feature
+            )
+            _cleanupRefreshTick.value++
+            onComplete(removed)
+        }
+    }
+
     val totalImagesCount: StateFlow<Int> = db.mediaDao().observeTotalImageCount().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
     )
 
-    val unindexedOcrImagesCount: StateFlow<Int> = db.mediaDao().observeUnindexedOcrImageCount().stateIn(
+    val totalOcrImagesCount: StateFlow<Int> = AiIndexingSupport.observeEligibleTotalCount(
+        db = db,
+        feature = AiIndexingFeature.OCR_TEXT,
+        configFlow = repository.aiIndexingFolderConfigFlow,
+        galleryExcludedFlow = repository.excludedFoldersFlow
+    ).flowOn(Dispatchers.IO).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val unindexedOcrImagesCount: StateFlow<Int> = AiIndexingSupport.observeEligibleUnindexedCount(
+        db = db,
+        feature = AiIndexingFeature.OCR_TEXT,
+        configFlow = repository.aiIndexingFolderConfigFlow,
+        galleryExcludedFlow = repository.excludedFoldersFlow
+    ).flowOn(Dispatchers.IO).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
@@ -544,8 +653,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.updateOcrIndexingEnabled(enabled)
             if (enabled) {
-                val hasUnindexed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    db.mediaDao().getUnindexedImageCount() > 0
+                val hasUnindexed = withContext(Dispatchers.IO) {
+                    val (cfg, exc) = AiIndexingSupport.loadScope(getApplication())
+                    AiIndexingSupport.getEligibleUnindexedOcrCount(db, cfg, exc) > 0
                 }
                 if (hasUnindexed) {
                     startOcrIndexing()
@@ -623,9 +733,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.updateSmartSearchAutoIndex(enabled)
             if (enabled) {
-                val shouldIndex = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val shouldIndex = withContext(Dispatchers.IO) {
                     val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication())
-                    searchEngine.isModelDownloaded() && db.embeddingDao().getUnindexedMediaIds().isNotEmpty()
+                    val (cfg, exc) = AiIndexingSupport.loadScope(getApplication())
+                    searchEngine.isModelDownloaded() &&
+                        AiIndexingSupport.getEligibleUnindexedSmartCount(db, cfg, exc) > 0
                 }
                 if (shouldIndex) {
                     startSmartSearchIndexing()
@@ -634,7 +746,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val unindexedSmartSearchCount: StateFlow<Int> = db.embeddingDao().observeUnindexedCount().stateIn(
+    val totalSmartSearchImagesCount: StateFlow<Int> = AiIndexingSupport.observeEligibleTotalCount(
+        db = db,
+        feature = AiIndexingFeature.SMART_SEARCH,
+        configFlow = repository.aiIndexingFolderConfigFlow,
+        galleryExcludedFlow = repository.excludedFoldersFlow
+    ).flowOn(Dispatchers.IO).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val unindexedSmartSearchCount: StateFlow<Int> = AiIndexingSupport.observeEligibleUnindexedCount(
+        db = db,
+        feature = AiIndexingFeature.SMART_SEARCH,
+        configFlow = repository.aiIndexingFolderConfigFlow,
+        galleryExcludedFlow = repository.excludedFoldersFlow
+    ).flowOn(Dispatchers.IO).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
@@ -737,7 +865,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    val unindexedFacesCount: StateFlow<Int> = db.faceDao().observeUnindexedCount().stateIn(
+    val totalFaceImagesCount: StateFlow<Int> = AiIndexingSupport.observeEligibleTotalCount(
+        db = db,
+        feature = AiIndexingFeature.FACE_RECOGNITION,
+        configFlow = repository.aiIndexingFolderConfigFlow,
+        galleryExcludedFlow = repository.excludedFoldersFlow
+    ).flowOn(Dispatchers.IO).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val unindexedFacesCount: StateFlow<Int> = AiIndexingSupport.observeEligibleUnindexedCount(
+        db = db,
+        feature = AiIndexingFeature.FACE_RECOGNITION,
+        configFlow = repository.aiIndexingFolderConfigFlow,
+        galleryExcludedFlow = repository.excludedFoldersFlow
+    ).flowOn(Dispatchers.IO).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
@@ -769,7 +913,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             if (enabled) {
                 val shouldIndex = withContext(Dispatchers.IO) {
                     val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
-                    faceEngine.isModelDownloaded() && db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                    val (cfg, exc) = AiIndexingSupport.loadScope(getApplication())
+                    faceEngine.isModelDownloaded() &&
+                        AiIndexingSupport.getEligibleUnindexedFaceCount(db, cfg, exc) > 0
                 }
                 if (shouldIndex) {
                     startFaceIndexing()

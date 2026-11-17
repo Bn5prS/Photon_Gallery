@@ -214,6 +214,13 @@ fun SettingsScreen(
     val clipProgressState by viewModel.clipProgress.collectAsState()
     val modelDownloadWorkInfo by viewModel.modelDownloadWorkInfo.collectAsState(initial = null)
     val totalImagesCount by viewModel.totalImagesCount.collectAsState()
+    val totalOcrImagesCount by viewModel.totalOcrImagesCount.collectAsState()
+    val totalFaceImagesCount by viewModel.totalFaceImagesCount.collectAsState()
+    val totalSmartSearchImagesCount by viewModel.totalSmartSearchImagesCount.collectAsState()
+    val aiIndexingConfig by viewModel.aiIndexingConfig.collectAsState()
+    val galleryExcludedFolders by viewModel.galleryExcludedFolders.collectAsState()
+    val imageBucketCounts by viewModel.imageBucketCounts.collectAsState()
+    val excludedAiDataSummary by viewModel.excludedAiDataSummary.collectAsState()
     val unindexedOcrImagesCount by viewModel.unindexedOcrImagesCount.collectAsState()
     val stripMetadataOnShare by viewModel.stripMetadataOnShare.collectAsState()
     val exifStripAction by viewModel.exifStripAction.collectAsState()
@@ -710,6 +717,7 @@ fun SettingsScreen(
                         "Customize Toolbars" -> stringResource(R.string.customize_toolbars_title)
                         "General" -> stringResource(R.string.category_general)
                         "Smart Search & OCR" -> stringResource(R.string.smart_search)
+                        "AI Indexing Folders" -> "Folders to Index"
                         "Privacy & Security" -> stringResource(R.string.category_security_privacy)
                         "About" -> stringResource(R.string.category_about)
                         null -> stringResource(R.string.settings_title)
@@ -1863,10 +1871,11 @@ fun SettingsScreen(
                         }
 
                         "Smart Search & OCR" -> {
-                            val dbIndexed = totalImagesCount - unindexedOcrImagesCount
+                            val eligibleOcrTotal = totalOcrImagesCount
+                            val dbIndexed = (eligibleOcrTotal - unindexedOcrImagesCount).coerceAtLeast(0)
                             val isOcrRunning = ocrProgressState.isIndexing
                             val ocrIndexed = if (isOcrRunning) ocrProgressState.progress else dbIndexed
-                            val ocrTotal = if (isOcrRunning) ocrProgressState.total else totalImagesCount
+                            val ocrTotal = if (isOcrRunning) ocrProgressState.total else eligibleOcrTotal
 
                             // ── 100% On-Device & Open Source Privacy Explainer Card ──
                             Surface(
@@ -1920,6 +1929,32 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+
+                            // ── Folder Scope & Device Burden Card ──
+                            val scopeSummarySubtitle = remember(aiIndexingConfig, galleryExcludedFolders, imageBucketCounts, totalSmartSearchImagesCount, totalFaceImagesCount, totalOcrImagesCount) {
+                                if (!aiIndexingConfig.hasAnyCustomRule() && aiIndexingConfig.respectGalleryExcluded) {
+                                    if (galleryExcludedFolders.isEmpty()) {
+                                        "All folders ($totalOcrImagesCount photos) · Tap to include or exclude folders per model"
+                                    } else {
+                                        "Skipping ${galleryExcludedFolders.size} gallery hidden folder${if (galleryExcludedFolders.size != 1) "s" else ""} · Tap to customize per model"
+                                    }
+                                } else {
+                                    "Search: $totalSmartSearchImagesCount · Faces: $totalFaceImagesCount · Text: $totalOcrImagesCount photos"
+                                }
+                            }
+                            SettingsGroupCard(
+                                title = "Indexing Scope",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Folders to Index",
+                                            subtitle = scopeSummarySubtitle,
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                            onClick = { onActiveSectionChange("AI Indexing Folders") }
+                                        )
+                                    }
+                                )
+                            )
 
                             // ── Text Search in Photos Group Card (Pixel Breathe) ──
                             val ocrItems = mutableListOf<@Composable () -> Unit>()
@@ -2111,8 +2146,8 @@ fun SettingsScreen(
                             val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
                             val rawFaceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
                             val rawFaceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
-                            val faceTotal = if (rawFaceTotal > 0) rawFaceTotal else totalImagesCount
-                            val faceProcessed = if (rawFaceTotal > 0) rawFaceProcessed else (totalImagesCount - unindexedFacesCount).coerceAtLeast(0)
+                            val faceTotal = if (rawFaceTotal > 0) rawFaceTotal else totalFaceImagesCount
+                            val faceProcessed = if (rawFaceTotal > 0) rawFaceProcessed else (totalFaceImagesCount - unindexedFacesCount).coerceAtLeast(0)
                             val facePending = (faceTotal - faceProcessed).coerceAtLeast(0).let { if (it > 0) it else unindexedFacesCount }
                             val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
                             val faceItems = mutableListOf<@Composable () -> Unit>()
@@ -2458,9 +2493,9 @@ fun SettingsScreen(
                             val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
                             val isClipIndexing = clipProgressState.isIndexing
                             val unindexedClip = unindexedSmartSearchCount
-                            val indexedClip = maxOf(0, totalImagesCount - unindexedClip)
+                            val indexedClip = maxOf(0, totalSmartSearchImagesCount - unindexedClip)
                             val displayClipIndexed = if (isClipIndexing) clipProgressState.progress else indexedClip
-                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalImagesCount
+                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalSmartSearchImagesCount
                             val smartCurrentImageName = clipProgressState.currentImageName
 
                             val smartSearchItems = mutableListOf<@Composable () -> Unit>()
@@ -3080,6 +3115,30 @@ fun SettingsScreen(
                                     items = folderItems
                                 )
                             }
+                        }
+
+                        "AI Indexing Folders" -> {
+                            val allFolders by galleryViewModel.allBucketNames.collectAsState()
+                            AiIndexingFoldersSection(
+                                allFolders = allFolders,
+                                imageBucketCounts = imageBucketCounts,
+                                galleryExcluded = galleryExcludedFolders,
+                                aiConfig = aiIndexingConfig,
+                                excludedDataSummary = excludedAiDataSummary,
+                                onSetRespectGalleryExcluded = { viewModel.setAiRespectGalleryExcluded(it) },
+                                onSetAutoScanNewFolders = { enabled, known -> viewModel.setAiAutoScanNewFolders(enabled, known) },
+                                onSetAllFoldersSelection = { scanAll -> viewModel.setAllAiFoldersSelection(scanAll) },
+                                onSetFolderIncluded = { feature, folder, included -> viewModel.setAiFolderIncluded(feature, folder, included) },
+                                onPurgeExcludedData = {
+                                    viewModel.purgeExcludedAiData(null) { removed ->
+                                        Toast.makeText(
+                                            context,
+                                            if (removed > 0) "Removed $removed indexed item${if (removed != 1) "s" else ""}" else "No skipped items found",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            )
                         }
 
                         "About" -> {

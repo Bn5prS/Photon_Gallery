@@ -140,9 +140,19 @@ class FaceIndexWorker(
         try {
             engine.loadModel()
 
-            // 2. Query strictly non-vault, unindexed media
-            val unindexedIds = faceDao.getUnindexedMediaIds()
-            totalPhotos = faceDao.getTotalNonVaultMediaCount().coerceAtLeast(unindexedIds.size)
+            // 2. Query strictly non-vault, unindexed media within eligible folders
+            val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(context)
+            val unindexedIds = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceIds(
+                database,
+                aiConfig,
+                galleryExcluded
+            )
+            totalPhotos = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleTotalCount(
+                database,
+                com.inferno.gallery.data.ai.AiIndexingFeature.FACE_RECOGNITION,
+                aiConfig,
+                galleryExcluded
+            ).coerceAtLeast(unindexedIds.size)
             if (unindexedIds.isEmpty()) {
                 Log.d(TAG, "All media faces are up to date.")
                 com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
@@ -186,6 +196,14 @@ class FaceIndexWorker(
 
                 for (media in mediaEntities) {
                     if (isStopped) return@withContext Result.retry()
+                    if (!aiConfig.isBucketEligible(
+                            com.inferno.gallery.data.ai.AiIndexingFeature.FACE_RECOGNITION,
+                            media.bucketName,
+                            galleryExcluded
+                        )
+                    ) {
+                        continue
+                    }
 
                     val uri = Uri.parse(media.uriString)
                     val savedFaceCount = FaceScanHelper.scanSingleMedia(
@@ -239,8 +257,28 @@ class FaceIndexWorker(
             Log.e(TAG, "FaceIndexWorker encountered error: ${e.message}", e)
             Result.retry()
         } finally {
-            val total = runCatching { faceDao.getTotalNonVaultMediaCount() }.getOrDefault(totalPhotos)
-            val unindexed = runCatching { faceDao.getUnindexedMediaIds().size }.getOrDefault(0)
+            val scope = runCatching {
+                com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(context)
+            }.getOrNull()
+            val total = if (scope != null) {
+                runCatching {
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleTotalCount(
+                        database,
+                        com.inferno.gallery.data.ai.AiIndexingFeature.FACE_RECOGNITION,
+                        scope.first,
+                        scope.second
+                    )
+                }.getOrDefault(totalPhotos)
+            } else totalPhotos
+            val unindexed = if (scope != null) {
+                runCatching {
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(
+                        database,
+                        scope.first,
+                        scope.second
+                    )
+                }.getOrDefault(0)
+            } else 0
             com.inferno.gallery.data.IndexingProgressManager.updateFaceProgress(
                 isIndexing = false,
                 progress = (total - unindexed).coerceAtLeast(0),

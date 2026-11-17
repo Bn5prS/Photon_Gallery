@@ -252,6 +252,76 @@ interface FaceDao {
     """)
     fun observeUnindexedCount(): Flow<Int>
 
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, MediaFaceStatusEntity::class, VaultMediaEntity::class, FaceEntity::class])
+    fun observeFaceIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int>
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, MediaFaceStatusEntity::class, VaultMediaEntity::class, FaceEntity::class])
+    suspend fun getFaceIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Int
+
+    @androidx.room.RawQuery(observedEntities = [CoreMediaEntity::class, MediaFaceStatusEntity::class, VaultMediaEntity::class, FaceEntity::class])
+    suspend fun getFaceLongListRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<Long>
+
+    @Query("SELECT cropCachePath FROM faces WHERE mediaId IN (:mediaIds) AND cropCachePath IS NOT NULL")
+    suspend fun getCropPathsForMediaIds(mediaIds: List<Long>): List<String>
+
+    @Transaction
+    suspend fun getCropPathsForMediaIdsChunked(mediaIds: List<Long>): List<String> {
+        val paths = mutableListOf<String>()
+        mediaIds.chunked(500).forEach { chunk ->
+            paths.addAll(getCropPathsForMediaIds(chunk))
+        }
+        return paths
+    }
+
+    @Query("DELETE FROM faces WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteFacesByMediaIds(mediaIds: List<Long>)
+
+    @Transaction
+    suspend fun deleteFacesByMediaIdsChunked(mediaIds: List<Long>) {
+        mediaIds.chunked(500).forEach { chunk ->
+            deleteFacesByMediaIds(chunk)
+        }
+    }
+
+    @Query("DELETE FROM media_face_status WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteFaceStatusesByMediaIds(mediaIds: List<Long>)
+
+    @Transaction
+    suspend fun deleteFaceStatusesByMediaIdsChunked(mediaIds: List<Long>) {
+        mediaIds.chunked(500).forEach { chunk ->
+            deleteFaceStatusesByMediaIds(chunk)
+        }
+    }
+
+    @Query("SELECT * FROM persons WHERE faceCount <= 0 AND (name IS NULL OR TRIM(name) = '')")
+    suspend fun getUnnamedEmptyPersons(): List<PersonEntity>
+
+    @Query("SELECT id, name, coverCropPath, NULL AS centroid, isPromoted, isHidden, isFavorite, faceCount, createdAt FROM persons WHERE faceCount > 0")
+    suspend fun getNonEmptyPersonsBasic(): List<PersonEntity>
+
+    @Query("SELECT cropCachePath FROM faces WHERE personId = :personId AND cropCachePath IS NOT NULL LIMIT 1")
+    suspend fun getFirstCropPathForPerson(personId: Long): String?
+
+    @Query("DELETE FROM persons WHERE id IN (:personIds)")
+    suspend fun deletePersonsByIds(personIds: List<Long>)
+
+    @Transaction
+    suspend fun deletePersonsByIdsChunked(personIds: List<Long>) {
+        personIds.chunked(500).forEach { chunk ->
+            deletePersonsByIds(chunk)
+        }
+    }
+
+    @Query("DELETE FROM person_merge_suggestions WHERE personIdA IN (:personIds) OR personIdB IN (:personIds)")
+    suspend fun deleteMergeSuggestionsForPersons(personIds: List<Long>)
+
+    @Transaction
+    suspend fun deleteMergeSuggestionsForPersonsChunked(personIds: List<Long>) {
+        personIds.chunked(500).forEach { chunk ->
+            deleteMergeSuggestionsForPersons(chunk)
+        }
+    }
+
     // ── Face Scan Status Operations ──
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

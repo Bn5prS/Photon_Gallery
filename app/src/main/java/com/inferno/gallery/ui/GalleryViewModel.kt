@@ -2565,8 +2565,18 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
 
     val smartSearchStatus: StateFlow<SmartSearchStatus> = combine(
-        database.mediaDao().observeTotalImageCount(),
-        database.embeddingDao().observeUnindexedCount(),
+        com.inferno.gallery.data.ai.AiIndexingSupport.observeEligibleTotalCount(
+            db = database,
+            feature = com.inferno.gallery.data.ai.AiIndexingFeature.SMART_SEARCH,
+            configFlow = settingsRepository.aiIndexingFolderConfigFlow,
+            galleryExcludedFlow = excludedFolders
+        ),
+        com.inferno.gallery.data.ai.AiIndexingSupport.observeEligibleUnindexedCount(
+            db = database,
+            feature = com.inferno.gallery.data.ai.AiIndexingFeature.SMART_SEARCH,
+            configFlow = settingsRepository.aiIndexingFolderConfigFlow,
+            galleryExcludedFlow = excludedFolders
+        ),
         com.inferno.gallery.data.IndexingProgressManager.clipProgress
     ) { totalCount, unindexedCount, clipProgress ->
         val indexed = (totalCount - unindexedCount).coerceAtLeast(0)
@@ -2588,12 +2598,31 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun performUnifiedSearch(query: String) {
         _isSearching.value = true
         val currentExcluded = excludedFolders.value
+        val aiConfig = settingsRepository.aiIndexingFolderConfigFlow.first()
+        val ocrBucketFilter = com.inferno.gallery.data.ai.AiIndexingQueryBuilder.buildBucketInclusionCondition(
+            alias = "cm",
+            rule = aiConfig.ruleFor(com.inferno.gallery.data.ai.AiIndexingFeature.OCR_TEXT),
+            galleryExcluded = currentExcluded,
+            respectGalleryExcluded = aiConfig.respectGalleryExcluded
+        )
         try {
             kotlinx.coroutines.coroutineScope {
                     val ftsDeferred = async(Dispatchers.IO) {
                         try {
                             val ftsEntities = if (query.isNotBlank()) {
-                                DatabaseProvider.searchMedia(database, query, currentExcluded)
+                                DatabaseProvider.searchMedia(
+                                    db = database,
+                                    query = query,
+                                    excluded = currentExcluded,
+                                    ocrBucketFilter = ocrBucketFilter,
+                                    isOcrBucketEligible = { bucket ->
+                                        aiConfig.isBucketEligible(
+                                            com.inferno.gallery.data.ai.AiIndexingFeature.OCR_TEXT,
+                                            bucket,
+                                            currentExcluded
+                                        )
+                                    }
+                                )
                             } else {
                                 emptyList()
                             }
@@ -2671,7 +2700,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                     withContext(Dispatchers.IO) {
                                         val entitiesMap = database.mediaDao().getMediaByIdsList(matchedIds).associateBy { it.id }
                                         val orderedEntities = matchedIds.mapNotNull { entitiesMap[it] }
-                                            .filter { !currentExcluded.contains(it.bucketName) && it.bucketName != "Trash" }
+                                            .filter {
+                                                !currentExcluded.contains(it.bucketName) &&
+                                                    aiConfig.isBucketEligible(
+                                                        com.inferno.gallery.data.ai.AiIndexingFeature.SMART_SEARCH,
+                                                        it.bucketName,
+                                                        currentExcluded
+                                                    )
+                                            }
 
                                         orderedEntities.map { entity ->
                                             val uri = Uri.parse(entity.uriString)
@@ -2755,7 +2791,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 }
 
                                 for (item in chunk) {
-                                    val ocrText = ocrMap[item.id]
+                                    val isOcrAllowed = aiConfig.isBucketEligible(
+                                        com.inferno.gallery.data.ai.AiIndexingFeature.OCR_TEXT,
+                                        item.bucketName,
+                                        currentExcluded
+                                    )
+                                    val ocrText = if (isOcrAllowed) ocrMap[item.id] else null
                                     val matchesOcr = if (!ocrText.isNullOrBlank()) {
                                         ocrText.contains(cleanQ, ignoreCase = true) ||
                                             (queryTokens.size > 1 && queryTokens.all { t -> ocrText.contains(t, ignoreCase = true) })

@@ -75,8 +75,11 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             WorkManager.getInstance(this@GalleryApplication)
                 .enqueueUniqueWork("MediaSyncWorker", androidx.work.ExistingWorkPolicy.KEEP, syncWorkRequest)
 
+            val db = DatabaseProvider.getDatabase(this@GalleryApplication)
+            val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(this@GalleryApplication)
+
             val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
-            if (ocrEnabled) {
+            if (ocrEnabled && com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrCount(db, aiConfig, galleryExcluded) > 0) {
                 val ocrConstraints = androidx.work.Constraints.Builder()
                     .setRequiresBatteryNotLow(true)
                     .build()
@@ -91,7 +94,6 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             val autoIndexFaces = settingsRepo.faceAutoIndexFlow.first()
             val faceEngine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(this@GalleryApplication)
             if (faceEnabled && autoIndexFaces && faceEngine.isModelDownloaded()) {
-                val db = DatabaseProvider.getDatabase(this@GalleryApplication)
                 val prefs = getSharedPreferences("face_scan_meta", android.content.Context.MODE_PRIVATE)
                 val scanVersion = prefs.getInt("scan_version", 1)
                 if (scanVersion < 2) {
@@ -99,7 +101,11 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
                     prefs.edit().putInt("scan_version", 2).apply()
                 }
 
-                val unindexedFaces = db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                val unindexedFaces = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(
+                    db,
+                    aiConfig,
+                    galleryExcluded
+                ) > 0
                 if (unindexedFaces) {
                     val faceConstraints = androidx.work.Constraints.Builder()
                         .setRequiresBatteryNotLow(true)

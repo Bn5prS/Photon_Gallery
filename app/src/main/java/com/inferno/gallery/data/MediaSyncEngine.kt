@@ -310,10 +310,16 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     database.mediaDao().insertAllChunked(toInsert)
                 }
 
-                // AI Indexing & background workers
+                // AI Indexing & background workers (respect per-feature AI folder policy)
+                val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(appContext)
+
                 val autoIndexSmartEnabled = settingsRepo.smartSearchAutoIndexFlow.first()
                 val smartSearchEngine = SmartSearchEngine.getInstance(appContext)
-                val unindexedSmartCount = database.embeddingDao().getUnindexedMediaIds().size
+                val unindexedSmartCount = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedSmartCount(
+                    database,
+                    aiConfig,
+                    galleryExcluded
+                )
                 if (autoIndexSmartEnabled && smartSearchEngine.isModelDownloaded() && unindexedSmartCount > 0 && newPhotosCount > 0) {
                     val indexRequest = OneTimeWorkRequestBuilder<SmartSearchIndexWorker>().build()
                     WorkManager.getInstance(appContext).enqueueUniqueWork(
@@ -326,7 +332,11 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 val faceRecognitionEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
                 val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
                 val faceEngine = FaceRecognitionEngine.getInstance(appContext)
-                val unindexedFaceCount = database.faceDao().getUnindexedMediaIds().size
+                val unindexedFaceCount = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(
+                    database,
+                    aiConfig,
+                    galleryExcluded
+                )
                 if (faceRecognitionEnabled && autoIndexFacesEnabled && unindexedFaceCount > 0 && faceEngine.isModelDownloaded()) {
                     val constraints = androidx.work.Constraints.Builder()
                         .setRequiresBatteryNotLow(true)
@@ -342,7 +352,11 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 }
 
                 val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
-                val unindexedOcrCount = database.mediaDao().getUnindexedImageCount()
+                val unindexedOcrCount = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrCount(
+                    database,
+                    aiConfig,
+                    galleryExcluded
+                )
                 if (ocrEnabled && unindexedOcrCount > 0 && newPhotosCount > 0) {
                     val constraints = androidx.work.Constraints.Builder()
                         .setRequiresBatteryNotLow(true)

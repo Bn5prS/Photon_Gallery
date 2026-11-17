@@ -1,5 +1,9 @@
 package com.inferno.gallery.data
 
+import com.inferno.gallery.data.ai.AiFeatureFolderRule
+import com.inferno.gallery.data.ai.AiFolderScopeMode
+import com.inferno.gallery.data.ai.AiIndexingFeature
+import com.inferno.gallery.data.ai.AiIndexingFolderConfig
 import com.inferno.gallery.data.model.ExifStripAction
 import android.content.Context
 import android.os.Build
@@ -113,6 +117,28 @@ class SettingsRepository private constructor(private val context: Context) {
         
 
         val EXCLUDED_FOLDERS = stringPreferencesKey("excluded_folders")
+        val AI_RESPECT_GALLERY_EXCLUDED = booleanPreferencesKey("ai_respect_gallery_excluded")
+        val AI_SMART_FOLDER_MODE = stringPreferencesKey("ai_smart_folder_mode")
+        val AI_SMART_EXCLUDED_FOLDERS = stringSetPreferencesKey("ai_smart_excluded_folders")
+        val AI_SMART_INCLUDED_FOLDERS = stringSetPreferencesKey("ai_smart_included_folders")
+        val AI_FACE_FOLDER_MODE = stringPreferencesKey("ai_face_folder_mode")
+        val AI_FACE_EXCLUDED_FOLDERS = stringSetPreferencesKey("ai_face_excluded_folders")
+        val AI_FACE_INCLUDED_FOLDERS = stringSetPreferencesKey("ai_face_included_folders")
+        val AI_OCR_FOLDER_MODE = stringPreferencesKey("ai_ocr_folder_mode")
+        val AI_OCR_EXCLUDED_FOLDERS = stringSetPreferencesKey("ai_ocr_excluded_folders")
+        val AI_OCR_INCLUDED_FOLDERS = stringSetPreferencesKey("ai_ocr_included_folders")
+
+        private data class AiFeatureKeys(
+            val modeKey: androidx.datastore.preferences.core.Preferences.Key<String>,
+            val excludedKey: androidx.datastore.preferences.core.Preferences.Key<Set<String>>,
+            val includedKey: androidx.datastore.preferences.core.Preferences.Key<Set<String>>
+        )
+
+        private val AI_FEATURE_KEYS = mapOf(
+            AiIndexingFeature.SMART_SEARCH to AiFeatureKeys(AI_SMART_FOLDER_MODE, AI_SMART_EXCLUDED_FOLDERS, AI_SMART_INCLUDED_FOLDERS),
+            AiIndexingFeature.FACE_RECOGNITION to AiFeatureKeys(AI_FACE_FOLDER_MODE, AI_FACE_EXCLUDED_FOLDERS, AI_FACE_INCLUDED_FOLDERS),
+            AiIndexingFeature.OCR_TEXT to AiFeatureKeys(AI_OCR_FOLDER_MODE, AI_OCR_EXCLUDED_FOLDERS, AI_OCR_INCLUDED_FOLDERS)
+        )
         val HDR_DISPLAY_ENABLED = booleanPreferencesKey("hdr_display_enabled")
         const val MAX_PINNED_FOLDERS = 15
         val PINNED_FOLDERS = stringPreferencesKey("pinned_folders")
@@ -992,6 +1018,78 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateExcludedFolders(folders: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[EXCLUDED_FOLDERS] = folders.joinToString(",")
+        }
+    }
+
+    val aiIndexingFolderConfigFlow: Flow<AiIndexingFolderConfig> = context.dataStore.data
+        .map { prefs ->
+            val rules = AiIndexingFeature.entries.associateWith { feature ->
+                val keys = AI_FEATURE_KEYS.getValue(feature)
+                AiFeatureFolderRule(
+                    mode = AiFolderScopeMode.fromStorage(prefs[keys.modeKey]),
+                    excludedFolders = prefs[keys.excludedKey] ?: emptySet(),
+                    includedFolders = prefs[keys.includedKey] ?: emptySet()
+                )
+            }
+            AiIndexingFolderConfig(
+                respectGalleryExcluded = prefs[AI_RESPECT_GALLERY_EXCLUDED] ?: true,
+                rules = rules
+            )
+        }
+
+    suspend fun updateAiRespectGalleryExcluded(respect: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[AI_RESPECT_GALLERY_EXCLUDED] = respect
+        }
+    }
+
+    suspend fun setAiFolderIncluded(feature: AiIndexingFeature?, folderName: String, included: Boolean) {
+        val targets = if (feature != null) listOf(feature) else AiIndexingFeature.entries
+        context.dataStore.edit { prefs ->
+            for (target in targets) {
+                val keys = AI_FEATURE_KEYS.getValue(target)
+                val currentRule = AiFeatureFolderRule(
+                    mode = AiFolderScopeMode.fromStorage(prefs[keys.modeKey]),
+                    excludedFolders = prefs[keys.excludedKey] ?: emptySet(),
+                    includedFolders = prefs[keys.includedKey] ?: emptySet()
+                )
+                val updated = currentRule.withBucketIncluded(folderName, included)
+                prefs[keys.excludedKey] = updated.excludedFolders
+                prefs[keys.includedKey] = updated.includedFolders
+            }
+        }
+    }
+
+    suspend fun updateAiAutoScanNewFolders(enabled: Boolean, knownBuckets: Collection<String>) {
+        val targetMode = if (enabled) AiFolderScopeMode.EXCLUDE_SELECTED else AiFolderScopeMode.ONLY_SELECTED
+        context.dataStore.edit { prefs ->
+            for (target in AiIndexingFeature.entries) {
+                val keys = AI_FEATURE_KEYS.getValue(target)
+                val currentRule = AiFeatureFolderRule(
+                    mode = AiFolderScopeMode.fromStorage(prefs[keys.modeKey]),
+                    excludedFolders = prefs[keys.excludedKey] ?: emptySet(),
+                    includedFolders = prefs[keys.includedKey] ?: emptySet()
+                )
+                val updated = currentRule.convertingModePreservingSelection(targetMode, knownBuckets)
+                prefs[keys.modeKey] = updated.mode.storageValue
+                prefs[keys.excludedKey] = updated.excludedFolders
+                prefs[keys.includedKey] = updated.includedFolders
+            }
+        }
+    }
+
+    suspend fun setAllAiFoldersSelection(scanAll: Boolean) {
+        val targetMode = if (scanAll) AiFolderScopeMode.EXCLUDE_SELECTED else AiFolderScopeMode.ONLY_SELECTED
+        context.dataStore.edit { prefs ->
+            for (target in AiIndexingFeature.entries) {
+                val keys = AI_FEATURE_KEYS.getValue(target)
+                prefs[keys.modeKey] = targetMode.storageValue
+                if (scanAll) {
+                    prefs[keys.excludedKey] = emptySet()
+                } else {
+                    prefs[keys.includedKey] = emptySet()
+                }
+            }
         }
     }
 

@@ -143,6 +143,13 @@ class MemoriesManagerTest {
         }
         override suspend fun getPastYearsMonthMedia(month: String, excludeYear: String, limit: Int): List<CoreMediaEntity> = emptyList()
         override suspend fun getHistoricalMedia(beforeTimestampSec: Long, limit: Int): List<CoreMediaEntity> = emptyList()
+        override fun observeIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int> = kotlinx.coroutines.flow.flowOf(0)
+        override suspend fun getIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Int = 0
+        override suspend fun getLongListRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<Long> = emptyList()
+        override suspend fun getMediaEntitiesRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<CoreMediaEntity> = emptyList()
+        override fun observeImageBucketCounts(): Flow<List<com.inferno.gallery.data.db.BucketImageCount>> = emptyFlow()
+        override suspend fun resetOcrIndexStatusByIds(ids: List<Long>) {}
+        override suspend fun deleteDocumentClassificationsByMediaIds(mediaIds: List<Long>) {}
     }
 
     @Test

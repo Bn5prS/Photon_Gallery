@@ -229,20 +229,25 @@ class SmartSearchIndexWorker(
                 }
             }
 
-            val excludedFolders = com.inferno.gallery.data.SettingsRepository.getInstance(applicationContext).excludedFoldersFlow.first()
+            val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(applicationContext)
             val unindexedIds = withContext(Dispatchers.IO) {
-                db.embeddingDao().getUnindexedMediaIds()
+                com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedSmartIds(db, aiConfig, galleryExcluded)
             }
 
             if (unindexedIds.isEmpty()) {
-                Log.d(TAG, "No unindexed images found.")
+                Log.d(TAG, "No unindexed images found in eligible folders.")
                 return Result.success()
             }
 
             val totalCount = withContext(Dispatchers.IO) {
-                db.mediaDao().getTotalImageCount()
+                com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleTotalCount(
+                    db,
+                    com.inferno.gallery.data.ai.AiIndexingFeature.SMART_SEARCH,
+                    aiConfig,
+                    galleryExcluded
+                ).coerceAtLeast(unindexedIds.size)
             }
-            val alreadyIndexed = totalCount - unindexedIds.size
+            val alreadyIndexed = (totalCount - unindexedIds.size).coerceAtLeast(0)
             var processedCount = 0
 
             Log.d(TAG, "Smart Search indexing started. Unindexed: ${unindexedIds.size}, total: $totalCount")
@@ -274,7 +279,12 @@ class SmartSearchIndexWorker(
                         var entity: com.inferno.gallery.data.db.CoreMediaEntity? = null
                         try {
                             entity = db.mediaDao().getMediaById(mediaId)
-                            if (entity == null || excludedFolders.contains(entity.bucketName) || entity.bucketName == "Trash") {
+                            if (entity == null || !aiConfig.isBucketEligible(
+                                    com.inferno.gallery.data.ai.AiIndexingFeature.SMART_SEARCH,
+                                    entity.bucketName,
+                                    galleryExcluded
+                                )
+                            ) {
                                 // Deleted or excluded, skip
                                 continue
                             }
@@ -432,11 +442,31 @@ class SmartSearchIndexWorker(
         } finally {
             searchEngine.unloadVisionModel()
             val db = DatabaseProvider.getDatabase(applicationContext)
-            val total = runCatching { db.mediaDao().getTotalImageCount() }.getOrDefault(0)
-            val unindexed = runCatching { db.embeddingDao().getUnindexedMediaIds().size }.getOrDefault(0)
+            val scope = runCatching {
+                com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(applicationContext)
+            }.getOrNull()
+            val total = if (scope != null) {
+                runCatching {
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleTotalCount(
+                        db,
+                        com.inferno.gallery.data.ai.AiIndexingFeature.SMART_SEARCH,
+                        scope.first,
+                        scope.second
+                    )
+                }.getOrDefault(0)
+            } else 0
+            val unindexed = if (scope != null) {
+                runCatching {
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedSmartCount(
+                        db,
+                        scope.first,
+                        scope.second
+                    )
+                }.getOrDefault(0)
+            } else 0
             com.inferno.gallery.data.IndexingProgressManager.updateClipProgress(
                 isIndexing = false,
-                progress = total - unindexed,
+                progress = (total - unindexed).coerceAtLeast(0),
                 total = total,
                 currentImageName = null
             )

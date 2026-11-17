@@ -6,7 +6,10 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.room.Transaction
 import androidx.room.TypeConverter
+import androidx.sqlite.db.SupportSQLiteQuery
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlinx.coroutines.flow.Flow
@@ -125,6 +128,25 @@ interface EmbeddingDao {
     @Query("DELETE FROM media_embeddings WHERE mediaId = :mediaId")
     suspend fun deleteEmbedding(mediaId: Long)
 
+    @Query("DELETE FROM media_embeddings WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteEmbeddingsByMediaIds(mediaIds: List<Long>)
+
+    @Transaction
+    suspend fun deleteEmbeddingsByMediaIdsChunked(mediaIds: List<Long>) {
+        mediaIds.chunked(500).forEach { chunk ->
+            deleteEmbeddingsByMediaIds(chunk)
+        }
+    }
+
+    @RawQuery(observedEntities = [CoreMediaEntity::class, MediaEmbeddingEntity::class, MediaEmbeddingStatusEntity::class, VaultMediaEntity::class])
+    fun observeEmbeddingIntRaw(query: SupportSQLiteQuery): Flow<Int>
+
+    @RawQuery(observedEntities = [CoreMediaEntity::class, MediaEmbeddingEntity::class, MediaEmbeddingStatusEntity::class, VaultMediaEntity::class])
+    suspend fun getEmbeddingIntRaw(query: SupportSQLiteQuery): Int
+
+    @RawQuery(observedEntities = [CoreMediaEntity::class, MediaEmbeddingEntity::class, MediaEmbeddingStatusEntity::class, VaultMediaEntity::class])
+    suspend fun getEmbeddingLongListRaw(query: SupportSQLiteQuery): List<Long>
+
     @Query("DELETE FROM media_embeddings")
     suspend fun clearAllEmbeddings()
 }
@@ -145,6 +167,16 @@ interface EmbeddingStatusDao {
 
     @Query("DELETE FROM media_embedding_status WHERE mediaId = :mediaId")
     suspend fun deleteStatus(mediaId: Long)
+
+    @Query("DELETE FROM media_embedding_status WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteStatusesByMediaIds(mediaIds: List<Long>)
+
+    @Transaction
+    suspend fun deleteStatusesByMediaIdsChunked(mediaIds: List<Long>) {
+        mediaIds.chunked(500).forEach { chunk ->
+            deleteStatusesByMediaIds(chunk)
+        }
+    }
 
     @Query("DELETE FROM media_embedding_status")
     suspend fun clearAllStatuses()
