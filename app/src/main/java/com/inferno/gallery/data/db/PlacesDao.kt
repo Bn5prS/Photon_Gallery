@@ -27,4 +27,7 @@ interface PlacesDao {
         ORDER BY itemCount DESC
     """)
     fun observePlaceClusters(): kotlinx.coroutines.flow.Flow<List<BucketInfo>>
+
+    @Query("SELECT * FROM geocoded_locations WHERE placeName IS NOT NULL AND placeName != ''")
+    fun observeAllGeocodedLocations(): kotlinx.coroutines.flow.Flow<List<GeocodedLocation>>
 }

@@ -50,4 +50,29 @@ class FaceRecognitionEngineTest {
         val length = sqrt(sumSq).toFloat()
         assertEquals(1.0f, length, 0.001f)
     }
+
+    @Test
+    fun mirrorPixelsHorizontally_reversesEachRowIndependently() {
+        val pixels = intArrayOf(
+            1, 2, 3,
+            4, 5, 6
+        )
+        val mirrored = FaceRecognitionEngine.mirrorPixelsHorizontally(pixels, width = 3, height = 2)
+        assertEquals(listOf(3, 2, 1, 6, 5, 4), mirrored.toList())
+    }
+
+    @Test
+    fun fuseMirrorEmbeddings_cancelsOppositePoseBiasAndBoostsFrontalMatch() {
+        // Identity along axis 0, pose bias along axis 1 (left=+pose, right=-pose)
+        val frontal = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.95f, 0.0f, 0.10f))
+        val leftProfile = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.68f, 0.72f, 0.10f))
+        val mirroredProfile = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.68f, -0.72f, 0.10f))
+
+        val rawSim = FaceRecognitionEngine.cosineSimilarity(frontal, leftProfile)
+        val fused = FaceRecognitionEngine.fuseMirrorEmbeddings(leftProfile, mirroredProfile)
+        val fusedSim = FaceRecognitionEngine.cosineSimilarity(frontal, fused)
+
+        assertTrue("Fused embedding must boost frontal-profile similarity ($fusedSim vs $rawSim)", fusedSim > rawSim + 0.15f)
+        assertEquals(1.0f, sqrt(fused.sumOf { (it * it).toDouble() }).toFloat(), 0.001f)
+    }
 }

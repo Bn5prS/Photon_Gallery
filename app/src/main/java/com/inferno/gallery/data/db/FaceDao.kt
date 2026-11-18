@@ -16,6 +16,11 @@ data class MediaPersonInfo(
     val faceCount: Int
 )
 
+data class MediaFaceQuality(
+    val mediaId: Long,
+    val maxQuality: Float
+)
+
 @Dao
 interface FaceDao {
 
@@ -171,6 +176,9 @@ interface FaceDao {
     @Update
     suspend fun updateFace(face: FaceEntity)
 
+    @Query("DELETE FROM faces WHERE id = :id")
+    suspend fun deleteFaceById(id: Long)
+
     @Query("SELECT * FROM faces WHERE id = :id")
     suspend fun getFaceById(id: Long): FaceEntity?
 
@@ -180,7 +188,7 @@ interface FaceDao {
     @Query("SELECT * FROM faces WHERE personId = :personId")
     suspend fun getFacesByPersonId(personId: Long): List<FaceEntity>
 
-    @Query("SELECT * FROM faces WHERE personId = :personId AND isExemplar = 1 ORDER BY qualityScore DESC LIMIT 5")
+    @Query("SELECT * FROM faces WHERE personId = :personId AND isExemplar = 1 ORDER BY id ASC LIMIT 10")
     suspend fun getExemplarFacesForPerson(personId: Long): List<FaceEntity>
 
     @Query("SELECT * FROM faces WHERE personId IS NULL")
@@ -409,5 +417,14 @@ interface FaceDao {
         ORDER BY s.similarity DESC
     """)
     fun observePendingMergeSuggestions(): Flow<List<MergeSuggestionWithPersons>>
+
+    @Query("""
+        SELECT f.mediaId AS mediaId, MAX(f.qualityScore) AS maxQuality
+        FROM faces f
+        LEFT JOIN persons p ON f.personId = p.id
+        WHERE p.id IS NULL OR p.isHidden = 0
+        GROUP BY f.mediaId
+    """)
+    fun observeMediaFaceQualities(): Flow<List<MediaFaceQuality>>
 }
 

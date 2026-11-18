@@ -49,7 +49,6 @@ class FaceIndexWorker(
         private const val NOTIFICATION_ID = 57
         private const val CHANNEL_ID = "face_indexing_channel"
         private const val BATCH_SIZE = 10
-        private const val MAX_THUMBNAIL_DIM = 1024
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
@@ -248,8 +247,9 @@ class FaceIndexWorker(
                 delay(50)
             }
 
-            // Final consolidation pass after all photos are processed
+            // Final centroid refresh + consolidation pass after all photos are processed
             if (processedCount > 0) {
+                runCatching { clusteringManager.refreshAllClusterCentroids() }
                 runCatching { clusteringManager.consolidateClusters() }
             }
             Result.success()
@@ -285,6 +285,7 @@ class FaceIndexWorker(
                 total = total
             )
             if (processedCount > 0) {
+                runCatching { clusteringManager.refreshAllClusterCentroids() }
                 runCatching { clusteringManager.consolidateClusters() }
             }
             runCatching { faceDao.recalculateAllPersonFaceCounts() }

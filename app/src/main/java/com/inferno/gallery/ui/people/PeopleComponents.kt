@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,10 +57,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -685,6 +689,71 @@ fun MergeSuggestionHeroCard(
     }
 }
 
+internal fun computePersonGridSpacingDp(gridCols: Int): Pair<Float, Float> = when {
+    gridCols <= 3 -> 16f to 12f
+    gridCols == 4 -> 12f to 8f
+    else -> 8f to 6f
+}
+
+internal fun initialPhotoCountFontSp(gridCols: Int): Float = when {
+    gridCols <= 2 -> 12f
+    gridCols == 3 -> 11.5f
+    gridCols == 4 -> 10.5f
+    else -> 9.5f
+}
+
+internal fun nextFittedPhotoCountFontSp(
+    currentSp: Float,
+    didOverflowWidth: Boolean,
+    minFontSp: Float = 8.0f
+): Float {
+    if (!didOverflowWidth || currentSp <= minFontSp) return currentSp
+    return (currentSp - 0.5f).coerceAtLeast(minFontSp)
+}
+
+/**
+ * Single-line photo count subtitle for person cluster cards.
+ * Uses `softWrap = false` so Compose never breaks between multi-digit numbers and "photos",
+ * and smoothly steps down font size down to [minFontSizeSp] if narrow columns or large font
+ * scales still overflow horizontally.
+ */
+@Composable
+internal fun PersonPhotoCountText(
+    count: Int,
+    baseFontSizeSp: Float = 11.5f,
+    minFontSizeSp: Float = 8.0f,
+    modifier: Modifier = Modifier
+) {
+    val label = if (count == 1) {
+        stringResource(R.string.photo_count_single, 1)
+    } else {
+        stringResource(R.string.photo_count_multiple, count)
+    }
+    var fontSizeSp by remember(label, baseFontSizeSp) { mutableFloatStateOf(baseFontSizeSp) }
+
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodySmall.copy(
+            fontWeight = FontWeight.Normal,
+            fontSize = fontSizeSp.sp,
+            lineHeight = (fontSizeSp + 3f).sp,
+            letterSpacing = if (fontSizeSp < 11f) (-0.15).sp else 0.sp
+        ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        onTextLayout = { layoutResult ->
+            val nextSp = nextFittedPhotoCountFontSp(fontSizeSp, layoutResult.didOverflowWidth, minFontSizeSp)
+            if (nextSp != fontSizeSp) {
+                fontSizeSp = nextSp
+            }
+        },
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
 @Composable
 private fun PersonAvatarColumn(
     person: PersonEntity,
@@ -729,13 +798,12 @@ private fun PersonAvatarColumn(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
+        PersonPhotoCountText(
+            count = person.faceCount,
+            baseFontSizeSp = 11.5f
         )
     }
 }

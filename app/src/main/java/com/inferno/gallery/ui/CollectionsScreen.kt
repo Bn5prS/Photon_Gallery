@@ -248,124 +248,110 @@ fun CollectionsScreen(
                     enter = expandVertically(animationSpec = MotionTokens.snappySpring()) + fadeIn(animationSpec = MotionTokens.snappySpring()),
                     exit = shrinkVertically(animationSpec = MotionTokens.snappySpring()) + fadeOut(animationSpec = MotionTokens.snappySpring())
                 ) {
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
-                    ) {
-                        item {
-                            // "Explore Map" Hero Card
-                            Surface(
-                                onClick = onNavigateToPhotoMap,
-                                shape = ShapeLargeIncreased,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                shadowElevation = 0.dp,
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .pressScale(pressedScale = 0.96f)
-                            ) {
-                                Column(
+                    if (placesClusters.isNotEmpty()) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = SpacingTokens.XS),
+                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                        ) {
+                            items(placesClusters, key = { "place_${it.bucketName}" }) { cluster ->
+                                Surface(
+                                    onClick = { onAlbumClick("place:${cluster.bucketName}") },
+                                    shape = ShapeLargeIncreased,
+                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                    shadowElevation = 0.dp,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                        .width(120.dp)
+                                        .pressScale(pressedScale = 0.96f)
                                 ) {
-                                    Surface(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                            .clip(ShapeMedium),
-                                        shape = ShapeMedium,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shadowElevation = 0.dp
+                                            .padding(8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Box(modifier = Modifier.fillMaxSize()) {
-                                            androidx.compose.foundation.Image(
-                                                painter = painterResource(R.drawable.map_bg_placeholder),
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                                .clip(ShapeMedium),
+                                            shape = ShapeMedium,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            shadowElevation = 0.dp
+                                        ) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context)
+                                                    .data(Uri.parse(cluster.representativeUri))
+                                                    .size(300)
+                                                    .crossfade(true)
+                                                    .build(),
                                                 contentDescription = null,
                                                 contentScale = ContentScale.Crop,
                                                 modifier = Modifier.fillMaxSize()
                                             )
-                                            Surface(
-                                                shape = ShapeFull,
-                                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f),
-                                                modifier = Modifier
-                                                    .align(Alignment.Center)
-                                                    .size(36.dp),
-                                                shadowElevation = 0.dp
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(IconSizeTokens.M),
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            }
                                         }
+                                        Spacer(modifier = Modifier.height(SpacingTokens.XS))
+                                        Text(
+                                            text = cluster.bucketName,
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(horizontal = 2.dp)
+                                        )
                                     }
-                                    Spacer(modifier = Modifier.height(SpacingTokens.XS))
-                                    Text(
-                                        text = stringResource(R.string.explore_map),
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 2.dp)
-                                    )
                                 }
                             }
                         }
-
-                        items(placesClusters, key = { "place_${it.bucketName}" }) { cluster ->
-                            Surface(
-                                onClick = { onAlbumClick("place:${cluster.bucketName}") },
-                                shape = ShapeLargeIncreased,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                shadowElevation = 0.dp,
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .pressScale(pressedScale = 0.96f)
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            shape = ShapeLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = SpacingTokens.XS)
+                                .clickable(onClick = onNavigateToPhotoMap)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.M),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                Surface(
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(36.dp)
                                 ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                            .clip(ShapeMedium),
-                                        shape = ShapeMedium,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shadowElevation = 0.dp
-                                    ) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(Uri.parse(cluster.representativeUri))
-                                                .size(300)
-                                                .crossfade(true)
-                                                .build(),
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_location_on),
                                             contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(SpacingTokens.XS))
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = cluster.bucketName,
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        text = stringResource(R.string.explore_map),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.places_no_geotag_desc),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 2.dp)
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
+                                Icon(
+                                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }

@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -84,11 +86,27 @@ private fun formatGroupHeader(dateAddedSeconds: Long): String {
     }
 }
 
-// Helper to convert drawable to bitmap safely
+// Ensure a bitmap is software-renderable (hardware bitmaps crash on Canvas draw)
+private fun ensureSoftwareBitmap(bitmap: Bitmap): Bitmap {
+    if (bitmap.config == Bitmap.Config.HARDWARE) {
+        return bitmap.copy(Bitmap.Config.ARGB_8888, false)
+            ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    }
+    return bitmap
+}
+
+// Helper to convert drawable to bitmap safely (always returns a software bitmap)
 private fun drawableToBitmap(drawable: Drawable): Bitmap {
     if (drawable is BitmapDrawable) {
-        if (drawable.bitmap != null) {
-            return drawable.bitmap
+        val bmp = drawable.bitmap
+        if (bmp != null) {
+            // Hardware bitmaps cannot be drawn onto a software Canvas;
+            // copy to a software-config bitmap when needed.
+            if (bmp.config == Bitmap.Config.HARDWARE) {
+                return bmp.copy(Bitmap.Config.ARGB_8888, false)
+                    ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            }
+            return bmp
         }
     }
     
@@ -150,18 +168,56 @@ fun PhotoMapScreen(
             // No geotagged photos (imported from MapScanningState.kt)
             NoGeotaggedPhotosState(onBackClick = onBackClick)
         } else {
-            // Map with persistent image sheet
+            // ── Map with BottomSheetScaffold ──
             var mapView by remember { mutableStateOf<MapView?>(null) }
             var focusedMarker by remember { mutableStateOf<Marker?>(null) }
-            
-            // Sheet is locked to 50% height
-            val heightFraction = 0.50f
+            var focusedItemFromMarker by remember { mutableStateOf<GalleryItem?>(null) }
 
-            // Group geotagged items by date
-            val groupedMedia = remember(geotaggedMedia) {
+            // Place name lookups from geocoded cache
+            val placesClusters by galleryViewModel.placesClusters.collectAsState()
+            val placeNameByMediaId by galleryViewModel.placeNameByMediaId.collectAsState()
+
+            // Place filter + search state
+            var selectedPlace by remember { mutableStateOf<String?>(null) }
+            var searchQuery by remember { mutableStateOf("") }
+            var isSearchActive by remember { mutableStateOf(false) }
+
+            // Map style state (0=default, 1=topo, 2=dark)
+            var mapStyle by remember { mutableIntStateOf(0) }
+            val darkTileSource = remember {
+                org.osmdroid.tileprovider.tilesource.XYTileSource(
+                    "CartoDB_Dark", 0, 19, 256, ".png",
+                    arrayOf("https://basemaps.cartocdn.com/dark_all/")
+                )
+            }
+
+            // Filter media by place and search
+            val filteredMedia = remember(geotaggedMedia, selectedPlace, placeNameByMediaId, searchQuery) {
+                var media = geotaggedMedia
+                if (selectedPlace != null) {
+                    media = media.filter { placeNameByMediaId[it.id.toLong()] == selectedPlace }
+                }
+                if (searchQuery.isNotBlank()) {
+                    val q = searchQuery.lowercase()
+                    media = media.filter { item ->
+                        item.name.lowercase().contains(q) ||
+                        (placeNameByMediaId[item.id.toLong()]?.lowercase()?.contains(q) == true) ||
+                        formatGroupHeader(item.dateAdded).lowercase().contains(q)
+                    }
+                }
+                media
+            }
+
+            // Re-cluster based on filtered media
+            val displayClusters = remember(filteredMedia) {
+                clusterPhotos(filteredMedia, clusterRadiusDeg = 0.01)
+            }
+
+            // Group filtered items by date with place names
+            val groupedMedia = remember(filteredMedia, placeNameByMediaId) {
                 val list = mutableListOf<GalleryListItem>()
                 var lastHeader: String? = null
-                geotaggedMedia.forEach { item ->
+                filteredMedia.forEach { item ->
                     val header = formatGroupHeader(item.dateAdded)
                     if (header != lastHeader) {
                         list.add(GalleryListItem.Header(title = header, id = item.id))
@@ -172,14 +228,14 @@ fun PhotoMapScreen(
                 list
             }
 
-            // Grid state to track scrolling
+            // Grid state
             val gridState = rememberLazyGridState()
 
             val clusterBitmaps = remember { mutableStateMapOf<String, Bitmap>() }
 
             // Preload cluster cover thumbnails
-            LaunchedEffect(clusters) {
-                clusters.forEach { cluster ->
+            LaunchedEffect(displayClusters) {
+                displayClusters.forEach { cluster ->
                     val firstItem = cluster.items.firstOrNull()
                     if (firstItem != null && !clusterBitmaps.containsKey(firstItem.id)) {
                         launch(Dispatchers.IO) {
@@ -194,7 +250,7 @@ fun PhotoMapScreen(
                                 val result = loader.execute(request)
                                 val image = (result as? coil3.request.SuccessResult)?.image
                                 val bitmap = when (image) {
-                                    is BitmapImage -> image.bitmap
+                                    is BitmapImage -> ensureSoftwareBitmap(image.bitmap)
                                     is DrawableImage -> drawableToBitmap(image.drawable)
                                     else -> null
                                 }
@@ -207,7 +263,7 @@ fun PhotoMapScreen(
                 }
             }
 
-            // Track the first visible image of the scrolled viewport
+            // Track the first visible image
             val firstVisibleImage by remember(groupedMedia) {
                 derivedStateOf {
                     if (groupedMedia.isEmpty()) return@derivedStateOf null
@@ -227,7 +283,7 @@ fun PhotoMapScreen(
             val haptic = LocalHapticFeedback.current
             var lastHapticId by remember { mutableStateOf<String?>(null) }
 
-            // Haptic feedback on scroll index change
+            // Haptic feedback on scroll
             LaunchedEffect(firstVisibleImage) {
                 val item = firstVisibleImage
                 if (item != null && item.id != lastHapticId) {
@@ -236,43 +292,9 @@ fun PhotoMapScreen(
                 }
             }
 
-            // Phase animation for map marker oscillation
-            val infiniteTransition = rememberInfiniteTransition(label = "markerBreathe")
-            val breatheAnimation by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = (2 * Math.PI).toFloat(),
-                animationSpec = infiniteRepeatable(
-                    animation = tween(4000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "breathe"
-            )
-
             var loadedBitmapState by remember { mutableStateOf<Bitmap?>(null) }
 
-            // Scale animatable for focused marker
-            val markerScale = remember { Animatable(1f) }
-
-            // Scale animation triggered on focused image change
-            LaunchedEffect(firstVisibleImage) {
-                markerScale.snapTo(0f)
-                markerScale.animateTo(
-                    targetValue = 1.1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessHigh
-                    )
-                )
-                markerScale.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                )
-            }
-
-            // 1. Asynchronously load the raw bitmap on change (prevents infinite reloading)
+            // Load focused bitmap
             LaunchedEffect(firstVisibleImage) {
                 val item = firstVisibleImage
                 if (item != null) {
@@ -288,13 +310,11 @@ fun PhotoMapScreen(
                             val result = loader.execute(request)
                             val image = (result as? coil3.request.SuccessResult)?.image
                             when (image) {
-                                is BitmapImage -> image.bitmap
+                                is BitmapImage -> ensureSoftwareBitmap(image.bitmap)
                                 is DrawableImage -> drawableToBitmap(image.drawable)
                                 else -> null
                             }
-                        } catch (e: Exception) {
-                            null
-                        }
+                        } catch (e: Exception) { null }
                     }
                     loadedBitmapState = bitmap
                 } else {
@@ -302,7 +322,7 @@ fun PhotoMapScreen(
                 }
             }
 
-            // 2. Debounced Glide Panning (80ms delay during rapid scroll to prevent jitter)
+            // Debounced map panning on grid scroll
             LaunchedEffect(firstVisibleImage, mapView) {
                 val item = firstVisibleImage
                 val map = mapView
@@ -310,17 +330,16 @@ fun PhotoMapScreen(
                     val lat = item.latitude
                     val lon = item.longitude
                     if (lat != null && lon != null) {
-                        delay(80) // Debounce delay
+                        delay(80)
                         val geoPoint = GeoPoint(lat, lon)
                         map.controller.animateTo(geoPoint)
                     }
                 }
             }
 
-            // 3. Dynamic Marker Render Updating (includes spring-pop scale)
-            val animPhase = breatheAnimation
-            val currentMarkerScale = markerScale.value
-            LaunchedEffect(loadedBitmapState, animPhase, currentMarkerScale, firstVisibleImage, mapView) {
+            // Focused marker update (circular photo marker)
+            val primaryContainerColor = MaterialTheme.colorScheme.primaryContainer.toArgb()
+            LaunchedEffect(loadedBitmapState, firstVisibleImage, mapView) {
                 val item = firstVisibleImage
                 val map = mapView
                 if (item != null && map != null) {
@@ -329,10 +348,17 @@ fun PhotoMapScreen(
                     if (lat != null && lon != null) {
                         val geoPoint = GeoPoint(lat, lon)
                         val bitmap = loadedBitmapState
-                        val wavyDrawable = if (bitmap != null) {
-                            createWavyDrawable(context, bitmap, animPhase, currentMarkerScale)
+                        val density = context.resources.displayMetrics.density
+                        val markerBitmap = if (bitmap != null) {
+                            createCircularMarkerBitmap(
+                                bitmap = bitmap,
+                                sizePx = (64 * density).toInt()
+                            )
                         } else {
-                            createDefaultWavyDrawable(context, animPhase, currentMarkerScale)
+                            createDefaultMarkerBitmap(
+                                sizePx = (44 * density).toInt(),
+                                fillColor = primaryContainerColor
+                            )
                         }
 
                         var marker = focusedMarker
@@ -344,7 +370,7 @@ fun PhotoMapScreen(
                         }
 
                         marker.position = geoPoint
-                        marker.icon = wavyDrawable
+                        marker.icon = BitmapDrawable(context.resources, markerBitmap)
                         marker.title = item.name
 
                         if (!map.overlays.contains(marker)) {
@@ -361,13 +387,238 @@ fun PhotoMapScreen(
                 }
             }
 
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Top Map View
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f - heightFraction)
-                ) {
+            // Map style toggle effect
+            LaunchedEffect(mapStyle) {
+                val source = when (mapStyle) {
+                    1 -> TileSourceFactory.OpenTopo
+                    2 -> try { darkTileSource } catch (_: Exception) { TileSourceFactory.MAPNIK }
+                    else -> TileSourceFactory.MAPNIK
+                }
+                mapView?.setTileSource(source)
+                mapView?.invalidate()
+            }
+
+            // Zoom to place when filter changes
+            LaunchedEffect(selectedPlace, filteredMedia) {
+                val map = mapView ?: return@LaunchedEffect
+                if (selectedPlace != null && filteredMedia.isNotEmpty()) {
+                    val lats = filteredMedia.mapNotNull { it.latitude }
+                    val lons = filteredMedia.mapNotNull { it.longitude }
+                    if (lats.isNotEmpty() && lons.isNotEmpty()) {
+                        val padding = 0.005
+                        map.post {
+                            map.zoomToBoundingBox(
+                                BoundingBox(lats.max() + padding, lons.max() + padding, lats.min() - padding, lons.min() - padding),
+                                true, 80
+                            )
+                        }
+                    }
+                } else if (selectedPlace == null && displayClusters.isNotEmpty()) {
+                    val points = displayClusters.map { it.center }
+                    val padding = 0.02
+                    map.post {
+                        map.zoomToBoundingBox(
+                            BoundingBox(
+                                points.maxOf { it.latitude } + padding, points.maxOf { it.longitude } + padding,
+                                points.minOf { it.latitude } - padding, points.minOf { it.longitude } - padding
+                            ),
+                            true, 80
+                        )
+                    }
+                }
+            }
+
+            // Clear focused item from marker after 3s
+            LaunchedEffect(focusedItemFromMarker) {
+                if (focusedItemFromMarker != null) {
+                    delay(3000)
+                    focusedItemFromMarker = null
+                }
+            }
+
+            // Search back handler
+            androidx.activity.compose.BackHandler(enabled = isSearchActive) {
+                searchQuery = ""
+                isSearchActive = false
+            }
+
+            // ── BottomSheetScaffold Layout ──
+            val scaffoldState = rememberBottomSheetScaffoldState(
+                bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+            )
+
+            BottomSheetScaffold(
+                scaffoldState = scaffoldState,
+                sheetPeekHeight = 88.dp,
+                sheetContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                sheetContentColor = MaterialTheme.colorScheme.onSurface,
+                sheetShape = ShapeEdgeTop,
+                sheetDragHandle = {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp)
+                                .height(4.dp)
+                                .clip(com.inferno.gallery.ui.theme.ShapeFull)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                        )
+                    }
+                },
+                sheetContent = {
+                    // Sheet header
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Places",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            shape = com.inferno.gallery.ui.theme.ShapeFull,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            val placesCount = placesClusters.size
+                            Text(
+                                text = "${filteredMedia.size} photos" + if (placesCount > 0) " · $placesCount places" else "",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    // Place filter chips
+                    if (placesClusters.isNotEmpty()) {
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            item {
+                                androidx.compose.material3.FilterChip(
+                                    selected = selectedPlace == null,
+                                    onClick = { selectedPlace = null },
+                                    label = { Text("All (${geotaggedMedia.size})", style = MaterialTheme.typography.labelMedium) },
+                                    shape = com.inferno.gallery.ui.theme.ShapeFull
+                                )
+                            }
+                            items(placesClusters.size) { index ->
+                                val place = placesClusters[index]
+                                // Skip coordinate-only place names
+                                if (!place.bucketName.startsWith("Location (")) {
+                                    androidx.compose.material3.FilterChip(
+                                        selected = selectedPlace == place.bucketName,
+                                        onClick = {
+                                            selectedPlace = if (selectedPlace == place.bucketName) null else place.bucketName
+                                        },
+                                        label = { Text("${place.bucketName} (${place.itemCount})", style = MaterialTheme.typography.labelMedium) },
+                                        shape = com.inferno.gallery.ui.theme.ShapeFull
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Photo grid
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        state = gridState,
+                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                    ) {
+                        items(
+                            count = groupedMedia.size,
+                            key = { index ->
+                                val item = groupedMedia[index]
+                                when (item) {
+                                    is GalleryListItem.Header -> "header_${item.id}"
+                                    is GalleryListItem.Item -> item.galleryItem.id
+                                }
+                            },
+                            span = { index ->
+                                val item = groupedMedia[index]
+                                if (item is GalleryListItem.Header) GridItemSpan(maxLineSpan) else GridItemSpan(1)
+                            }
+                        ) { index ->
+                            val listItem = groupedMedia[index]
+                            when (listItem) {
+                                is GalleryListItem.Header -> {
+                                    // Date + Place header
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 14.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = listItem.title,
+                                            style = com.inferno.gallery.ui.theme.TimelineDateHeaderStyle,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        // Find the place for the first item in this date group
+                                        val nextItemIndex = groupedMedia.indexOf(listItem) + 1
+                                        val firstItemInGroup = if (nextItemIndex in groupedMedia.indices) {
+                                            (groupedMedia[nextItemIndex] as? GalleryListItem.Item)?.galleryItem
+                                        } else null
+                                        val placeName = firstItemInGroup?.let { placeNameByMediaId[it.id.toLong()] }
+                                        if (placeName != null && !placeName.startsWith("Location (")) {
+                                            Text(
+                                                text = "📍 $placeName",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                                is GalleryListItem.Item -> {
+                                    val item = listItem.galleryItem
+                                    val isHighlighted = item.id == focusedItemFromMarker?.id
+                                    Surface(
+                                        shape = com.inferno.gallery.ui.theme.ShapeMedium,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clip(com.inferno.gallery.ui.theme.ShapeMedium)
+                                            .then(
+                                                if (isHighlighted) Modifier.border(
+                                                    2.dp, MaterialTheme.colorScheme.primaryContainer,
+                                                    com.inferno.gallery.ui.theme.ShapeMedium
+                                                ) else Modifier
+                                            )
+                                            .haptickClickable {
+                                                galleryViewModel.setInitialDetailItem(item, "geotagged")
+                                                onPhotoClick(item.id, "geotagged", null)
+                                            }
+                                    ) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(item.resolvedUri)
+                                                .size(256)
+                                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                                .crossfade(true)
+                                                .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ) { innerPadding ->
+                // ── Map Content (behind the sheet) ──
+                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                     AndroidView(
                         factory = { ctx ->
                             MapView(ctx).apply {
@@ -381,46 +632,52 @@ fun PhotoMapScreen(
                         update = { map ->
                             map.overlays.clear()
 
-                            // Render clusters/other markers
-                            clusters.forEach { cluster ->
+                            // Render cluster & single-photo markers with circular thumbnails
+                            displayClusters.forEach { cluster ->
                                 val count = cluster.items.size
                                 val marker = Marker(map)
                                 marker.position = cluster.center
-                                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                                 marker.title = "${count} photo${if (count > 1) "s" else ""}"
 
-                                val sizeDp = (42 + minOf(count * 2, 20)).coerceAtMost(64)
                                 val density = context.resources.displayMetrics.density
-                                val sizePx = (sizeDp * density).toInt()
-
                                 val firstItem = cluster.items.firstOrNull()
                                 val bitmap = firstItem?.let { clusterBitmaps[it.id] }
 
-                                val drawable = if (bitmap != null) {
-                                    createWavyClusterDrawable(
-                                        context = context,
+                                if (count == 1) {
+                                    val singleBitmap = if (bitmap != null) {
+                                        createCircularMarkerBitmap(
+                                            bitmap = bitmap,
+                                            sizePx = (42 * density).toInt()
+                                        )
+                                    } else {
+                                        createDefaultMarkerBitmap(
+                                            sizePx = (36 * density).toInt(),
+                                            fillColor = tertiaryColor.toArgb()
+                                        )
+                                    }
+                                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                    marker.icon = BitmapDrawable(context.resources, singleBitmap)
+                                } else {
+                                    val sizeDp = (46 + minOf(count * 2, 18)).coerceAtMost(64)
+                                    val sizePx = (sizeDp * density).toInt()
+                                    val placeName = firstItem?.let { placeNameByMediaId[it.id.toLong()] }
+                                        ?.takeIf { !it.startsWith("Location (") }
+                                    val (markerBitmap, anchorY) = createClusterMarkerBitmap(
                                         bitmap = bitmap,
                                         count = count,
                                         sizePx = sizePx,
-                                        bgColor = tertiaryColor.toArgb(),
-                                        textColor = onTertiaryColor.toArgb()
+                                        density = density,
+                                        badgeColor = tertiaryColor.toArgb(),
+                                        badgeTextColor = onTertiaryColor.toArgb(),
+                                        labelText = placeName
                                     )
-                                } else {
-                                    createPlaceholderWavyClusterDrawable(
-                                        context = context,
-                                        count = count,
-                                        sizePx = sizePx,
-                                        bgColor = tertiaryColor.toArgb(),
-                                        textColor = onTertiaryColor.toArgb()
-                                    )
+                                    marker.setAnchor(Marker.ANCHOR_CENTER, anchorY)
+                                    marker.icon = BitmapDrawable(context.resources, markerBitmap)
                                 }
-                                marker.icon = drawable
 
                                 marker.setOnMarkerClickListener { _, _ ->
-                                    // Cluster-burst zoom: fit the map to the cluster's bounding box
                                     val clusterItems = cluster.items
                                     if (clusterItems.size <= 1) {
-                                        // Single item — zoom in close
                                         map.controller.animateTo(cluster.center)
                                         map.controller.setZoom(17.0)
                                     } else {
@@ -429,40 +686,34 @@ fun PhotoMapScreen(
                                         if (lats.isNotEmpty() && lons.isNotEmpty()) {
                                             val padding = 0.003
                                             val boundingBox = BoundingBox(
-                                                lats.max() + padding,
-                                                lons.max() + padding,
-                                                lats.min() - padding,
-                                                lons.min() - padding
+                                                lats.max() + padding, lons.max() + padding,
+                                                lats.min() - padding, lons.min() - padding
                                             )
-                                            map.post {
-                                                map.zoomToBoundingBox(boundingBox, true, 60)
-                                            }
+                                            map.post { map.zoomToBoundingBox(boundingBox, true, 60) }
                                         }
                                     }
-                                    // Smoothly scroll list to the first image of this cluster
-                                    val targetId = clusterItems.firstOrNull()?.id
-                                    val index = groupedMedia.indexOfFirst {
+                                    // Bi-directional sync: marker → grid scroll
+                                    val targetItem = clusterItems.firstOrNull()
+                                    focusedItemFromMarker = targetItem
+                                    val targetId = targetItem?.id
+                                    val idx = groupedMedia.indexOfFirst {
                                         (it as? GalleryListItem.Item)?.galleryItem?.id == targetId
                                     }
-                                    if (index >= 0) {
-                                        coroutineScope.launch {
-                                            gridState.animateScrollToItem(index)
-                                        }
+                                    if (idx >= 0) {
+                                        coroutineScope.launch { gridState.animateScrollToItem(idx) }
                                     }
                                     true
                                 }
                                 map.overlays.add(marker)
                             }
 
-                            // Keep focusedMarker rendered on top
-                            focusedMarker?.let {
-                                map.overlays.add(it)
-                            }
+                            // Keep focused marker on top
+                            focusedMarker?.let { map.overlays.add(it) }
 
-                            // Zoom out to bound initial clusters once when loaded
-                            if (clusters.isNotEmpty() && focusedMarker == null) {
+                            // Initial zoom to fit clusters
+                            if (displayClusters.isNotEmpty() && focusedMarker == null) {
                                 try {
-                                    val points = clusters.map { it.center }
+                                    val points = displayClusters.map { it.center }
                                     val minLat = points.minOf { it.latitude }
                                     val maxLat = points.maxOf { it.latitude }
                                     val minLon = points.minOf { it.longitude }
@@ -470,10 +721,7 @@ fun PhotoMapScreen(
                                     val padding = 0.02
                                     map.post {
                                         map.zoomToBoundingBox(
-                                            BoundingBox(
-                                                maxLat + padding, maxLon + padding,
-                                                minLat - padding, minLon - padding
-                                            ),
+                                            BoundingBox(maxLat + padding, maxLon + padding, minLat - padding, minLon - padding),
                                             true, 80
                                         )
                                     }
@@ -485,199 +733,197 @@ fun PhotoMapScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Top Bar back overlay with transparent material styling
+                    // ── Translucent Top Bar with Search ──
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = com.inferno.gallery.ui.theme.ShapeFull,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
-                            tonalElevation = 0.dp
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = onBackClick,
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                    )
                                 )
-                            ) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
-                            }
+                            )
+                            .statusBarsPadding()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = onBackClick,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_arrow_back), contentDescription = "Back")
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+
+                        // Search bar
                         Surface(
                             shape = com.inferno.gallery.ui.theme.ShapeFull,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
-                            tonalElevation = 0.dp
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+                            modifier = Modifier.weight(1f).height(40.dp)
+                                .clickable { isSearchActive = true }
                         ) {
-                            Text(
-                                text = "Photo Map",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                            )
-                        }
-                    }
-
-                    // Re-center FAB
-                    FloatingActionButton(
-                        onClick = {
-                            mapView?.let { map ->
-                                if (clusters.isNotEmpty()) {
-                                    val points = clusters.map { it.center }
-                                    val minLat = points.minOf { it.latitude }
-                                    val maxLat = points.maxOf { it.latitude }
-                                    val minLon = points.minOf { it.longitude }
-                                    val maxLon = points.maxOf { it.longitude }
-                                    val padding = 0.02
-                                    map.zoomToBoundingBox(
-                                        BoundingBox(
-                                            maxLat + padding, maxLon + padding,
-                                            minLat - padding, minLon - padding
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 14.dp)
+                            ) {
+                                Icon(
+                                    ImageVector.vectorResource(R.drawable.ic_ms_search),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                if (isSearchActive) {
+                                    androidx.compose.foundation.text.BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurface
                                         ),
-                                        true, 80
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { searchQuery = ""; isSearchActive = false },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                ImageVector.vectorResource(R.drawable.ic_ms_close),
+                                                contentDescription = "Clear",
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        "Search places & photos",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
-                        },
-                        shape = com.inferno.gallery.ui.theme.ShapeFull,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 16.dp)
-                            .size(52.dp)
-                    ) {
-                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_my_location), contentDescription = "Re-center", modifier = Modifier.size(24.dp))
+                        }
                     }
-                }
 
-                // Bottom Image Grid Sheet
-                Surface(
-                    shape = ShapeEdgeTop,
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 0.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.5f)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .navigationBarsPadding()
-                    ) {
-                        // Drag Handle / Header area
-                        Row(
+                    // ── Preview Card (shown when focused item exists) ──
+                    val previewItem = focusedItemFromMarker ?: firstVisibleImage
+                    if (previewItem != null) {
+                        val previewPlace = placeNameByMediaId[previewItem.id.toLong()]
+                            ?.takeIf { !it.startsWith("Location (") }
+                        Surface(
+                            shape = com.inferno.gallery.ui.theme.ShapeMedium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                            tonalElevation = 2.dp,
                             modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 12.dp, end = 72.dp, bottom = 12.dp)
                                 .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                                .clickable {
+                                    galleryViewModel.setInitialDetailItem(previewItem, "geotagged")
+                                    onPhotoClick(previewItem.id, "geotagged", null)
+                                }
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(36.dp)
-                                    .height(4.dp)
-                                    .clip(com.inferno.gallery.ui.theme.ShapeFull)
-                                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-                            )
-                        }
-
-                        // Info title
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Geotagged Photos",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Surface(
-                                shape = com.inferno.gallery.ui.theme.ShapeFull,
-                                color = MaterialTheme.colorScheme.secondaryContainer
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(10.dp)
                             ) {
-                                Text(
-                                    text = "${geotaggedMedia.size} items",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        // Scrollable grid
-                        Box(modifier = Modifier.weight(1f)) {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(4),
-                                state = gridState,
-                                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(
-                                    count = groupedMedia.size,
-                                    key = { index ->
-                                        val item = groupedMedia[index]
-                                        when (item) {
-                                            is GalleryListItem.Header -> "header_${item.id}"
-                                            is GalleryListItem.Item -> item.galleryItem.id
-                                        }
-                                    },
-                                    span = { index ->
-                                        val item = groupedMedia[index]
-                                        if (item is GalleryListItem.Header) GridItemSpan(maxLineSpan) else GridItemSpan(1)
-                                    }
-                                ) { index ->
-                                    val listItem = groupedMedia[index]
-                                    when (listItem) {
-                                        is GalleryListItem.Header -> {
-                                            Text(
-                                                text = listItem.title,
-                                                style = com.inferno.gallery.ui.theme.TimelineDateHeaderStyle,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 14.dp)
-                                            )
-                                        }
-                                        is GalleryListItem.Item -> {
-                                            val item = listItem.galleryItem
-                                            Surface(
-                                                shape = com.inferno.gallery.ui.theme.ShapeMedium,
-                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                modifier = Modifier
-                                                    .aspectRatio(1f)
-                                                    .clip(com.inferno.gallery.ui.theme.ShapeMedium)
-                                                    .haptickClickable {
-                                                        galleryViewModel.setInitialDetailItem(item, "geotagged")
-                                                        onPhotoClick(item.id, "geotagged", null)
-                                                    }
-                                            ) {
-                                                AsyncImage(
-                                                    model = ImageRequest.Builder(context)
-                                                        .data(item.resolvedUri)
-                                                        .size(256)
-                                                        .memoryCachePolicy(CachePolicy.ENABLED)
-                                                        .crossfade(true)
-                                                        .build(),
-                                                    contentDescription = null,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            }
-                                        }
-                                    }
+                                Surface(
+                                    shape = com.inferno.gallery.ui.theme.ShapeMedium,
+                                    modifier = Modifier.size(52.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(previewItem.resolvedUri)
+                                            .size(128)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = previewItem.name,
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    val dateStr = formatGroupHeader(previewItem.dateAdded)
+                                    Text(
+                                        text = if (previewPlace != null) "📍 $previewPlace · $dateStr" else dateStr,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
                                 }
                             }
+                        }
+                    }
+
+                    // ── FAB Column (map style + re-center) ──
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 12.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Map style toggle
+                        SmallFloatingActionButton(
+                            onClick = { mapStyle = (mapStyle + 1) % 3 },
+                            shape = com.inferno.gallery.ui.theme.ShapeMedium,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ) {
+                            Icon(
+                                ImageVector.vectorResource(
+                                    when (mapStyle) {
+                                        1 -> R.drawable.ic_ms_terrain
+                                        2 -> R.drawable.ic_ms_dark_mode
+                                        else -> R.drawable.ic_ms_map
+                                    }
+                                ),
+                                contentDescription = "Map style",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Re-center FAB
+                        FloatingActionButton(
+                            onClick = {
+                                mapView?.let { map ->
+                                    if (displayClusters.isNotEmpty()) {
+                                        val points = displayClusters.map { it.center }
+                                        val padding = 0.02
+                                        map.zoomToBoundingBox(
+                                            BoundingBox(
+                                                points.maxOf { it.latitude } + padding,
+                                                points.maxOf { it.longitude } + padding,
+                                                points.minOf { it.latitude } - padding,
+                                                points.minOf { it.longitude } - padding
+                                            ),
+                                            true, 80
+                                        )
+                                    }
+                                }
+                            },
+                            shape = com.inferno.gallery.ui.theme.ShapeFull,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_my_location), contentDescription = "Re-center", modifier = Modifier.size(24.dp))
                         }
                     }
                 }
@@ -686,122 +932,131 @@ fun PhotoMapScreen(
     }
 }
 
-// ── Custom Wavy Marker Drawing ──
+// ── Circular Marker Rendering (Clean, Outline-Free) ──
 
-private fun createWavyDrawable(
-    context: android.content.Context,
-    bitmap: Bitmap,
-    phase: Float,
-    springScale: Float = 1f
-): Drawable {
-    val sizePx = 160
-    val breatheScale = 1.0f + 0.04f * sin(phase)
-    val scale = breatheScale * springScale.coerceAtLeast(0.01f)
-    val finalSize = (sizePx * scale).toInt()
-    val output = Bitmap.createBitmap(finalSize, finalSize, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(output)
-
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val path = Path()
-
-    val centerX = finalSize / 2f
-    val centerY = finalSize / 2f
-    val r0 = (finalSize / 2f) - 12f
-    val amplitude = r0 * 0.07f
-    val waveCount = 8f
-    val numPoints = 120
-    val wavePhase = phase * 2f
-
-    for (i in 0 until numPoints) {
-        val angle = i * (2 * Math.PI / numPoints)
-        val r = r0 + amplitude * sin(waveCount * angle + wavePhase)
-        val x = (centerX + r * cos(angle)).toFloat()
-        val y = (centerY + r * sin(angle)).toFloat()
-        if (i == 0) {
-            path.moveTo(x, y)
-        } else {
-            path.lineTo(x, y)
-        }
+private fun drawCircularPhoto(canvas: Canvas, bitmap: Bitmap, cx: Float, cy: Float, radius: Float) {
+    val scale = (radius * 2f) / minOf(bitmap.width, bitmap.height).toFloat()
+    val matrix = android.graphics.Matrix().apply {
+        setScale(scale, scale)
+        postTranslate(cx - bitmap.width * scale / 2f, cy - bitmap.height * scale / 2f)
     }
-    path.close()
-
-    // Shadow
-    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x2A000000
-        style = Paint.Style.FILL
-    }
-    val shadowPath = Path(path).apply {
-        offset(0f, 4f)
-    }
-    canvas.drawPath(shadowPath, shadowPaint)
-
-    // Clip & Draw Image
-    canvas.save()
-    canvas.clipPath(path)
-    val srcRect = Rect(0, 0, bitmap.width, bitmap.height)
-    val destRect = Rect(0, 0, finalSize, finalSize)
-    canvas.drawBitmap(bitmap, srcRect, destRect, paint)
-    canvas.restore()
-
-    // Border
-    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 6f
-    }
-    canvas.drawPath(path, borderPaint)
-
-    return BitmapDrawable(context.resources, output)
+    val shader = android.graphics.BitmapShader(
+        bitmap,
+        android.graphics.Shader.TileMode.CLAMP,
+        android.graphics.Shader.TileMode.CLAMP
+    ).apply { setLocalMatrix(matrix) }
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { this.shader = shader }
+    canvas.drawCircle(cx, cy, radius, paint)
 }
 
-private fun createDefaultWavyDrawable(
-    context: android.content.Context,
-    phase: Float,
-    springScale: Float = 1f
-): Drawable {
-    val sizePx = 120
-    val breatheScale = 1.0f + 0.04f * sin(phase)
-    val scale = breatheScale * springScale.coerceAtLeast(0.01f)
-    val finalSize = (sizePx * scale).toInt()
-    val output = Bitmap.createBitmap(finalSize, finalSize, Bitmap.Config.ARGB_8888)
+private fun createCircularMarkerBitmap(
+    bitmap: Bitmap,
+    sizePx: Int
+): Bitmap {
+    val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+    val r = sizePx / 2f
+    drawCircularPhoto(canvas, bitmap, r, r, r)
+    return output
+}
+
+private fun createClusterMarkerBitmap(
+    bitmap: Bitmap?,
+    count: Int,
+    sizePx: Int,
+    density: Float,
+    badgeColor: Int,
+    badgeTextColor: Int,
+    labelText: String? = null
+): Pair<Bitmap, Float> {
+    val badgeHeight = 20f * density
+    val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = badgeTextColor
+        textSize = 11f * density
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+    val countStr = count.toString()
+    val badgeWidth = maxOf(badgeHeight, badgeTextPaint.measureText(countStr) + 10f * density)
+
+    val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 11f * density
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+    val labelPillHeight = if (labelText != null) 20f * density else 0f
+    val labelGap = if (labelText != null) 4f * density else 0f
+    val labelPillWidth = if (labelText != null) labelPaint.measureText(labelText) + 14f * density else 0f
+
+    val topPad = ceil(badgeHeight * 0.35f + 1f).toInt()
+    val sidePad = ceil(badgeWidth * 0.55f).toInt()
+    val totalWidth = maxOf(sizePx + sidePad * 2, ceil(labelPillWidth + 4f).toInt())
+    val bottomExtra = ceil(labelGap + labelPillHeight + 2f).toInt()
+    val totalHeight = topPad + sizePx + bottomExtra
+
+    val output = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
 
-    val path = Path()
-    val centerX = finalSize / 2f
-    val centerY = finalSize / 2f
-    val r0 = (finalSize / 2f) - 8f
-    val amplitude = r0 * 0.08f
-    val waveCount = 8f
-    val numPoints = 120
-    val wavePhase = phase * 2f
+    val cx = totalWidth / 2f
+    val cy = topPad + sizePx / 2f
+    val radius = sizePx / 2f
 
-    for (i in 0 until numPoints) {
-        val angle = i * (2 * Math.PI / numPoints)
-        val r = r0 + amplitude * sin(waveCount * angle + wavePhase)
-        val x = (centerX + r * cos(angle)).toFloat()
-        val y = (centerY + r * sin(angle)).toFloat()
-        if (i == 0) {
-            path.moveTo(x, y)
-        } else {
-            path.lineTo(x, y)
+    if (bitmap != null) {
+        drawCircularPhoto(canvas, bitmap, cx, cy, radius)
+        val angleRad = Math.toRadians(-45.0)
+        val badgeCx = (cx + radius * cos(angleRad).toFloat()).coerceAtMost(totalWidth - badgeWidth / 2f - 1f)
+        val badgeCy = (cy + radius * sin(angleRad).toFloat()).coerceAtLeast(badgeHeight / 2f + 1f)
+        val badgeRect = android.graphics.RectF(
+            badgeCx - badgeWidth / 2f,
+            badgeCy - badgeHeight / 2f,
+            badgeCx + badgeWidth / 2f,
+            badgeCy + badgeHeight / 2f
+        )
+        val badgeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = badgeColor; style = Paint.Style.FILL }
+        canvas.drawRoundRect(badgeRect, badgeHeight / 2f, badgeHeight / 2f, badgeFill)
+        val badgeTextY = badgeCy - (badgeTextPaint.ascent() + badgeTextPaint.descent()) / 2f
+        canvas.drawText(countStr, badgeCx, badgeTextY, badgeTextPaint)
+    } else {
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = badgeColor; style = Paint.Style.FILL }
+        canvas.drawCircle(cx, cy, radius, fillPaint)
+        val centerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = badgeTextColor
+            textSize = sizePx * 0.36f
+            textAlign = Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
+        val textY = cy - (centerTextPaint.ascent() + centerTextPaint.descent()) / 2f
+        canvas.drawText(countStr, cx, textY, centerTextPaint)
     }
-    path.close()
 
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.RED
-        style = Paint.Style.FILL
+    if (labelText != null) {
+        val pillTop = cy + radius + labelGap
+        val pillRect = android.graphics.RectF(
+            cx - labelPillWidth / 2f,
+            pillTop,
+            cx + labelPillWidth / 2f,
+            pillTop + labelPillHeight
+        )
+        val labelBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA000000.toInt(); style = Paint.Style.FILL }
+        canvas.drawRoundRect(pillRect, labelPillHeight / 2f, labelPillHeight / 2f, labelBg)
+        val labelTextY = pillRect.centerY() - (labelPaint.ascent() + labelPaint.descent()) / 2f
+        canvas.drawText(labelText, cx, labelTextY, labelPaint)
     }
-    canvas.drawPath(path, fillPaint)
 
-    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
-    }
-    canvas.drawPath(path, borderPaint)
+    return output to (cy / totalHeight)
+}
 
-    return BitmapDrawable(context.resources, output)
+private fun createDefaultMarkerBitmap(
+    sizePx: Int,
+    fillColor: Int
+): Bitmap {
+    val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+    val r = sizePx / 2f
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fillColor; style = Paint.Style.FILL }
+    canvas.drawCircle(r, r, r, fillPaint)
+    return output
 }
 
 // ── Clustering ──
@@ -852,142 +1107,4 @@ private fun clusterPhotos(
     return clusters.sortedByDescending { it.items.size }
 }
 
-// ── Custom Cluster Marker Drawable ──
-
-private fun createWavyClusterDrawable(
-    context: android.content.Context,
-    bitmap: Bitmap,
-    count: Int,
-    sizePx: Int,
-    bgColor: Int,
-    textColor: Int
-): Drawable {
-    val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(output)
-
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val path = Path()
-
-    val centerX = sizePx / 2f
-    val centerY = sizePx / 2f
-    val r0 = sizePx / 2f - 8f
-    val amplitude = r0 * 0.07f
-    val waveCount = 8f
-    val numPoints = 120
-
-    for (i in 0 until numPoints) {
-        val angle = i * (2 * Math.PI / numPoints)
-        val r = r0 + amplitude * sin(waveCount * angle)
-        val x = (centerX + r * cos(angle)).toFloat()
-        val y = (centerY + r * sin(angle)).toFloat()
-        if (i == 0) {
-            path.moveTo(x, y)
-        } else {
-            path.lineTo(x, y)
-        }
-    }
-    path.close()
-
-    // Draw shadow
-    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x2A000000
-        style = Paint.Style.FILL
-    }
-    val shadowPath = Path(path).apply {
-        offset(0f, 3f)
-    }
-    canvas.drawPath(shadowPath, shadowPaint)
-
-    // Clip and draw image
-    canvas.save()
-    canvas.clipPath(path)
-    val srcRect = Rect(0, 0, bitmap.width, bitmap.height)
-    val destRect = Rect(0, 0, sizePx, sizePx)
-    canvas.drawBitmap(bitmap, srcRect, destRect, paint)
-
-    // Draw dark semi-transparent overlay to make text pop
-    val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x66000000
-        style = Paint.Style.FILL
-    }
-    canvas.drawPath(path, overlayPaint)
-    canvas.restore()
-
-    // Draw white border
-    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 5f
-    }
-    canvas.drawPath(path, borderPaint)
-
-    // Draw count text centered
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        textSize = sizePx * 0.35f
-        textAlign = Paint.Align.CENTER
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setShadowLayer(4f, 0f, 2f, 0xFF000000.toInt())
-    }
-    val textY = sizePx / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
-    canvas.drawText(count.toString(), sizePx / 2f, textY, textPaint)
-
-    return BitmapDrawable(context.resources, output)
-}
-
-private fun createPlaceholderWavyClusterDrawable(
-    context: android.content.Context,
-    count: Int,
-    sizePx: Int,
-    bgColor: Int,
-    textColor: Int
-): Drawable {
-    val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(output)
-
-    val path = Path()
-    val centerX = sizePx / 2f
-    val centerY = sizePx / 2f
-    val r0 = sizePx / 2f - 8f
-    val amplitude = r0 * 0.07f
-    val waveCount = 8f
-    val numPoints = 120
-
-    for (i in 0 until numPoints) {
-        val angle = i * (2 * Math.PI / numPoints)
-        val r = r0 + amplitude * sin(waveCount * angle)
-        val x = (centerX + r * cos(angle)).toFloat()
-        val y = (centerY + r * sin(angle)).toFloat()
-        if (i == 0) {
-            path.moveTo(x, y)
-        } else {
-            path.lineTo(x, y)
-        }
-    }
-    path.close()
-
-    // Draw fill with primary background color
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = bgColor
-        style = Paint.Style.FILL
-    }
-    canvas.drawPath(path, fillPaint)
-
-    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
-    }
-    canvas.drawPath(path, borderPaint)
-
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = textColor
-        textSize = sizePx * 0.35f
-        textAlign = Paint.Align.CENTER
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
-    }
-    val textY = sizePx / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
-    canvas.drawText(count.toString(), sizePx / 2f, textY, textPaint)
-
-    return BitmapDrawable(context.resources, output)
-}
+// (Cluster marker rendering now uses createClusterMarkerBitmap above)

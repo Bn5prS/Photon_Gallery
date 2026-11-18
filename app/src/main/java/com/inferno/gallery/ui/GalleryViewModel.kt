@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.MediaEntity
+import com.inferno.gallery.data.db.MediaFaceQuality
 import com.inferno.gallery.data.LocalMediaRepository
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.DockStyle
@@ -98,13 +99,18 @@ data class SmartSearchStatus(
     val modelDownloaded: Boolean,
     val isIndexing: Boolean,
     val indexedCount: Int,
-    val totalCount: Int
+    val totalCount: Int,
+    val isModelDownloading: Boolean = false,
+    val modelDownloadProgress: Int = 0
 )
 
 sealed class GalleryListItem {
     data class Item(val galleryItem: GalleryItem) : GalleryListItem()
     data class Header(val title: String, val id: String = title) : GalleryListItem()
 }
+
+internal fun mapMediaFaceQualities(rows: List<MediaFaceQuality>): Map<String, Float> =
+    rows.associate { it.mediaId.toString() to it.maxQuality }
 
 /**
  * Stable wrapper around the current selection set.
@@ -184,11 +190,25 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         initialValue = emptySet()
     )
     private val database = DatabaseProvider.getDatabase(application)
+    val faceQualityByMediaId: StateFlow<Map<String, Float>> = database.faceDao()
+        .observeMediaFaceQualities()
+        .map(::mapMediaFaceQualities)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
     
 
     // UI State for Place Clusters
     private val _placesClusters = MutableStateFlow<List<com.inferno.gallery.data.db.BucketInfo>>(emptyList())
     val placesClusters: StateFlow<List<com.inferno.gallery.data.db.BucketInfo>> = _placesClusters.asStateFlow()
+
+    // Map of mediaId → placeName from geocoded_locations cache (used by PhotoMapScreen)
+    val placeNameByMediaId: StateFlow<Map<Long, String>> = database.placesDao()
+        .observeAllGeocodedLocations()
+        .map { locations -> locations.associate { it.mediaId to it.placeName } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // ── Duplicate Scan State ──
     private val _duplicateScanState = MutableStateFlow<DuplicateScanState>(DuplicateScanState.Idle)
@@ -2554,15 +2574,44 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             searchJob?.cancel()
             return
         }
-        // Debounce: wait 300ms after user stops typing, then fire searches
+        // Debounce: wait 300ms after user stops typing, then fire searches without polluting history.
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
-            addRecentSearch(query)
             performUnifiedSearch(query)
         }
     }
 
+    /** Submits a search immediately (IME action / suggestion tap) and records recent history. */
+    fun submitSearch(query: String) {
+        val trimmed = query.trim()
+        _searchQuery.value = trimmed
+        searchJob?.cancel()
+        if (trimmed.isBlank()) {
+            _ftsSearchResults.value = emptyList()
+            _smartSearchResults.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+        addRecentSearch(trimmed)
+        searchJob = viewModelScope.launch {
+            performUnifiedSearch(trimmed)
+        }
+    }
+
+    fun startSmartSearchIndexing() {
+        val request = OneTimeWorkRequestBuilder<com.inferno.gallery.workers.SmartSearchIndexWorker>()
+            .build()
+        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
+            "SmartSearchIndexWorker",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    private val modelDownloadWorkFlow = WorkManager.getInstance(getApplication())
+        .getWorkInfosForUniqueWorkFlow("ModelDownloadWorker")
+        .map { it.firstOrNull() }
 
     val smartSearchStatus: StateFlow<SmartSearchStatus> = combine(
         com.inferno.gallery.data.ai.AiIndexingSupport.observeEligibleTotalCount(
@@ -2577,16 +2626,26 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             configFlow = settingsRepository.aiIndexingFolderConfigFlow,
             galleryExcludedFlow = excludedFolders
         ),
-        com.inferno.gallery.data.IndexingProgressManager.clipProgress
-    ) { totalCount, unindexedCount, clipProgress ->
+        com.inferno.gallery.data.IndexingProgressManager.clipProgress,
+        modelDownloadWorkFlow
+    ) { totalCount, unindexedCount, clipProgress, downloadWorkInfo ->
+        val modelReady = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication()).isModelDownloaded()
+        val isDownloading = !modelReady && (
+            downloadWorkInfo?.state == androidx.work.WorkInfo.State.RUNNING ||
+                downloadWorkInfo?.state == androidx.work.WorkInfo.State.ENQUEUED
+            )
+        val downloadProgress = downloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
         val indexed = (totalCount - unindexedCount).coerceAtLeast(0)
         SmartSearchStatus(
-            modelDownloaded = true,
+            modelDownloaded = modelReady,
             isIndexing = clipProgress.isIndexing,
             indexedCount = indexed,
-            totalCount = totalCount
+            totalCount = totalCount,
+            isModelDownloading = isDownloading,
+            modelDownloadProgress = downloadProgress
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SmartSearchStatus(false, false, 0, 0))
+    }.flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SmartSearchStatus(false, false, 0, 0))
 
     /** Whether the smart search ONNX model is downloaded and ready for inference. */
     val isSmartSearchReady: StateFlow<Boolean> = smartSearchStatus
@@ -2656,47 +2715,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
                     val smartDeferred = async(Dispatchers.Default) {
                         try {
+                            val cleanQuery = query.trim()
                             val searchEngine = com.inferno.gallery.data.ai.SmartSearchEngine.getInstance(getApplication())
-                            if (searchEngine.isModelDownloaded()) {
+                            if (cleanQuery.length >= 2 && searchEngine.isModelDownloaded()) {
                                 searchEngine.loadTextModel()
-                                val queryVector = searchEngine.encodeText(query)
+                                val queryVector = searchEngine.encodeText(cleanQuery)
                                 val allEmbeddings = database.embeddingDao().getAllEmbeddings()
                                 if (allEmbeddings.isEmpty()) return@async emptyList()
 
-                                val minConfidence = 0.145f
-                                android.util.Log.i(
-                                    "GalleryViewModel",
-                                    "Smart search for: '$query'. Query vector sample: [${queryVector.take(3).joinToString(", ")}], Total DB embeddings: ${allEmbeddings.size}, MinConfidence: $minConfidence"
-                                )
-
                                 val scored = allEmbeddings.map { record ->
                                     record.mediaId to searchEngine.dotProduct(queryVector, record.embedding)
-                                }.sortedByDescending { it.second }
-
-                                val topScore = scored.firstOrNull()?.second ?: return@async emptyList()
-                                // Noise floor rejection: if top match is below minConfidence, concept is absent from gallery
-                                if (topScore < minConfidence) {
-                                    android.util.Log.d("GalleryViewModel", "Smart search: topScore $topScore < minConfidence $minConfidence, returning empty list")
-                                    return@async emptyList()
                                 }
-
-                                val tokenCount = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.size
-                                val adaptiveGap = when {
-                                    tokenCount <= 1 -> 0.030f // Broad query: increase recall for single words (e.g. "car", "dog", "sunset")
-                                    tokenCount == 2 -> 0.022f
-                                    else -> 0.016f            // Specific query (e.g. "red sports car in rain")
-                                }
-                                val adaptiveThreshold = maxOf(minConfidence, topScore - adaptiveGap)
-                                val maxResults = 200
-                                val matched = scored.filter { it.second >= adaptiveThreshold }.take(maxResults)
+                                val scoringResult = com.inferno.gallery.data.ai.SemanticSearchScorer.filterMatches(
+                                    scored = scored,
+                                    query = cleanQuery
+                                )
                                 android.util.Log.i(
                                     "GalleryViewModel",
-                                    "Smart search: topScore $topScore, adaptiveThreshold $adaptiveThreshold, matches found: ${matched.size}"
+                                    "Smart search '$cleanQuery': total=${allEmbeddings.size}, top=${scoringResult.topScore}, median=${scoringResult.baselineMedian}, threshold=${scoringResult.threshold}, matches=${scoringResult.matches.size}"
                                 )
 
+                                val matched = scoringResult.matches
                                 if (matched.isNotEmpty()) {
-                                    val scoreMap = matched.associate { it.first to it.second }
-                                    val matchedIds = matched.map { it.first }
+                                    val matchMap = matched.associateBy { it.mediaId }
+                                    val matchedIds = matched.map { it.mediaId }
                                     withContext(Dispatchers.IO) {
                                         val entitiesMap = database.mediaDao().getMediaByIdsList(matchedIds).associateBy { it.id }
                                         val orderedEntities = matchedIds.mapNotNull { entitiesMap[it] }
@@ -2712,11 +2754,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                         orderedEntities.map { entity ->
                                             val uri = Uri.parse(entity.uriString)
                                             val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
-                                            val score = scoreMap[entity.id]
-                                            val snippet = score?.let {
-                                                val pct = (((it - 0.145f) / (0.260f - 0.145f)) * 35f + 60f).coerceIn(60f, 99f).toInt()
-                                                "$pct% match"
-                                            }
+                                            val scoredMatch = matchMap[entity.id]
+                                            val snippet = scoredMatch?.let { "${it.confidencePercent}% match" }
                                             GalleryItem(
                                                 id = entity.id.toString(),
                                                 uri = uri,
@@ -2728,7 +2767,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                                 path = entity.filePath,
                                                 isVideo = entity.isVideo,
                                                 durationMs = entity.durationMs,
-                                                searchScore = score,
+                                                searchScore = scoredMatch?.score,
                                                 localExists = exists,
                                                 resolvedUri = resolved,
                                                 matchType = "SEMANTIC",
@@ -2753,14 +2792,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val smartResults = smartDeferred.await().distinctBy { it.id }
                     val ftsIds = ftsResults.map { it.id }.toSet()
                     val unclassifiedSmart = smartResults.filterNot { it.id in ftsIds }
-
-                    // Boost items that matched BOTH FTS (OCR/filename) AND semantic search:
-                    // Dual-matching items are the highest-confidence results in the library.
                     val smartScoreMap = smartResults.associate { it.id to (it.searchScore ?: 0f) }
-                    ftsResults.sortByDescending { item ->
-                        val semanticScore = smartScoreMap[item.id] ?: 0f
-                        if (semanticScore > 0.145f) 10f + semanticScore else 1f
-                    }
 
                     val cleanQ = query.trim()
                     val queryTokens = cleanQ.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
@@ -2818,6 +2850,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         }
                     } else {
                         filteredSmartResults.addAll(unclassifiedSmart)
+                    }
+
+                    // Sort FTS results AFTER promoting OCR+semantic dual matches so high-confidence
+                    // dual matches consistently float to the top of direct matches.
+                    ftsResults.sortByDescending { item ->
+                        val semanticScore = smartScoreMap[item.id] ?: 0f
+                        if (semanticScore > 0f) 10f + semanticScore else 1f
                     }
 
                     searchMatchMap.clear()

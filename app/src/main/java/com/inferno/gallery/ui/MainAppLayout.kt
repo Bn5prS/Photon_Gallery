@@ -1376,6 +1376,9 @@ fun MainAppLayout(
                     },
                     onPersonClick = { personId ->
                         nestedNavController.navigate("person/$personId")
+                    },
+                    onOpenSmartSearchSettings = {
+                        navigateToSettingsSection("Smart Search & OCR")
                     }
                 )
             }

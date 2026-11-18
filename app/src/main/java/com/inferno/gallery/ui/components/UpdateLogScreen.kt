@@ -58,6 +58,19 @@ data class UpdateLogEntry(
 
 val UpdateLogEntries = listOf(
     UpdateLogEntry(
+        versionName = "4.2.0",
+        buildCode = 14,
+        date = "Nov 18, 2026",
+        changes = listOf(
+            "Redesigned Photo Map with 3-stop sheet, circular pins, search, place chips & map styles (#48)",
+            "Per-feature AI indexing folder include/exclude controls & automatic index cleanup (#46)",
+            "Settings JSON backup & restore and configurable default startup tab",
+            "Upgraded Stories carousel to taller portrait cards with indicator pills (#47)",
+            "Upgraded Editorial Mosaic to pure-square Date-Grid Hero layout",
+            "Improved Smart Search noise rejection and Face Recognition clustering accuracy"
+        )
+    ),
+    UpdateLogEntry(
         versionName = "4.1.0",
         buildCode = 13,
         date = "Nov 17, 2026",
