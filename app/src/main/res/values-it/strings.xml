@@ -52,8 +52,8 @@
     <string name="empty_gallery_title">Nessuna foto o video</string>
     <string name="empty_gallery_subtitle">I momenti catturati e i contenuti scaricati appariranno qui</string>
     <string name="media_count_single">%1$d elemento</string>
-    <string name="media_count_multiple">Elementi: %1$d</string>
-    <string name="selected_count">Selezionati: %1$d</string>
+    <string name="media_count_multiple">%1$d elementi</string>
+    <string name="selected_count">%1$d selezionati</string>
 
     <!-- Albums -->
     <string name="album_camera">Fotocamera</string>
@@ -62,7 +62,7 @@
     <string name="album_videos">Video</string>
     <string name="album_trash">Cestino</string>
     <string name="album_archive">Archivio</string>
-    <string name="album_vault">Cassaforte</string>
+    <string name="album_vault">Cassaforte privata</string>
     <string name="pinned_albums">Album fissati</string>
     <string name="all_albums">Tutti gli album</string>
     <string name="media_types">Tipi di contenuto</string>
@@ -143,7 +143,7 @@
     <string name="section_creation_studio">Studio creativo</string>
     <string name="tag_media">Media</string>
     <string name="tag_actions">Azioni</string>
-    <string name="trash_empty_retained">Vuoto</string>
+    <string name="trash_empty_retained">Vuoto • Conservazione 30 giorni</string>
     <string name="vault_status_protected">Protetta</string>
     <string name="tool_sub_layouts">Layout</string>
     <string name="tool_sub_merge">Unisci</string>
@@ -217,7 +217,7 @@
     <string name="setting_strip_exif">Rimuovi la posizione durante la condivisione</string>
     <string name="setting_strip_exif_sub">Rimuovi coordinate GPS e metadati della fotocamera prima di condividere le foto</string>
     <string name="setting_trash_retention">Svuota automaticamente il cestino</string>
-    <string name="setting_trash_retention_sub">Elimina definitivamente gli elementi nel cestino al termine del periodo di conservazione</string>
+    <string name="setting_trash_retention_sub">Elimina definitivamente gli elementi nel cestino dopo 30 giorni</string>
     <string name="setting_privacy_policy">Informativa sulla privacy</string>
     <string name="setting_privacy_policy_sub">Dati locali, zero tracker, zero analytics, privato per progettazione</string>
     <string name="setting_app_version">Versione dell\'app</string>
@@ -235,7 +235,7 @@
     <string name="detail_details">Dettagli</string>
     <string name="detail_slideshow">Presentazione</string>
     <string name="detail_set_wallpaper">Imposta come sfondo</string>
-    <string name="detail_move_vault">Sposta nella Cassaforte</string>
+    <string name="detail_move_vault">Sposta nella Cassaforte privata</string>
     <string name="detail_info_title">Dettagli</string>
     <string name="detail_info_date">Data e ora</string>
     <string name="detail_info_dimensions">Dimensioni</string>
@@ -254,8 +254,8 @@
     <string name="editor_action_cancel">Annulla</string>
     <string name="editor_action_save">Salva</string>
     <string name="editor_action_save_copy">Salva come copia</string>
-    <string name="editor_action_reset">Reimposta</string>
-    <string name="editor_action_undo">Annulla modifica</string>
+    <string name="editor_action_reset">Ripristina</string>
+    <string name="editor_action_undo">Annulla</string>
     <string name="editor_action_redo">Ripeti</string>
     <string name="editor_action_original">Originale</string>
     <string name="editor_action_done">Fine</string>
@@ -330,7 +330,7 @@
     <string name="setting_media_playback_title">Riproduzione multimediale</string>
     <string name="setting_recycle_bin_title">Cestino ed eliminazione</string>
     <string name="setting_retention_period">Periodo di conservazione</string>
-    <string name="days_count">Giorni: %1$d</string>
+    <string name="days_count">%1$d giorni</string>
     <string name="setting_recents_security_title">Sicurezza dello schermo e delle app recenti</string>
     <string name="setting_hide_recents">Nascondi il contenuto nelle app recenti</string>
     <string name="setting_hide_recents_sub">Impedisce di visualizzare il contenuto dell\'app nella schermata delle app recenti (disattiva anche gli screenshot)</string>
@@ -411,7 +411,7 @@
     <string name="setting_grid_style_sub">Scegli come foto e video sono disposti nella timeline principale</string>
     <string name="setting_grid_items_per_row">Elementi della griglia per riga</string>
     <string name="setting_grid_items_sub">Numero di colonne nella timeline</string>
-    <string name="columns_count">Colonne: %1$d</string>
+    <string name="columns_count">%1$d colonne</string>
     <string name="setting_dock_navigation_title">Dock e navigazione</string>
     <string name="setting_restore_spotlight_title">Ripristina il banner In evidenza</string>
     <string name="setting_restore_spotlight_sub">Mostra di nuovo il banner dei ricordi chiuso nel feed principale</string>
@@ -435,9 +435,9 @@
     <string name="explore_map">Esplora la mappa</string>
     <string name="quick_tip">Suggerimento rapido</string>
     <string name="action_change_cover">Cambia copertina</string>
-    <string name="action_reset_cover">Reimposta copertina predefinita</string>
+    <string name="action_reset_cover">Ripristina copertina predefinita</string>
     <string name="action_change_shape">Cambia forma</string>
-    <string name="action_reset_shape">Reimposta forma predefinita</string>
+    <string name="action_reset_shape">Ripristina forma predefinita</string>
     <string name="setting_no_folders_found">Nessuna cartella trovata</string>
     <string name="setting_no_folders_found_sub">Le cartelle multimediali compariranno qui dopo la scansione</string>
     <string name="tip_albums_customize">Tieni premuto su un album per cambiarne la foto di copertina o scegliere forme personalizzate come Biscotto, Trifoglio e Pillola.</string>
@@ -494,9 +494,9 @@
     <string name="editor_save_copy">Salva come copia</string>
     <string name="editor_overwrite">Sovrascrivi originale</string>
     <string name="editor_rotate">Ruota</string>
-    <string name="editor_flip_h">Specchia orizz.</string>
-    <string name="editor_flip_v">Specchia vert.</string>
-    <string name="editor_reset">Reimposta</string>
+    <string name="editor_flip_h">Rifletti orizz.</string>
+    <string name="editor_flip_v">Rifletti vert.</string>
+    <string name="editor_reset">Ripristina</string>
     <string name="places_no_geotag_title">Nessuna foto geolocalizzata</string>
     <string name="places_no_geotag_desc">Le foto con coordinate GPS compariranno qui automaticamente, raggruppate per luogo e città.</string>
     <string name="map_title">Mappa delle foto</string>
@@ -504,7 +504,7 @@
     <string name="map_no_location_desc">Nessuna delle tue foto contiene coordinate GPS. Le foto scattate con la posizione attiva compariranno qui.</string>
     <string name="vault_lock_now">Blocca la Cassaforte ora</string>
     <string name="vault_change_pin">Cambia PIN principale</string>
-    <string name="vault_empty_title">La Cassaforte è vuota</string>
+    <string name="vault_empty_title">Lo spazio privato è vuoto</string>
     <string name="people_merge_similar">Unisci volti simili</string>
     <string name="people_filter_count">Filtra per numero di foto</string>
     <string name="cleaner_select_copies">Seleziona copie</string>
@@ -515,10 +515,10 @@
     <string name="action_hide">Nascondi</string>
     <string name="album_name_label">Nome album</string>
     <string name="dialog_restore_items_title">Ripristina elementi</string>
-    <string name="dialog_restore_items_msg">Ripristinare dal cestino gli elementi selezionati (%1$d)?</string>
+    <string name="dialog_restore_items_msg">Ripristinare %1$d elementi dal cestino?</string>
     <string name="dialog_delete_perm_title">Elimina definitivamente</string>
-    <string name="dialog_delete_perm_msg">Eliminare definitivamente gli elementi selezionati (%1$d)? Questa azione non può essere annullata.</string>
-    <string name="dialog_multi_trash_msg">Spostare nel cestino gli elementi selezionati (%1$d)?</string>
+    <string name="dialog_delete_perm_msg">Eliminare definitivamente %1$d elementi? Questa azione non può essere annullata.</string>
+    <string name="dialog_multi_trash_msg">Spostare %1$d elementi nel cestino?</string>
     <string name="search_empty_title">Cerca foto e video</string>
     <string name="search_empty_subtitle">Cerca per nome file, formato, album, data, testo all\'interno delle foto, oppure descrivi una scena.</string>
     <string name="search_in_progress">Ricerca in corso…</string>
@@ -566,7 +566,7 @@
     <string name="people_photos_count_filter">%1$d+ foto (%2$d)</string>
     <string name="people_move_photos_title">Sposta foto in...</string>
     <string name="people_move_photos_desc">Seleziona una persona a cui spostare %1$d foto.</string>
-    <string name="vault_empty_instruction">Seleziona le foto nella galleria e tocca “Nascondi” per spostarle in questa Cassaforte crittografata.</string>
+    <string name="vault_empty_instruction">Seleziona le foto nella galleria e tocca \"Nascondi\" per spostarle in questo spazio crittografato.</string>
     <string name="picker_tab_all">Tutti</string>
     <string name="cd_back">Indietro</string>
     <string name="cd_more_options">Altre opzioni</string>
@@ -652,8 +652,8 @@
     <string name="toolbar_shelf_drop_hint">Trascina in alto nella barra per aggiungere</string>
     <string name="toolbar_all_tools_active">Tutti gli strumenti disponibili sono già nella barra degli strumenti</string>
     <string name="toolbar_min_limit_toast">Nella barra degli strumenti devono rimanere almeno 2 strumenti</string>
-    <string name="toolbar_reset_toast">Barra degli strumenti reimpostata ai valori predefiniti</string>
-    <string name="toolbar_reset_button">Reimposta predefiniti</string>
+    <string name="toolbar_reset_toast">Barra degli strumenti ripristinata ai valori predefiniti</string>
+    <string name="toolbar_reset_button">Ripristina predefiniti</string>
 
     <!-- Ultra HDR -->
     <string name="settings_ultra_hdr_title">Display Ultra HDR</string>
