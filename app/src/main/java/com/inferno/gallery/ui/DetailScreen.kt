@@ -463,6 +463,29 @@ fun DetailScreen(
             } catch (_: Exception) {
                 true
             }
+        } else if (bucketName == "External" || item.bucketName == "External" || externalItem != null || item.uri.scheme == "content") {
+            if (item.path.isNotBlank() && java.io.File(item.path).exists()) {
+                val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
+                val isHidden = !showHidden && com.inferno.gallery.data.NoMediaUtils.isPathHiddenByNoMedia(item.path)
+                !isHidden
+            } else if (item.uri.scheme == "content") {
+                try {
+                    context.contentResolver.openAssetFileDescriptor(item.uri, "r")?.use { true }
+                        ?: context.contentResolver.openInputStream(item.uri)?.use { true }
+                        ?: false
+                } catch (_: java.io.FileNotFoundException) {
+                    false
+                } catch (_: SecurityException) {
+                    true
+                } catch (_: Exception) {
+                    true
+                }
+            } else if (item.uri.scheme == "file") {
+                val filePath = item.path.ifBlank { item.uri.path ?: "" }
+                if (filePath.isNotBlank()) java.io.File(filePath).exists() else true
+            } else {
+                true
+            }
         } else if (item.path.isNotBlank()) {
             val file = java.io.File(item.path)
             val showHidden = settingsRepo.showHiddenAlbumsFlow.first()
@@ -480,7 +503,7 @@ fun DetailScreen(
                 if (item != null) {
                     coroutineScope.launch(Dispatchers.IO) {
                         if (!isTrashItemExists(item)) {
-                            if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash") {
+                            if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash" && item.bucketName != "External" && bucketName != "External") {
                                 try {
                                     android.media.MediaScannerConnection.scanFile(
                                         context.applicationContext,
@@ -512,7 +535,7 @@ fun DetailScreen(
         if (item != null) {
             withContext(Dispatchers.IO) {
                 if (!isTrashItemExists(item)) {
-                    if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash") {
+                    if (item.path.isNotBlank() && bucketName != "Trash" && item.bucketName != "Trash" && item.bucketName != "External" && bucketName != "External") {
                         try {
                             android.media.MediaScannerConnection.scanFile(
                                 context.applicationContext,

@@ -45,7 +45,7 @@ class DateGridHeroMosaicTest {
     }
 
     @Test
-    fun `promotes favorite over face and camera photo and places first hero on right`() {
+    fun `promotes favorite over face and camera photo and anchors hero on left`() {
         val feed = listOf(
             GalleryListItem.Header("Yesterday"),
             item("1"),
@@ -63,8 +63,8 @@ class DateGridHeroMosaicTest {
         )
 
         assertEquals(3, display.size)
-        val quad = display[1] as MosaicDisplayItem.QuadTileItem
-        val big = display[2] as MosaicDisplayItem.BigTileItem
+        val big = display[1] as MosaicDisplayItem.BigTileItem
+        val quad = display[2] as MosaicDisplayItem.QuadTileItem
         assertEquals("4", big.item.id)
         assertEquals(2, big.span)
         assertEquals(1.0f, big.aspectRatio, 1e-4f)
@@ -88,12 +88,12 @@ class DateGridHeroMosaicTest {
             faceQualityByMediaId = mapOf("11" to 0.61f, "13" to 0.95f)
         )
 
-        val big = display[2] as MosaicDisplayItem.BigTileItem
+        val big = display[1] as MosaicDisplayItem.BigTileItem
         assertEquals("13", big.item.id)
     }
 
     @Test
-    fun `paces two calm 1x1 rows between hero blocks and alternates right then left`() {
+    fun `paces two calm 1x1 rows between hero blocks and anchors heroes on left`() {
         val feed = buildList {
             add(GalleryListItem.Header("Saturday"))
             for (i in 1..18) add(item(i.toString()))
@@ -105,8 +105,8 @@ class DateGridHeroMosaicTest {
             favoriteIds = setOf("2", "17")
         )
 
-        assertTrue(display[1] is MosaicDisplayItem.QuadTileItem)
-        assertEquals("2", (display[2] as MosaicDisplayItem.BigTileItem).item.id)
+        assertEquals("2", (display[1] as MosaicDisplayItem.BigTileItem).item.id)
+        assertTrue(display[2] is MosaicDisplayItem.QuadTileItem)
 
         for (idx in 3..10) {
             assertTrue("Expected SingleItem at $idx", display[idx] is MosaicDisplayItem.SingleItem)
@@ -221,8 +221,8 @@ class DateGridHeroMosaicTest {
         val before4 = buildDateGridHeroItems(feed4.size, { feed4[it] }, columns = 4, favoriteIds = setOf("5"))
         val after4 = buildDateGridHeroItems(feed4.size, { feed4[it] }, columns = 4, favoriteIds = setOf("4"))
 
-        val quadBefore = before4[1] as MosaicDisplayItem.QuadTileItem
-        val quadAfter = after4[1] as MosaicDisplayItem.QuadTileItem
+        val quadBefore = before4[2] as MosaicDisplayItem.QuadTileItem
+        val quadAfter = after4[2] as MosaicDisplayItem.QuadTileItem
         assertNotEquals(quadBefore.key, quadAfter.key)
 
         val feed3 = listOf(
@@ -232,11 +232,11 @@ class DateGridHeroMosaicTest {
         val before3 = buildDateGridHeroItems(feed3.size, { feed3[it] }, columns = 3, favoriteIds = setOf("3"))
         val after3 = buildDateGridHeroItems(feed3.size, { feed3[it] }, columns = 3, favoriteIds = setOf("2"))
 
-        val pairBefore = before3[1] as MosaicDisplayItem.PairTileItem
-        val pairAfter = after3[1] as MosaicDisplayItem.PairTileItem
+        val pairBefore = before3[2] as MosaicDisplayItem.PairTileItem
+        val pairAfter = after3[2] as MosaicDisplayItem.PairTileItem
         assertNotEquals(pairBefore.key, pairAfter.key)
 
-        val big = before4[2] as MosaicDisplayItem.BigTileItem
+        val big = before4[1] as MosaicDisplayItem.BigTileItem
         val single = before4[3] as MosaicDisplayItem.SingleItem
         assertEquals(720, mosaicCellTargetPxOverride(big))
         assertNull(mosaicCellTargetPxOverride(single))

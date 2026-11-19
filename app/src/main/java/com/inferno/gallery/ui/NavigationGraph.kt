@@ -110,7 +110,7 @@ fun NavigationGraph(
                 if (editMode) {
                     navController.navigate("editor?uri=$encoded")
                 } else {
-                    navController.navigate("detail/$encoded")
+                    navController.navigate("detail/$encoded?bucket=External")
                 }
                 mainActivity?.consumeViewIntentUri()
                 mainActivity?.consumeEditIntent()

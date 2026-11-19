@@ -1,5 +1,6 @@
 package com.inferno.gallery.ui
 
+import com.inferno.gallery.ui.components.VideoControlsBottomSheet
 import androidx.compose.material3.FilledTonalIconButton
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -208,6 +209,29 @@ fun VideoPlayerItemWithResolvedUri(
     val autoplayWithSound by settings.autoplayWithSoundEnabledFlow.collectAsState(initial = false)
     val viewerFilmstripEnabled = false // Feature backed up: re-bind to settings.viewerFilmstripEnabledFlow when requested
     var isMuted by remember(autoplayWithSound) { mutableStateOf(!autoplayWithSound) }
+    var playbackSpeed by remember(uri) { mutableFloatStateOf(1.0f) }
+    var rotationDegrees by remember(uri) { mutableStateOf(0) }
+    var isLooping by remember(uri) { mutableStateOf(false) }
+    var resizeMode by remember(uri) { mutableStateOf(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var showControlsSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(playbackSpeed) {
+        exoPlayer.setPlaybackSpeed(playbackSpeed)
+    }
+
+    LaunchedEffect(isLooping) {
+        exoPlayer.repeatMode = if (isLooping) {
+            androidx.media3.common.Player.REPEAT_MODE_ONE
+        } else {
+            androidx.media3.common.Player.REPEAT_MODE_OFF
+        }
+    }
+
+    val animatedRotation by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = rotationDegrees.toFloat(),
+        animationSpec = MotionTokens.snappySpring(),
+        label = "videoRotation"
+    )
 
     DisposableEffect(exoPlayer) {
         val listener = object : androidx.media3.common.Player.Listener {
@@ -534,10 +558,18 @@ fun VideoPlayerItemWithResolvedUri(
                 .clipToBounds()
                 .graphicsLayer {
                     val safeScale = scale.floatValue.coerceAtLeast(0.05f)
-                    scaleX = safeScale
-                    scaleY = safeScale
+                    val isQuarterRotated = (rotationDegrees % 180) != 0
+                    val w = size.width
+                    val h = size.height
+                    val rotationScale = if (isQuarterRotated && w > 0f && h > 0f) {
+                        minOf(w / h, h / w).coerceAtMost(1f)
+                    } else 1f
+
+                    scaleX = safeScale * rotationScale
+                    scaleY = safeScale * rotationScale
                     translationX = offsetX.floatValue
                     translationY = offsetY.floatValue
+                    rotationZ = animatedRotation
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -561,7 +593,7 @@ fun VideoPlayerItemWithResolvedUri(
                             (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
                         }
                         player = exoPlayer
-                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        this.resizeMode = resizeMode
                         try {
                             val method = javaClass.getMethod("setEnableComposeSurfaceSyncWorkaround", Boolean::class.javaPrimitiveType)
                             method.invoke(this, true)
@@ -582,6 +614,9 @@ fun VideoPlayerItemWithResolvedUri(
                     }
                     if (playerView.player != exoPlayer) {
                         playerView.player = exoPlayer
+                    }
+                    if (playerView.resizeMode != resizeMode) {
+                        playerView.resizeMode = resizeMode
                     }
                 },
                 modifier = playerModifier
@@ -613,7 +648,7 @@ fun VideoPlayerItemWithResolvedUri(
                 shadowElevation = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 380.dp)
+                    .widthIn(max = 430.dp)
                     .height(52.dp)
                     .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
@@ -693,7 +728,7 @@ fun VideoPlayerItemWithResolvedUri(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Audio mute / unmute button on right: Circular tonal button
+                    // Audio mute / unmute button: Circular tonal button
                     FilledTonalIconButton(
                         onClick = { isMuted = !isMuted },
                         shape = CircleShape,
@@ -710,8 +745,43 @@ fun VideoPlayerItemWithResolvedUri(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Video controls / tune button: opens M3 Expressive Quick Sheet
+                    val hasCustomSettings = playbackSpeed != 1.0f || rotationDegrees != 0 || isLooping || resizeMode != androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    FilledTonalIconButton(
+                        onClick = { showControlsSheet = true },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (hasCustomSettings) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = if (hasCustomSettings) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                            contentDescription = "Video Controls",
+                            tint = if (hasCustomSettings) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
+        }
+
+        if (showControlsSheet) {
+            VideoControlsBottomSheet(
+                playbackSpeed = playbackSpeed,
+                onPlaybackSpeedChange = { playbackSpeed = it },
+                rotationDegrees = rotationDegrees,
+                onRotationDegreesChange = { rotationDegrees = it },
+                isLooping = isLooping,
+                onLoopingChange = { isLooping = it },
+                resizeMode = resizeMode,
+                onResizeModeChange = { resizeMode = it },
+                onDismissRequest = { showControlsSheet = false }
+            )
         }
     }
 }

@@ -1605,14 +1605,10 @@ internal fun buildDateGridHeroItems(
                     )
                 }
 
-                val heroOnRight = heroBlockIndex % 2 == 0
-                if (heroOnRight) {
-                    result.addAll(companionTiles)
-                    result.add(heroTile)
-                } else {
-                    result.add(heroTile)
-                    result.addAll(companionTiles)
-                }
+                // Always anchor hero tile on the left so that left-to-right reading order
+                // strictly aligns with chronological timeline order and horizontal viewer paging.
+                result.add(heroTile)
+                result.addAll(companionTiles)
 
                 rowCursor = 0
                 heroBlockIndex++

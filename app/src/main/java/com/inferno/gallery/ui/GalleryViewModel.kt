@@ -1339,6 +1339,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         inFlightDetailMediaId = mediaId
         loadDetailJob?.cancel()
         loadDetailJob = viewModelScope.launch(Dispatchers.IO) {
+            if (bucketName == "External") {
+                val parsedUri = runCatching { Uri.parse(mediaId) }.getOrNull()
+                if (parsedUri != null && (parsedUri.scheme == "content" || parsedUri.scheme == "file")) {
+                    _detailMedia.value = listOf(createExternalGalleryItem(mediaId ?: parsedUri.toString(), parsedUri))
+                    currentDetailQueryKey = queryKey
+                    return@launch
+                }
+            }
             if (bucketName == BucketNames.SEARCH_TEXT) {
                 _detailMedia.value = _ftsSearchResults.value
                 currentDetailQueryKey = queryKey
@@ -1493,22 +1501,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     val parsedUri = runCatching { Uri.parse(mediaId) }.getOrNull()
                     if (parsedUri != null && (parsedUri.scheme == "content" || parsedUri.scheme == "file")) {
-                        val isVideo = getApplication<android.app.Application>().contentResolver.getType(parsedUri)?.startsWith("video/") == true
-                        val fallbackItem = GalleryItem(
-                            id = mediaId,
-                            uri = parsedUri,
-                            bucketName = "Camera",
-                            dateAdded = System.currentTimeMillis() / 1000L,
-                            size = 0L,
-                            name = parsedUri.lastPathSegment ?: "Media",
-                            dateModified = System.currentTimeMillis() / 1000L,
-                            path = parsedUri.path ?: "",
-                            isVideo = isVideo,
-                            durationMs = null,
-                            localExists = true,
-                            resolvedUri = parsedUri
-                        )
-                        _detailMedia.value = listOf(fallbackItem)
+                        _detailMedia.value = listOf(createExternalGalleryItem(mediaId, parsedUri))
                     } else {
                         _detailMedia.value = emptyList()
                     }
@@ -1518,6 +1511,96 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 currentDetailQueryKey = queryKey
             }
         }
+    }
+
+    private fun createExternalGalleryItem(mediaId: String, parsedUri: Uri): GalleryItem {
+        val app = getApplication<android.app.Application>()
+        val isVideo = runCatching {
+            val mime = app.contentResolver.getType(parsedUri)
+            mime?.startsWith("video/") == true ||
+                (parsedUri.lastPathSegment ?: "").lowercase().let { 
+                    it.endsWith(".mp4") || it.endsWith(".mkv") || it.endsWith(".mov") || it.endsWith(".webm") || it.endsWith(".avi") || it.endsWith(".3gp")
+                }
+        }.getOrDefault(false)
+
+        val resolvedPath = if (parsedUri.scheme == "file") {
+            parsedUri.path ?: ""
+        } else {
+            runCatching {
+                var filePath = ""
+                app.contentResolver.query(
+                    parsedUri,
+                    arrayOf(android.provider.MediaStore.MediaColumns.DATA),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val dataIdx = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+                        if (dataIdx >= 0) {
+                            filePath = cursor.getString(dataIdx) ?: ""
+                        }
+                    }
+                }
+                if (filePath.isNotEmpty() && java.io.File(filePath).exists()) filePath else ""
+            }.getOrDefault("")
+        }
+
+        val fileName = runCatching {
+            var displayName: String? = null
+            if (parsedUri.scheme == "content") {
+                app.contentResolver.query(
+                    parsedUri,
+                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIdx >= 0) displayName = cursor.getString(nameIdx)
+                    }
+                }
+            }
+            displayName ?: parsedUri.lastPathSegment ?: "Media"
+        }.getOrDefault(parsedUri.lastPathSegment ?: "Media")
+
+        val fileSize = runCatching {
+            var s = 0L
+            if (parsedUri.scheme == "content") {
+                app.contentResolver.query(
+                    parsedUri,
+                    arrayOf(android.provider.OpenableColumns.SIZE),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val sizeIdx = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                        if (sizeIdx >= 0) s = cursor.getLong(sizeIdx)
+                    }
+                }
+            } else if (parsedUri.scheme == "file") {
+                val f = java.io.File(parsedUri.path ?: "")
+                if (f.exists()) s = f.length()
+            }
+            s
+        }.getOrDefault(0L)
+
+        return GalleryItem(
+            id = mediaId,
+            uri = parsedUri,
+            bucketName = "External",
+            dateAdded = System.currentTimeMillis() / 1000L,
+            size = fileSize,
+            name = fileName,
+            dateModified = System.currentTimeMillis() / 1000L,
+            path = resolvedPath,
+            isVideo = isVideo,
+            durationMs = null,
+            localExists = true,
+            resolvedUri = parsedUri
+        )
     }
 
     fun recordMediaView(mediaId: String) {
