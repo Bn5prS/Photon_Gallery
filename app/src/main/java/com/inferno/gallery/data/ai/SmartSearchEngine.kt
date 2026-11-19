@@ -12,6 +12,7 @@ import ai.onnxruntime.OrtSession
 import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import android.os.Build
@@ -48,41 +49,107 @@ class SmartSearchEngine(private val context: Context) {
             }
         }
 
+        data class WeightedPrompt(val text: String, val weight: Float)
+
+        private val WHITESPACE_REGEX = Regex("\\s+")
+
+        private val DOCUMENT_OR_DIGITAL_REGEX = Regex(
+            """\b(screenshot|screenshots|screen\s*shot|receipt|bill|invoice|document|certificate|menu|ticket|card|id|license|licence|aadhaar|aadhar|pan|passport|qr|barcode|note|notes|chat|message)\b""",
+            RegexOption.IGNORE_CASE
+        )
+
         private val PHRASE_EXPANSIONS = listOf(
+            Regex("""\b(phone\s*screen\s*shot(s)?|screen\s*shot(s)?|screenshots?)\b""", RegexOption.IGNORE_CASE) to "phone screenshot screen capture interface",
+            Regex("""\b(mobile\s*phone|cell\s*phone|cellphone|mobile)\b""", RegexOption.IGNORE_CASE) to "smartphone mobile phone",
             Regex("""\b(iron\s*box|ironbox)\b""", RegexOption.IGNORE_CASE) to "clothes iron steam iron",
             Regex("""\b(fridge)\b""", RegexOption.IGNORE_CASE) to "refrigerator fridge",
-            Regex("""\b(specs|spectacles|cooling\s*glass(es)?)\b""", RegexOption.IGNORE_CASE) to "eyeglasses sunglasses spectacles",
+            Regex("""\b(cooling\s*glass(es)?|specs|spectacles)\b""", RegexOption.IGNORE_CASE) to "eyeglasses sunglasses spectacles",
             Regex("""\b(scooty|moped)\b""", RegexOption.IGNORE_CASE) to "motor scooter moped",
             Regex("""\b(ac)\b""", RegexOption.IGNORE_CASE) to "air conditioner",
             Regex("""\b(autorickshaw|rickshaw)\b""", RegexOption.IGNORE_CASE) to "auto rickshaw",
             Regex("""\b(chappal(s)?|slippers)\b""", RegexOption.IGNORE_CASE) to "slippers sandals footwear",
-            Regex("""\b(mobile|cellphone|cell\s*phone)\b""", RegexOption.IGNORE_CASE) to "smartphone mobile phone",
             Regex("""\b(doggie|doggy)\b""", RegexOption.IGNORE_CASE) to "dog puppy",
             Regex("""\b(kitty)\b""", RegexOption.IGNORE_CASE) to "cat kitten",
-            Regex("""\b(aadhaar|aadhar|pan\s*card|voter\s*id|ration\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card government id document",
+            Regex("""\b(aadhaar\s*card|aadhar\s*card|aadhaar|aadhar|pan\s*card|voter\s*id|ration\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card government id document",
             Regex("""\b(driving\s*licen[sc]e|dl)\b""", RegexOption.IGNORE_CASE) to "driving license card id document",
             Regex("""\b(bill|receipt|invoice)\b""", RegexOption.IGNORE_CASE) to "printed receipt bill paper invoice",
-            Regex("""\b(screen\s*shot(s)?|screenshots?)\b""", RegexOption.IGNORE_CASE) to "phone screenshot screen capture interface",
             Regex("""\b(bike|two\s*wheeler)\b""", RegexOption.IGNORE_CASE) to "motorcycle motorbike",
             Regex("""\b(gadi|gaadi)\b""", RegexOption.IGNORE_CASE) to "automobile car passenger vehicle",
-            Regex("""\b(laptop|notebook\s*pc)\b""", RegexOption.IGNORE_CASE) to "laptop computer keyboard",
+            Regex("""\b(notebook\s*pc|laptop)\b""", RegexOption.IGNORE_CASE) to "laptop computer keyboard",
             Regex("""\b(earphones|earbuds|airpods|headset)\b""", RegexOption.IGNORE_CASE) to "headphones earbuds audio device",
-            Regex("""\b(charger|adapter|data\s*cable)\b""", RegexOption.IGNORE_CASE) to "phone charger power adapter cable",
+            Regex("""\b(data\s*cable|charger|adapter)\b""", RegexOption.IGNORE_CASE) to "phone charger power adapter cable",
             Regex("""\b(selfie|selfies)\b""", RegexOption.IGNORE_CASE) to "selfie portrait front camera photo",
             Regex("""\b(baby|infant|toddler)\b""", RegexOption.IGNORE_CASE) to "cute baby infant child",
             Regex("""\b(biryani|biriyani)\b""", RegexOption.IGNORE_CASE) to "spiced rice biryani dish food",
-            Regex("""\b(id\s*card|identity\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card badge document"
+            Regex("""\b(identity\s*card|id\s*card)\b""", RegexOption.IGNORE_CASE) to "identity card badge document",
+            Regex("""\b(bday|b'day)\b""", RegexOption.IGNORE_CASE) to "birthday celebration cake",
+            Regex("""\b(xmas)\b""", RegexOption.IGNORE_CASE) to "christmas holiday tree"
         )
 
         fun normalizeQuery(query: String): String {
-            var q = query.trim()
-            if (q.isEmpty()) return ""
+            val trimmed = query.trim().replace(WHITESPACE_REGEX, " ")
+            if (trimmed.isEmpty()) return ""
+
+            // Single-pass placeholder substitution avoids recursive expansion when one replacement
+            // happens to contain keywords matched by a later expansion rule (e.g. "pan card").
+            var working = trimmed
+            val replacements = ArrayList<String>(4)
             for ((regex, replacement) in PHRASE_EXPANSIONS) {
-                if (regex.containsMatchIn(q)) {
-                    q = regex.replace(q, replacement)
+                working = regex.replace(working) {
+                    val token = "\u0000EXP_${replacements.size}\u0000"
+                    replacements.add(replacement)
+                    token
                 }
             }
-            return q
+            for (i in replacements.indices) {
+                working = working.replace("\u0000EXP_$i\u0000", replacements[i])
+            }
+            return working.replace(WHITESPACE_REGEX, " ").trim()
+        }
+
+        /**
+         * Builds a compact, gallery-aware CLIP prompt ensemble (at most 4 prompts) for zero-shot
+         * retrieval. Multi-template ensembling stabilizes cosine similarity without invalidating
+         * already-indexed image embeddings on disk.
+         */
+        fun buildWeightedPrompts(rawQuery: String): List<WeightedPrompt> {
+            val rawClean = rawQuery.trim().replace(WHITESPACE_REGEX, " ")
+            if (rawClean.isEmpty()) return emptyList()
+
+            val expandedClean = normalizeQuery(rawClean)
+            val wordCount = rawClean.split(' ').count { it.isNotBlank() }
+            val isDocumentOrDigital = DOCUMENT_OR_DIGITAL_REGEX.containsMatchIn(rawClean)
+
+            val rawCandidates = ArrayList<WeightedPrompt>(4)
+            if (!expandedClean.equals(rawClean, ignoreCase = true)) {
+                rawCandidates += WeightedPrompt("a photo of $expandedClean", 1.4f)
+                rawCandidates += WeightedPrompt(expandedClean, 1.0f)
+                if (isDocumentOrDigital) {
+                    rawCandidates += WeightedPrompt("a clear image of $expandedClean", 0.8f)
+                }
+                rawCandidates += WeightedPrompt("a photo of $rawClean", 0.9f)
+            } else if (wordCount >= 4) {
+                rawCandidates += WeightedPrompt(rawClean, 1.6f)
+                rawCandidates += WeightedPrompt("a photo of $rawClean", 1.1f)
+            } else if (isDocumentOrDigital) {
+                rawCandidates += WeightedPrompt("a photo of $rawClean", 1.4f)
+                rawCandidates += WeightedPrompt(rawClean, 1.2f)
+                rawCandidates += WeightedPrompt("a clear image of $rawClean", 0.9f)
+            } else {
+                rawCandidates += WeightedPrompt("a photo of $rawClean", 1.5f)
+                rawCandidates += WeightedPrompt(rawClean, 1.1f)
+                rawCandidates += WeightedPrompt("a good photo of $rawClean", 0.8f)
+            }
+
+            val deduped = LinkedHashMap<String, WeightedPrompt>(rawCandidates.size)
+            for (candidate in rawCandidates) {
+                val key = candidate.text.lowercase(Locale.ROOT)
+                val existing = deduped[key]
+                if (existing == null || candidate.weight > existing.weight) {
+                    deduped[key] = candidate
+                }
+            }
+            return deduped.values.take(4)
         }
     }
 
@@ -287,26 +354,34 @@ class SmartSearchEngine(private val context: Context) {
     fun isLoaded(): Boolean = textSession != null && visionSession != null
 
     fun encodeText(query: String): FloatArray {
-        val trimmed = normalizeQuery(query)
-        if (trimmed.isEmpty()) return FloatArray(EMBEDDING_DIM)
+        val cleanQuery = query.trim().replace(WHITESPACE_REGEX, " ")
+        if (cleanQuery.isEmpty()) return FloatArray(EMBEDDING_DIM)
 
+        val cacheKey = cleanQuery.lowercase(Locale.ROOT)
         synchronized(queryVectorCache) {
-            val cached = queryVectorCache.get(trimmed)
+            val cached = queryVectorCache.get(cacheKey)
             if (cached != null) return cached
         }
 
-        val prompt = if (!trimmed.contains(' ') &&
-            !trimmed.equals("screenshot", ignoreCase = true) &&
-            !trimmed.equals("selfie", ignoreCase = true)
-        ) {
-            "a photo of $trimmed"
+        val prompts = buildWeightedPrompts(cleanQuery)
+        if (prompts.isEmpty()) return FloatArray(EMBEDDING_DIM)
+
+        val normalized = if (prompts.size == 1) {
+            encodeSingleText(prompts[0].text)
         } else {
-            trimmed
+            val weightedSum = FloatArray(EMBEDDING_DIM)
+            for (prompt in prompts) {
+                val vec = encodeSingleText(prompt.text)
+                val limit = minOf(EMBEDDING_DIM, vec.size)
+                for (i in 0 until limit) {
+                    weightedSum[i] += prompt.weight * vec[i]
+                }
+            }
+            l2Normalize(weightedSum)
         }
 
-        val normalized = encodeSingleText(prompt)
         synchronized(queryVectorCache) {
-            queryVectorCache.put(trimmed, normalized)
+            queryVectorCache.put(cacheKey, normalized)
         }
         return normalized
     }
@@ -359,11 +434,7 @@ class SmartSearchEngine(private val context: Context) {
             bitmap
         }
 
-        val resizedBitmap = if (softwareBitmap.width == IMAGE_SIZE && softwareBitmap.height == IMAGE_SIZE) {
-            softwareBitmap
-        } else {
-            Bitmap.createScaledBitmap(softwareBitmap, IMAGE_SIZE, IMAGE_SIZE, true)
-        }
+        val resizedBitmap = prepareCenterCropInputBitmap(softwareBitmap, IMAGE_SIZE)
 
         return try {
             runVisionInference(resizedBitmap, currentEnv, currentVisionSession)

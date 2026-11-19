@@ -18,27 +18,38 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 
 import androidx.compose.ui.graphics.toArgb
 import android.content.Intent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.inferno.gallery.data.AppLockAuthManager
 import com.inferno.gallery.data.SettingsRepository
 import com.inferno.gallery.data.network.UpdateInfo
 import com.inferno.gallery.update.UpdateManager
 import com.inferno.gallery.update.UpdateNotificationHelper
+import com.inferno.gallery.ui.components.AppLockOverlay
 import com.inferno.gallery.ui.components.UpdateDialog
 
 class MainActivity : FragmentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val galleryViewModel: GalleryViewModel by viewModels()
+    private val appLockAuthManager = AppLockAuthManager()
 
     private val _viewIntentUri = kotlinx.coroutines.flow.MutableStateFlow<android.net.Uri?>(null)
     val viewIntentUri: kotlinx.coroutines.flow.StateFlow<android.net.Uri?> = _viewIntentUri.asStateFlow()
@@ -98,6 +109,56 @@ class MainActivity : FragmentActivity() {
             val useSystemFont by settingsViewModel.useSystemFont.collectAsState()
             val fontScale by settingsViewModel.fontScale.collectAsState()
             val secureRecentsEnabled by settingsViewModel.secureRecentsEnabled.collectAsState()
+            val appLockEnabled by settingsViewModel.appLockEnabled.collectAsState()
+            val appLockBiometricEnabled by settingsViewModel.appLockBiometricEnabled.collectAsState()
+            val appLockTimeoutSeconds by settingsViewModel.appLockTimeoutSeconds.collectAsState()
+            var isAppLockAuthenticated by rememberSaveable { mutableStateOf(!appLockEnabled) }
+            var hasUnlockedOnce by rememberSaveable { mutableStateOf(!appLockEnabled) }
+            var lastBackgroundedAtMs by rememberSaveable { mutableStateOf(0L) }
+            val lifecycleOwner = LocalLifecycleOwner.current
+
+            LaunchedEffect(appLockEnabled) {
+                if (!appLockEnabled) {
+                    isAppLockAuthenticated = true
+                    hasUnlockedOnce = true
+                    lastBackgroundedAtMs = 0L
+                }
+            }
+
+            DisposableEffect(lifecycleOwner, appLockTimeoutSeconds, appLockEnabled) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (this@MainActivity.isChangingConfigurations) return@LifecycleEventObserver
+                    when (event) {
+                        Lifecycle.Event.ON_STOP -> {
+                            if (appLockTimeoutSeconds <= 0) {
+                                isAppLockAuthenticated = false
+                                lastBackgroundedAtMs = 0L
+                            } else if (isAppLockAuthenticated) {
+                                lastBackgroundedAtMs = android.os.SystemClock.elapsedRealtime()
+                            }
+                        }
+                        Lifecycle.Event.ON_START -> {
+                            if (appLockEnabled && appLockTimeoutSeconds > 0 && isAppLockAuthenticated && lastBackgroundedAtMs > 0L) {
+                                val elapsedMs = android.os.SystemClock.elapsedRealtime() - lastBackgroundedAtMs
+                                if (elapsedMs >= appLockTimeoutSeconds * 1000L) {
+                                    isAppLockAuthenticated = false
+                                }
+                            }
+                            lastBackgroundedAtMs = 0L
+                        }
+                        else -> Unit
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycleOwner.lifecycle.removeObserver(observer)
+                }
+            }
+
+            val isAppLocked = appLockEnabled &&
+                appLockAuthManager.isPinConfigured(this@MainActivity) &&
+                !isAppLockAuthenticated
+
             val hapticsEnabled by settingsViewModel.hapticsEnabled.collectAsState()
             val hapticsStrength by settingsViewModel.hapticsStrength.collectAsState()
             val animateThemeTransitions by settingsViewModel.animateThemeTransitions.collectAsState()
@@ -132,8 +193,10 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            LaunchedEffect(secureRecentsEnabled) {
-                if (secureRecentsEnabled) {
+            val isVaultUnlocked by galleryViewModel.isVaultUnlocked.collectAsState()
+
+            LaunchedEffect(secureRecentsEnabled, isAppLocked, isVaultUnlocked) {
+                if (secureRecentsEnabled || isAppLocked || isVaultUnlocked) {
                     window.setFlags(
                         android.view.WindowManager.LayoutParams.FLAG_SECURE,
                         android.view.WindowManager.LayoutParams.FLAG_SECURE
@@ -164,11 +227,27 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = backgroundColor
                 ) {
-                    NavigationGraph(
-                        isLoading = isLoading,
-                        settingsViewModel = settingsViewModel
-                    )
-                    UpdateDialog()
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (hasUnlockedOnce || !isAppLocked) {
+                            NavigationGraph(
+                                isLoading = isLoading,
+                                settingsViewModel = settingsViewModel
+                            )
+                        }
+                        if (!isAppLocked) {
+                            UpdateDialog()
+                        }
+                        if (isAppLocked) {
+                            AppLockOverlay(
+                                authManager = appLockAuthManager,
+                                biometricEnabled = appLockBiometricEnabled,
+                                onUnlocked = {
+                                    hasUnlockedOnce = true
+                                    isAppLockAuthenticated = true
+                                }
+                            )
+                        }
+                    }
                 }
                 }
             }
@@ -223,9 +302,14 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handleViewMediaIntent(intent: Intent?) {
-        val action = intent?.action
-        val type = intent?.type
-        val uri = intent?.data
+        if (intent == null) return
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+
+        val action = intent.action
+        val type = intent.type
+        val uri = intent.data ?: intent.clipData?.let { clip ->
+            if (clip.itemCount > 0) clip.getItemAt(0).uri else null
+        }
 
         // If intent is opening a media collection directory (e.g. from camera app tapping gallery shortcut,
         // or system gallery directory intent), we stay on the gallery overview grid (Photos tab).
@@ -239,13 +323,15 @@ class MainActivity : FragmentActivity() {
             return
         }
 
-        val isEdit = action == Intent.ACTION_EDIT || intent?.getBooleanExtra("open_editor", false) == true
+        val isEdit = action == Intent.ACTION_EDIT || intent.getBooleanExtra("open_editor", false)
         if (action == Intent.ACTION_VIEW ||
             action == Intent.ACTION_EDIT ||
             action == "com.android.camera.action.REVIEW" ||
             action == android.provider.MediaStore.ACTION_REVIEW
         ) {
             if (uri != null) {
+                // Force emission even if the exact same URI is tapped twice externally before clearing
+                _viewIntentUri.value = null
                 _isEditIntent.value = isEdit
                 _viewIntentUri.value = uri
             }

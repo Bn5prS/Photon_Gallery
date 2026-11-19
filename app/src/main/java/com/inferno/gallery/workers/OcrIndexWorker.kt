@@ -177,36 +177,48 @@ class OcrIndexWorker(
             safeSetForeground("Starting…")
 
             val db = DatabaseProvider.getDatabase(applicationContext)
+            val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(applicationContext)
 
-            val unindexed = withContext(Dispatchers.IO) {
-                // Self-healing check: If photos are marked indexed for OCR, but image_fts is completely empty,
+            val (unindexed, totalImageCount) = withContext(Dispatchers.IO) {
+                val eligibleTotal = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleTotalCount(
+                    db,
+                    com.inferno.gallery.data.ai.AiIndexingFeature.OCR_TEXT,
+                    aiConfig,
+                    galleryExcluded
+                )
+                // Self-healing check: If eligible photos are marked indexed for OCR, but image_fts is completely empty,
                 // reset is_indexed_ocr so they can actually be processed.
                 val ftsCount = try {
                     val cursor = db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM image_fts")
                     cursor.use { if (it.moveToFirst()) it.getInt(0) else 0 }
                 } catch (_: Exception) { 0 }
 
-                val totalImages = db.mediaDao().getTotalImageCount()
-                val unindexedBefore = db.mediaDao().getUnindexedImageCount()
-                val totalIndexed = totalImages - unindexedBefore
+                val unindexedBefore = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrCount(
+                    db,
+                    aiConfig,
+                    galleryExcluded
+                )
+                val totalIndexed = (eligibleTotal - unindexedBefore).coerceAtLeast(0)
 
-                if (ftsCount == 0 && totalIndexed > 0 && totalImages > 0) {
-                    Log.w(TAG, "Self-healing: Found $totalIndexed photos marked as indexed, but image_fts has 0 rows. Resetting OCR index status.")
+                if (ftsCount == 0 && totalIndexed > 0 && eligibleTotal > 0) {
+                    Log.w(TAG, "Self-healing: Found $totalIndexed eligible photos marked as indexed, but image_fts has 0 rows. Resetting OCR index status.")
                     db.mediaDao().resetOcrIndexStatus()
                 }
 
-                db.mediaDao().getUnindexedOcrMedia()
+                val list = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrMedia(
+                    db,
+                    aiConfig,
+                    galleryExcluded
+                )
+                list to eligibleTotal.coerceAtLeast(list.size)
             }
 
             if (unindexed.isEmpty()) {
-                Log.d(TAG, "Nothing to index.")
+                Log.d(TAG, "Nothing to index in eligible folders.")
                 return Result.success()
             }
 
-            val totalImageCount = withContext(Dispatchers.IO) {
-                db.mediaDao().getTotalImageCount()
-            }
-            val alreadyIndexed = totalImageCount - unindexed.size
+            val alreadyIndexed = (totalImageCount - unindexed.size).coerceAtLeast(0)
             var processedCount = 0
             val recentUris = ArrayDeque<String>(5)
 
@@ -388,11 +400,31 @@ class OcrIndexWorker(
             return Result.retry()
         } finally {
             val db = DatabaseProvider.getDatabase(applicationContext)
-            val total = runCatching { db.mediaDao().getTotalImageCount() }.getOrDefault(0)
-            val unindexed = runCatching { db.mediaDao().getUnindexedImageCount() }.getOrDefault(0)
+            val scope = runCatching {
+                com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(applicationContext)
+            }.getOrNull()
+            val total = if (scope != null) {
+                runCatching {
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleTotalCount(
+                        db,
+                        com.inferno.gallery.data.ai.AiIndexingFeature.OCR_TEXT,
+                        scope.first,
+                        scope.second
+                    )
+                }.getOrDefault(0)
+            } else 0
+            val unindexed = if (scope != null) {
+                runCatching {
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrCount(
+                        db,
+                        scope.first,
+                        scope.second
+                    )
+                }.getOrDefault(0)
+            } else 0
             com.inferno.gallery.data.IndexingProgressManager.updateOcrProgress(
                 isIndexing = false,
-                progress = total - unindexed,
+                progress = (total - unindexed).coerceAtLeast(0),
                 total = total,
                 currentImageName = null
             )

@@ -19,11 +19,19 @@ class MemoriesManagerTest {
     private fun createEntity(
         id: Long,
         yearsAgo: Int,
+        dayOfMonthOverride: Int? = null,
+        monthsAgoExtra: Int = 0,
         bucketName: String = "Camera",
         name: String = "photo_$id.jpg"
     ): CoreMediaEntity {
         val cal = Calendar.getInstance().apply {
             add(Calendar.YEAR, -yearsAgo)
+            if (monthsAgoExtra != 0) {
+                add(Calendar.MONTH, -monthsAgoExtra)
+            }
+            if (dayOfMonthOverride != null) {
+                set(Calendar.DAY_OF_MONTH, dayOfMonthOverride.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
+            }
         }
         val sec = cal.timeInMillis / 1000L
 
@@ -43,7 +51,9 @@ class MemoriesManagerTest {
     }
 
     private class FakeMediaDao(
-        private val mediaList: List<CoreMediaEntity>
+        private val mediaList: List<CoreMediaEntity>,
+        private val pastMonthList: List<CoreMediaEntity> = emptyList(),
+        private val historicalList: List<CoreMediaEntity> = emptyList()
     ) : MediaDao {
         override suspend fun getOnThisDayMedia(month: String, day: String, excludeYear: String): List<CoreMediaEntity> {
             val exYear = excludeYear.toIntOrNull() ?: -1
@@ -141,8 +151,15 @@ class MemoriesManagerTest {
                 monthDays.contains(md) && y != exYear
             }
         }
-        override suspend fun getPastYearsMonthMedia(month: String, excludeYear: String, limit: Int): List<CoreMediaEntity> = emptyList()
-        override suspend fun getHistoricalMedia(beforeTimestampSec: Long, limit: Int): List<CoreMediaEntity> = emptyList()
+        override suspend fun getPastYearsMonthMedia(month: String, excludeYear: String, limit: Int): List<CoreMediaEntity> = pastMonthList.take(limit)
+        override suspend fun getHistoricalMedia(beforeTimestampSec: Long, limit: Int): List<CoreMediaEntity> = historicalList.take(limit)
+        override fun observeIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<Int> = kotlinx.coroutines.flow.flowOf(0)
+        override suspend fun getIntRaw(query: androidx.sqlite.db.SupportSQLiteQuery): Int = 0
+        override suspend fun getLongListRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<Long> = emptyList()
+        override suspend fun getMediaEntitiesRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<CoreMediaEntity> = emptyList()
+        override fun observeImageBucketCounts(): Flow<List<com.inferno.gallery.data.db.BucketImageCount>> = emptyFlow()
+        override suspend fun resetOcrIndexStatusByIds(ids: List<Long>) {}
+        override suspend fun deleteDocumentClassificationsByMediaIds(mediaIds: List<Long>) {}
     }
 
     @Test
@@ -240,5 +257,56 @@ class MemoriesManagerTest {
 
         assertEquals(1, memories.size)
         assertEquals("20", memories[0].coverItem.id)
+    }
+
+    @Test
+    fun testNoDuplicateYearOrBracketedTitlesAcrossSections() = runBlocking {
+        val today = Calendar.getInstance()
+        val offWindowDay = if (today.get(Calendar.DAY_OF_MONTH) > 15) 1 else 25
+        val year2Ago = today.get(Calendar.YEAR) - 2
+        val year3Ago = today.get(Calendar.YEAR) - 3
+
+        val onThisDay = listOf(createEntity(id = 1L, yearsAgo = 2))
+        val pastMonth = listOf(
+            // Same year as Section 1 (must NOT duplicate with a bracketed "(2 Years Ago)" card)
+            createEntity(id = 2L, yearsAgo = 2, dayOfMonthOverride = offWindowDay),
+            createEntity(id = 3L, yearsAgo = 2, dayOfMonthOverride = offWindowDay),
+            // Different year not in Section 1 -> should appear once without brackets
+            createEntity(id = 4L, yearsAgo = 3, dayOfMonthOverride = offWindowDay),
+            createEntity(id = 5L, yearsAgo = 3, dayOfMonthOverride = offWindowDay)
+        )
+        val historical = listOf(
+            // Extra items from same (year2Ago, currentMonth) -> must NOT re-emit
+            createEntity(id = 6L, yearsAgo = 2, dayOfMonthOverride = offWindowDay),
+            createEntity(id = 7L, yearsAgo = 2, dayOfMonthOverride = offWindowDay),
+            // Two different prior months in a non-general folder -> distinct titles with no brackets
+            createEntity(id = 8L, yearsAgo = 2, monthsAgoExtra = 1, bucketName = "Vacation"),
+            createEntity(id = 9L, yearsAgo = 2, monthsAgoExtra = 1, bucketName = "Vacation"),
+            createEntity(id = 10L, yearsAgo = 2, monthsAgoExtra = 2, bucketName = "Vacation"),
+            createEntity(id = 11L, yearsAgo = 2, monthsAgoExtra = 2, bucketName = "Vacation")
+        )
+
+        val dao = FakeMediaDao(
+            mediaList = onThisDay,
+            pastMonthList = pastMonth,
+            historicalList = historical
+        )
+
+        val memories = MemoriesManager.loadOnThisDayMemories(
+            mediaDao = dao,
+            excludedFolders = emptySet(),
+            favoriteIds = emptySet(),
+            uriResolver = { uriStr, _ -> FakeUri(uriStr) }
+        )
+
+        val titles = memories.map { it.title }
+        // No parenthesized year/years-ago labels anywhere
+        assertTrue("Unexpected parentheses in titles: $titles", titles.none { it.contains("(") || it.contains(")") })
+        // Section 2 must NOT add a duplicate card for year2Ago when already covered by Section 1
+        assertEquals(1, memories.count { it.key.startsWith("memory_anniversary_$year2Ago") || it.key.startsWith("memory_month_$year2Ago") })
+        // Covered Section 3 year3Ago card has no duplicate from Section 2
+        assertTrue(memories.any { it.year == year3Ago && it.title.contains(year3Ago.toString()) })
+        // Distinct archival titles even for the same folder across two months
+        assertEquals(titles.size, titles.distinct().size)
     }
 }

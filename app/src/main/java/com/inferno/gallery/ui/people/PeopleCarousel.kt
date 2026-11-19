@@ -161,7 +161,7 @@ private fun PersonAvatarCard(
 ) {
     Column(
         modifier = modifier
-            .width(84.dp)
+            .width(88.dp)
             .pressScale(pressedScale = 0.94f)
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -211,18 +211,15 @@ private fun PersonAvatarCard(
             style = MaterialTheme.typography.labelLarge,
             color = if (person.name != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text(
-            text = if (person.faceCount == 1) stringResource(R.string.photo_count_single, 1) else stringResource(R.string.photo_count_multiple, person.faceCount),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+        PersonPhotoCountText(
+            count = person.faceCount,
+            baseFontSizeSp = 11.5f
         )
     }
 }

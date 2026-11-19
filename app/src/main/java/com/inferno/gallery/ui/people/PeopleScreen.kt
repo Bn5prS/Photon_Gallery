@@ -497,7 +497,10 @@ fun PeopleScreen(
                                     )
                                 }
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.people_filter_count)) },
+                                    text = {
+                                        val baseLabel = stringResource(R.string.people_filter_count)
+                                        Text(if (minPhotosThreshold > 1) "$baseLabel ($minPhotosThreshold+)" else baseLabel)
+                                    },
                                     onClick = {
                                         showMenu = false
                                         showFilterSheet = true
@@ -605,50 +608,7 @@ fun PeopleScreen(
                 )
             }
 
-            // Photo Count Filter Chips Row
-            if (allPeople.isNotEmpty()) {
-                val isCustomActive = minPhotosThreshold > 1
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.XS),
-                    horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // All (1+)
-                    FilterChip(
-                        selected = minPhotosThreshold == 1,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            minPhotosThreshold = 1
-                        },
-                        label = { Text(stringResource(R.string.people_filter_all, allPeople.size)) },
-                        shape = ShapeFull
-                    )
-
-                    // Custom threshold chip
-                    FilterChip(
-                        selected = isCustomActive,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            showFilterSheet = true
-                        },
-                        label = {
-                            Text(if (isCustomActive) "$minPhotosThreshold+ photos (${displayPeople.size})" else "Custom…")
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSizeTokens.S)
-                            )
-                        },
-                        shape = ShapeFull
-                    )
-                }
-            } else if (isScanning) {
+            if (allPeople.isEmpty() && isScanning) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     shape = ShapeFull,
@@ -1091,11 +1051,15 @@ fun PeopleScreen(
                         )
                 ) {
                     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                    val (gridHorizPadDp, gridHorizGapDp) = computePersonGridSpacingDp(gridCols)
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(gridCols),
-                        contentPadding = PaddingValues(SpacingTokens.L),
-                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M),
+                        contentPadding = PaddingValues(
+                            horizontal = gridHorizPadDp.dp,
+                            vertical = SpacingTokens.L
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(gridHorizGapDp.dp),
                         verticalArrangement = Arrangement.spacedBy(SpacingTokens.L),
                         modifier = Modifier
                             .fillMaxSize()
@@ -1275,6 +1239,7 @@ private fun PersonGridCard(
                         else MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -1284,26 +1249,25 @@ private fun PersonGridCard(
                 shape = ShapeFull,
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                 onClick = onAddName,
-                modifier = Modifier.padding(horizontal = SpacingTokens.XS)
+                modifier = Modifier.padding(horizontal = if (gridCols <= 3) SpacingTokens.XS else 2.dp)
             ) {
                 Text(
                     text = "Add name",
                     style = if (gridCols <= 3) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                            else MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = SpacingTokens.S, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = if (gridCols <= 3) SpacingTokens.S else 6.dp, vertical = 2.dp)
                 )
             }
         }
 
-        Text(
-            text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+        PersonPhotoCountText(
+            count = person.faceCount,
+            baseFontSizeSp = initialPhotoCountFontSp(gridCols)
         )
     }
 }

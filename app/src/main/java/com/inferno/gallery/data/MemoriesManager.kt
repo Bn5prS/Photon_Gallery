@@ -92,8 +92,8 @@ object MemoriesManager {
                             }
                         } else {
                             when (yearsAgo) {
-                                1 -> "This Week 1 Year Ago"
-                                else -> "This Week ($yearsAgo Years Ago)"
+                                1 -> "1 Year Ago This Week"
+                                else -> "$yearsAgo Years Ago This Week"
                             }
                         }
 
@@ -135,7 +135,7 @@ object MemoriesManager {
             }
 
             monthYearGroups.keys.sortedDescending().forEach { year ->
-                if (year !in yearsCovered || finalMemoryGroups.size < 5) {
+                if (year !in yearsCovered) {
                     val groupEntities = monthYearGroups[year] ?: emptyList()
                     if (groupEntities.size >= 2) {
                         val galleryItems = groupEntities.map { entityToGalleryItem(it, uriResolver) }
@@ -148,9 +148,9 @@ object MemoriesManager {
                         val title = if (yearsAgo == 1) {
                             "$monthName Last Year"
                         } else {
-                            "$monthName ($yearsAgo Years Ago)"
+                            "$monthName $year"
                         }
-                        val formattedDate = "$monthName $year • $yearsAgo ${if (yearsAgo == 1) "year" else "years"} ago"
+                        val formattedDate = "$yearsAgo ${if (yearsAgo == 1) "year" else "years"} ago"
 
                         finalMemoryGroups.add(
                             MemoryDayGroup(
@@ -188,11 +188,14 @@ object MemoriesManager {
                     cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH)
                 }
 
+                val seenArchiveKeys = mutableSetOf<String>()
                 for ((yearMonth, groupEntities) in historicalGroups) {
                     if (finalMemoryGroups.size >= 8) break
                     if (groupEntities.size < 2) continue
 
                     val (itemYear, itemMonth) = yearMonth
+                    if (itemYear in yearsCovered && itemMonth == (currentMonth - 1)) continue
+
                     val yearsAgo = (currentYear - itemYear).coerceAtLeast(0)
 
                     val galleryItems = groupEntities.map { entityToGalleryItem(it, uriResolver) }
@@ -204,13 +207,15 @@ object MemoriesManager {
                         .maxByOrNull { it.value.size }?.key
 
                     val isGeneralFolder = topBucket in listOf("Camera", "Pictures", "DCIM", "Photos", "0", null)
+                    val formattedMonthYear = monthYearFormat.format(sampleDate)
                     val title = when {
-                        !isGeneralFolder && !topBucket.isNullOrBlank() -> "Trip: $topBucket ($itemYear)"
-                        yearsAgo > 1 -> "Flashback: ${monthYearFormat.format(sampleDate)}"
+                        !isGeneralFolder && !topBucket.isNullOrBlank() -> "$topBucket · $formattedMonthYear"
+                        yearsAgo > 1 -> "Flashback: $formattedMonthYear"
                         yearsAgo == 1 -> "${monthNameFormat.format(sampleDate)} Last Year"
-                        else -> "Moments from ${monthYearFormat.format(sampleDate)}"
+                        else -> "Moments from $formattedMonthYear"
                     }
-                    val formattedDate = monthYearFormat.format(sampleDate)
+                    if (!seenArchiveKeys.add(title)) continue
+                    val formattedDate = formattedMonthYear
 
                     finalMemoryGroups.add(
                         MemoryDayGroup(

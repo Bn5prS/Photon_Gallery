@@ -149,4 +149,38 @@ class SmartSearchEngineTest {
         assertEquals("dog puppy playing", SmartSearchEngine.normalizeQuery("doggy playing"))
         assertEquals("red car", SmartSearchEngine.normalizeQuery("red car"))
     }
+
+    @Test
+    fun testNormalizeQueryDoesNotDoubleExpand() {
+        assertEquals("identity card government id document", SmartSearchEngine.normalizeQuery("pan card"))
+        assertEquals("smartphone mobile phone", SmartSearchEngine.normalizeQuery("mobile phone"))
+        assertEquals("phone screenshot screen capture interface", SmartSearchEngine.normalizeQuery("phone screenshot"))
+        assertEquals("birthday celebration cake", SmartSearchEngine.normalizeQuery("bday"))
+    }
+
+    @Test
+    fun testBuildWeightedPromptsGeneralAndLongQueries() {
+        assertTrue(SmartSearchEngine.buildWeightedPrompts("   ").isEmpty())
+
+        val shortPrompts = SmartSearchEngine.buildWeightedPrompts("sunset")
+        assertEquals(3, shortPrompts.size)
+        assertEquals("a photo of sunset", shortPrompts[0].text)
+        assertEquals("sunset", shortPrompts[1].text)
+        assertEquals("a good photo of sunset", shortPrompts[2].text)
+
+        val longPrompts = SmartSearchEngine.buildWeightedPrompts("dog running on sunny green grass")
+        assertEquals(2, longPrompts.size)
+        assertEquals("dog running on sunny green grass", longPrompts[0].text)
+        assertEquals("a photo of dog running on sunny green grass", longPrompts[1].text)
+
+        val expandedPrompts = SmartSearchEngine.buildWeightedPrompts("fridge")
+        assertEquals(3, expandedPrompts.size)
+        assertEquals("a photo of refrigerator fridge", expandedPrompts[0].text)
+        assertEquals("refrigerator fridge", expandedPrompts[1].text)
+        assertEquals("a photo of fridge", expandedPrompts[2].text)
+
+        val docPrompts = SmartSearchEngine.buildWeightedPrompts("receipt")
+        assertEquals(4, docPrompts.size)
+        assertTrue(docPrompts.any { it.text.contains("clear image") })
+    }
 }

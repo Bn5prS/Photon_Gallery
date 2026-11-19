@@ -62,7 +62,7 @@
     <string name="album_videos">Videos</string>
     <string name="album_trash">Recycle Bin</string>
     <string name="album_archive">Archive</string>
-    <string name="album_vault">Private Vault</string>
+    <string name="album_vault">Private Space</string>
     <string name="pinned_albums">Pinned Albums</string>
     <string name="all_albums">All Albums</string>
     <string name="media_types">Media Types</string>
@@ -235,7 +235,7 @@
     <string name="detail_details">Details</string>
     <string name="detail_slideshow">Slideshow</string>
     <string name="detail_set_wallpaper">Set as wallpaper</string>
-    <string name="detail_move_vault">Move to Private Vault</string>
+    <string name="detail_move_vault">Move to Private Space</string>
     <string name="detail_info_title">Details</string>
     <string name="detail_info_date">Date &amp; Time</string>
     <string name="detail_info_dimensions">Dimensions</string>
@@ -512,7 +512,7 @@
     <string name="cleaner_exact_hash_match">Exact Hash Match</string>
     <string name="action_collage">Collage</string>
     <string name="action_stitch">Stitch</string>
-    <string name="action_hide">Hide</string>
+    <string name="action_hide">Private Space</string>
     <string name="album_name_label">Album name</string>
     <string name="dialog_restore_items_title">Restore Items</string>
     <string name="dialog_restore_items_msg">Restore %1$d items from the Recycle Bin?</string>
@@ -638,7 +638,7 @@ You will not be able to scan or cluster new faces until you download it again. E
     <string name="toast_cannot_delete">Cannot delete this item</string>
     <string name="toast_coords_copied">Coordinates copied!</string>
     <string name="toast_metadata_copied">All metadata copied to clipboard!</string>
-    <string name="toast_pin_success">Vault PIN created successfully!</string>
+    <string name="toast_pin_success">Private Space PIN created successfully!</string>
     <string name="toast_pin_mismatch">PINs did not match, please try again</string>
     <string name="toast_pin_incorrect">Incorrect PIN</string>
     <string name="toast_vault_restored">Restored to gallery</string>

@@ -221,7 +221,8 @@ class NativeTimelineRepository(
             _sortOrder.value != sortOrder ||
             _viewMode.value != viewMode ||
             _groupBy.value != groupBy ||
-            _excludedFolders.value != excluded) {
+            _excludedFolders.value != excluded ||
+            _albumMediaFilter.value != albumMediaFilter) {
             bucketCache.clear()
         }
         _currentBucket.value = bucket
@@ -230,7 +231,7 @@ class NativeTimelineRepository(
         _viewMode.value = viewMode
         _groupBy.value = groupBy
         _excludedFolders.value = excluded
-        _favIds.value == favIds
+        _favIds.value = favIds
         _ftsIds.value = ftsIds
         _smartIds.value = smartIds
         _albumMediaFilter.value = albumMediaFilter
@@ -456,7 +457,9 @@ class NativeTimelineRepository(
                 excluded = _excludedFolders.value,
                 favIds = _favIds.value,
                 ftsIds = _ftsIds.value,
-                smartIds = _smartIds.value
+                smartIds = _smartIds.value,
+                albumMediaFilter = _albumMediaFilter.value,
+                groupBy = _groupBy.value
             )
             bucketCache[cacheKey(targetBucket)] = items
             _timelineSnapshot.value = TimelineSnapshot(bucket = targetBucket, items = items, isLoaded = true)

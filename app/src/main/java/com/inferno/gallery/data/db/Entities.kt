@@ -73,6 +73,11 @@ data class BucketInfo(
     val representativeUri: String
 )
 
+data class BucketImageCount(
+    val bucketName: String,
+    val photoCount: Int
+)
+
 
 
 @Entity(tableName = "geocoded_locations")

@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -40,8 +42,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -108,10 +112,15 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.Density
 import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
@@ -123,10 +132,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
@@ -191,6 +205,7 @@ fun SettingsScreen(
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
     val showPillLabels by viewModel.showPillLabels.collectAsState()
+    val defaultStartupTab by viewModel.defaultStartupTab.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
@@ -199,6 +214,13 @@ fun SettingsScreen(
     val clipProgressState by viewModel.clipProgress.collectAsState()
     val modelDownloadWorkInfo by viewModel.modelDownloadWorkInfo.collectAsState(initial = null)
     val totalImagesCount by viewModel.totalImagesCount.collectAsState()
+    val totalOcrImagesCount by viewModel.totalOcrImagesCount.collectAsState()
+    val totalFaceImagesCount by viewModel.totalFaceImagesCount.collectAsState()
+    val totalSmartSearchImagesCount by viewModel.totalSmartSearchImagesCount.collectAsState()
+    val aiIndexingConfig by viewModel.aiIndexingConfig.collectAsState()
+    val galleryExcludedFolders by viewModel.galleryExcludedFolders.collectAsState()
+    val imageBucketCounts by viewModel.imageBucketCounts.collectAsState()
+    val excludedAiDataSummary by viewModel.excludedAiDataSummary.collectAsState()
     val unindexedOcrImagesCount by viewModel.unindexedOcrImagesCount.collectAsState()
     val stripMetadataOnShare by viewModel.stripMetadataOnShare.collectAsState()
     val exifStripAction by viewModel.exifStripAction.collectAsState()
@@ -208,6 +230,12 @@ fun SettingsScreen(
     val useSystemFont by viewModel.useSystemFont.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val secureRecentsEnabled by viewModel.secureRecentsEnabled.collectAsState()
+    val appLockEnabled by viewModel.appLockEnabled.collectAsState()
+    val appLockBiometricEnabled by viewModel.appLockBiometricEnabled.collectAsState()
+    val appLockTimeoutSeconds by viewModel.appLockTimeoutSeconds.collectAsState()
+    val appLockAuthManager = remember { com.inferno.gallery.data.AppLockAuthManager() }
+    var activeAppLockDialogMode by remember { mutableStateOf<com.inferno.gallery.ui.components.AppLockDialogMode?>(null) }
+    var showAppLockTimeoutDialog by remember { mutableStateOf(false) }
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val hapticsStrength by viewModel.hapticsStrength.collectAsState()
     val viewerBlurEffect by viewModel.viewerBlurEffect.collectAsState()
@@ -233,6 +261,44 @@ fun SettingsScreen(
     val faceAutoIndex by viewModel.faceAutoIndex.collectAsState()
 
     val context = LocalContext.current
+    val settingsCoroutineScope = rememberCoroutineScope()
+    val exportSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            settingsCoroutineScope.launch {
+                try {
+                    val json = viewModel.exportSettingsJson()
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            out.write(json.toByteArray(Charsets.UTF_8))
+                        } ?: throw IllegalStateException("Could not open destination file")
+                    }
+                    Toast.makeText(context, "Settings backed up successfully", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "Failed to back up settings", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+    val importSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            settingsCoroutineScope.launch {
+                try {
+                    val json = withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                            ?: throw IllegalStateException("Could not read backup file")
+                    }
+                    val restoredCount = viewModel.importSettingsJson(json)
+                    Toast.makeText(context, "Restored $restoredCount settings", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "Failed to restore settings", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
     val isHdrSupported = remember(context) { UltraHdrHelper.isHdrSupported(context) }
     val uriHandler = LocalUriHandler.current
     val haptic = LocalHapticFeedback.current
@@ -604,31 +670,74 @@ fun SettingsScreen(
     }
 
 
-    androidx.activity.compose.BackHandler(enabled = activeSection != null) {
-        onActiveSectionChange(
-            when (activeSection) {
-                "Update Log" -> "About"
-                "Customize Toolbars" -> "Layout & Navigation"
-                else -> null
-            }
-        )
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val allowInteractions = if (activeSection == null) {
+        lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    } else {
+        lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     }
 
-    Column(
+    Surface(
         modifier = Modifier
-            .padding(contentPadding)
             .fillMaxSize()
-    ) {
-        AnimatedContent(
-            targetState = activeSection,
-            transitionSpec = {
-                fadeIn(animationSpec = MotionTokens.snappySpring()) togetherWith
-                        fadeOut(animationSpec = MotionTokens.snappySpring())
+            .pointerInput(allowInteractions) {
+                if (!allowInteractions) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
             },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            label = "SettingsSectionContent"
-        ) { section ->
-            if (section == null) {
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(contentPadding)
+                .fillMaxSize()
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PhotonBackButton(onClick = onBackClick)
+                    val settingsHeaderTitle = when (activeSection) {
+                        "Look & Feel" -> stringResource(R.string.category_theme_display)
+                        "Layout & Navigation" -> stringResource(R.string.category_layout_navigation)
+                        "Customize Toolbars" -> stringResource(R.string.customize_toolbars_title)
+                        "General" -> stringResource(R.string.category_general)
+                        "Smart Search & OCR" -> stringResource(R.string.smart_search)
+                        "AI Indexing Folders" -> "Folders to Index"
+                        "Privacy & Security" -> stringResource(R.string.category_security_privacy)
+                        "About" -> stringResource(R.string.category_about)
+                        null -> stringResource(R.string.settings_title)
+                        else -> activeSection
+                    }
+                    Text(
+                        settingsHeaderTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(start = 12.dp)
+                            .weight(1f)
+                    )
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val section = activeSection
+                if (section == null) {
                 // ── Main Settings Categories View (Grouped Cards) ──────────────
                 Column(
                     modifier = Modifier
@@ -731,6 +840,7 @@ fun SettingsScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(28.dp))
+                    Spacer(modifier = Modifier.navigationBarsPadding())
                 }
             } else {
                 // ── Sub-Screens (Connected Segmented Cards) ────────────────────
@@ -1297,6 +1407,92 @@ fun SettingsScreen(
                                             onCheckedChange = { viewModel.setShowVideosInDock(it) }
                                         )
                                     }
+                                    add {
+                                        val tabOptions = buildList {
+                                            add("photos" to stringResource(R.string.nav_photos))
+                                            if (showVideosInDock) {
+                                                add("videos" to stringResource(R.string.album_videos))
+                                            }
+                                            add("albums" to stringResource(R.string.nav_albums))
+                                            add("collections" to stringResource(R.string.nav_collections))
+                                        }
+                                        val activeStartupTab = com.inferno.gallery.data.SettingsRepository.sanitizeStartupTab(
+                                            defaultStartupTab,
+                                            showVideosInDock
+                                        )
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Default Startup Tab",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Surface(
+                                                shape = ShapeFull,
+                                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 0.dp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(44.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(4.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    tabOptions.forEachIndexed { index, (tabId, tabLabel) ->
+                                                        val isSelected = tabId == activeStartupTab
+                                                        val shape = com.inferno.gallery.ui.theme.getSegmentShape(
+                                                            index = index,
+                                                            total = tabOptions.size,
+                                                            outerCorner = 20.dp,
+                                                            innerCorner = 6.dp
+                                                        )
+                                                        Surface(
+                                                            shape = shape,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                            tonalElevation = 0.dp,
+                                                            shadowElevation = 0.dp,
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .fillMaxHeight()
+                                                                .clip(shape)
+                                                                .clickable { viewModel.setDefaultStartupTab(tabId) }
+                                                        ) {
+                                                            Box(
+                                                                contentAlignment = Alignment.Center,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .padding(horizontal = 4.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = tabLabel,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                                    ),
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = "Choose which tab opens first when launching Photon Gallery",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
                             )
 
@@ -1437,7 +1633,7 @@ fun SettingsScreen(
 
                         "Customize Toolbars" -> {
                             com.inferno.gallery.ui.settings.CustomizeToolbarsScreen(
-                                onBackClick = { onActiveSectionChange("Layout & Navigation") },
+                                onBackClick = onBackClick,
                                 settingsViewModel = viewModel,
                                 showTopBar = false
                             )
@@ -1645,13 +1841,41 @@ fun SettingsScreen(
                                     }
                                 )
                             )
+
+                            // ── Card 5: Backup & Restore ──
+                            SettingsGroupCard(
+                                title = "Backup & Restore",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Backup Settings",
+                                            subtitle = "Export preferences, theme, and layout choices to a JSON file",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_save),
+                                            onClick = {
+                                                exportSettingsLauncher.launch("photon_gallery_settings.json")
+                                            }
+                                        )
+                                    },
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Restore Settings",
+                                            subtitle = "Import preferences from a saved Photon Gallery backup file",
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_download),
+                                            onClick = {
+                                                importSettingsLauncher.launch(arrayOf("application/json", "*/*"))
+                                            }
+                                        )
+                                    }
+                                )
+                            )
                         }
 
                         "Smart Search & OCR" -> {
-                            val dbIndexed = totalImagesCount - unindexedOcrImagesCount
+                            val eligibleOcrTotal = totalOcrImagesCount
+                            val dbIndexed = (eligibleOcrTotal - unindexedOcrImagesCount).coerceAtLeast(0)
                             val isOcrRunning = ocrProgressState.isIndexing
                             val ocrIndexed = if (isOcrRunning) ocrProgressState.progress else dbIndexed
-                            val ocrTotal = if (isOcrRunning) ocrProgressState.total else totalImagesCount
+                            val ocrTotal = if (isOcrRunning) ocrProgressState.total else eligibleOcrTotal
 
                             // ── 100% On-Device & Open Source Privacy Explainer Card ──
                             Surface(
@@ -1705,6 +1929,32 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+
+                            // ── Folder Scope & Device Burden Card ──
+                            val scopeSummarySubtitle = remember(aiIndexingConfig, galleryExcludedFolders, imageBucketCounts, totalSmartSearchImagesCount, totalFaceImagesCount, totalOcrImagesCount) {
+                                if (!aiIndexingConfig.hasAnyCustomRule() && aiIndexingConfig.respectGalleryExcluded) {
+                                    if (galleryExcludedFolders.isEmpty()) {
+                                        "All folders ($totalOcrImagesCount photos) · Tap to include or exclude folders per model"
+                                    } else {
+                                        "Skipping ${galleryExcludedFolders.size} gallery hidden folder${if (galleryExcludedFolders.size != 1) "s" else ""} · Tap to customize per model"
+                                    }
+                                } else {
+                                    "Search: $totalSmartSearchImagesCount · Faces: $totalFaceImagesCount · Text: $totalOcrImagesCount photos"
+                                }
+                            }
+                            SettingsGroupCard(
+                                title = "Indexing Scope",
+                                items = listOf(
+                                    {
+                                        ClickableSettingItem(
+                                            title = "Folders to Index",
+                                            subtitle = scopeSummarySubtitle,
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_folder),
+                                            onClick = { onActiveSectionChange("AI Indexing Folders") }
+                                        )
+                                    }
+                                )
+                            )
 
                             // ── Text Search in Photos Group Card (Pixel Breathe) ──
                             val ocrItems = mutableListOf<@Composable () -> Unit>()
@@ -1896,8 +2146,8 @@ fun SettingsScreen(
                             val faceDownloadProgress = faceModelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
                             val rawFaceProcessed = if (faceProgressState.total > 0) faceProgressState.progress else (faceIndexWorkInfo?.progress?.getInt("processed", 0) ?: 0)
                             val rawFaceTotal = if (faceProgressState.total > 0) faceProgressState.total else (faceIndexWorkInfo?.progress?.getInt("total", 0) ?: 0)
-                            val faceTotal = if (rawFaceTotal > 0) rawFaceTotal else totalImagesCount
-                            val faceProcessed = if (rawFaceTotal > 0) rawFaceProcessed else (totalImagesCount - unindexedFacesCount).coerceAtLeast(0)
+                            val faceTotal = if (rawFaceTotal > 0) rawFaceTotal else totalFaceImagesCount
+                            val faceProcessed = if (rawFaceTotal > 0) rawFaceProcessed else (totalFaceImagesCount - unindexedFacesCount).coerceAtLeast(0)
                             val facePending = (faceTotal - faceProcessed).coerceAtLeast(0).let { if (it > 0) it else unindexedFacesCount }
                             val faceProgressFloat = if (faceTotal > 0) (faceProcessed.toFloat() / faceTotal.toFloat()).coerceIn(0f, 1f) else 0f
                             val faceItems = mutableListOf<@Composable () -> Unit>()
@@ -2243,9 +2493,9 @@ fun SettingsScreen(
                             val downloadProgress = modelDownloadWorkInfo?.progress?.getInt("progress", 0) ?: 0
                             val isClipIndexing = clipProgressState.isIndexing
                             val unindexedClip = unindexedSmartSearchCount
-                            val indexedClip = maxOf(0, totalImagesCount - unindexedClip)
+                            val indexedClip = maxOf(0, totalSmartSearchImagesCount - unindexedClip)
                             val displayClipIndexed = if (isClipIndexing) clipProgressState.progress else indexedClip
-                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalImagesCount
+                            val displayClipTotal = if (isClipIndexing) clipProgressState.total else totalSmartSearchImagesCount
                             val smartCurrentImageName = clipProgressState.currentImageName
 
                             val smartSearchItems = mutableListOf<@Composable () -> Unit>()
@@ -2532,6 +2782,84 @@ fun SettingsScreen(
                         }
 
                         "Privacy & Security" -> {
+                            val appLockItems = mutableListOf<@Composable () -> Unit>(
+                                {
+                                    SwitchSettingItem(
+                                        title = "App Lock",
+                                        subtitle = "Require PIN or fingerprint to open Photon Gallery",
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_lock),
+                                        checked = appLockEnabled,
+                                        onCheckedChange = { enable ->
+                                            if (enable) {
+                                                if (appLockAuthManager.isPinConfigured(context)) {
+                                                    viewModel.setAppLockEnabled(true)
+                                                } else {
+                                                    activeAppLockDialogMode = com.inferno.gallery.ui.components.AppLockDialogMode.SETUP
+                                                }
+                                            } else {
+                                                if (appLockAuthManager.isPinConfigured(context)) {
+                                                    activeAppLockDialogMode = com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE
+                                                } else {
+                                                    viewModel.setAppLockEnabled(false)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+
+                            if (appLockEnabled) {
+                                val biometricsAvailable = appLockAuthManager.canAuthenticateWithBiometrics(context)
+                                appLockItems.add {
+                                    SwitchSettingItem(
+                                        title = "Biometric Unlock",
+                                        subtitle = "Use fingerprint or face to unlock the app",
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_fingerprint),
+                                        checked = appLockBiometricEnabled && biometricsAvailable,
+                                        onCheckedChange = { enable ->
+                                            if (enable && !biometricsAvailable) {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "No biometrics enrolled on this device",
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else if (appLockAuthManager.isPinConfigured(context)) {
+                                                activeAppLockDialogMode = if (enable) {
+                                                    com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_ENABLE_BIOMETRIC
+                                                } else {
+                                                    com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE_BIOMETRIC
+                                                }
+                                            } else {
+                                                viewModel.setAppLockBiometricEnabled(enable)
+                                            }
+                                        }
+                                    )
+                                }
+                                appLockItems.add {
+                                    ClickableSettingItem(
+                                        title = "Auto-lock Timeout",
+                                        subtitle = formatAppLockTimeoutLabel(appLockTimeoutSeconds),
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_schedule),
+                                        onClick = { showAppLockTimeoutDialog = true }
+                                    )
+                                }
+                                appLockItems.add {
+                                    ClickableSettingItem(
+                                        title = "Change App Lock PIN",
+                                        subtitle = "Update your 4-digit App Lock PIN",
+                                        icon = ImageVector.vectorResource(R.drawable.ic_ms_key),
+                                        onClick = {
+                                            activeAppLockDialogMode = com.inferno.gallery.ui.components.AppLockDialogMode.CHANGE_PIN
+                                        }
+                                    )
+                                }
+                            }
+
+                            SettingsGroupCard(
+                                title = "App Lock",
+                                items = appLockItems
+                            )
+
                             SettingsGroupCard(
                                 title = stringResource(R.string.setting_recents_security_title),
                                 items = listOf(
@@ -2642,6 +2970,85 @@ fun SettingsScreen(
                                     }
                                 )
                             }
+
+                            activeAppLockDialogMode?.let { dialogMode ->
+                                com.inferno.gallery.ui.components.AppLockPinFlowDialog(
+                                    mode = dialogMode,
+                                    authManager = appLockAuthManager,
+                                    onSuccess = {
+                                        when (dialogMode) {
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.SETUP -> {
+                                                viewModel.setAppLockEnabled(true)
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.CHANGE_PIN -> {
+                                                // PIN saved inside dialog
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE -> {
+                                                viewModel.setAppLockEnabled(false)
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_ENABLE_BIOMETRIC -> {
+                                                viewModel.setAppLockBiometricEnabled(true)
+                                            }
+                                            com.inferno.gallery.ui.components.AppLockDialogMode.VERIFY_TO_DISABLE_BIOMETRIC -> {
+                                                viewModel.setAppLockBiometricEnabled(false)
+                                            }
+                                        }
+                                        activeAppLockDialogMode = null
+                                    },
+                                    onDismiss = {
+                                        activeAppLockDialogMode = null
+                                    }
+                                )
+                            }
+
+                            if (showAppLockTimeoutDialog) {
+                                val timeoutOptions = listOf(
+                                    0 to "Immediately (on exit)",
+                                    20 to "After 20 seconds",
+                                    60 to "After 1 minute",
+                                    300 to "After 5 minutes",
+                                    900 to "After 15 minutes"
+                                )
+                                AlertDialog(
+                                    onDismissRequest = { showAppLockTimeoutDialog = false },
+                                    title = { Text("Auto-lock Timeout", fontWeight = FontWeight.Bold) },
+                                    text = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            timeoutOptions.forEach { (seconds, label) ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .clickable {
+                                                            viewModel.setAppLockTimeoutSeconds(seconds)
+                                                            showAppLockTimeoutDialog = false
+                                                        }
+                                                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    RadioButton(
+                                                        selected = appLockTimeoutSeconds == seconds,
+                                                        onClick = {
+                                                            viewModel.setAppLockTimeoutSeconds(seconds)
+                                                            showAppLockTimeoutDialog = false
+                                                        }
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyLarge
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { showAppLockTimeoutDialog = false }) {
+                                            Text("Close")
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         "Excluded Folders" -> {
@@ -2710,6 +3117,30 @@ fun SettingsScreen(
                             }
                         }
 
+                        "AI Indexing Folders" -> {
+                            val allFolders by galleryViewModel.allBucketNames.collectAsState()
+                            AiIndexingFoldersSection(
+                                allFolders = allFolders,
+                                imageBucketCounts = imageBucketCounts,
+                                galleryExcluded = galleryExcludedFolders,
+                                aiConfig = aiIndexingConfig,
+                                excludedDataSummary = excludedAiDataSummary,
+                                onSetRespectGalleryExcluded = { viewModel.setAiRespectGalleryExcluded(it) },
+                                onSetAutoScanNewFolders = { enabled, known -> viewModel.setAiAutoScanNewFolders(enabled, known) },
+                                onSetAllFoldersSelection = { scanAll -> viewModel.setAllAiFoldersSelection(scanAll) },
+                                onSetFolderIncluded = { feature, folder, included -> viewModel.setAiFolderIncluded(feature, folder, included) },
+                                onPurgeExcludedData = {
+                                    viewModel.purgeExcludedAiData(null) { removed ->
+                                        Toast.makeText(
+                                            context,
+                                            if (removed > 0) "Removed $removed indexed item${if (removed != 1) "s" else ""}" else "No skipped items found",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            )
+                        }
+
                         "About" -> {
                             AboutScreenContent(
                                 autoCheckUpdates = autoCheckUpdates,
@@ -2733,7 +3164,9 @@ fun SettingsScreen(
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.navigationBarsPadding())
                 }
+            }
             }
         }
     }
@@ -3943,4 +4376,13 @@ private fun getSampleColor(seed: Int): Color {
         3 -> MaterialTheme.colorScheme.surfaceContainerHighest
         else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
     }
+}
+
+private fun formatAppLockTimeoutLabel(seconds: Int): String = when (seconds) {
+    0 -> "Immediately (on exit)"
+    20 -> "After 20 seconds"
+    60 -> "After 1 minute"
+    300 -> "After 5 minutes"
+    900 -> "After 15 minutes"
+    else -> if (seconds < 60) "After $seconds seconds" else "After ${seconds / 60} minutes"
 }

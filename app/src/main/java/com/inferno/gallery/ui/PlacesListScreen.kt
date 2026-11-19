@@ -111,21 +111,6 @@ fun PlacesListScreen(
                         )
                     }
                 },
-                actions = {
-                    ExpressiveFilledIconButton(
-                        onClick = onNavigateToMap,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_map),
-                            contentDescription = "Open Map View",
-                            modifier = Modifier.size(IconSizeTokens.L)
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
@@ -222,23 +207,6 @@ fun PlacesListScreen(
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Surface(
-                                    shape = ShapeFull,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(44.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_map),
-                                            contentDescription = "Open Map",
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
                                 }
                             }
                         }

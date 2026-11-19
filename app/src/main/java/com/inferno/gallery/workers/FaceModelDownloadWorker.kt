@@ -231,7 +231,12 @@ class FaceModelDownloadWorker(
                 val settingsRepo = SettingsRepository.getInstance(context)
                 val faceEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
                 val autoIndex = settingsRepo.faceAutoIndexFlow.first()
-                faceEnabled && autoIndex && db.faceDao().getUnindexedMediaIds().isNotEmpty()
+                val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(context)
+                faceEnabled && autoIndex && com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(
+                    db,
+                    aiConfig,
+                    galleryExcluded
+                ) > 0
             }
             if (shouldAutoIndex) {
                 val indexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>().build()

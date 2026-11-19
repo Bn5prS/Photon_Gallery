@@ -1,11 +1,13 @@
 package com.inferno.gallery.ui
 
+import com.inferno.gallery.ui.components.VideoControlsBottomSheet
 import androidx.compose.material3.FilledTonalIconButton
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -208,6 +210,29 @@ fun VideoPlayerItemWithResolvedUri(
     val autoplayWithSound by settings.autoplayWithSoundEnabledFlow.collectAsState(initial = false)
     val viewerFilmstripEnabled = false // Feature backed up: re-bind to settings.viewerFilmstripEnabledFlow when requested
     var isMuted by remember(autoplayWithSound) { mutableStateOf(!autoplayWithSound) }
+    var playbackSpeed by remember(uri) { mutableFloatStateOf(1.0f) }
+    var rotationDegrees by remember(uri) { mutableStateOf(0) }
+    var isLooping by remember(uri) { mutableStateOf(false) }
+    var resizeMode by remember(uri) { mutableStateOf(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var showControlsSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(playbackSpeed) {
+        exoPlayer.setPlaybackSpeed(playbackSpeed)
+    }
+
+    LaunchedEffect(isLooping) {
+        exoPlayer.repeatMode = if (isLooping) {
+            androidx.media3.common.Player.REPEAT_MODE_ONE
+        } else {
+            androidx.media3.common.Player.REPEAT_MODE_OFF
+        }
+    }
+
+    val animatedRotation by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = rotationDegrees.toFloat(),
+        animationSpec = MotionTokens.snappySpring(),
+        label = "videoRotation"
+    )
 
     DisposableEffect(exoPlayer) {
         val listener = object : androidx.media3.common.Player.Listener {
@@ -236,6 +261,19 @@ fun VideoPlayerItemWithResolvedUri(
         onDispose {
             exoPlayer.removeListener(listener)
             exoPlayer.release()
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -276,26 +314,26 @@ fun VideoPlayerItemWithResolvedUri(
                             val composableW = size.width.toFloat()
                             val composableH = size.height.toFloat()
                             if (scale.floatValue > 1.05f) {
-                                // Zoom out back to 1x fit
+                                // Zoom out back to 1x fit (critically damped — no bounce or negative-scale flip)
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = scale.floatValue,
                                         targetValue = 1f,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> scale.floatValue = v }
+                                        animationSpec = MotionTokens.sharedElementSpring()
+                                    ) { v, _ -> scale.floatValue = v.coerceAtLeast(1f) }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetX.floatValue,
                                         targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetX.floatValue = v }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetY.floatValue,
                                         targetValue = 0f,
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetY.floatValue = v }
                                 }
                             } else {
@@ -309,21 +347,21 @@ fun VideoPlayerItemWithResolvedUri(
                                     androidx.compose.animation.core.animate(
                                         initialValue = scale.floatValue,
                                         targetValue = targetScale,
-                                        animationSpec = MotionTokens.gentleSpring()
-                                    ) { v, _ -> scale.floatValue = v }
+                                        animationSpec = MotionTokens.sharedElementSpring()
+                                    ) { v, _ -> scale.floatValue = v.coerceAtLeast(0.05f) }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetX.floatValue,
                                         targetValue = targetX.coerceIn(-maxX, maxX),
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetX.floatValue = v }
                                 }
                                 launch {
                                     androidx.compose.animation.core.animate(
                                         initialValue = offsetY.floatValue,
                                         targetValue = targetY.coerceIn(-maxY, maxY),
-                                        animationSpec = MotionTokens.gentleSpring()
+                                        animationSpec = MotionTokens.sharedElementSpring()
                                     ) { v, _ -> offsetY.floatValue = v }
                                 }
                             }
@@ -515,63 +553,122 @@ fun VideoPlayerItemWithResolvedUri(
                 }
             }
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .clipToBounds()
-                .graphicsLayer {
-                    scaleX = scale.floatValue
-                    scaleY = scale.floatValue
-                    translationX = offsetX.floatValue
-                    translationY = offsetY.floatValue
-                },
+                .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
-            val playerModifier = if (videoAspectRatio != null && videoAspectRatio!! > 0f) {
-                Modifier
-                    .fillMaxSize()
-                    .aspectRatio(videoAspectRatio!!, matchHeightConstraintsFirst = false)
+            val containerWidth = maxWidth
+            val containerHeight = maxHeight
+            val containerRatio = if (containerHeight.value > 0f) containerWidth.value / containerHeight.value else 1f
+            val rawRatio = videoAspectRatio ?: containerRatio
+
+            val isFillMode = resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+
+            // Calculate target unrotated video dimensions based on Fit vs Fill
+            val (targetWidth, targetHeight) = if (isFillMode) {
+                // Crop to fill screen: expand beyond bounds so no black bars
+                if (rawRatio > containerRatio) {
+                    Pair(containerHeight * rawRatio, containerHeight)
+                } else {
+                    Pair(containerWidth, containerWidth / rawRatio)
+                }
             } else {
-                Modifier.fillMaxSize()
+                // Fit within screen: entire video visible with letterboxing
+                if (rawRatio > containerRatio) {
+                    Pair(containerWidth, containerWidth / rawRatio)
+                } else {
+                    Pair(containerHeight * rawRatio, containerHeight)
+                }
             }
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
-                        controllerAutoShow = false
-                        hideController()
-                        // Completely eradicate the Media3 default controller view from the hierarchy
-                        // so legacy ghost controls (prev/rewind/ffwd/next/progress) never appear
-                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
+
+            val animatedWidth by androidx.compose.animation.core.animateDpAsState(
+                targetValue = targetWidth,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "videoWidth"
+            )
+            val animatedHeight by androidx.compose.animation.core.animateDpAsState(
+                targetValue = targetHeight,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "videoHeight"
+            )
+
+            // Calculate rotation scaling when rotated 90° or 270°
+            val isQuarterRotated = (rotationDegrees % 180) != 0
+            val targetRotationScale = if (isQuarterRotated && targetWidth.value > 0f && targetHeight.value > 0f) {
+                if (isFillMode) {
+                    maxOf(
+                        containerWidth.value / targetHeight.value,
+                        containerHeight.value / targetWidth.value
+                    )
+                } else {
+                    minOf(
+                        containerWidth.value / targetHeight.value,
+                        containerHeight.value / targetWidth.value
+                    )
+                }
+            } else {
+                1f
+            }
+
+            val animatedRotationScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = targetRotationScale,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "videoRotationScale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(animatedWidth, animatedHeight)
+                    .graphicsLayer {
+                        val safeScale = scale.floatValue.coerceAtLeast(0.05f)
+                        scaleX = safeScale * animatedRotationScale
+                        scaleY = safeScale * animatedRotationScale
+                        translationX = offsetX.floatValue
+                        translationY = offsetY.floatValue
+                        rotationZ = animatedRotation
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        val view = android.view.LayoutInflater.from(ctx)
+                            .inflate(R.layout.view_video_player, null, false) as PlayerView
+                        view.apply {
+                            useController = false
+                            controllerAutoShow = false
+                            hideController()
+                            isClickable = false
+                            isFocusable = false
+                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
+                                ctrl.visibility = android.view.View.GONE
+                                (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
+                            }
+                            player = exoPlayer
+                            this.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            layoutParams = android.widget.FrameLayout.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    update = { playerView ->
+                        playerView.useController = false
+                        playerView.controllerAutoShow = false
+                        playerView.hideController()
+                        playerView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
                             ctrl.visibility = android.view.View.GONE
                             (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
                         }
-                        player = exoPlayer
-                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        try {
-                            val method = javaClass.getMethod("setEnableComposeSurfaceSyncWorkaround", Boolean::class.javaPrimitiveType)
-                            method.invoke(this, true)
-                        } catch (_: Throwable) {}
-                        layoutParams = android.widget.FrameLayout.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
-                update = { playerView ->
-                    playerView.useController = false
-                    playerView.controllerAutoShow = false
-                    playerView.hideController()
-                    playerView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
-                        ctrl.visibility = android.view.View.GONE
-                        (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
-                    }
-                    if (playerView.player != exoPlayer) {
-                        playerView.player = exoPlayer
-                    }
-                },
-                modifier = playerModifier
-            )
+                        if (playerView.player != exoPlayer) {
+                            playerView.player = exoPlayer
+                        }
+                        playerView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         // Floating Video Scrubber Capsule: Single unified floating pill styling
@@ -599,7 +696,7 @@ fun VideoPlayerItemWithResolvedUri(
                 shadowElevation = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 380.dp)
+                    .widthIn(max = 430.dp)
                     .height(52.dp)
                     .clickable(enabled = false) {} // Consume clicks so they don't toggle controller
             ) {
@@ -679,7 +776,7 @@ fun VideoPlayerItemWithResolvedUri(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Audio mute / unmute button on right: Circular tonal button
+                    // Audio mute / unmute button: Circular tonal button
                     FilledTonalIconButton(
                         onClick = { isMuted = !isMuted },
                         shape = CircleShape,
@@ -696,8 +793,43 @@ fun VideoPlayerItemWithResolvedUri(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Video controls / tune button: opens M3 Expressive Quick Sheet
+                    val hasCustomSettings = playbackSpeed != 1.0f || rotationDegrees != 0 || isLooping || resizeMode != androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    FilledTonalIconButton(
+                        onClick = { showControlsSheet = true },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (hasCustomSettings) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = if (hasCustomSettings) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_tune),
+                            contentDescription = "Video Controls",
+                            tint = if (hasCustomSettings) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
+        }
+
+        if (showControlsSheet) {
+            VideoControlsBottomSheet(
+                playbackSpeed = playbackSpeed,
+                onPlaybackSpeedChange = { playbackSpeed = it },
+                rotationDegrees = rotationDegrees,
+                onRotationDegreesChange = { rotationDegrees = it },
+                isLooping = isLooping,
+                onLoopingChange = { isLooping = it },
+                resizeMode = resizeMode,
+                onResizeModeChange = { resizeMode = it },
+                onDismissRequest = { showControlsSheet = false }
+            )
         }
     }
 }

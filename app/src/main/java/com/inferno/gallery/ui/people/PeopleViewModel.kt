@@ -102,11 +102,23 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
 
     val faceProgress = com.inferno.gallery.data.IndexingProgressManager.faceProgress
 
-    val unindexedFacesCount: StateFlow<Int> = faceDao.observeUnindexedCount()
+    val unindexedFacesCount: StateFlow<Int> = com.inferno.gallery.data.ai.AiIndexingSupport
+        .observeEligibleUnindexedCount(
+            db = database,
+            feature = com.inferno.gallery.data.ai.AiIndexingFeature.FACE_RECOGNITION,
+            configFlow = settingsRepository.aiIndexingFolderConfigFlow,
+            galleryExcludedFlow = settingsRepository.excludedFoldersFlow
+        )
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val totalPhotosCount: StateFlow<Int> = database.mediaDao().observeTotalImageCount()
+    val totalPhotosCount: StateFlow<Int> = com.inferno.gallery.data.ai.AiIndexingSupport
+        .observeEligibleTotalCount(
+            db = database,
+            feature = com.inferno.gallery.data.ai.AiIndexingFeature.FACE_RECOGNITION,
+            configFlow = settingsRepository.aiIndexingFolderConfigFlow,
+            galleryExcludedFlow = settingsRepository.excludedFoldersFlow
+        )
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 

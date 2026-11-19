@@ -704,23 +704,25 @@ fun GalleryScreen(
 
         // ── Top Gradient Scrim (Refined Status Bar & Notch Vignette) ──────────
         val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        val scrimHeight = statusBarTop + 16.dp
-        val scrimColor = MaterialTheme.colorScheme.surfaceContainerLow
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(scrimHeight)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to scrimColor.copy(alpha = 0.82f),
-                        0.35f to scrimColor.copy(alpha = 0.60f),
-                        0.65f to scrimColor.copy(alpha = 0.32f),
-                        0.85f to scrimColor.copy(alpha = 0.10f),
-                        1.0f to Color.Transparent
+        if (contentPadding.calculateTopPadding() > 0.dp) {
+            val scrimHeight = statusBarTop + 16.dp
+            val scrimColor = MaterialTheme.colorScheme.surfaceContainerLow
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(scrimHeight)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to scrimColor.copy(alpha = 0.82f),
+                            0.35f to scrimColor.copy(alpha = 0.60f),
+                            0.65f to scrimColor.copy(alpha = 0.32f),
+                            0.85f to scrimColor.copy(alpha = 0.10f),
+                            1.0f to Color.Transparent
+                        )
                     )
-                )
-        )
+            )
+        }
 
         // ── Dynamic Date Badge ──────────────────────────────────────────────
         val topBarContentPadding = contentPadding.calculateTopPadding()

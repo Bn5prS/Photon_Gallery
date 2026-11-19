@@ -3,6 +3,7 @@ package com.inferno.gallery.ui
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -26,8 +27,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.inferno.gallery.data.db.PersonEntity
@@ -55,6 +62,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -105,7 +113,8 @@ fun SearchScreen(
     viewModel: GalleryViewModel = viewModel(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     onAlbumClick: (String) -> Unit = {},
-    onPersonClick: (Long) -> Unit = {}
+    onPersonClick: (Long) -> Unit = {},
+    onOpenSmartSearchSettings: () -> Unit = {}
 ) {
     val query by viewModel.searchQuery.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
@@ -114,7 +123,10 @@ fun SearchScreen(
     val matchingAlbums by viewModel.matchingAlbums.collectAsState()
     val matchingPeople by viewModel.matchingPeople.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
+    val smartSearchStatus by viewModel.smartSearchStatus.collectAsState()
     val haptic = LocalHapticFeedback.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val hasAnyResults = ftsResults.isNotEmpty() || smartResults.isNotEmpty() || matchingAlbums.isNotEmpty() || (query.isNotBlank() && matchingPeople.isNotEmpty())
 
@@ -151,6 +163,16 @@ fun SearchScreen(
                     value = query,
                     onValueChange = { viewModel.updateSearchQuery(it) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            if (query.isNotBlank()) {
+                                viewModel.submitSearch(query)
+                            }
+                        }
+                    ),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onSurface
                     ),
@@ -162,9 +184,11 @@ fun SearchScreen(
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (query.isEmpty()) {
                                 Text(
-                                    text = "Search names, types, albums, dates, text…",
+                                    text = "Search scenes, names, albums, dates, text…",
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             innerTextField()
@@ -193,9 +217,22 @@ fun SearchScreen(
             }
         }
 
+        // Subtle inline refresh indicator while refining an active search without collapsing results.
+        AnimatedVisibility(visible = isSearching && query.isNotBlank() && hasAnyResults) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .height(2.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                strokeCap = StrokeCap.Round
+            )
+        }
+
         // ── Results Area ────────────────────────────────────────────────────────
         AnimatedContent(
-            targetState = Triple(query.isBlank(), isSearching, hasAnyResults),
+            targetState = Triple(query.isBlank(), isSearching && !hasAnyResults, hasAnyResults),
             transitionSpec = {
                 (fadeIn(MotionTokens.gentleSpring()) +
                     scaleIn(MotionTokens.gentleSpring(), initialScale = 0.95f))
@@ -204,26 +241,43 @@ fun SearchScreen(
             },
             label = "searchContentTransition",
             modifier = Modifier.fillMaxSize()
-        ) { (isBlank, searching, hasResults) ->
+        ) { (isBlank, searchingEmpty, hasResults) ->
             when {
-                query.isBlank() -> EmptySearchState(
+                isBlank -> EmptySearchState(
                     recentSearches = recentSearches,
                     topPeople = matchingPeople,
+                    smartSearchStatus = smartSearchStatus,
                     onPersonClick = onPersonClick,
+                    onRecentSearchClick = { recent ->
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        viewModel.submitSearch(recent)
+                    },
+                    onOpenSmartSearchSettings = onOpenSmartSearchSettings,
+                    onStartIndexing = { viewModel.startSmartSearchIndexing() },
                     viewModel = viewModel
                 )
-                searching -> SearchingState()
-                !hasResults -> NoResultsState(query = query, onClear = { viewModel.updateSearchQuery("") })
+                searchingEmpty -> SearchingState()
+                !hasResults -> NoResultsState(
+                    query = query,
+                    smartSearchStatus = smartSearchStatus,
+                    onClear = { viewModel.updateSearchQuery("") },
+                    onOpenSmartSearchSettings = onOpenSmartSearchSettings,
+                    onStartIndexing = { viewModel.startSmartSearchIndexing() }
+                )
                 else -> SearchResultsList(
                     ftsResults = ftsResults,
                     smartResults = smartResults,
                     matchingAlbums = matchingAlbums,
                     matchingPeople = matchingPeople,
+                    smartSearchStatus = smartSearchStatus,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onPhotoClick = onPhotoClick,
                     onAlbumClick = onAlbumClick,
                     onPersonClick = onPersonClick,
+                    onOpenSmartSearchSettings = onOpenSmartSearchSettings,
+                    onStartIndexing = { viewModel.startSmartSearchIndexing() },
                     query = query,
                     viewModel = viewModel
                 )
@@ -236,7 +290,11 @@ fun SearchScreen(
 private fun EmptySearchState(
     recentSearches: List<String>,
     topPeople: List<PersonEntity>,
+    smartSearchStatus: SmartSearchStatus,
     onPersonClick: (Long) -> Unit,
+    onRecentSearchClick: (String) -> Unit,
+    onOpenSmartSearchSettings: () -> Unit,
+    onStartIndexing: () -> Unit,
     viewModel: GalleryViewModel
 ) {
     val haptic = LocalHapticFeedback.current
@@ -246,6 +304,18 @@ private fun EmptySearchState(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        if (!smartSearchStatus.modelDownloaded || smartSearchStatus.isModelDownloading || smartSearchStatus.isIndexing ||
+            (smartSearchStatus.totalCount > 0 && smartSearchStatus.indexedCount < smartSearchStatus.totalCount)
+        ) {
+            item(key = "semantic_status_banner") {
+                SemanticStatusBanner(
+                    status = smartSearchStatus,
+                    onOpenSettings = onOpenSmartSearchSettings,
+                    onStartIndexing = onStartIndexing
+                )
+            }
+        }
+
         if (topPeople.isNotEmpty()) {
             item {
                 Row(
@@ -273,7 +343,8 @@ private fun EmptySearchState(
                             person = person,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                person.name?.takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }; onPersonClick(person.id)
+                                person.name?.takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
+                                onPersonClick(person.id)
                             }
                         )
                     }
@@ -319,7 +390,7 @@ private fun EmptySearchState(
                 Surface(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.updateSearchQuery(recentQuery)
+                        onRecentSearchClick(recentQuery)
                     },
                     shape = ShapeLarge,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -364,7 +435,9 @@ private fun EmptySearchState(
                     }
                 }
             }
-        } else {
+        }
+
+        if (recentSearches.isEmpty() && topPeople.isEmpty()) {
             item {
                 PhotonEmptyState(
                     icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
@@ -373,6 +446,120 @@ private fun EmptySearchState(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 48.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SemanticStatusBanner(
+    status: SmartSearchStatus,
+    onOpenSettings: () -> Unit,
+    onStartIndexing: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val progress = if (status.totalCount > 0) {
+        (status.indexedCount.toFloat() / status.totalCount.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    Surface(
+        shape = ShapeLarge,
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(
+                                if (!status.modelDownloaded) R.drawable.ic_ms_download else R.drawable.ic_ms_search_sparkle
+                            ),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    val title = when {
+                        status.isModelDownloading -> "Downloading AI search model…"
+                        !status.modelDownloaded -> "Visual AI search not set up"
+                        status.isIndexing -> "Indexing photos for AI search"
+                        status.indexedCount == 0 -> "Index photos for visual search"
+                        else -> "${status.indexedCount} of ${status.totalCount} photos AI-indexed"
+                    }
+                    val subtitle = when {
+                        status.isModelDownloading -> "${status.modelDownloadProgress}% complete"
+                        !status.modelDownloaded -> "Download on-device model (~386 MB) to search scenes & objects"
+                        status.isIndexing -> "${status.indexedCount} / ${status.totalCount} photos ready (${(progress * 100).toInt()}%)"
+                        status.indexedCount == 0 -> "Run quick on-device indexing to search any scene naturally"
+                        else -> "${status.totalCount - status.indexedCount} remaining photos won't appear in visual results yet"
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (!status.isModelDownloading && !status.isIndexing) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilledTonalButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (!status.modelDownloaded) onOpenSettings() else onStartIndexing()
+                        },
+                        shape = ShapeFull,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = if (!status.modelDownloaded) "Set up" else "Index",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
+            }
+
+            if (status.isModelDownloading || status.isIndexing) {
+                LinearProgressIndicator(
+                    progress = {
+                        if (status.isModelDownloading) (status.modelDownloadProgress / 100f).coerceIn(0f, 1f)
+                        else progress
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    strokeCap = StrokeCap.Round
                 )
             }
         }
@@ -400,22 +587,71 @@ private fun SearchingState() {
 }
 
 @Composable
-private fun NoResultsState(query: String, onClear: () -> Unit) {
+private fun NoResultsState(
+    query: String,
+    smartSearchStatus: SmartSearchStatus,
+    onClear: () -> Unit,
+    onOpenSmartSearchSettings: () -> Unit,
+    onStartIndexing: () -> Unit
+) {
+    val customSubtitle = when {
+        !smartSearchStatus.modelDownloaded ->
+            "Exact filenames and text matched nothing. Set up on-device AI search in Settings to search scenes like “$query”."
+        smartSearchStatus.totalCount > 0 && smartSearchStatus.indexedCount == 0 && !smartSearchStatus.isIndexing ->
+            "Visual AI indexing hasn't run yet. Index your photos or try file/date keywords."
+        smartSearchStatus.isIndexing ->
+            "Visual AI indexing is still running (${smartSearchStatus.indexedCount} / ${smartSearchStatus.totalCount}). Some scenes aren't indexed yet."
+        else -> stringResource(R.string.search_no_results_subtitle)
+    }
+
     PhotonEmptyState(
         icon = ImageVector.vectorResource(R.drawable.ic_ms_search),
         title = stringResource(R.string.search_no_results_title, query),
-        subtitle = stringResource(R.string.search_no_results_subtitle),
+        subtitle = customSubtitle,
         shape = ExpressiveShapes.Clover8Leaf,
         modifier = Modifier.fillMaxSize(),
         action = {
-            FilledTonalButton(
-                onClick = onClear,
-                shape = ShapeFull
-            ) {
-                Text(
-                    text = stringResource(R.string.search_clear_button),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FilledTonalButton(
+                    onClick = onClear,
+                    shape = ShapeFull
+                ) {
+                    Text(
+                        text = stringResource(R.string.search_clear_button),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                }
+                if (!smartSearchStatus.modelDownloaded && !smartSearchStatus.isModelDownloading) {
+                    FilledTonalButton(
+                        onClick = onOpenSmartSearchSettings,
+                        shape = ShapeFull,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Text(
+                            text = "Set up AI search",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                } else if (smartSearchStatus.modelDownloaded && !smartSearchStatus.isIndexing &&
+                    smartSearchStatus.totalCount > 0 && smartSearchStatus.indexedCount < smartSearchStatus.totalCount
+                ) {
+                    FilledTonalButton(
+                        onClick = onStartIndexing,
+                        shape = ShapeFull,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Text(
+                            text = "Index photos",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
             }
         }
     )
@@ -435,11 +671,14 @@ private fun SearchResultsList(
     smartResults: List<GalleryItem>,
     matchingAlbums: List<AlbumBucket>,
     matchingPeople: List<PersonEntity>,
+    smartSearchStatus: SmartSearchStatus,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onPhotoClick: (String, String?, String?) -> Unit,
     onAlbumClick: (String) -> Unit,
     onPersonClick: (Long) -> Unit,
+    onOpenSmartSearchSettings: () -> Unit,
+    onStartIndexing: () -> Unit,
     query: String,
     viewModel: GalleryViewModel
 ) {
@@ -470,6 +709,7 @@ private fun SearchResultsList(
             if (isSelectionMode) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
+                query.trim().takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
                 viewModel.setInitialDetailItem(item, com.inferno.gallery.data.BucketNames.SEARCH_TEXT)
                 onPhotoClick(item.id, "search_text", query)
             }
@@ -480,6 +720,7 @@ private fun SearchResultsList(
             if (isSelectionMode) {
                 viewModel.toggleSelection(item.uri.toString())
             } else {
+                query.trim().takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
                 viewModel.setInitialDetailItem(item, com.inferno.gallery.data.BucketNames.SEARCH_SMART)
                 onPhotoClick(item.id, "search_smart", query)
             }
@@ -549,7 +790,7 @@ private fun SearchResultsList(
     val bannerText = when (selectedFilter) {
         "ALL" -> when {
             totalMatches > 0 && matchingAlbums.isNotEmpty() ->
-                "$totalMatches ${if (totalMatches == 1) "result" else "results"} & ${matchingAlbums.size} ${if (matchingAlbums.size == 1) "album" else "albums"} for “$query”"
+                "${if (totalMatches == 1) "result" else "results"} & ${matchingAlbums.size} ${if (matchingAlbums.size == 1) "album" else "albums"} for “$query”"
             totalMatches > 0 ->
                 if (totalMatches == 1) "Result found for “$query”" else "Results found for “$query”"
             matchingPeople.isNotEmpty() ->
@@ -734,6 +975,7 @@ private fun SearchResultsList(
                                     album = album,
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        query.trim().takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
                                         onAlbumClick(album.bucketName)
                                     }
                                 )
@@ -781,6 +1023,7 @@ private fun SearchResultsList(
                                 FilledTonalButton(
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        query.trim().takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
                                         viewModel.setBucket("search_text")
                                         onAlbumClick("search_text")
                                     },
@@ -813,11 +1056,12 @@ private fun SearchResultsList(
 
                 // Semantic Matches
                 if (smartResults.isNotEmpty()) {
+                    val inlineSemanticLimit = if (ftsResults.isEmpty() && matchingAlbums.isEmpty() && matchingPeople.isEmpty()) 24 else 12
                     item(span = { GridItemSpan(4) }) {
                         PhotonSectionHeader(title = stringResource(R.string.search_section_semantic))
                     }
                     items(
-                        items = smartResults.take(12),
+                        items = smartResults.take(inlineSemanticLimit),
                         key = { "smart_grid_${it.id}" }
                     ) { item ->
                         val isSelected = selectedUris.contains(item.uri.toString())
@@ -836,7 +1080,7 @@ private fun SearchResultsList(
                             onBoundsChanged = onCellBoundsChanged
                         )
                     }
-                    if (smartResults.size > 12) {
+                    if (smartResults.size > inlineSemanticLimit) {
                         item(span = { GridItemSpan(4) }) {
                             Box(
                                 modifier = Modifier
@@ -847,6 +1091,7 @@ private fun SearchResultsList(
                                 FilledTonalButton(
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        query.trim().takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
                                         viewModel.setBucket("search_smart")
                                         onAlbumClick("search_smart")
                                     },
@@ -864,6 +1109,20 @@ private fun SearchResultsList(
                                 }
                             }
                         }
+                    }
+                }
+
+                // Helpful coverage note when only partial / unindexed semantic coverage exists
+                if (!smartSearchStatus.modelDownloaded || smartSearchStatus.isIndexing ||
+                    (smartSearchStatus.totalCount > 0 && smartSearchStatus.indexedCount < smartSearchStatus.totalCount && smartResults.isEmpty())
+                ) {
+                    item(span = { GridItemSpan(4) }) {
+                        SemanticStatusBanner(
+                            status = smartSearchStatus,
+                            onOpenSettings = onOpenSmartSearchSettings,
+                            onStartIndexing = onStartIndexing,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                        )
                     }
                 }
             }
@@ -990,6 +1249,7 @@ private fun SearchResultsList(
                                     album = album,
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        query.trim().takeIf { it.isNotBlank() }?.let { viewModel.addRecentSearch(it) }
                                         onAlbumClick(album.bucketName)
                                     }
                                 )
@@ -1154,7 +1414,7 @@ private fun PersonSearchCard(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .width(76.dp)
+            .width(84.dp)
             .clip(ShapeMedium)
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp)
@@ -1199,16 +1459,14 @@ private fun PersonSearchCard(
             color = if (person.name != null) MaterialTheme.colorScheme.onSurface
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
-        Text(
-            text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+        com.inferno.gallery.ui.people.PersonPhotoCountText(
+            count = person.faceCount,
+            baseFontSizeSp = 11f
         )
     }
 }

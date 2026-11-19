@@ -58,12 +58,54 @@ class FaceRecognitionEngine(private val context: Context) {
             }
             return normalized
         }
+
+        /**
+         * Reverses each horizontal row of an ARGB pixel buffer for flip test-time augmentation.
+         */
+        fun mirrorPixelsHorizontally(
+            pixels: IntArray,
+            width: Int,
+            height: Int,
+            out: IntArray = IntArray(width * height)
+        ): IntArray {
+            for (y in 0 until height) {
+                val rowStart = y * width
+                for (x in 0 until width) {
+                    out[rowStart + x] = pixels[rowStart + (width - 1 - x)]
+                }
+            }
+            return out
+        }
+
+        /**
+         * InsightFace CFP-FP flip-feature fusion: summing L2-normalized original + horizontally
+         * mirrored embeddings cancels asymmetric left/right yaw components while sharpening
+         * symmetric identity features.
+         */
+        fun fuseMirrorEmbeddings(primary: FloatArray, mirrored: FloatArray): FloatArray {
+            if (primary.size != mirrored.size || primary.isEmpty()) {
+                return normalizeL2(primary)
+            }
+            val normPrimary = normalizeL2(primary)
+            val normMirrored = normalizeL2(mirrored)
+            val sum = FloatArray(normPrimary.size)
+            for (i in sum.indices) {
+                sum[i] = normPrimary[i] + normMirrored[i]
+            }
+            val fused = normalizeL2(sum)
+            var energy = 0.0
+            for (v in fused) energy += v * v
+            return if (energy < 1e-6) normPrimary else fused
+        }
     }
 
     private val modelDirFile = File(context.filesDir, FaceModelRegistry.MODEL_DIR)
     private var env: OrtEnvironment? = null
     private var faceSession: OrtSession? = null
     private var isLoaded = false
+    private var reusablePixels: IntArray? = null
+    private var reusableMirroredPixels: IntArray? = null
+    private var reusableFloatData: FloatArray? = null
 
     fun getModelFile(): File = File(modelDirFile, FaceModelRegistry.MODEL_NAME)
 
@@ -112,20 +154,46 @@ class FaceRecognitionEngine(private val context: Context) {
             return null
         }
 
-        val pixels = IntArray(width * height)
+        val planeSize = width * height
+        val pixels = reusablePixels?.takeIf { it.size == planeSize }
+            ?: IntArray(planeSize).also { reusablePixels = it }
+        val mirrored = reusableMirroredPixels?.takeIf { it.size == planeSize }
+            ?: IntArray(planeSize).also { reusableMirroredPixels = it }
+
         aligned112.getPixels(pixels, 0, width, 0, 0, width, height)
 
-        val floatBuffer = FloatBuffer.allocate(1 * 3 * width * height)
-        // Red channel
-        for (p in pixels) floatBuffer.put(((p shr 16 and 0xFF) - 127.5f) / 128.0f)
-        // Green channel
-        for (p in pixels) floatBuffer.put(((p shr 8 and 0xFF) - 127.5f) / 128.0f)
-        // Blue channel
-        for (p in pixels) floatBuffer.put(((p and 0xFF) - 127.5f) / 128.0f)
-        floatBuffer.rewind()
+        val primaryEmbedding = runSingleInference(pixels, width, height, currentEnv, currentSession)
+            ?: return null
+        mirrorPixelsHorizontally(pixels, width, height, mirrored)
+        val mirroredEmbedding = runSingleInference(mirrored, width, height, currentEnv, currentSession)
+
+        return if (mirroredEmbedding != null) {
+            fuseMirrorEmbeddings(primaryEmbedding, mirroredEmbedding)
+        } else {
+            primaryEmbedding
+        }
+    }
+
+    private fun runSingleInference(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        currentEnv: OrtEnvironment,
+        currentSession: OrtSession
+    ): FloatArray? {
+        val planeSize = width * height
+        val floatData = reusableFloatData?.takeIf { it.size == 3 * planeSize }
+            ?: FloatArray(3 * planeSize).also { reusableFloatData = it }
+
+        for (i in 0 until planeSize) {
+            val p = pixels[i]
+            floatData[i] = ((p shr 16 and 0xFF) - 127.5f) / 128.0f
+            floatData[i + planeSize] = ((p shr 8 and 0xFF) - 127.5f) / 128.0f
+            floatData[i + 2 * planeSize] = ((p and 0xFF) - 127.5f) / 128.0f
+        }
 
         val shape = longArrayOf(1, 3, width.toLong(), height.toLong())
-        val tensor = OnnxTensor.createTensor(currentEnv, floatBuffer, shape)
+        val tensor = OnnxTensor.createTensor(currentEnv, FloatBuffer.wrap(floatData), shape)
 
         return try {
             val inputName = currentSession.inputNames.firstOrNull() ?: FaceModelRegistry.INPUT_NAME
@@ -178,6 +246,9 @@ class FaceRecognitionEngine(private val context: Context) {
             faceSession = null
             env = null
             isLoaded = false
+            reusablePixels = null
+            reusableMirroredPixels = null
+            reusableFloatData = null
         } catch (e: Exception) {
             Log.e(TAG, "Error closing face session: ${e.message}", e)
         }

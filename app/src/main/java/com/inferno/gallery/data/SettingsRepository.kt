@@ -1,5 +1,9 @@
 package com.inferno.gallery.data
 
+import com.inferno.gallery.data.ai.AiFeatureFolderRule
+import com.inferno.gallery.data.ai.AiFolderScopeMode
+import com.inferno.gallery.data.ai.AiIndexingFeature
+import com.inferno.gallery.data.ai.AiIndexingFolderConfig
 import com.inferno.gallery.data.model.ExifStripAction
 import android.content.Context
 import android.os.Build
@@ -7,11 +11,15 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class DockStyle { PILL, FULL_WIDTH }
 enum class TimelineLayoutMode { STANDARD_GRID, EDITORIAL_MOSAIC }
@@ -46,6 +54,15 @@ enum class PinnedAlbumsStyle(val id: String) {
 val Context.dataStore by preferencesDataStore(name = "user_settings")
 
 class SettingsRepository private constructor(private val context: Context) {
+    sealed interface TypedSettingValue {
+        data class BoolVal(val value: Boolean) : TypedSettingValue
+        data class IntVal(val value: Int) : TypedSettingValue
+        data class LongVal(val value: Long) : TypedSettingValue
+        data class FloatVal(val value: Float) : TypedSettingValue
+        data class StringVal(val value: String) : TypedSettingValue
+        data class StringSetVal(val value: Set<String>) : TypedSettingValue
+    }
+
     companion object {
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -67,6 +84,8 @@ class SettingsRepository private constructor(private val context: Context) {
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val SHOW_VIDEOS_IN_DOCK = booleanPreferencesKey("show_videos_in_dock")
         val SHOW_PILL_LABELS = booleanPreferencesKey("show_pill_labels")
+        val DEFAULT_STARTUP_TAB = stringPreferencesKey("default_startup_tab")
+        val VALID_STARTUP_TABS = setOf("photos", "videos", "albums", "collections")
         val VIEWER_TOOLBAR_ACTIONS = stringPreferencesKey("viewer_toolbar_actions")
         val SELECTION_DOCK_ACTIONS = stringPreferencesKey("selection_dock_actions")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
@@ -98,6 +117,28 @@ class SettingsRepository private constructor(private val context: Context) {
         
 
         val EXCLUDED_FOLDERS = stringPreferencesKey("excluded_folders")
+        val AI_RESPECT_GALLERY_EXCLUDED = booleanPreferencesKey("ai_respect_gallery_excluded")
+        val AI_SMART_FOLDER_MODE = stringPreferencesKey("ai_smart_folder_mode")
+        val AI_SMART_EXCLUDED_FOLDERS = stringSetPreferencesKey("ai_smart_excluded_folders")
+        val AI_SMART_INCLUDED_FOLDERS = stringSetPreferencesKey("ai_smart_included_folders")
+        val AI_FACE_FOLDER_MODE = stringPreferencesKey("ai_face_folder_mode")
+        val AI_FACE_EXCLUDED_FOLDERS = stringSetPreferencesKey("ai_face_excluded_folders")
+        val AI_FACE_INCLUDED_FOLDERS = stringSetPreferencesKey("ai_face_included_folders")
+        val AI_OCR_FOLDER_MODE = stringPreferencesKey("ai_ocr_folder_mode")
+        val AI_OCR_EXCLUDED_FOLDERS = stringSetPreferencesKey("ai_ocr_excluded_folders")
+        val AI_OCR_INCLUDED_FOLDERS = stringSetPreferencesKey("ai_ocr_included_folders")
+
+        private data class AiFeatureKeys(
+            val modeKey: androidx.datastore.preferences.core.Preferences.Key<String>,
+            val excludedKey: androidx.datastore.preferences.core.Preferences.Key<Set<String>>,
+            val includedKey: androidx.datastore.preferences.core.Preferences.Key<Set<String>>
+        )
+
+        private val AI_FEATURE_KEYS = mapOf(
+            AiIndexingFeature.SMART_SEARCH to AiFeatureKeys(AI_SMART_FOLDER_MODE, AI_SMART_EXCLUDED_FOLDERS, AI_SMART_INCLUDED_FOLDERS),
+            AiIndexingFeature.FACE_RECOGNITION to AiFeatureKeys(AI_FACE_FOLDER_MODE, AI_FACE_EXCLUDED_FOLDERS, AI_FACE_INCLUDED_FOLDERS),
+            AiIndexingFeature.OCR_TEXT to AiFeatureKeys(AI_OCR_FOLDER_MODE, AI_OCR_EXCLUDED_FOLDERS, AI_OCR_INCLUDED_FOLDERS)
+        )
         val HDR_DISPLAY_ENABLED = booleanPreferencesKey("hdr_display_enabled")
         const val MAX_PINNED_FOLDERS = 15
         val PINNED_FOLDERS = stringPreferencesKey("pinned_folders")
@@ -153,6 +194,11 @@ class SettingsRepository private constructor(private val context: Context) {
 
         // Migration flags
         val THEME_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("theme_default_migrated_v210")
+
+        // App Lock
+        val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
+        val APP_LOCK_BIOMETRIC_ENABLED = booleanPreferencesKey("app_lock_biometric_enabled")
+        val APP_LOCK_TIMEOUT_SECONDS = intPreferencesKey("app_lock_timeout_seconds")
         val DATE_HEADER_DEFAULT_MIGRATED_V210 = booleanPreferencesKey("date_header_default_migrated_v210")
 
         // One-time Feature Discovery Tips
@@ -160,6 +206,90 @@ class SettingsRepository private constructor(private val context: Context) {
         const val TIP_PEOPLE_COVER = "tip_people_cover"
         const val TIP_MOTION_PHOTO = "tip_motion_photo"
         const val TIP_MARKUP_GESTURES = "tip_markup_gestures"
+
+        val EXCLUDED_BACKUP_KEYS = setOf(
+            ONBOARDING_COMPLETED.name,
+            ONBOARDING_V210_COMPLETED.name,
+            LAST_UPDATE_CHECK_TIMESTAMP.name,
+            DOC_CLASSIFIER_VERSION.name,
+            THEME_DEFAULT_MIGRATED_V210.name,
+            DATE_HEADER_DEFAULT_MIGRATED_V210.name,
+            APP_LOCK_ENABLED.name
+        )
+
+        fun sanitizeStartupTab(tab: String?, showVideosInDock: Boolean = true): String {
+            val normalized = tab?.trim()?.lowercase() ?: "photos"
+            if (normalized !in VALID_STARTUP_TABS) return "photos"
+            if (normalized == "videos" && !showVideosInDock) return "photos"
+            return normalized
+        }
+
+        fun encodeSettingsMapToJson(entries: Map<String, Any?>, exportedAtMs: Long = System.currentTimeMillis()): String {
+            val settingsObj = JSONObject()
+            for ((key, rawVal) in entries.entries.sortedBy { it.key }) {
+                if (key in EXCLUDED_BACKUP_KEYS || rawVal == null) continue
+                val itemObj = when (rawVal) {
+                    is Boolean -> JSONObject().put("type", "boolean").put("value", rawVal)
+                    is Int -> JSONObject().put("type", "int").put("value", rawVal)
+                    is Long -> JSONObject().put("type", "long").put("value", rawVal)
+                    is Float -> JSONObject().put("type", "float").put("value", rawVal.toDouble())
+                    is Double -> JSONObject().put("type", "float").put("value", rawVal)
+                    is String -> JSONObject().put("type", "string").put("value", rawVal)
+                    is Set<*> -> {
+                        val arr = JSONArray()
+                        rawVal.filterIsInstance<String>().sorted().forEach { arr.put(it) }
+                        JSONObject().put("type", "string_set").put("value", arr)
+                    }
+                    else -> null
+                }
+                if (itemObj != null) {
+                    settingsObj.put(key, itemObj)
+                }
+            }
+            return JSONObject()
+                .put("schemaVersion", 1)
+                .put("app", "PhotonGallery")
+                .put("exportedAt", exportedAtMs)
+                .put("settings", settingsObj)
+                .toString(2)
+        }
+
+        fun decodeSettingsJsonToTypedMap(jsonString: String): Map<String, TypedSettingValue> {
+            val root = try {
+                JSONObject(jsonString)
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Invalid JSON backup file", e)
+            }
+            if (root.optString("app") != "PhotonGallery" || !root.has("settings")) {
+                throw IllegalArgumentException("Not a valid Photon Gallery settings backup file")
+            }
+            val settingsObj = root.getJSONObject("settings")
+            val result = LinkedHashMap<String, TypedSettingValue>()
+            val keys = settingsObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key in EXCLUDED_BACKUP_KEYS) continue
+                val itemObj = settingsObj.optJSONObject(key) ?: continue
+                when (itemObj.optString("type")) {
+                    "boolean" -> if (itemObj.has("value")) result[key] = TypedSettingValue.BoolVal(itemObj.getBoolean("value"))
+                    "int" -> if (itemObj.has("value")) result[key] = TypedSettingValue.IntVal(itemObj.getInt("value"))
+                    "long" -> if (itemObj.has("value")) result[key] = TypedSettingValue.LongVal(itemObj.getLong("value"))
+                    "float" -> if (itemObj.has("value")) result[key] = TypedSettingValue.FloatVal(itemObj.getDouble("value").toFloat())
+                    "string" -> if (itemObj.has("value")) result[key] = TypedSettingValue.StringVal(itemObj.getString("value"))
+                    "string_set" -> {
+                        val arr = itemObj.optJSONArray("value")
+                        if (arr != null) {
+                            val set = LinkedHashSet<String>(arr.length())
+                            for (i in 0 until arr.length()) {
+                                set.add(arr.optString(i))
+                            }
+                            result[key] = TypedSettingValue.StringSetVal(set)
+                        }
+                    }
+                }
+            }
+            return result
+        }
     }
 
     fun isTipDismissed(tipKey: String): Flow<Boolean> = context.dataStore.data
@@ -891,6 +1021,78 @@ class SettingsRepository private constructor(private val context: Context) {
         }
     }
 
+    val aiIndexingFolderConfigFlow: Flow<AiIndexingFolderConfig> = context.dataStore.data
+        .map { prefs ->
+            val rules = AiIndexingFeature.entries.associateWith { feature ->
+                val keys = AI_FEATURE_KEYS.getValue(feature)
+                AiFeatureFolderRule(
+                    mode = AiFolderScopeMode.fromStorage(prefs[keys.modeKey]),
+                    excludedFolders = prefs[keys.excludedKey] ?: emptySet(),
+                    includedFolders = prefs[keys.includedKey] ?: emptySet()
+                )
+            }
+            AiIndexingFolderConfig(
+                respectGalleryExcluded = prefs[AI_RESPECT_GALLERY_EXCLUDED] ?: true,
+                rules = rules
+            )
+        }
+
+    suspend fun updateAiRespectGalleryExcluded(respect: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[AI_RESPECT_GALLERY_EXCLUDED] = respect
+        }
+    }
+
+    suspend fun setAiFolderIncluded(feature: AiIndexingFeature?, folderName: String, included: Boolean) {
+        val targets = if (feature != null) listOf(feature) else AiIndexingFeature.entries
+        context.dataStore.edit { prefs ->
+            for (target in targets) {
+                val keys = AI_FEATURE_KEYS.getValue(target)
+                val currentRule = AiFeatureFolderRule(
+                    mode = AiFolderScopeMode.fromStorage(prefs[keys.modeKey]),
+                    excludedFolders = prefs[keys.excludedKey] ?: emptySet(),
+                    includedFolders = prefs[keys.includedKey] ?: emptySet()
+                )
+                val updated = currentRule.withBucketIncluded(folderName, included)
+                prefs[keys.excludedKey] = updated.excludedFolders
+                prefs[keys.includedKey] = updated.includedFolders
+            }
+        }
+    }
+
+    suspend fun updateAiAutoScanNewFolders(enabled: Boolean, knownBuckets: Collection<String>) {
+        val targetMode = if (enabled) AiFolderScopeMode.EXCLUDE_SELECTED else AiFolderScopeMode.ONLY_SELECTED
+        context.dataStore.edit { prefs ->
+            for (target in AiIndexingFeature.entries) {
+                val keys = AI_FEATURE_KEYS.getValue(target)
+                val currentRule = AiFeatureFolderRule(
+                    mode = AiFolderScopeMode.fromStorage(prefs[keys.modeKey]),
+                    excludedFolders = prefs[keys.excludedKey] ?: emptySet(),
+                    includedFolders = prefs[keys.includedKey] ?: emptySet()
+                )
+                val updated = currentRule.convertingModePreservingSelection(targetMode, knownBuckets)
+                prefs[keys.modeKey] = updated.mode.storageValue
+                prefs[keys.excludedKey] = updated.excludedFolders
+                prefs[keys.includedKey] = updated.includedFolders
+            }
+        }
+    }
+
+    suspend fun setAllAiFoldersSelection(scanAll: Boolean) {
+        val targetMode = if (scanAll) AiFolderScopeMode.EXCLUDE_SELECTED else AiFolderScopeMode.ONLY_SELECTED
+        context.dataStore.edit { prefs ->
+            for (target in AiIndexingFeature.entries) {
+                val keys = AI_FEATURE_KEYS.getValue(target)
+                prefs[keys.modeKey] = targetMode.storageValue
+                if (scanAll) {
+                    prefs[keys.excludedKey] = emptySet()
+                } else {
+                    prefs[keys.includedKey] = emptySet()
+                }
+            }
+        }
+    }
+
     val pinnedFoldersFlow: Flow<Set<String>> = context.dataStore.data
         .map { preferences ->
             val str = preferences[PINNED_FOLDERS] ?: ""
@@ -1219,5 +1421,59 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun updateDateHeaderAlignment(alignment: String) {
         context.dataStore.edit { it[DATE_HEADER_ALIGNMENT] = alignment }
+    }
+
+    val appLockEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { it[APP_LOCK_ENABLED] ?: false }
+
+    suspend fun updateAppLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[APP_LOCK_ENABLED] = enabled }
+    }
+
+    val appLockBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { it[APP_LOCK_BIOMETRIC_ENABLED] ?: true }
+
+    suspend fun updateAppLockBiometricEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[APP_LOCK_BIOMETRIC_ENABLED] = enabled }
+    }
+
+    val appLockTimeoutSecondsFlow: Flow<Int> = context.dataStore.data
+        .map { it[APP_LOCK_TIMEOUT_SECONDS] ?: 0 }
+
+    suspend fun updateAppLockTimeoutSeconds(seconds: Int) {
+        context.dataStore.edit { it[APP_LOCK_TIMEOUT_SECONDS] = seconds.coerceAtLeast(0) }
+    }
+
+    val defaultStartupTabFlow: Flow<String> = context.dataStore.data
+        .map { sanitizeStartupTab(it[DEFAULT_STARTUP_TAB], it[SHOW_VIDEOS_IN_DOCK] ?: false) }
+
+    suspend fun updateDefaultStartupTab(tab: String) {
+        context.dataStore.edit { prefs ->
+            val showVideos = prefs[SHOW_VIDEOS_IN_DOCK] ?: false
+            prefs[DEFAULT_STARTUP_TAB] = sanitizeStartupTab(tab, showVideos)
+        }
+    }
+
+    suspend fun exportSettingsToJson(): String {
+        val prefs = context.dataStore.data.first()
+        val rawMap = prefs.asMap().entries.associate { (k, v) -> k.name to v }
+        return encodeSettingsMapToJson(rawMap)
+    }
+
+    suspend fun importSettingsFromJson(jsonString: String): Int {
+        val decoded = decodeSettingsJsonToTypedMap(jsonString)
+        context.dataStore.edit { prefs ->
+            for ((key, typedVal) in decoded) {
+                when (typedVal) {
+                    is TypedSettingValue.BoolVal -> prefs[booleanPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.IntVal -> prefs[intPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.LongVal -> prefs[longPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.FloatVal -> prefs[floatPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.StringVal -> prefs[stringPreferencesKey(key)] = typedVal.value
+                    is TypedSettingValue.StringSetVal -> prefs[stringSetPreferencesKey(key)] = typedVal.value
+                }
+            }
+        }
+        return decoded.size
     }
 }

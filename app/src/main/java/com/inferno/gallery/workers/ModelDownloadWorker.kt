@@ -261,8 +261,13 @@ class ModelDownloadWorker(
                 db.embeddingStatusDao().clearAllStatuses()
                 val settingsRepo = com.inferno.gallery.data.SettingsRepository.getInstance(applicationContext)
                 settingsRepo.updateSmartSearchAutoIndex(true)
-                settingsRepo.smartSearchAutoIndexFlow
-                    .first() && db.embeddingDao().getUnindexedMediaIds().isNotEmpty()
+                val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(applicationContext)
+                settingsRepo.smartSearchAutoIndexFlow.first() &&
+                    com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedSmartCount(
+                        db,
+                        aiConfig,
+                        galleryExcluded
+                    ) > 0
             }
 
             if (shouldAutoIndex) {

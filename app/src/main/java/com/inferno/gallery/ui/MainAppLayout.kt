@@ -216,15 +216,18 @@ fun MainAppLayout(
     val dockStyle by viewModel.dockStyle.collectAsState()
     val showVideosInDock by viewModel.showVideosInDock.collectAsState()
     val showPillLabels by viewModel.showPillLabels.collectAsState()
+    val defaultStartupTab by settingsViewModel.defaultStartupTab.collectAsState()
+    val initialStartDestination = remember {
+        SettingsRepository.sanitizeStartupTab(defaultStartupTab, showVideosInDock)
+    }
     val nestedNavController = rememberNavController()
 
     var showMenu by remember { mutableStateOf(false) }
     var showCreateAlbumDialog by remember { mutableStateOf(false) }
     var showDisplaySortSheet by remember { mutableStateOf(false) }
     var newAlbumName by remember { mutableStateOf("") }
-    var settingsActiveSection by remember { mutableStateOf<String?>(null) }
     val navBackStackEntry by nestedNavController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentRoute = navBackStackEntry?.destination?.route ?: initialStartDestination
 
     LaunchedEffect(currentRoute) {
         viewModel.setTopBarCollapsed(false)
@@ -558,7 +561,6 @@ fun MainAppLayout(
 
     val isMainScreen = currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == "search" || currentRoute == null
     val isAlbumScreen = currentRoute == "album/{bucketName}"
-    val isSettingsScreen = currentRoute == "settings"
 
     Scaffold(
         modifier = modifier
@@ -567,7 +569,7 @@ fun MainAppLayout(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            if (isMainScreen || isAlbumScreen || isSettingsScreen) {
+            if (isMainScreen || isAlbumScreen) {
                 val isTopBarCollapsed by viewModel.isTopBarCollapsed.collectAsState()
                 val topBarColor by animateColorAsState(
                     targetValue = when {
@@ -814,48 +816,6 @@ fun MainAppLayout(
                                 }
                             }
                         }
-                    } else if (currentRoute == "settings") {
-                        Surface(
-                            color = topBarColor,
-                            shadowElevation = 0.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                PhotonBackButton(
-                                    onClick = {
-                                        if (settingsActiveSection == "Customize Toolbars") {
-                                            settingsActiveSection = "Layout & Navigation"
-                                        } else if (settingsActiveSection != null) {
-                                            settingsActiveSection = null
-                                        } else {
-                                            nestedNavController.popBackStackSafely()
-                                        }
-                                    }
-                                )
-                                val settingsHeaderTitle = when (settingsActiveSection) {
-                                    "Look & Feel" -> stringResource(R.string.category_theme_display)
-                                    "Layout & Navigation" -> stringResource(R.string.category_layout_navigation)
-                                    "Customize Toolbars" -> stringResource(R.string.customize_toolbars_title)
-                                    "General" -> stringResource(R.string.category_general)
-                                    "Smart Search & OCR" -> stringResource(R.string.smart_search)
-                                    "Privacy & Security" -> stringResource(R.string.category_security_privacy)
-                                    "About" -> stringResource(R.string.category_about)
-                                    null -> stringResource(R.string.settings_title)
-                                    else -> settingsActiveSection ?: stringResource(R.string.settings_title)
-                                }
-                                Text(
-                                    settingsHeaderTitle,
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .padding(start = 12.dp)
-                                        .weight(1f)
-                                )
-                            }
-                        }
                     } else {
                         Surface(
                             color = topBarColor,
@@ -909,11 +869,11 @@ fun MainAppLayout(
                                             )
                                         }
                                     }
-                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == null) {
+                                    if (currentRoute == "photos" || currentRoute == "videos" || currentRoute == "albums" || currentRoute == "collections" || currentRoute == "search" || currentRoute == null) {
                                         PhotonHeaderIconButton(
                                             onClick = {
                                                 nestedNavController.navigate("settings") {
-                                                    popUpTo("photos") { saveState = true }
+                                                    popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                                                     launchSingleTop = true
                                                     restoreState = true
                                                 }
@@ -1046,9 +1006,18 @@ fun MainAppLayout(
             end = innerPadding.calculateEndPadding(layoutDirection).coerceAtLeast(0.dp),
             bottom = animatedBottomPadding.coerceAtLeast(0.dp)
         )
+        val navigateToSettingsSection: (String) -> Unit = { nextSection ->
+            val currentSection = nestedNavController.currentBackStackEntry
+                ?.arguments
+                ?.getString("section")
+                ?.let { raw -> try { android.net.Uri.decode(raw) } catch (_: Exception) { raw } }
+            if (currentSection != nextSection) {
+                nestedNavController.navigate("settings/${android.net.Uri.encode(nextSection)}")
+            }
+        }
         NavHost(
             navController = nestedNavController,
-            startDestination = "photos",
+            startDestination = initialStartDestination,
             enterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
             exitTransition = { getExitTransition(initialState.destination.route, targetState.destination.route) },
             popEnterTransition = { getEnterTransition(initialState.destination.route, targetState.destination.route) },
@@ -1069,7 +1038,7 @@ fun MainAppLayout(
                     },
                     onNavigateToSettings = {
                         nestedNavController.navigate("settings") {
-                            popUpTo("photos") { saveState = true }
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -1092,7 +1061,7 @@ fun MainAppLayout(
                     },
                     onNavigateToSettings = {
                         nestedNavController.navigate("settings") {
-                            popUpTo("photos") { saveState = true }
+                            popUpTo(nestedNavController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -1275,8 +1244,7 @@ fun MainAppLayout(
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onStartScan = { settingsViewModel.startFaceIndexing() },
                     onNavigateToSettings = {
-                        settingsActiveSection = "Smart Search & OCR"
-                        nestedNavController.navigate("settings")
+                        navigateToSettingsSection("Smart Search & OCR")
                     },
                     viewModel = peopleViewModel
                 )
@@ -1294,8 +1262,7 @@ fun MainAppLayout(
                     onPersonClick = { personId -> nestedNavController.navigate("person_detail/$personId") },
                     onStartScan = { settingsViewModel.startFaceIndexing() },
                     onNavigateToSettings = {
-                        settingsActiveSection = "Smart Search & OCR"
-                        nestedNavController.navigate("settings")
+                        navigateToSettingsSection("Smart Search & OCR")
                     },
                     viewModel = peopleViewModel
                 )
@@ -1365,9 +1332,16 @@ fun MainAppLayout(
                             boundsTransform = { _, _ -> MotionTokens.sharedElementSpring() }
                         )
                     }
+                    val albumContentPadding = PaddingValues(
+                        start = effectivePadding.calculateStartPadding(layoutDirection),
+                        top = 0.dp,
+                        end = effectivePadding.calculateEndPadding(layoutDirection),
+                        bottom = effectivePadding.calculateBottomPadding()
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .padding(top = effectivePadding.calculateTopPadding())
                             .then(albumContainerModifier)
                             .background(MaterialTheme.colorScheme.background)
                     ) {
@@ -1376,7 +1350,7 @@ fun MainAppLayout(
                             animatedVisibilityScope = animatedVisibilityScope,
                             onPhotoClick = onPhotoClick,
                             viewModel = viewModel,
-                            contentPadding = effectivePadding,
+                            contentPadding = albumContentPadding,
                             bucketName = bucketName,
                             topBarCollapseFractionProvider = {
                                 if (isCollapsibleTopBarActive && topBarHeightPx > 0f) {
@@ -1402,6 +1376,9 @@ fun MainAppLayout(
                     },
                     onPersonClick = { personId ->
                         nestedNavController.navigate("person/$personId")
+                    },
+                    onOpenSmartSearchSettings = {
+                        navigateToSettingsSection("Smart Search & OCR")
                     }
                 )
             }
@@ -1411,14 +1388,51 @@ fun MainAppLayout(
                 exitTransition = { subScreenExitTransition() },
                 popEnterTransition = { subScreenPopEnterTransition() },
                 popExitTransition = { subScreenPopExitTransition() }
-            ) {
+            ) { backStackEntry ->
                 SettingsScreen(
-                    contentPadding = effectivePadding,
+                    contentPadding = PaddingValues(0.dp),
                     galleryViewModel = viewModel,
-                    onBackClick = { nestedNavController.popBackStackSafely() },
+                    onBackClick = { nestedNavController.popBackStackSafely(backStackEntry) },
                     onNavigateToVault = onNavigateToVault,
-                    activeSection = settingsActiveSection,
-                    onActiveSectionChange = { settingsActiveSection = it }
+                    activeSection = null,
+                    onActiveSectionChange = { nextSection ->
+                        if (nextSection != null) {
+                            navigateToSettingsSection(nextSection)
+                        }
+                    }
+                )
+            }
+            composable(
+                route = "settings/{section}",
+                arguments = listOf(
+                    androidx.navigation.navArgument("section") {
+                        type = androidx.navigation.NavType.StringType
+                    }
+                ),
+                enterTransition = { subScreenEnterTransition() },
+                exitTransition = { subScreenExitTransition() },
+                popEnterTransition = { subScreenPopEnterTransition() },
+                popExitTransition = { subScreenPopExitTransition() }
+            ) { backStackEntry ->
+                val rawSection = backStackEntry.arguments?.getString("section") ?: return@composable
+                val decodedSection = try {
+                    android.net.Uri.decode(rawSection)
+                } catch (_: Exception) {
+                    rawSection
+                }
+                SettingsScreen(
+                    contentPadding = PaddingValues(0.dp),
+                    galleryViewModel = viewModel,
+                    onBackClick = { nestedNavController.popBackStackSafely(backStackEntry) },
+                    onNavigateToVault = onNavigateToVault,
+                    activeSection = decodedSection,
+                    onActiveSectionChange = { nextSection ->
+                        if (nextSection == null) {
+                            nestedNavController.popBackStackSafely(backStackEntry)
+                        } else {
+                            navigateToSettingsSection(nextSection)
+                        }
+                    }
                 )
             }
 
@@ -1619,77 +1633,6 @@ fun MainAppLayout(
                             androidx.compose.foundation.lazy.LazyColumn(
                                 modifier = Modifier.heightIn(max = 400.dp)
                             ) {
-                                // Private Space as first item
-                                item {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                showMoveSheet = false
-                                                val activity = context as? androidx.fragment.app.FragmentActivity
-                                                if (activity != null) {
-                                                    val hideAction: () -> Unit = {
-                                                        val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
-                                                        viewModel.hideMedia(uris)
-                                                        viewModel.lockVault()
-                                                        viewModel.clearSelection()
-                                                    }
-                                                    viewModel.vaultAuthManager.authenticate(
-                                                        activity = activity,
-                                                        negativeButtonText = "Use PIN",
-                                                        unlockSession = false,
-                                                        onSuccess = hideAction,
-                                                        onNegativeButton = {
-                                                            if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
-                                                                pendingVaultHideAction = hideAction
-                                                            }
-                                                        },
-                                                        onFailure = {}
-                                                    )
-                                                }
-                                            }
-                                            .padding(vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .background(
-                                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                                    shape = ShapeMedium
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                ImageVector.vectorResource(R.drawable.ic_ms_shield),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                "Private Space",
-                                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-                                            )
-                                            Text(
-                                                "Hidden \u00b7 Biometric protected",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Icon(
-                                            ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                    )
-                                }
                                 items(albums.size) { index ->
                                     val album = albums[index]
                                     Row(
@@ -2438,47 +2381,31 @@ fun MainAppLayout(
                     )
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                com.inferno.gallery.ui.components.LayeredToolPill(
+                    shadowElevation = 3.dp,
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth()
+                        .widthIn(max = 340.dp)
                 ) {
-                    ExpressiveButton(
+                    com.inferno.gallery.ui.components.LayeredToolTile(
+                        icon = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                        contentDescription = "Restore",
+                        label = stringResource(R.string.action_restore),
                         onClick = { showTrashRestoreConfirmDialog = true },
-                        shape = ShapeFull,
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
-                            contentDescription = "Restore",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.action_restore))
-                    }
-
-                    ExpressiveButton(
+                        tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(0, 2),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    com.inferno.gallery.ui.components.LayeredToolTile(
+                        icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                        contentDescription = "Delete Permanently",
+                        label = stringResource(R.string.action_delete),
                         onClick = { showTrashDeleteConfirmDialog = true },
-                        shape = ShapeFull,
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        ),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
-                            contentDescription = "Delete Permanently",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.action_delete))
-                    }
+                        tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(1, 2),
+                        tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             } else {
                 val isCreateEnabled = selectedUris.size in 1..8
@@ -2497,25 +2424,19 @@ fun MainAppLayout(
                 }
 
                 val onVaultSelectedAction = {
-                    val activity = context as? androidx.fragment.app.FragmentActivity
-                    if (activity != null) {
-                        val hideAction: () -> Unit = {
-                            val uris = selectedUris.mapNotNull { android.net.Uri.parse(it) }
-                            viewModel.hideMedia(uris)
-                            viewModel.lockVault()
-                            viewModel.clearSelection()
-                        }
-                        viewModel.vaultAuthManager.authenticate(
+                    val urisSnapshot = selectedUris.mapNotNull { runCatching { android.net.Uri.parse(it) }.getOrNull() }
+                    val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+                        .filterIsInstance<androidx.fragment.app.FragmentActivity>()
+                        .firstOrNull()
+                    if (activity != null && urisSnapshot.isNotEmpty()) {
+                        viewModel.vaultAuthManager.authenticateForHide(
                             activity = activity,
-                            negativeButtonText = "Use PIN",
-                            unlockSession = false,
-                            onSuccess = hideAction,
-                            onNegativeButton = {
-                                if (viewModel.vaultAuthManager.isPinConfigured(activity)) {
-                                    pendingVaultHideAction = hideAction
-                                }
+                            itemCount = urisSnapshot.size,
+                            onAuthenticated = {
+                                viewModel.hideMedia(urisSnapshot, lockAfter = true)
+                                viewModel.clearSelection()
                             },
-                            onFailure = {}
+                            onRequirePinDialog = { pendingVaultHideAction = it }
                         )
                     }
                     Unit
@@ -2579,117 +2500,145 @@ fun MainAppLayout(
                     }
                 }
 
-                Surface(
-                    shape = ShapeExtraLarge,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    tonalElevation = 6.dp,
-                    shadowElevation = 8.dp
+                val dockTotal = selectionDockActions.size + 1 // actions + More overflow tile
+                com.inferno.gallery.ui.components.LayeredToolPill(
+                    shadowElevation = 3.dp,
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth()
+                        .widthIn(max = 380.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        selectionDockActions.forEach { actionId ->
-                            when (actionId) {
-                                "share" -> {
-                                    IconButton(onClick = onShareSelectedAction) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_share), contentDescription = "Share", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "copy" -> {
-                                    IconButton(onClick = { showCopySheet = true }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_folder_copy), contentDescription = stringResource(R.string.action_copy_to_album), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "move" -> {
-                                    IconButton(onClick = { showMoveSheet = true }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move), contentDescription = "Move", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "create" -> {
-                                    Box {
-                                        IconButton(onClick = { createMenuExpanded = true }) {
-                                            Icon(ImageVector.vectorResource(R.drawable.ic_ms_add), contentDescription = "Create", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
+                    selectionDockActions.forEachIndexed { index, actionId ->
+                        val tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(index, dockTotal)
+                        when (actionId) {
+                            "share" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                                contentDescription = stringResource(R.string.detail_share),
+                                onClick = onShareSelectedAction,
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "copy" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_folder_copy),
+                                contentDescription = stringResource(R.string.action_copy_to_album),
+                                onClick = { showCopySheet = true },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "move" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_drive_file_move),
+                                contentDescription = stringResource(R.string.action_move),
+                                onClick = { showMoveSheet = true },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "create" -> Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            ) {
+                                com.inferno.gallery.ui.components.LayeredToolTile(
+                                    icon = ImageVector.vectorResource(R.drawable.ic_ms_add),
+                                    contentDescription = stringResource(R.string.action_create),
+                                    onClick = { createMenuExpanded = true },
+                                    tileShape = tileShape,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                DropdownMenu(
+                                    expanded = createMenuExpanded,
+                                    onDismissRequest = { createMenuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_collage)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
+                                        onClick = {
+                                            createMenuExpanded = false
+                                            if (isCreateEnabled) {
+                                                onCreateCollage(selectedUris.toList())
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
                                         }
-                                        DropdownMenu(
-                                            expanded = createMenuExpanded,
-                                            onDismissRequest = { createMenuExpanded = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.action_collage)) },
-                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = null) },
-                                                onClick = {
-                                                    createMenuExpanded = false
-                                                    if (isCreateEnabled) {
-                                                        onCreateCollage(selectedUris.toList())
-                                                    } else {
-                                                        android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.action_stitch)) },
-                                                leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
-                                                onClick = {
-                                                    createMenuExpanded = false
-                                                    if (isStitchEnabled) {
-                                                        onCreateStitch(selectedUris.toList())
-                                                    } else {
-                                                        android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            )
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_stitch)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = null) },
+                                        onClick = {
+                                            createMenuExpanded = false
+                                            if (isStitchEnabled) {
+                                                onCreateStitch(selectedUris.toList())
+                                            } else {
+                                                android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
                                         }
-                                    }
-                                }
-                                "delete" -> {
-                                    IconButton(onClick = onDeleteSelectedAction) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_delete), contentDescription = "Delete", tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "vault" -> {
-                                    IconButton(onClick = onVaultSelectedAction) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_visibility_off), contentDescription = stringResource(R.string.action_hide), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "selectAll" -> {
-                                    IconButton(onClick = { viewModel.toggleSelectAll() }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_select_all), contentDescription = stringResource(R.string.action_select_all), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "collage" -> {
-                                    IconButton(onClick = {
-                                        if (isCreateEnabled) {
-                                            onCreateCollage(selectedUris.toList())
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_grid_view), contentDescription = stringResource(R.string.action_collage), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
-                                }
-                                "stitch" -> {
-                                    IconButton(onClick = {
-                                        if (isStitchEnabled) {
-                                            onCreateStitch(selectedUris.toList())
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }) {
-                                        Icon(ImageVector.vectorResource(R.drawable.ic_ms_sort), contentDescription = stringResource(R.string.action_stitch), tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                                    }
+                                    )
                                 }
                             }
+                            "delete" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                                contentDescription = stringResource(R.string.detail_delete),
+                                tint = com.inferno.gallery.ui.theme.LocalHarmonizedColors.current.error,
+                                onClick = onDeleteSelectedAction,
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "vault" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
+                                contentDescription = stringResource(R.string.action_hide),
+                                onClick = onVaultSelectedAction,
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "selectAll" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
+                                contentDescription = stringResource(R.string.action_select_all),
+                                onClick = { viewModel.toggleSelectAll() },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "collage" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_grid_view),
+                                contentDescription = stringResource(R.string.action_collage),
+                                onClick = {
+                                    if (isCreateEnabled) {
+                                        onCreateCollage(selectedUris.toList())
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Collage supports up to 8 images", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
+                            "stitch" -> com.inferno.gallery.ui.components.LayeredToolTile(
+                                icon = ImageVector.vectorResource(R.drawable.ic_ms_sort),
+                                contentDescription = stringResource(R.string.action_stitch),
+                                onClick = {
+                                    if (isStitchEnabled) {
+                                        onCreateStitch(selectedUris.toList())
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Select between 2 and 10 images to stitch", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                tileShape = tileShape,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
+                    }
 
-                        // More options
-                        Box {
-                            IconButton(onClick = { moreMenuExpanded = true }) {
-                                Icon(ImageVector.vectorResource(R.drawable.ic_ms_more_vert), contentDescription = "More", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(IconSizeTokens.L))
-                            }
-                            DropdownMenu(
+                    // More options overflow tile
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        com.inferno.gallery.ui.components.LayeredToolTile(
+                            icon = ImageVector.vectorResource(R.drawable.ic_ms_more_vert),
+                            contentDescription = "More",
+                            onClick = { moreMenuExpanded = true },
+                            tileShape = com.inferno.gallery.ui.components.LayeredToolPillDefaults.segmentShape(dockTotal - 1, dockTotal),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        DropdownMenu(
                                 expanded = moreMenuExpanded,
                                 onDismissRequest = { moreMenuExpanded = false }
                             ) {
@@ -2797,7 +2746,6 @@ fun MainAppLayout(
                 }
             }
         }
-    }
 
     if (showCreateAlbumDialog) {
         com.inferno.gallery.ui.components.PhotonDialog(

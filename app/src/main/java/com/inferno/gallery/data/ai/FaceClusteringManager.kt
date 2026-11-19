@@ -15,9 +15,9 @@ import kotlinx.coroutines.withContext
 
 /**
  * Manages identity clustering with:
- * 1. Multi-Exemplar Anchors to prevent centroid drift across poses/lighting.
- * 2. 3-Photo Admission Rule: Clusters require >= 3 distinct photos before promotion to UI.
- * 3. Two-tier matching: Real-time multi-exemplar matching + periodic Chinese Whispers graph consolidation.
+ * 1. Diverse Pose/Lighting Exemplar Anchors (up to 10 per identity) to bridge frontal -> 3/4 -> profile poses.
+ * 2. Quality-weighted centroids anchored on crisp frontal detections so steep profiles don't drift centroids.
+ * 3. Corroborated pose-bridge matching + centroid sanity floor to boost profile recall without false merges.
  */
 class FaceClusteringManager(private val context: Context) {
 
@@ -25,10 +25,15 @@ class FaceClusteringManager(private val context: Context) {
         private const val TAG = "FaceClusteringManager"
 
         // Similarity thresholds on LFW/WebFace600k 512-D MobileFaceNet embeddings
-        const val MATCH_THRESHOLD = 0.52f          // Reliably associates different angles, lighting, and natural poses of the same identity
-        const val CONSOLIDATION_THRESHOLD = 0.54f  // Threshold for merging split clusters of the same person
-        const val PROMOTION_MIN_PHOTOS = 1         // Instant promotion: all discovered faces appear immediately in UI
-        const val MAX_EXEMPLARS_PER_CLUSTER = 6    // Retain up to 6 diverse pose/lighting exemplars per identity
+        const val MATCH_THRESHOLD = 0.52f          // Direct match threshold
+        const val CONSOLIDATION_THRESHOLD = 0.54f  // Direct consolidation threshold
+        const val MIN_CENTROID_SANITY = 0.38f      // Blocks single-outlier exemplar chaining against strangers
+        const val POSE_BRIDGE_EXEMPLAR_MIN = 0.495f
+        const val POSE_BRIDGE_SECOND_MIN = 0.465f
+        const val POSE_BRIDGE_CENTROID_MIN = 0.43f
+        const val SAME_PHOTO_COLLAGE_OVERRIDE_SIM = 0.72f
+        const val PROMOTION_MIN_PHOTOS = 1
+        const val MAX_EXEMPLARS_PER_CLUSTER = 10
 
         // Ambiguous candidate similarity window for proactive merge suggestions
         const val SUGGESTION_MIN_THRESHOLD = 0.48f
@@ -48,9 +53,148 @@ class FaceClusteringManager(private val context: Context) {
             similarity: Float
         ): Boolean {
             if (isHiddenA || isHiddenB) return false
+            if (hasConflictingNames(nameA, nameB)) return false
             if (!isCandidateSimilarity(similarity)) return false
             return (faceCountA >= 2 || !nameA.isNullOrBlank()) || (faceCountB >= 2 || !nameB.isNullOrBlank())
         }
+
+        fun hasConflictingNames(nameA: String?, nameB: String?): Boolean {
+            val cleanA = nameA?.trim().orEmpty()
+            val cleanB = nameB?.trim().orEmpty()
+            return cleanA.isNotEmpty() && cleanB.isNotEmpty() && !cleanA.equals(cleanB, ignoreCase = true)
+        }
+
+        fun computeWeightedCentroid(
+            embeddings: List<FloatArray>,
+            weights: List<Float>
+        ): FloatArray? {
+            if (embeddings.isEmpty()) return null
+            val dim = embeddings[0].size
+            if (dim == 0) return null
+            val sum = FloatArray(dim)
+            var totalWeight = 0f
+            for (idx in embeddings.indices) {
+                val emb = embeddings[idx]
+                if (emb.size != dim) continue
+                val w = weights.getOrElse(idx) { 0.5f }.coerceIn(0.25f, 1.0f)
+                for (i in 0 until dim) {
+                    sum[i] += emb[i] * w
+                }
+                totalWeight += w
+            }
+            if (totalWeight <= 1e-6f) return null
+            for (i in 0 until dim) {
+                sum[i] /= totalWeight
+            }
+            val normalized = FaceRecognitionEngine.normalizeL2(sum)
+            var energy = 0.0
+            for (v in normalized) energy += v * v
+            return if (energy < 1e-6) null else normalized
+        }
+
+        /**
+         * Evaluates similarity between a candidate face embedding and an identity cluster.
+         * Returns the effective similarity if accepted (either direct match with centroid sanity
+         * or corroborated pose-bridge across exemplars + centroid), or `-1f` if rejected.
+         */
+        fun evaluateClusterSimilarity(
+            embedding: FloatArray,
+            centroid: FloatArray,
+            exemplars: List<FloatArray>
+        ): Float {
+            val centroidSim = FaceRecognitionEngine.cosineSimilarity(embedding, centroid)
+            var bestExSim = -1f
+            var secondExSim = -1f
+            for (ex in exemplars) {
+                val s = FaceRecognitionEngine.cosineSimilarity(embedding, ex)
+                if (s > bestExSim) {
+                    secondExSim = bestExSim
+                    bestExSim = s
+                } else if (s > secondExSim) {
+                    secondExSim = s
+                }
+            }
+
+            val topDirect = maxOf(centroidSim, bestExSim)
+            if (topDirect >= MATCH_THRESHOLD && centroidSim >= MIN_CENTROID_SANITY) {
+                return topDirect
+            }
+
+            // Pose-bridge: side profile strongly matches a 3/4 exemplar AND is corroborated by
+            // both the cluster centroid and a second reference anchor.
+            val secondSupport = maxOf(secondExSim, centroidSim)
+            if (bestExSim >= POSE_BRIDGE_EXEMPLAR_MIN &&
+                secondSupport >= POSE_BRIDGE_SECOND_MIN &&
+                centroidSim >= POSE_BRIDGE_CENTROID_MIN
+            ) {
+                return bestExSim
+            }
+
+            return -1f
+        }
+
+        fun isClusterMatch(
+            embedding: FloatArray,
+            centroid: FloatArray,
+            exemplars: List<FloatArray>
+        ): Boolean = evaluateClusterSimilarity(embedding, centroid, exemplars) > 0f
+
+        /**
+         * Returns consolidated similarity between two clusters if they belong to the same identity,
+         * or `-1f` if they should remain separate. Never merges distinct user-named identities.
+         */
+        fun evaluateClusterConsolidation(
+            centroidA: FloatArray,
+            exemplarsA: List<FloatArray>,
+            nameA: String?,
+            centroidB: FloatArray,
+            exemplarsB: List<FloatArray>,
+            nameB: String?,
+            threshold: Float = CONSOLIDATION_THRESHOLD
+        ): Float {
+            if (hasConflictingNames(nameA, nameB)) return -1f
+
+            val centroidSim = FaceRecognitionEngine.cosineSimilarity(centroidA, centroidB)
+            var maxExSim = -1f
+            var secondExSim = -1f
+            for (e1 in exemplarsA) {
+                for (e2 in exemplarsB) {
+                    val s = FaceRecognitionEngine.cosineSimilarity(e1, e2)
+                    if (s > maxExSim) {
+                        secondExSim = maxExSim
+                        maxExSim = s
+                    } else if (s > secondExSim) {
+                        secondExSim = s
+                    }
+                }
+            }
+
+            val maxSim = maxOf(centroidSim, maxExSim)
+            if (maxSim >= threshold && centroidSim >= 0.40f) {
+                return maxSim
+            }
+
+            val secondSupport = maxOf(secondExSim, centroidSim)
+            if (maxExSim >= 0.505f && secondSupport >= 0.475f && centroidSim >= POSE_BRIDGE_CENTROID_MIN) {
+                return maxExSim
+            }
+
+            return -1f
+        }
+
+        fun shouldConsolidateClusters(
+            centroidA: FloatArray,
+            exemplarsA: List<FloatArray>,
+            nameA: String?,
+            centroidB: FloatArray,
+            exemplarsB: List<FloatArray>,
+            nameB: String?,
+            threshold: Float = CONSOLIDATION_THRESHOLD
+        ): Boolean = evaluateClusterConsolidation(
+            centroidA, exemplarsA, nameA,
+            centroidB, exemplarsB, nameB,
+            threshold
+        ) > 0f
 
         fun toCanonicalPair(idA: Long, idB: Long): Pair<Long, Long> {
             return if (idA < idB) Pair(idA, idB) else Pair(idB, idA)
@@ -73,7 +217,9 @@ class FaceClusteringManager(private val context: Context) {
         val personId: Long,
         val exemplars: MutableList<FloatArray>,
         var centroid: FloatArray,
+        var centroidWeight: Float,
         var faceCount: Int,
+        var bestQualityScore: Float,
         var isPromoted: Boolean,
         var isHidden: Boolean,
         var name: String?,
@@ -96,13 +242,16 @@ class FaceClusteringManager(private val context: Context) {
             } else {
                 mutableListOf(centroid)
             }
+            val bestQuality = exemplarFaces.maxOfOrNull { it.qualityScore } ?: 0.6f
 
             clusterCache.add(
                 ClusterCacheItem(
                     personId = person.id,
                     exemplars = exemplars,
                     centroid = centroid,
+                    centroidWeight = maxOf(1f, person.faceCount * 0.7f),
                     faceCount = person.faceCount,
+                    bestQualityScore = bestQuality,
                     isPromoted = person.isPromoted,
                     isHidden = person.isHidden,
                     name = person.name,
@@ -114,8 +263,9 @@ class FaceClusteringManager(private val context: Context) {
     }
 
     /**
-     * Assigns a newly detected face to the best matching person cluster or spawns a new candidate cluster.
-     * Guaranteed thread-safe via mutex.
+     * Assigns a newly detected face to the best matching person cluster or spawns a new cluster.
+     * [excludedPersonIds] guards against assigning two distinct simultaneous faces in the same
+     * group photo to the same identity on borderline similarity.
      */
     suspend fun assignFaceToCluster(
         mediaId: Long,
@@ -125,50 +275,44 @@ class FaceClusteringManager(private val context: Context) {
         bboxRight: Float = 0f,
         bboxBottom: Float = 0f,
         qualityScore: Float = 0.5f,
-        cropCachePath: String? = null
+        cropCachePath: String? = null,
+        excludedPersonIds: Set<Long> = emptySet()
     ): Long = mutex.withLock {
         withContext(Dispatchers.IO) {
             ensureCacheLoaded()
 
-            var bestPersonId = -1L
             var maxSimilarity = -1f
             var bestClusterIndex = -1
 
-            // 1. Multi-exemplar & centroid matching against all known clusters
             for (i in clusterCache.indices) {
                 val cluster = clusterCache[i]
-                val simCentroid = FaceRecognitionEngine.cosineSimilarity(embedding, cluster.centroid)
-                if (simCentroid > maxSimilarity) {
-                    maxSimilarity = simCentroid
-                    bestPersonId = cluster.personId
-                    bestClusterIndex = i
+                val sim = evaluateClusterSimilarity(embedding, cluster.centroid, cluster.exemplars)
+                if (sim <= 0f) continue
+                if (cluster.personId in excludedPersonIds && sim < SAME_PHOTO_COLLAGE_OVERRIDE_SIM) {
+                    continue
                 }
-                for (exemplar in cluster.exemplars) {
-                    val sim = FaceRecognitionEngine.cosineSimilarity(embedding, exemplar)
-                    if (sim > maxSimilarity) {
-                        maxSimilarity = sim
-                        bestPersonId = cluster.personId
-                        bestClusterIndex = i
-                    }
+                if (sim > maxSimilarity) {
+                    maxSimilarity = sim
+                    bestClusterIndex = i
                 }
             }
 
-            if (maxSimilarity >= MATCH_THRESHOLD && bestClusterIndex != -1) {
-                // Match confirmed: update existing cluster
+            if (bestClusterIndex != -1) {
                 val cluster = clusterCache[bestClusterIndex]
-                val newCount = cluster.faceCount + 1
+                val effectiveWeight = qualityScore.coerceIn(0.25f, 1.0f)
 
-                // Update running centroid: C_new = normalize(C_old * N + embedding)
                 val updatedCentroid = FloatArray(embedding.size)
                 for (j in embedding.indices) {
-                    updatedCentroid[j] = cluster.centroid[j] * cluster.faceCount + embedding[j]
+                    updatedCentroid[j] = cluster.centroid[j] * cluster.centroidWeight + embedding[j] * effectiveWeight
                 }
                 val normalizedCentroid = FaceRecognitionEngine.normalizeL2(updatedCentroid)
 
-                // Expand angle/lighting coverage with diverse exemplars
+                // Retain up to 10 pose/lighting-diverse exemplars per identity
                 var isExemplar = false
                 if (cluster.exemplars.size < MAX_EXEMPLARS_PER_CLUSTER) {
-                    val isDiverse = cluster.exemplars.all { FaceRecognitionEngine.cosineSimilarity(embedding, it) < 0.88f }
+                    val isDiverse = cluster.exemplars.all {
+                        FaceRecognitionEngine.cosineSimilarity(embedding, it) < 0.88f
+                    }
                     if (isDiverse) {
                         cluster.exemplars.add(embedding)
                         isExemplar = true
@@ -176,32 +320,18 @@ class FaceClusteringManager(private val context: Context) {
                 }
 
                 cluster.centroid = normalizedCentroid
-                cluster.faceCount = newCount
-                if (cluster.coverCropPath == null && cropCachePath != null) {
+                cluster.centroidWeight += effectiveWeight
+
+                val hasManualCover = cluster.coverCropPath?.endsWith("_cover.webp") == true
+                if (cropCachePath != null && (
+                        cluster.coverCropPath == null ||
+                            (!hasManualCover && cluster.bestQualityScore < 0.62f && qualityScore >= 0.80f)
+                    )
+                ) {
                     cluster.coverCropPath = cropCachePath
                 }
-
-                // 3-Photo Admission Rule: promote cluster once 3 distinct photos contain this person
-                val distinctPhotos = faceDao.countDistinctMediaForPerson(cluster.personId) + 1
-                val shouldPromote = if (!cluster.isPromoted) {
-                    distinctPhotos >= PROMOTION_MIN_PHOTOS
-                } else {
-                    true
-                }
-                cluster.isPromoted = shouldPromote
-                cluster.faceCount = distinctPhotos
-
-                // Persist updates
-                val existingPerson = faceDao.getPersonById(cluster.personId)
-                if (existingPerson != null) {
-                    faceDao.updatePerson(
-                        existingPerson.copy(
-                            centroid = normalizedCentroid,
-                            faceCount = distinctPhotos,
-                            coverCropPath = cluster.coverCropPath,
-                            isPromoted = shouldPromote
-                        )
-                    )
+                if (qualityScore > cluster.bestQualityScore) {
+                    cluster.bestQualityScore = qualityScore
                 }
 
                 val faceEntity = FaceEntity(
@@ -217,10 +347,31 @@ class FaceClusteringManager(private val context: Context) {
                     embedding = embedding
                 )
                 faceDao.insertFace(faceEntity)
+
+                val distinctPhotos = faceDao.countDistinctMediaForPerson(cluster.personId).coerceAtLeast(1)
+                val shouldPromote = if (!cluster.isPromoted) {
+                    distinctPhotos >= PROMOTION_MIN_PHOTOS
+                } else {
+                    true
+                }
+                cluster.isPromoted = shouldPromote
+                cluster.faceCount = distinctPhotos
+
+                val existingPerson = faceDao.getPersonById(cluster.personId)
+                if (existingPerson != null) {
+                    faceDao.updatePerson(
+                        existingPerson.copy(
+                            centroid = normalizedCentroid,
+                            faceCount = distinctPhotos,
+                            coverCropPath = cluster.coverCropPath,
+                            isPromoted = shouldPromote
+                        )
+                    )
+                }
+
                 Log.d(TAG, "Assigned face from media $mediaId to Person ${cluster.personId} (sim=$maxSimilarity, count=${cluster.faceCount})")
                 return@withContext cluster.personId
             } else {
-                // No match: spawn new candidate cluster (immediately promoted so it appears in UI)
                 val newPerson = PersonEntity(
                     name = null,
                     coverCropPath = cropCachePath,
@@ -251,7 +402,9 @@ class FaceClusteringManager(private val context: Context) {
                         personId = newPersonId,
                         exemplars = mutableListOf(embedding),
                         centroid = embedding,
+                        centroidWeight = qualityScore.coerceIn(0.25f, 1.0f),
                         faceCount = 1,
+                        bestQualityScore = qualityScore,
                         isPromoted = true,
                         isHidden = false,
                         name = null,
@@ -262,6 +415,59 @@ class FaceClusteringManager(private val context: Context) {
                 Log.d(TAG, "Created new Person cluster $newPersonId with face from media $mediaId")
                 return@withContext newPersonId
             }
+        }
+    }
+
+    /**
+     * Recomputes quality-weighted centroids and pose-diverse exemplars from stored FaceEntity rows
+     * (e.g. after an in-place rescan upgrades embeddings).
+     */
+    suspend fun refreshAllClusterCentroids() = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            val persons = faceDao.getAllPersonsWithCentroids()
+            for (person in persons) {
+                val faces = faceDao.getFacesByPersonId(person.id)
+                if (faces.isEmpty()) continue
+                val updatedCentroid = computeCentroidFromFaces(faces) ?: continue
+
+                // Ensure up to MAX_EXEMPLARS_PER_CLUSTER diverse faces are flagged as exemplars
+                val selectedExemplars = ArrayList<FloatArray>(MAX_EXEMPLARS_PER_CLUSTER)
+                // Seed with highest-quality frontal face first, then greedily add diverse angles
+                val ordered = faces.sortedByDescending { it.qualityScore }
+                for (face in ordered) {
+                    val shouldBeExemplar = if (selectedExemplars.size < MAX_EXEMPLARS_PER_CLUSTER) {
+                        selectedExemplars.isEmpty() || selectedExemplars.all {
+                            FaceRecognitionEngine.cosineSimilarity(face.embedding, it) < 0.88f
+                        }
+                    } else {
+                        false
+                    }
+                    if (shouldBeExemplar) {
+                        selectedExemplars.add(face.embedding)
+                    }
+                    if (face.isExemplar != shouldBeExemplar) {
+                        faceDao.updateFace(face.copy(isExemplar = shouldBeExemplar))
+                    }
+                }
+
+                val hasManualCover = person.coverCropPath?.endsWith("_cover.webp") == true
+                val bestFaceCrop = ordered.firstOrNull { !it.cropCachePath.isNullOrBlank() }?.cropCachePath
+                val updatedCover = if (!hasManualCover && person.coverCropPath == null && bestFaceCrop != null) {
+                    bestFaceCrop
+                } else {
+                    person.coverCropPath
+                }
+
+                val distinctPhotos = faceDao.countDistinctMediaForPerson(person.id)
+                faceDao.updatePerson(
+                    person.copy(
+                        centroid = updatedCentroid,
+                        faceCount = distinctPhotos,
+                        coverCropPath = updatedCover
+                    )
+                )
+            }
+            isCacheInitialized = false
         }
     }
 
@@ -295,7 +501,6 @@ class FaceClusteringManager(private val context: Context) {
             )
             faceDao.recalculateAllPersonFaceCounts()
 
-            // Invalidate cache to reflect merged state
             isCacheInitialized = false
             ensureCacheLoaded()
             Log.d(TAG, "Merged person $sourcePersonId into $targetPersonId (total $totalCount faces)")
@@ -354,10 +559,8 @@ class FaceClusteringManager(private val context: Context) {
             if (sourcePersonId == targetPersonId || mediaIds.isEmpty()) return@withContext
             ensureCacheLoaded()
 
-            // 1. Reassign in database
             faceDao.reassignFacesForMedia(mediaIds, sourcePersonId, targetPersonId)
 
-            // 2. Recompute distinct photos and faces for source
             val sourceFaces = faceDao.getFacesByPersonId(sourcePersonId)
             val sourceMediaCount = faceDao.countDistinctMediaForPerson(sourcePersonId)
 
@@ -370,7 +573,7 @@ class FaceClusteringManager(private val context: Context) {
                     val cover = if (sourceFaces.any { it.cropCachePath == sourcePerson.coverCropPath }) {
                         sourcePerson.coverCropPath
                     } else {
-                        sourceFaces.firstOrNull()?.cropCachePath ?: sourcePerson.coverCropPath
+                        sourceFaces.maxByOrNull { it.qualityScore }?.cropCachePath ?: sourcePerson.coverCropPath
                     }
                     faceDao.updatePerson(
                         sourcePerson.copy(
@@ -382,14 +585,13 @@ class FaceClusteringManager(private val context: Context) {
                 }
             }
 
-            // 3. Recompute distinct photos and faces for target
             val targetFaces = faceDao.getFacesByPersonId(targetPersonId)
             val targetMediaCount = faceDao.countDistinctMediaForPerson(targetPersonId)
             val targetPerson = faceDao.getPersonById(targetPersonId)
 
             if (targetPerson != null) {
                 val targetCentroid = computeCentroidFromFaces(targetFaces) ?: targetPerson.centroid
-                val targetCover = targetPerson.coverCropPath ?: targetFaces.firstOrNull()?.cropCachePath
+                val targetCover = targetPerson.coverCropPath ?: targetFaces.maxByOrNull { it.qualityScore }?.cropCachePath
                 faceDao.updatePerson(
                     targetPerson.copy(
                         centroid = targetCentroid,
@@ -440,23 +642,10 @@ class FaceClusteringManager(private val context: Context) {
 
     fun computeCentroidFromFaces(faces: List<FaceEntity>): FloatArray? {
         if (faces.isEmpty()) return null
-        val dim = faces[0].embedding.size
-        val sum = FloatArray(dim)
-        var count = 0
-        for (f in faces) {
-            if (f.embedding.size == dim) {
-                for (i in 0 until dim) {
-                    sum[i] += f.embedding[i]
-                }
-                count++
-            }
-        }
-        if (count == 0) return null
-        for (i in 0 until dim) {
-            sum[i] /= count.toFloat()
-        }
-        val normalized = FaceRecognitionEngine.normalizeL2(sum)
-        return if (isZeroVector(normalized)) null else normalized
+        return computeWeightedCentroid(
+            embeddings = faces.map { it.embedding },
+            weights = faces.map { it.qualityScore }
+        )
     }
 
     fun invalidateCache() {
@@ -464,8 +653,9 @@ class FaceClusteringManager(private val context: Context) {
     }
 
     /**
-     * Iteratively merges clusters of the same identity whose centroids or exemplars exceed similarity threshold.
-     * Consolidates fragmented clusters formed due to lighting/angle/pose variations.
+     * Iteratively merges clusters of the same identity whose centroids or exemplars pass
+     * consolidation (either high direct similarity with centroid sanity, or corroborated pose bridge).
+     * Never merges two clusters that have different user-assigned names.
      */
     suspend fun consolidateClusters(threshold: Float = CONSOLIDATION_THRESHOLD): Int = mutex.withLock {
         withContext(Dispatchers.IO + NonCancellable) {
@@ -484,29 +674,34 @@ class FaceClusteringManager(private val context: Context) {
                     val c1 = clusterCache[i]
                     for (j in i + 1 until clusterCache.size) {
                         val c2 = clusterCache[j]
-
-                        var maxSim = FaceRecognitionEngine.cosineSimilarity(c1.centroid, c2.centroid)
-
-                        for (e1 in c1.exemplars) {
-                            for (e2 in c2.exemplars) {
-                                val s = FaceRecognitionEngine.cosineSimilarity(e1, e2)
-                                if (s > maxSim) maxSim = s
-                            }
-                        }
-
-                        if (maxSim >= threshold && maxSim > bestSim) {
-                            bestSim = maxSim
+                        val sim = evaluateClusterConsolidation(
+                            centroidA = c1.centroid,
+                            exemplarsA = c1.exemplars,
+                            nameA = c1.name,
+                            centroidB = c2.centroid,
+                            exemplarsB = c2.exemplars,
+                            nameB = c2.name,
+                            threshold = threshold
+                        )
+                        if (sim > bestSim) {
+                            bestSim = sim
                             bestPair = Pair(i, j)
                         }
                     }
                 }
 
-                if (bestPair != null) {
+                if (bestPair != null && bestSim > 0f) {
                     val (i, j) = bestPair
                     val c1 = clusterCache[i]
                     val c2 = clusterCache[j]
 
-                    val (target, source) = if (c1.faceCount >= c2.faceCount) Pair(c1, c2) else Pair(c2, c1)
+                    // Prefer keeping named cluster as target, otherwise larger cluster
+                    val keepFirst = when {
+                        !c1.name.isNullOrBlank() && c2.name.isNullOrBlank() -> true
+                        c1.name.isNullOrBlank() && !c2.name.isNullOrBlank() -> false
+                        else -> c1.faceCount >= c2.faceCount
+                    }
+                    val (target, source) = if (keepFirst) Pair(c1, c2) else Pair(c2, c1)
 
                     val totalCount = target.faceCount + source.faceCount
                     val normalizedCentroid = safeCombineCentroids(
@@ -519,6 +714,17 @@ class FaceClusteringManager(private val context: Context) {
 
                     if (targetPerson?.name.isNullOrBlank() && !sourcePerson?.name.isNullOrBlank()) {
                         faceDao.setPersonName(target.personId, sourcePerson?.name)
+                        target.name = sourcePerson?.name
+                    }
+
+                    val chosenCover = if (target.coverCropPath?.endsWith("_cover.webp") == true) {
+                        target.coverCropPath
+                    } else if (source.coverCropPath?.endsWith("_cover.webp") == true) {
+                        source.coverCropPath
+                    } else if (source.bestQualityScore > target.bestQualityScore + 0.18f && source.coverCropPath != null) {
+                        source.coverCropPath
+                    } else {
+                        target.coverCropPath ?: source.coverCropPath
                     }
 
                     faceDao.mergePersons(
@@ -526,16 +732,24 @@ class FaceClusteringManager(private val context: Context) {
                         targetPersonId = target.personId,
                         mergedCentroid = normalizedCentroid,
                         faceCount = totalCount,
-                        coverCropPath = target.coverCropPath ?: source.coverCropPath
+                        coverCropPath = chosenCover
                     )
 
                     for (ex in source.exemplars) {
                         if (target.exemplars.size < MAX_EXEMPLARS_PER_CLUSTER) {
-                            target.exemplars.add(ex)
+                            val isDiverse = target.exemplars.all {
+                                FaceRecognitionEngine.cosineSimilarity(ex, it) < 0.88f
+                            }
+                            if (isDiverse) {
+                                target.exemplars.add(ex)
+                            }
                         }
                     }
                     target.centroid = normalizedCentroid
+                    target.centroidWeight += source.centroidWeight
                     target.faceCount = totalCount
+                    target.bestQualityScore = maxOf(target.bestQualityScore, source.bestQualityScore)
+                    target.coverCropPath = chosenCover
                     target.isPromoted = true
 
                     clusterCache.remove(source)
@@ -547,7 +761,6 @@ class FaceClusteringManager(private val context: Context) {
             faceDao.recalculateAllPersonFaceCounts()
             Log.d(TAG, "Cluster consolidation complete: performed $mergeCount merges.")
 
-            // Proactively generate merge suggestions for remaining ambiguous clusters
             computeAndSaveMergeSuggestions()
 
             mergeCount
@@ -555,8 +768,7 @@ class FaceClusteringManager(private val context: Context) {
     }
 
     /**
-     * Finds pairs of clusters with ambiguous similarity (e.g. 0.44 to 0.54)
-     * and saves them as PENDING merge suggestions in the database.
+     * Finds pairs of clusters with ambiguous similarity and saves them as PENDING merge suggestions.
      */
     suspend fun computeAndSaveMergeSuggestions(): Int = withContext(Dispatchers.IO) {
         ensureCacheLoaded()

@@ -73,28 +73,48 @@ fun NavigationGraph(
     }
 
     val galleryViewModel: GalleryViewModel = viewModel()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val mainActivity = context as? com.inferno.gallery.MainActivity
-    val viewIntentUri by mainActivity?.viewIntentUri?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
-    val isEditIntent by mainActivity?.isEditIntent?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-
-    LaunchedEffect(viewIntentUri, isLoading) {
-        val uri = viewIntentUri
-        if (uri != null && !isLoading) {
-            val encoded = android.net.Uri.encode(uri.toString())
-            mainActivity?.consumeViewIntentUri()
-            if (isEditIntent) {
-                mainActivity?.consumeEditIntent()
-                navController.navigate("editor?uri=$encoded")
-            } else {
-                navController.navigate("detail/$encoded")
-            }
+    val pendingVaultHideDelete by galleryViewModel.pendingVaultHideDelete.collectAsState()
+    val vaultHideDeleteLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        galleryViewModel.resolvePendingVaultHideDelete(result.resultCode == android.app.Activity.RESULT_OK)
+    }
+    LaunchedEffect(pendingVaultHideDelete) {
+        val pending = pendingVaultHideDelete
+        if (pending != null) {
+            vaultHideDeleteLauncher.launch(
+                androidx.activity.result.IntentSenderRequest.Builder(pending.intentSender).build()
+            )
         }
     }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val mainActivity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+        .filterIsInstance<com.inferno.gallery.MainActivity>()
+        .firstOrNull()
+    val viewIntentUri by mainActivity?.viewIntentUri?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
+    val isEditIntent by mainActivity?.isEditIntent?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     SharedTransitionLayout(modifier = modifier) {
         var detailOverlay by androidx.compose.runtime.remember {
             androidx.compose.runtime.mutableStateOf<DetailOverlayArgs?>(null)
+        }
+
+        LaunchedEffect(viewIntentUri, isLoading) {
+            val uri = viewIntentUri
+            if (uri != null && !isLoading) {
+                val editMode = isEditIntent
+                val encoded = android.net.Uri.encode(uri.toString())
+                detailOverlay = null
+                com.inferno.gallery.ui.components.MediaTransitionRegistry.clear()
+                navController.popBackStack("gallery", inclusive = false)
+                if (editMode) {
+                    navController.navigate("editor?uri=$encoded")
+                } else {
+                    navController.navigate("detail/$encoded?bucket=External")
+                }
+                mainActivity?.consumeViewIntentUri()
+                mainActivity?.consumeEditIntent()
+            }
         }
         NavHost(
             navController = navController,
@@ -295,7 +315,11 @@ fun NavigationGraph(
                 }
             ) { backStackEntry ->
                 val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: return@composable
-                val mediaId = try { android.net.Uri.decode(rawMediaId) } catch (e: Exception) { rawMediaId }
+                val mediaId = if (rawMediaId.contains("://")) {
+                    rawMediaId
+                } else {
+                    try { android.net.Uri.decode(rawMediaId) } catch (e: Exception) { rawMediaId }
+                }
                 val bucketName = backStackEntry.arguments?.getString("bucketName")
                 val highlightText = backStackEntry.arguments?.getString("highlightText")
                 

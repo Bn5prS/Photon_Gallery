@@ -160,6 +160,11 @@ fun PhotonGrid(
     val checkIconVector = ImageVector.vectorResource(R.drawable.ic_ms_check)
     val favoriteIconVector = ImageVector.vectorResource(R.drawable.ic_ms_favorite_filled)
     val favoriteIds by viewModel.favoriteIds.collectAsState()
+    val faceQualityByMediaId = if (timelineLayoutMode == TimelineLayoutMode.EDITORIAL_MOSAIC) {
+        viewModel.faceQualityByMediaId.collectAsState().value
+    } else {
+        emptyMap()
+    }
 
     // ── Live Pinch-to-Zoom Spring Animation & Scale State ───────────────────────
     var isPinching by remember { mutableStateOf(false) }
@@ -220,8 +225,25 @@ fun PhotonGrid(
             }
     }
 
+    val visibleCellBounds = remember { mutableMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    val onCellBoundsChanged = remember {
+        { key: String, rect: androidx.compose.ui.geometry.Rect ->
+            visibleCellBounds[key] = rect
+        }
+    }
+    val onCellBoundsDisposed = remember {
+        { key: String ->
+            visibleCellBounds.remove(key)
+            Unit
+        }
+    }
+
     DisposableEffect(Unit) {
+        val resolver: (String) -> androidx.compose.ui.geometry.Rect? = { key -> visibleCellBounds[key] }
+        MediaTransitionRegistry.registerResolver(resolver)
         onDispose {
+            MediaTransitionRegistry.unregisterResolver(resolver)
+            visibleCellBounds.clear()
             isPinching = false
             com.inferno.gallery.data.ThumbnailScrollThrottle.isFastScrolling = false
         }
@@ -231,10 +253,20 @@ fun PhotonGrid(
         Box(modifier = basePinchModifier) {
             when (timelineLayoutMode) {
                 TimelineLayoutMode.EDITORIAL_MOSAIC -> {
-                    // ── Editorial Mosaic Layout (Multi-Cell Block Architecture) ──
+                    // ── Editorial Mosaic Layout (Date-Grid Hero Architecture) ──
                     val mosaicCols = gridCellsCount.coerceIn(2, 6)
-                    val mosaicDisplayItems = remember(pagedMedia.itemCount, mosaicCols) {
-                        buildMosaicDisplayItems(pagedMedia, mosaicCols)
+                    val mosaicDisplayItems = remember(
+                        pagedMedia.itemSnapshotList,
+                        mosaicCols,
+                        favoriteIds,
+                        faceQualityByMediaId
+                    ) {
+                        buildMosaicDisplayItems(
+                            pagedMedia = pagedMedia,
+                            columns = mosaicCols,
+                            favoriteIds = favoriteIds,
+                            faceQualityByMediaId = faceQualityByMediaId
+                        )
                     }
 
                     LazyVerticalGrid(
@@ -316,7 +348,11 @@ fun PhotonGrid(
                                         favoriteIconVector = favoriteIconVector,
                                         isFavorite = isFav,
                                         showMatchBadge = showMatchBadge,
-                                        targetPxOverride = 720
+                                        targetPxOverride = mosaicCellTargetPxOverride(item),
+                                        useContainerTransform = true,
+                                        recordLaunchBounds = !isSelectionMode,
+                                        onBoundsChanged = onCellBoundsChanged,
+                                        onBoundsDisposed = onCellBoundsDisposed
                                     )
                                 }
                                 is MosaicDisplayItem.QuadTileItem -> {
@@ -337,26 +373,33 @@ fun PhotonGrid(
                                                 for (i in 0..1) {
                                                     val subItem = item.items.getOrNull(i)
                                                     if (subItem != null) {
-                                                        val isSubSelected = selectedUris.contains(subItem.uriString)
-                                                        val isSubFav = favoriteIds.contains(subItem.id)
-                                                        OptimizedThumbnailCell(
-                                                            modifier = Modifier
-                                                                .weight(1f)
-                                                                .aspectRatio(1f),
-                                                            item = subItem,
-                                                            sharedTransitionScope = sharedTransitionScope,
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                            onClick = onMediaClick,
-                                                            isSelected = isSubSelected,
-                                                            gridCellsCount = mosaicCols,
-                                                            thumbnailCornerRadius = thumbnailCornerRadius,
-                                                            aspectRatio = 1.0f,
-                                                            videoIconVector = videoIconVector,
-                                                            checkIconVector = checkIconVector,
-                                                            favoriteIconVector = favoriteIconVector,
-                                                            isFavorite = isSubFav,
-                                                            showMatchBadge = showMatchBadge
-                                                        )
+                                                        val cellModifier = Modifier
+                                                            .weight(1f)
+                                                            .aspectRatio(1f)
+                                                        androidx.compose.runtime.key(subItem.id) {
+                                                            val isSubSelected = selectedUris.contains(subItem.uriString)
+                                                            val isSubFav = favoriteIds.contains(subItem.id)
+                                                            OptimizedThumbnailCell(
+                                                                modifier = cellModifier,
+                                                                item = subItem,
+                                                                sharedTransitionScope = sharedTransitionScope,
+                                                                animatedVisibilityScope = animatedVisibilityScope,
+                                                                onClick = onMediaClick,
+                                                                isSelected = isSubSelected,
+                                                                gridCellsCount = mosaicCols,
+                                                                thumbnailCornerRadius = thumbnailCornerRadius,
+                                                                aspectRatio = 1.0f,
+                                                                videoIconVector = videoIconVector,
+                                                                checkIconVector = checkIconVector,
+                                                                favoriteIconVector = favoriteIconVector,
+                                                                isFavorite = isSubFav,
+                                                                showMatchBadge = showMatchBadge,
+                                                                useContainerTransform = true,
+                                                                recordLaunchBounds = !isSelectionMode,
+                                                                onBoundsChanged = onCellBoundsChanged,
+                                                                onBoundsDisposed = onCellBoundsDisposed
+                                                            )
+                                                        }
                                                     } else {
                                                         Spacer(modifier = Modifier.weight(1f))
                                                     }
@@ -369,26 +412,33 @@ fun PhotonGrid(
                                                 for (i in 2..3) {
                                                     val subItem = item.items.getOrNull(i)
                                                     if (subItem != null) {
-                                                        val isSubSelected = selectedUris.contains(subItem.uriString)
-                                                        val isSubFav = favoriteIds.contains(subItem.id)
-                                                        OptimizedThumbnailCell(
-                                                            modifier = Modifier
-                                                                .weight(1f)
-                                                                .aspectRatio(1f),
-                                                            item = subItem,
-                                                            sharedTransitionScope = sharedTransitionScope,
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                            onClick = onMediaClick,
-                                                            isSelected = isSubSelected,
-                                                            gridCellsCount = mosaicCols,
-                                                            thumbnailCornerRadius = thumbnailCornerRadius,
-                                                            aspectRatio = 1.0f,
-                                                            videoIconVector = videoIconVector,
-                                                            checkIconVector = checkIconVector,
-                                                            favoriteIconVector = favoriteIconVector,
-                                                            isFavorite = isSubFav,
-                                                            showMatchBadge = showMatchBadge
-                                                        )
+                                                        val cellModifier = Modifier
+                                                            .weight(1f)
+                                                            .aspectRatio(1f)
+                                                        androidx.compose.runtime.key(subItem.id) {
+                                                            val isSubSelected = selectedUris.contains(subItem.uriString)
+                                                            val isSubFav = favoriteIds.contains(subItem.id)
+                                                            OptimizedThumbnailCell(
+                                                                modifier = cellModifier,
+                                                                item = subItem,
+                                                                sharedTransitionScope = sharedTransitionScope,
+                                                                animatedVisibilityScope = animatedVisibilityScope,
+                                                                onClick = onMediaClick,
+                                                                isSelected = isSubSelected,
+                                                                gridCellsCount = mosaicCols,
+                                                                thumbnailCornerRadius = thumbnailCornerRadius,
+                                                                aspectRatio = 1.0f,
+                                                                videoIconVector = videoIconVector,
+                                                                checkIconVector = checkIconVector,
+                                                                favoriteIconVector = favoriteIconVector,
+                                                                isFavorite = isSubFav,
+                                                                showMatchBadge = showMatchBadge,
+                                                                useContainerTransform = true,
+                                                                recordLaunchBounds = !isSelectionMode,
+                                                                onBoundsChanged = onCellBoundsChanged,
+                                                                onBoundsDisposed = onCellBoundsDisposed
+                                                            )
+                                                        }
                                                     } else {
                                                         Spacer(modifier = Modifier.weight(1f))
                                                     }
@@ -403,19 +453,19 @@ fun PhotonGrid(
                                             pagedMedia[srcIdx]
                                         }
                                     }
-                                    Box(modifier = Modifier.aspectRatio(0.5f)) {
-                                        Column(
-                                            modifier = Modifier.fillMaxSize(),
-                                            verticalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing)
-                                        ) {
-                                            for (i in 0..1) {
-                                                val subItem = item.items.getOrNull(i)
-                                                if (subItem != null) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(ThumbnailGridSpacing)
+                                    ) {
+                                        for (i in 0..1) {
+                                            val subItem = item.items.getOrNull(i)
+                                            if (subItem != null) {
+                                                androidx.compose.runtime.key(subItem.id) {
                                                     val isSubSelected = selectedUris.contains(subItem.uriString)
                                                     val isSubFav = favoriteIds.contains(subItem.id)
                                                     OptimizedThumbnailCell(
                                                         modifier = Modifier
-                                                            .weight(1f)
+                                                            .fillMaxWidth()
                                                             .aspectRatio(1f),
                                                         item = subItem,
                                                         sharedTransitionScope = sharedTransitionScope,
@@ -429,11 +479,19 @@ fun PhotonGrid(
                                                         checkIconVector = checkIconVector,
                                                         favoriteIconVector = favoriteIconVector,
                                                         isFavorite = isSubFav,
-                                                        showMatchBadge = showMatchBadge
+                                                        showMatchBadge = showMatchBadge,
+                                                        useContainerTransform = true,
+                                                        recordLaunchBounds = !isSelectionMode,
+                                                        onBoundsChanged = onCellBoundsChanged,
+                                                        onBoundsDisposed = onCellBoundsDisposed
                                                     )
-                                                } else {
-                                                    Spacer(modifier = Modifier.weight(1f))
                                                 }
+                                            } else {
+                                                Spacer(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .aspectRatio(1f)
+                                                )
                                             }
                                         }
                                     }
@@ -459,7 +517,11 @@ fun PhotonGrid(
                                         favoriteIconVector = favoriteIconVector,
                                         isFavorite = isFav,
                                         showMatchBadge = showMatchBadge,
-                                        targetPxOverride = 720
+                                        targetPxOverride = mosaicCellTargetPxOverride(item),
+                                        useContainerTransform = true,
+                                        recordLaunchBounds = !isSelectionMode,
+                                        onBoundsChanged = onCellBoundsChanged,
+                                        onBoundsDisposed = onCellBoundsDisposed
                                     )
                                 }
                             }
@@ -538,7 +600,11 @@ fun PhotonGrid(
                                 checkIconVector = checkIconVector,
                                 favoriteIconVector = favoriteIconVector,
                                 isFavorite = isFav,
-                                showMatchBadge = showMatchBadge
+                                showMatchBadge = showMatchBadge,
+                                useContainerTransform = true,
+                                recordLaunchBounds = !isSelectionMode,
+                                onBoundsChanged = onCellBoundsChanged,
+                                onBoundsDisposed = onCellBoundsDisposed
                             )
                         } else {
                             val placeholderShape = remember(thumbnailCornerRadius) {
@@ -617,7 +683,9 @@ fun OptimizedThumbnailCell(
     showMatchBadge: Boolean = false,
     targetPxOverride: Int? = null,
     useContainerTransform: Boolean = false,
-    onBoundsChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null
+    recordLaunchBounds: Boolean = true,
+    onBoundsChanged: ((String, androidx.compose.ui.geometry.Rect) -> Unit)? = null,
+    onBoundsDisposed: ((String) -> Unit)? = null
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var cellBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -626,9 +694,9 @@ fun OptimizedThumbnailCell(
     // gridDragSelectGesture on the grid itself, so cells stay on plain clickable and don't add
     // a second long-press detector competing for the pointer stream). SearchScreen, which has
     // no grid-level drag-select, does supply one.
-    val clickHandler = remember(item, onClick, useContainerTransform, thumbnailCornerRadius) {
+    val clickHandler = remember(item, onClick, useContainerTransform, recordLaunchBounds, thumbnailCornerRadius) {
         {
-            if (useContainerTransform) {
+            if (useContainerTransform && recordLaunchBounds) {
                 cellBounds?.let { rect ->
                     MediaTransitionRegistry.setLaunchBounds(
                         mediaKey = item.uriString,
@@ -664,6 +732,12 @@ fun OptimizedThumbnailCell(
         }
     } else {
         Modifier
+    }
+
+    if (useContainerTransform && onBoundsDisposed != null) {
+        DisposableEffect(item.uriString) {
+            onDispose { onBoundsDisposed(item.uriString) }
+        }
     }
 
     // Shared bounds transition is active for standard grid densities (1-5 columns)
@@ -1344,16 +1418,16 @@ sealed class MosaicDisplayItem {
         val items: List<GalleryItem>,
         override val sourceIndices: List<Int>
     ) : MosaicDisplayItem() {
-        override val key: String get() = "mosaic_quad_${items.firstOrNull()?.id ?: 0}_${sourceIndices.firstOrNull() ?: 0}"
-        override val uris: List<String> get() = items.map { it.uri.toString() }
+        override val key: String = "mosaic_quad_${items.joinToString("_") { it.id }}"
+        override val uris: List<String> get() = items.map { it.uriString }
     }
 
     data class PairTileItem(
         val items: List<GalleryItem>,
         override val sourceIndices: List<Int>
     ) : MosaicDisplayItem() {
-        override val key: String get() = "mosaic_pair_${items.firstOrNull()?.id ?: 0}_${sourceIndices.firstOrNull() ?: 0}"
-        override val uris: List<String> get() = items.map { it.uri.toString() }
+        override val key: String = "mosaic_pair_${items.joinToString("_") { it.id }}"
+        override val uris: List<String> get() = items.map { it.uriString }
     }
 
     data class SingleItem(
@@ -1361,256 +1435,585 @@ sealed class MosaicDisplayItem {
         val sourceIndex: Int
     ) : MosaicDisplayItem() {
         override val key: String get() = "mosaic_single_${item.id}"
-        override val uris: List<String> get() = listOf(item.uri.toString())
+        override val uris: List<String> get() = listOf(item.uriString)
         override val sourceIndices: List<Int> get() = listOf(sourceIndex)
     }
 }
 
-private data class MosaicBlockPattern(
-    val bigSpan: Int,
-    val bigAspectRatio: Float,
-    val companionType: MosaicCompanionType,
-    val itemsConsumed: Int
-)
+internal fun mosaicCellTargetPxOverride(item: MosaicDisplayItem): Int? =
+    if (item is MosaicDisplayItem.BigTileItem) 720 else null
 
-private enum class MosaicCompanionType { QUAD, PAIR, SINGLES }
-
-private fun getMosaicPatternsForColumns(columns: Int): List<MosaicBlockPattern> {
-    val patterns = mutableListOf<MosaicBlockPattern>()
-    when (columns) {
-        2 -> {
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 2,
-                    bigAspectRatio = 16f / 9f,
-                    companionType = MosaicCompanionType.SINGLES,
-                    itemsConsumed = 1
-                )
-            )
-        }
-        3 -> {
-            // PAIR pattern: big(2) + pair(1). Both 2 units high, total row = 3 cols. Consumes 3 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 2,
-                    bigAspectRatio = 1.0f,
-                    companionType = MosaicCompanionType.PAIR,
-                    itemsConsumed = 3
-                )
-            )
-            // SINGLES pattern: big(2) + 1 single. Both 1 unit high, total row = 3 cols. Consumes 2 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 2,
-                    bigAspectRatio = 2.0f,
-                    companionType = MosaicCompanionType.SINGLES,
-                    itemsConsumed = 2
-                )
-            )
-        }
-        4 -> {
-            // QUAD pattern: big(2) + quad(2). Both 2 units high, total row = 4 cols. Consumes 5 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 2,
-                    bigAspectRatio = 1.0f,
-                    companionType = MosaicCompanionType.QUAD,
-                    itemsConsumed = 5
-                )
-            )
-            // PAIR pattern: big(3) + pair(1). Both 2 units high, total row = 4 cols. Consumes 3 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 3,
-                    bigAspectRatio = 1.5f,
-                    companionType = MosaicCompanionType.PAIR,
-                    itemsConsumed = 3
-                )
-            )
-        }
-        5 -> {
-            // QUAD pattern: big(3) + quad(2). Both 2 units high, total row = 5 cols. Consumes 5 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 3,
-                    bigAspectRatio = 1.5f,
-                    companionType = MosaicCompanionType.QUAD,
-                    itemsConsumed = 5
-                )
-            )
-            // PAIR pattern: big(4) + pair(1). Both 2 units high, total row = 5 cols. Consumes 3 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 4,
-                    bigAspectRatio = 2.0f,
-                    companionType = MosaicCompanionType.PAIR,
-                    itemsConsumed = 3
-                )
-            )
-        }
-        else -> {
-            // QUAD pattern: big(4) + quad(2). Both 2 units high, total row = 6 cols. Consumes 5 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 4,
-                    bigAspectRatio = 2.0f,
-                    companionType = MosaicCompanionType.QUAD,
-                    itemsConsumed = 5
-                )
-            )
-            // PAIR pattern: big(5) + pair(1). Both 2 units high, total row = 6 cols. Consumes 3 items.
-            patterns.add(
-                MosaicBlockPattern(
-                    bigSpan = 5,
-                    bigAspectRatio = 2.5f,
-                    companionType = MosaicCompanionType.PAIR,
-                    itemsConsumed = 3
-                )
-            )
-        }
+internal fun isScreenshotLikeItem(item: GalleryItem): Boolean {
+    val bucket = item.bucketName
+    if (bucket.contains("screenshot", ignoreCase = true) ||
+        bucket.contains("screencap", ignoreCase = true) ||
+        bucket.contains("screen_cap", ignoreCase = true) ||
+        bucket.contains("screen record", ignoreCase = true) ||
+        bucket.contains("screenrecord", ignoreCase = true)
+    ) {
+        return true
     }
-    return patterns
+    val name = item.name
+    if (name.startsWith("screenshot", ignoreCase = true) ||
+        name.startsWith("screen_", ignoreCase = true) ||
+        name.startsWith("screen-", ignoreCase = true) ||
+        name.startsWith("screenrecord", ignoreCase = true)
+    ) {
+        return true
+    }
+    return item.path.contains("/screenshots/", ignoreCase = true) ||
+        item.path.contains("/screenrecord", ignoreCase = true)
+}
+
+internal fun scoreMosaicHeroCandidate(
+    item: GalleryItem,
+    isFavorite: Boolean,
+    faceQuality: Float?
+): Float {
+    if (isScreenshotLikeItem(item)) return -100f
+    var score = if (item.isVideo) 4f else 10f
+    if (isFavorite) score += 100f
+    if (faceQuality != null) {
+        score += 40f + 20f * faceQuality.coerceIn(0f, 1f)
+    }
+    return score
 }
 
 private fun buildMosaicDisplayItems(
     pagedMedia: LazyPagingItems<GalleryListItem>,
-    columns: Int
+    columns: Int,
+    favoriteIds: Set<String>,
+    faceQualityByMediaId: Map<String, Float>
+): List<MosaicDisplayItem> = buildDateGridHeroItems(
+    totalCount = pagedMedia.itemCount,
+    itemAt = { idx -> pagedMedia.peek(idx) },
+    columns = columns,
+    favoriteIds = favoriteIds,
+    faceQualityByMediaId = faceQualityByMediaId
+)
+
+internal fun buildDateGridHeroItems(
+    totalCount: Int,
+    itemAt: (Int) -> GalleryListItem?,
+    columns: Int,
+    favoriteIds: Set<String> = emptySet(),
+    faceQualityByMediaId: Map<String, Float> = emptyMap()
 ): List<MosaicDisplayItem> {
     val cols = columns.coerceIn(2, 6)
-    val patterns = getMosaicPatternsForColumns(cols)
-    val totalCount = pagedMedia.itemCount
-    val result = ArrayList<MosaicDisplayItem>(totalCount + totalCount / 4)
-    val buffer = ArrayList<Pair<Int, GalleryItem>>(16)
-    var blockIndex = 0
-    var groupRandom = kotlin.random.Random(0)
+    val heroBlockSize = when (cols) {
+        2 -> 1
+        3 -> 3
+        4 -> 5
+        5 -> 7
+        else -> 9
+    }
+    val calmQuota = cols * 2
+    val result = ArrayList<MosaicDisplayItem>(totalCount)
+    val buffer = ArrayList<Pair<Int, GalleryItem>>(heroBlockSize + cols)
+    var heroBlockIndex = 0
+    var calmRemaining = 0
+    var rowCursor = 0
 
-    fun pickPattern(): MosaicBlockPattern? {
-        if (patterns.isEmpty()) return null
-        val bufSize = buffer.size
-        val eligible = patterns.filter { it.itemsConsumed <= bufSize }
-        if (eligible.isEmpty()) return null
-        return eligible[groupRandom.nextInt(eligible.size)]
+    fun emitSingleFromFront() {
+        val (srcIdx, item) = buffer.removeAt(0)
+        result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
+        rowCursor = (rowCursor + 1) % cols
     }
 
-    fun emitBlock(force: Boolean = false) {
-        if (buffer.isEmpty()) return
-        val pattern = pickPattern()
-        if (pattern == null) {
-            if (force) {
-                for ((srcIdx, item) in buffer) {
-                    result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
-                }
-                buffer.clear()
+    fun drainBuffer(flushAll: Boolean) {
+        while (buffer.isNotEmpty()) {
+            if (rowCursor != 0) {
+                emitSingleFromFront()
+                if (calmRemaining > 0) calmRemaining--
+                continue
             }
-            return
+
+            if (calmRemaining > 0) {
+                emitSingleFromFront()
+                calmRemaining--
+                continue
+            }
+
+            if (buffer.size >= heroBlockSize) {
+                when (cols) {
+                    2 -> {
+                        val candidate = buffer[0]
+                        val score = scoreMosaicHeroCandidate(
+                            item = candidate.second,
+                            isFavorite = favoriteIds.contains(candidate.second.id),
+                            faceQuality = faceQualityByMediaId[candidate.second.id]
+                        )
+                        if (score < 0f) {
+                            emitSingleFromFront()
+                            continue
+                        }
+                        val (srcIdx, item) = buffer.removeAt(0)
+                        result.add(
+                            MosaicDisplayItem.BigTileItem(
+                                item = item,
+                                span = 2,
+                                aspectRatio = 1.0f,
+                                sourceIndex = srcIdx
+                            )
+                        )
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    3 -> {
+                        // 3 columns: 1:1 squares only.
+                        // Row 1: Col 0, Col 1, Col 2. Row 2: Col 0, Col 1, Col 2.
+                        val p0 = buffer[0]
+                        val p1 = buffer[1]
+                        val p2 = buffer[2]
+                        val s0 = scoreMosaicHeroCandidate(p0.second, favoriteIds.contains(p0.second.id), faceQualityByMediaId[p0.second.id])
+                        val s1 = scoreMosaicHeroCandidate(p1.second, favoriteIds.contains(p1.second.id), faceQualityByMediaId[p1.second.id])
+                        val s2 = scoreMosaicHeroCandidate(p2.second, favoriteIds.contains(p2.second.id), faceQualityByMediaId[p2.second.id])
+
+                        if (s0 < 0f && s1 < 0f && s2 < 0f) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+
+                        val valid0 = if (s0 >= 0f) s0 else -1f
+                        val valid1 = if (s1 >= 0f) s1 else -1f
+
+                        val chooseRight = when {
+                            valid1 > valid0 -> true
+                            valid0 > valid1 -> false
+                            else -> (heroBlockIndex % 2 != 0)
+                        }
+
+                        buffer.subList(0, 3).clear()
+                        if (chooseRight) {
+                            // Right Hero (Cols 1-2):
+                            // Row 1: Col 0 = p0, Cols 1-2 = p1 (Hero)
+                            // Row 2: Col 0 = p2, Cols 1-2 = p1 (Hero cont)
+                            // Reading & chronological order: p0, p1, p2
+                            result.add(
+                                MosaicDisplayItem.PairTileItem(
+                                    items = listOf(p0.second, p2.second),
+                                    sourceIndices = listOf(p0.first, p2.first)
+                                )
+                            )
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p1.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p1.first
+                                )
+                            )
+                        } else {
+                            // Left Hero (Cols 0-1):
+                            // Row 1: Cols 0-1 = p0 (Hero), Col 2 = p1
+                            // Row 2: Cols 0-1 = p0 (Hero cont), Col 2 = p2
+                            // Reading & chronological order: p0, p1, p2
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p0.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p0.first
+                                )
+                            )
+                            result.add(
+                                MosaicDisplayItem.PairTileItem(
+                                    items = listOf(p1.second, p2.second),
+                                    sourceIndices = listOf(p1.first, p2.first)
+                                )
+                            )
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    4 -> {
+                        // 4 columns: 1:1 squares only.
+                        val p0 = buffer[0]
+                        val p1 = buffer[1]
+                        val p2 = buffer[2]
+                        val p3 = buffer[3]
+                        val p4 = buffer[4]
+                        val s0 = scoreMosaicHeroCandidate(p0.second, favoriteIds.contains(p0.second.id), faceQualityByMediaId[p0.second.id])
+                        val s1 = scoreMosaicHeroCandidate(p1.second, favoriteIds.contains(p1.second.id), faceQualityByMediaId[p1.second.id])
+                        val s2 = scoreMosaicHeroCandidate(p2.second, favoriteIds.contains(p2.second.id), faceQualityByMediaId[p2.second.id])
+                        val s3 = scoreMosaicHeroCandidate(p3.second, favoriteIds.contains(p3.second.id), faceQualityByMediaId[p3.second.id])
+                        val s4 = scoreMosaicHeroCandidate(p4.second, favoriteIds.contains(p4.second.id), faceQualityByMediaId[p4.second.id])
+
+                        if (s0 < 0f && s1 < 0f && s2 < 0f && s3 < 0f && s4 < 0f) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+
+                        // Twin Heroes: both p0 and p1 are standout highlights
+                        val isTwin = (s0 >= 100f && s1 >= 100f) || (s0 >= 50f && s1 >= 50f)
+                        if (isTwin) {
+                            buffer.subList(0, 2).clear()
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p0.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p0.first
+                                )
+                            )
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p1.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p1.first
+                                )
+                            )
+                            rowCursor = 0
+                            heroBlockIndex++
+                            calmRemaining = calmQuota
+                            continue
+                        }
+
+                        val valid0 = if (s0 >= 0f) s0 else -1f
+                        val valid1 = if (s1 >= 0f) s1 else -1f
+                        val valid2 = if (s2 >= 0f) s2 else -1f
+
+                        val pattern = when {
+                            valid0 > valid1 && valid0 > valid2 -> 0 // Left Hero
+                            valid1 > valid0 && valid1 > valid2 -> 1 // Center Hero
+                            valid2 > valid0 && valid2 > valid1 -> 2 // Right Hero
+                            else -> when (heroBlockIndex % 3) {
+                                0 -> if (valid0 >= 0f) 0 else if (valid2 >= 0f) 2 else 1
+                                1 -> if (valid2 >= 0f) 2 else if (valid0 >= 0f) 0 else 1
+                                else -> if (valid1 >= 0f) 1 else if (valid0 >= 0f) 0 else 2
+                            }
+                        }
+
+                        buffer.subList(0, 5).clear()
+                        when (pattern) {
+                            0 -> {
+                                // Left Hero (Cols 0-1):
+                                // Row 1: Cols 0-1 = p0 (Hero), Col 2 = p1, Col 3 = p2
+                                // Row 2: Cols 0-1 = p0 (Hero cont), Col 2 = p3, Col 3 = p4
+                                // Reading & chronological order: p0, p1, p2, p3, p4
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p0.second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p0.first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p1.second, p2.second, p3.second, p4.second),
+                                        sourceIndices = listOf(p1.first, p2.first, p3.first, p4.first)
+                                    )
+                                )
+                            }
+                            1 -> {
+                                // Center Hero (Cols 1-2):
+                                // Row 1: Col 0 = p0, Cols 1-2 = p1 (Hero), Col 3 = p2
+                                // Row 2: Col 0 = p3, Cols 1-2 = p1 (Hero cont), Col 3 = p4
+                                // Reading & chronological order: p0, p1, p2, p3, p4
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p0.second, p3.second),
+                                        sourceIndices = listOf(p0.first, p3.first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p1.second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p1.first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p2.second, p4.second),
+                                        sourceIndices = listOf(p2.first, p4.first)
+                                    )
+                                )
+                            }
+                            else -> {
+                                // Right Hero (Cols 2-3):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Cols 2-3 = p2 (Hero)
+                                // Row 2: Col 0 = p3, Col 1 = p4, Cols 2-3 = p2 (Hero cont)
+                                // Reading & chronological order: p0, p1, p2, p3, p4
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p0.second, p1.second, p3.second, p4.second),
+                                        sourceIndices = listOf(p0.first, p1.first, p3.first, p4.first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p2.second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p2.first
+                                    )
+                                )
+                            }
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    5 -> {
+                        // 5 columns: 1:1 squares only.
+                        val p = (0..6).map { buffer[it] }
+                        val s = p.map { scoreMosaicHeroCandidate(it.second, favoriteIds.contains(it.second.id), faceQualityByMediaId[it.second.id]) }
+                        if (s.all { it < 0f }) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+                        val valid0 = if (s[0] >= 0f) s[0] else -1f
+                        val valid1 = if (s[1] >= 0f) s[1] else -1f
+                        val valid3 = if (s[3] >= 0f) s[3] else -1f
+
+                        val pattern = when {
+                            valid0 > valid1 && valid0 > valid3 -> 0 // Left Hero
+                            valid3 > valid0 && valid3 > valid1 -> 1 // Right Hero
+                            valid1 > valid0 && valid1 > valid3 -> 2 // Center Hero
+                            else -> when (heroBlockIndex % 3) {
+                                0 -> if (valid0 >= 0f) 0 else if (valid3 >= 0f) 1 else 2
+                                1 -> if (valid3 >= 0f) 1 else if (valid0 >= 0f) 0 else 2
+                                else -> if (valid1 >= 0f) 2 else if (valid0 >= 0f) 0 else 1
+                            }
+                        }
+
+                        buffer.subList(0, 7).clear()
+                        when (pattern) {
+                            0 -> {
+                                // Left Hero (Cols 0-1):
+                                // Row 1: Cols 0-1 = p0, Col 2 = p1, Col 3 = p2, Col 4 = p3
+                                // Row 2: Cols 0-1 = p0 cont, Col 2 = p4, Col 3 = p5, Col 4 = p6
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[0].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[0].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[1].second, p[2].second, p[4].second, p[5].second),
+                                        sourceIndices = listOf(p[1].first, p[2].first, p[4].first, p[5].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p[3].second, p[6].second),
+                                        sourceIndices = listOf(p[3].first, p[6].first)
+                                    )
+                                )
+                            }
+                            1 -> {
+                                // Right Hero (Cols 3-4):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Col 2 = p2, Cols 3-4 = p3 (Hero)
+                                // Row 2: Col 0 = p4, Col 1 = p5, Col 2 = p6, Cols 3-4 = p3 cont
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p[0].second, p[4].second),
+                                        sourceIndices = listOf(p[0].first, p[4].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[1].second, p[2].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[1].first, p[2].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[3].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[3].first
+                                    )
+                                )
+                            }
+                            else -> {
+                                // Center Hero (Cols 1-2):
+                                // Row 1: Col 0 = p0, Cols 1-2 = p1 (Hero), Col 3 = p2, Col 4 = p3
+                                // Row 2: Col 0 = p4, Cols 1-2 = p1 cont, Col 3 = p5, Col 4 = p6
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p[0].second, p[4].second),
+                                        sourceIndices = listOf(p[0].first, p[4].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[1].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[1].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[2].second, p[3].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[2].first, p[3].first, p[5].first, p[6].first)
+                                    )
+                                )
+                            }
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    else -> { // cols == 6
+                        // 6 columns: 1:1 squares only.
+                        val p = (0..8).map { buffer[it] }
+                        val s = p.map { scoreMosaicHeroCandidate(it.second, favoriteIds.contains(it.second.id), faceQualityByMediaId[it.second.id]) }
+                        if (s.all { it < 0f }) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+                        val valid0 = if (s[0] >= 0f) s[0] else -1f
+                        val valid2 = if (s[2] >= 0f) s[2] else -1f
+                        val valid4 = if (s[4] >= 0f) s[4] else -1f
+
+                        val pattern = when {
+                            valid0 > valid2 && valid0 > valid4 -> 0 // Left Hero
+                            valid4 > valid0 && valid4 > valid2 -> 1 // Right Hero
+                            valid2 > valid0 && valid2 > valid4 -> 2 // Center Hero
+                            else -> when (heroBlockIndex % 3) {
+                                0 -> if (valid0 >= 0f) 0 else if (valid4 >= 0f) 1 else 2
+                                1 -> if (valid4 >= 0f) 1 else if (valid0 >= 0f) 0 else 2
+                                else -> if (valid2 >= 0f) 2 else if (valid0 >= 0f) 0 else 1
+                            }
+                        }
+
+                        buffer.subList(0, 9).clear()
+                        when (pattern) {
+                            0 -> {
+                                // Left Hero (Cols 0-1):
+                                // Row 1: Cols 0-1 = p0, Col 2 = p1, Col 3 = p2, Col 4 = p3, Col 5 = p4
+                                // Row 2: Cols 0-1 = p0 cont, Col 2 = p5, Col 3 = p6, Col 4 = p7, Col 5 = p8
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[0].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[0].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[1].second, p[2].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[1].first, p[2].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[3].second, p[4].second, p[7].second, p[8].second),
+                                        sourceIndices = listOf(p[3].first, p[4].first, p[7].first, p[8].first)
+                                    )
+                                )
+                            }
+                            1 -> {
+                                // Right Hero (Cols 4-5):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Col 2 = p2, Col 3 = p3, Cols 4-5 = p4 (Hero)
+                                // Row 2: Col 0 = p5, Col 1 = p6, Col 2 = p7, Col 3 = p8, Cols 4-5 = p4 cont
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[0].second, p[1].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[0].first, p[1].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[2].second, p[3].second, p[7].second, p[8].second),
+                                        sourceIndices = listOf(p[2].first, p[3].first, p[7].first, p[8].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[4].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[4].first
+                                    )
+                                )
+                            }
+                            else -> {
+                                // Center Hero (Cols 2-3):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Cols 2-3 = p2 (Hero), Col 4 = p3, Col 5 = p4
+                                // Row 2: Col 0 = p5, Col 1 = p6, Cols 2-3 = p2 cont, Col 4 = p7, Col 5 = p8
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[0].second, p[1].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[0].first, p[1].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[2].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[2].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[3].second, p[4].second, p[7].second, p[8].second),
+                                        sourceIndices = listOf(p[3].first, p[4].first, p[7].first, p[8].first)
+                                    )
+                                )
+                            }
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+                }
+            }
+
+            if (flushAll) {
+                while (buffer.isNotEmpty()) {
+                    emitSingleFromFront()
+                }
+            }
+            break
         }
-
-        val leftSide = blockIndex % 2 == 0
-        val consumedCount: Int
-
-        when (pattern.companionType) {
-            MosaicCompanionType.QUAD -> {
-                val big = MosaicDisplayItem.BigTileItem(
-                    item = buffer[0].second,
-                    span = pattern.bigSpan,
-                    aspectRatio = pattern.bigAspectRatio,
-                    sourceIndex = buffer[0].first
-                )
-                val quad = MosaicDisplayItem.QuadTileItem(
-                    items = listOf(buffer[1].second, buffer[2].second, buffer[3].second, buffer[4].second),
-                    sourceIndices = listOf(buffer[1].first, buffer[2].first, buffer[3].first, buffer[4].first)
-                )
-                if (leftSide) {
-                    result.add(big)
-                    result.add(quad)
-                } else {
-                    result.add(quad)
-                    result.add(big)
-                }
-                consumedCount = 5
-            }
-            MosaicCompanionType.PAIR -> {
-                val big = MosaicDisplayItem.BigTileItem(
-                    item = buffer[0].second,
-                    span = pattern.bigSpan,
-                    aspectRatio = pattern.bigAspectRatio,
-                    sourceIndex = buffer[0].first
-                )
-                val pair = MosaicDisplayItem.PairTileItem(
-                    items = listOf(buffer[1].second, buffer[2].second),
-                    sourceIndices = listOf(buffer[1].first, buffer[2].first)
-                )
-                if (leftSide) {
-                    result.add(big)
-                    result.add(pair)
-                } else {
-                    result.add(pair)
-                    result.add(big)
-                }
-                consumedCount = 3
-            }
-            MosaicCompanionType.SINGLES -> {
-                val big = MosaicDisplayItem.BigTileItem(
-                    item = buffer[0].second,
-                    span = pattern.bigSpan,
-                    aspectRatio = pattern.bigAspectRatio,
-                    sourceIndex = buffer[0].first
-                )
-                val singles = (1 until pattern.itemsConsumed).map {
-                    MosaicDisplayItem.SingleItem(buffer[it].second, buffer[it].first)
-                }
-                if (leftSide) {
-                    result.add(big)
-                    result.addAll(singles)
-                } else {
-                    result.addAll(singles)
-                    result.add(big)
-                }
-                consumedCount = pattern.itemsConsumed
-            }
-        }
-
-        buffer.subList(0, consumedCount).clear()
-
-        // Emit complete rows of singles (multiples of columns)
-        val completeRowItems = (buffer.size / cols) * cols
-        for (i in 0 until completeRowItems) {
-            val (srcIdx, item) = buffer[i]
-            result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
-        }
-
-        if (force) {
-            for (i in completeRowItems until buffer.size) {
-                val (srcIdx, item) = buffer[i]
-                result.add(MosaicDisplayItem.SingleItem(item, srcIdx))
-            }
-            buffer.clear()
-        } else if (completeRowItems > 0) {
-            buffer.subList(0, completeRowItems).clear()
-        }
-
-        blockIndex++
     }
 
     for (i in 0 until totalCount) {
-        val listItem = pagedMedia.peek(i)
-        when (listItem) {
+        when (val listItem = itemAt(i)) {
             is GalleryListItem.Header -> {
-                emitBlock(force = true)
-                blockIndex = 0
-                groupRandom = kotlin.random.Random(listItem.id.hashCode().toLong())
+                drainBuffer(flushAll = true)
+                heroBlockIndex = 0
+                calmRemaining = 0
+                rowCursor = 0
                 result.add(MosaicDisplayItem.HeaderItem(listItem, i))
             }
             is GalleryListItem.Item -> {
                 buffer.add(Pair(i, listItem.galleryItem))
-                if (buffer.size >= cols * 2 + 1) {
-                    emitBlock()
+                if (buffer.size >= heroBlockSize) {
+                    drainBuffer(flushAll = false)
                 }
             }
-            null -> Unit
+            null -> drainBuffer(flushAll = true)
         }
     }
-    emitBlock(force = true)
+    drainBuffer(flushAll = true)
     return result
 }
 

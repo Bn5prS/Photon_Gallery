@@ -784,7 +784,9 @@ object DatabaseProvider {
     suspend fun searchMedia(
         db: GalleryDatabase,
         query: String,
-        excluded: Set<String> = emptySet()
+        excluded: Set<String> = emptySet(),
+        ocrBucketFilter: com.inferno.gallery.data.ai.SqlQuerySpec? = null,
+        isOcrBucketEligible: (String?) -> Boolean = { true }
     ): List<SearchMediaResult> = withContext(Dispatchers.IO) {
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return@withContext emptyList()
@@ -795,7 +797,7 @@ object DatabaseProvider {
         val metadataResults = searchMetadata(rawDb, cleanQuery, excluded)
 
         // 2. Perform OCR text search on image_fts
-        val ftsResults = searchFtsInternal(rawDb, cleanQuery, excluded)
+        val ftsResults = searchFtsInternal(rawDb, cleanQuery, excluded, ocrBucketFilter)
 
         // 3. Score and merge results
         val tokens = cleanQuery.split(Regex("[\\s_\\-\\.]+")).filter { it.isNotBlank() }
@@ -803,7 +805,9 @@ object DatabaseProvider {
 
         // Check if any metadata candidates also have matching OCR text in image_fts
         // that FTS prefix search might have missed (e.g. substrings, symbols, multi-token variations)
-        val missingFtsCandidates = metadataResults.filterNot { it.id in ftsMap.keys }
+        val missingFtsCandidates = metadataResults.filter {
+            it.id !in ftsMap.keys && isOcrBucketEligible(it.bucketName)
+        }
         if (missingFtsCandidates.isNotEmpty()) {
             val candidateChunks = missingFtsCandidates.chunked(100)
             for (chunk in candidateChunks) {
@@ -1070,17 +1074,25 @@ object DatabaseProvider {
     private fun searchFtsInternal(
         rawDb: SupportSQLiteDatabase,
         query: String,
-        excluded: Set<String>
+        excluded: Set<String>,
+        ocrBucketFilter: com.inferno.gallery.data.ai.SqlQuerySpec? = null
     ): List<Pair<CoreMediaEntity, String?>> {
         val ftsKeywords = setOf("AND", "OR", "NOT", "NEAR")
         val cleanQuery = query.trim()
         val terms = cleanQuery.split(Regex("[^\\p{L}\\p{Nd}]+"))
             .filter { it.isNotBlank() && it.uppercase() !in ftsKeywords }
 
-        val excludedClause = if (excluded.isNotEmpty()) {
-            val placeholders = excluded.joinToString(",") { "?" }
-            " AND cm.bucketName NOT IN ($placeholders)"
-        } else ""
+        val excludedClause = buildString {
+            if (excluded.isNotEmpty()) {
+                val placeholders = excluded.joinToString(",") { "?" }
+                append(" AND cm.bucketName NOT IN ($placeholders)")
+            }
+            if (ocrBucketFilter != null) {
+                append(" AND (").append(ocrBucketFilter.sql).append(")")
+            }
+        }
+        val extraArgs: List<String> = excluded.toList() +
+            (ocrBucketFilter?.args?.map { it.toString() } ?: emptyList())
 
         val resultsMap = LinkedHashMap<Long, Pair<CoreMediaEntity, String?>>()
 
@@ -1096,7 +1108,7 @@ object DatabaseProvider {
                 ORDER BY cm.dateAdded DESC
                 LIMIT 500
             """.trimIndent()
-            val args = (listOf(ftsExpr) + excluded).toTypedArray()
+            val args = (listOf(ftsExpr) + extraArgs).toTypedArray()
             try {
                 rawDb.query(sql, args).use { c ->
                     val ocrIdx = c.getColumnIndex("ocrText")
@@ -1140,7 +1152,7 @@ object DatabaseProvider {
                 ORDER BY cm.dateAdded DESC
                 LIMIT 500
             """.trimIndent()
-            val likeArgs = (listOf("%$cleanQuery%") + excluded).toTypedArray()
+            val likeArgs = (listOf("%$cleanQuery%") + extraArgs).toTypedArray()
             try {
                 rawDb.query(likeSql, likeArgs).use { c ->
                     val ocrIdx = c.getColumnIndex("ocrText")
@@ -1173,7 +1185,7 @@ object DatabaseProvider {
                 ORDER BY cm.dateAdded DESC
                 LIMIT 500
             """.trimIndent()
-            val multiArgs = (terms.map { "%$it%" } + excluded).toTypedArray()
+            val multiArgs = (terms.map { "%$it%" } + extraArgs).toTypedArray()
             try {
                 rawDb.query(multiSql, multiArgs).use { c ->
                     val ocrIdx = c.getColumnIndex("ocrText")
