@@ -115,7 +115,7 @@
     <string name="privacy_guarantee">Informativa sulla privacy e garanzie</string>
 
     <!-- Onboarding &amp; Language -->
-    <string name="onboarding_welcome_to">Benvenuto in</string>
+    <string name="onboarding_welcome_to">Ti diamo il benvenuto in</string>
     <string name="onboarding_welcome_tagline">Una galleria open source per sfogliare, organizzare e cercare nella tua libreria multimediale.</string>
     <string name="onboarding_action_get_started">Inizia</string>
     <string name="onboarding_permissions_header">Accesso ai tuoi contenuti</string>
@@ -155,7 +155,7 @@
     <string name="settings_category_general_sub">Visibilità degli album, feedback aptico, riproduzione automatica dei video e conferme</string>
     <string name="settings_category_smart_search_sub">Ricerca semantica IA, raggruppamento dei volti e riconoscimento del testo</string>
     <string name="settings_category_privacy_sub">Rimozione dei metadati, regole di eliminazione e controllo dei dati</string>
-    <string name="settings_category_about_sub">Info sull\'app, aggiornamenti, manutentore e licenze open source</string>
+    <string name="settings_category_about_sub">Info sull\'app, aggiornamenti, responsabile del progetto e licenze open source</string>
     <string name="setting_theme_mode">Tema e modalità</string>
     <string name="setting_theme_system">Sistema</string>
     <string name="setting_theme_light">Chiaro</string>
@@ -182,7 +182,7 @@
     <string name="setting_timeline_grid">Griglia uniforme</string>
     <string name="setting_album_shapes">Forme degli album personalizzate</string>
     <string name="setting_album_shapes_sub">Applica forme espressive come squircle, fiore o pillola alle schede degli album</string>
-    <string name="setting_show_album_count">Mostra numero di contenuti</string>
+    <string name="setting_show_album_count">Mostra numero di elementi</string>
     <string name="setting_show_album_count_sub">Mostra il numero di foto e video nei badge degli album</string>
     <string name="setting_show_album_size">Mostra dimensione degli album</string>
     <string name="setting_show_album_size_sub">Mostra lo spazio occupato sul disco nelle schede degli album</string>
@@ -241,7 +241,7 @@
     <string name="detail_info_dimensions">Dimensioni</string>
     <string name="detail_info_size">Dimensione file</string>
     <string name="detail_info_path">Percorso</string>
-    <string name="detail_info_device">Dispositivo fotocamera</string>
+    <string name="detail_info_device">Fotocamera</string>
     <string name="detail_info_aperture">Apertura</string>
     <string name="detail_info_iso">ISO</string>
     <string name="detail_info_exposure">Esposizione</string>
@@ -358,7 +358,7 @@
     <string name="setting_folder_visibility_title">Visibilità delle cartelle</string>
     <string name="setting_excluded_folders_desc">Le cartelle escluse non compariranno nella scheda Foto né nella griglia Album. Puoi comunque accedervi tramite la ricerca.</string>
     <string name="about_developer">SVILUPPATORE</string>
-    <string name="about_creator_maintainer">Manutentore principale</string>
+    <string name="about_creator_maintainer">Responsabile del progetto</string>
     <string name="about_star_project">Metti una stella al progetto</string>
     <string name="about_updates_delivery">Aggiornamenti e distribuzione</string>
     <string name="about_check_updates">Controlla aggiornamenti</string>
@@ -511,7 +511,7 @@
     <string name="cleaner_exact_hash_badge">Questi file hanno contenuto identico, verificato tramite hash del file</string>
     <string name="cleaner_exact_hash_match">Corrispondenza hash esatta</string>
     <string name="action_collage">Collage</string>
-    <string name="action_stitch">Giunzione</string>
+    <string name="action_stitch">Unisci in sequenza</string>
     <string name="action_hide">Nascondi</string>
     <string name="album_name_label">Nome album</string>
     <string name="dialog_restore_items_title">Ripristina elementi</string>
@@ -541,7 +541,7 @@
     <string name="dialog_clear_smart_search_title">Cancella indice della ricerca intelligente</string>
     <string name="dialog_clear_smart_search_msg">Verranno eliminati tutti gli embedding delle immagini calcolati per la ricerca semantica. Dovrai eseguire di nuovo l\'indicizzazione per usare la ricerca intelligente. Vuoi continuare?</string>
     <string name="dialog_delete_ai_models_title">Elimina file dei modelli IA</string>
-    <string name="dialog_delete_ai_models_msg">Verranno eliminati i file locali del modello ONNX (circa 103 MB). Non potrai usare la ricerca semantica né indicizzare nuove immagini finché non li scaricherai di nuovo. Sei sicuro?</string>
+    <string name="dialog_delete_ai_models_msg">Verranno eliminati i file locali del modello ONNX (circa 103 MB). Non potrai usare la ricerca semantica né indicizzare nuove immagini finché non li scaricherai di nuovo. Vuoi continuare?</string>
     <string name="dialog_delete_files_confirm">Elimina file</string>
     <string name="dialog_rescan_faces_title">Riscansiona tutti i volti</string>
     <string name="dialog_rescan_faces_msg">Verrà reimpostato lo stato di scansione dei volti e tutte le foto della galleria verranno analizzate di nuovo con il motore di riconoscimento facciale sul dispositivo.\n\nTutte le persone con nome, i tag personalizzati e i raggruppamenti manuali esistenti saranno conservati in sicurezza. Vuoi davvero riscansionare?</string>
