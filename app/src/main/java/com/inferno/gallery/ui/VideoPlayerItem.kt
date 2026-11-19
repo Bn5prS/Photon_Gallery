@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -552,75 +553,122 @@ fun VideoPlayerItemWithResolvedUri(
                 }
             }
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .clipToBounds()
-                .graphicsLayer {
-                    val safeScale = scale.floatValue.coerceAtLeast(0.05f)
-                    val isQuarterRotated = (rotationDegrees % 180) != 0
-                    val w = size.width
-                    val h = size.height
-                    val rotationScale = if (isQuarterRotated && w > 0f && h > 0f) {
-                        minOf(w / h, h / w).coerceAtMost(1f)
-                    } else 1f
-
-                    scaleX = safeScale * rotationScale
-                    scaleY = safeScale * rotationScale
-                    translationX = offsetX.floatValue
-                    translationY = offsetY.floatValue
-                    rotationZ = animatedRotation
-                },
+                .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
-            val playerModifier = if (videoAspectRatio != null && videoAspectRatio!! > 0f) {
-                Modifier
-                    .fillMaxSize()
-                    .aspectRatio(videoAspectRatio!!, matchHeightConstraintsFirst = false)
+            val containerWidth = maxWidth
+            val containerHeight = maxHeight
+            val containerRatio = if (containerHeight.value > 0f) containerWidth.value / containerHeight.value else 1f
+            val rawRatio = videoAspectRatio ?: containerRatio
+
+            val isFillMode = resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+
+            // Calculate target unrotated video dimensions based on Fit vs Fill
+            val (targetWidth, targetHeight) = if (isFillMode) {
+                // Crop to fill screen: expand beyond bounds so no black bars
+                if (rawRatio > containerRatio) {
+                    Pair(containerHeight * rawRatio, containerHeight)
+                } else {
+                    Pair(containerWidth, containerWidth / rawRatio)
+                }
             } else {
-                Modifier.fillMaxSize()
+                // Fit within screen: entire video visible with letterboxing
+                if (rawRatio > containerRatio) {
+                    Pair(containerWidth, containerWidth / rawRatio)
+                } else {
+                    Pair(containerHeight * rawRatio, containerHeight)
+                }
             }
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
-                        controllerAutoShow = false
-                        hideController()
-                        // Completely eradicate the Media3 default controller view from the hierarchy
-                        // so legacy ghost controls (prev/rewind/ffwd/next/progress) never appear
-                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
+
+            val animatedWidth by androidx.compose.animation.core.animateDpAsState(
+                targetValue = targetWidth,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "videoWidth"
+            )
+            val animatedHeight by androidx.compose.animation.core.animateDpAsState(
+                targetValue = targetHeight,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "videoHeight"
+            )
+
+            // Calculate rotation scaling when rotated 90° or 270°
+            val isQuarterRotated = (rotationDegrees % 180) != 0
+            val targetRotationScale = if (isQuarterRotated && targetWidth.value > 0f && targetHeight.value > 0f) {
+                if (isFillMode) {
+                    maxOf(
+                        containerWidth.value / targetHeight.value,
+                        containerHeight.value / targetWidth.value
+                    )
+                } else {
+                    minOf(
+                        containerWidth.value / targetHeight.value,
+                        containerHeight.value / targetWidth.value
+                    )
+                }
+            } else {
+                1f
+            }
+
+            val animatedRotationScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = targetRotationScale,
+                animationSpec = MotionTokens.snappySpring(),
+                label = "videoRotationScale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(animatedWidth, animatedHeight)
+                    .graphicsLayer {
+                        val safeScale = scale.floatValue.coerceAtLeast(0.05f)
+                        scaleX = safeScale * animatedRotationScale
+                        scaleY = safeScale * animatedRotationScale
+                        translationX = offsetX.floatValue
+                        translationY = offsetY.floatValue
+                        rotationZ = animatedRotation
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        val view = android.view.LayoutInflater.from(ctx)
+                            .inflate(R.layout.view_video_player, null, false) as PlayerView
+                        view.apply {
+                            useController = false
+                            controllerAutoShow = false
+                            hideController()
+                            isClickable = false
+                            isFocusable = false
+                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
+                                ctrl.visibility = android.view.View.GONE
+                                (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
+                            }
+                            player = exoPlayer
+                            this.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            layoutParams = android.widget.FrameLayout.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    update = { playerView ->
+                        playerView.useController = false
+                        playerView.controllerAutoShow = false
+                        playerView.hideController()
+                        playerView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
                             ctrl.visibility = android.view.View.GONE
                             (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
                         }
-                        player = exoPlayer
-                        this.resizeMode = resizeMode
-                        try {
-                            val method = javaClass.getMethod("setEnableComposeSurfaceSyncWorkaround", Boolean::class.javaPrimitiveType)
-                            method.invoke(this, true)
-                        } catch (_: Throwable) {}
-                        layoutParams = android.widget.FrameLayout.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
-                update = { playerView ->
-                    playerView.useController = false
-                    playerView.controllerAutoShow = false
-                    playerView.hideController()
-                    playerView.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controller)?.let { ctrl ->
-                        ctrl.visibility = android.view.View.GONE
-                        (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
-                    }
-                    if (playerView.player != exoPlayer) {
-                        playerView.player = exoPlayer
-                    }
-                    if (playerView.resizeMode != resizeMode) {
-                        playerView.resizeMode = resizeMode
-                    }
-                },
-                modifier = playerModifier
-            )
+                        if (playerView.player != exoPlayer) {
+                            playerView.player = exoPlayer
+                        }
+                        playerView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         // Floating Video Scrubber Capsule: Single unified floating pill styling
