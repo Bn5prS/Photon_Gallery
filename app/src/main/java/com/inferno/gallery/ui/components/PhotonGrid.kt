@@ -1535,85 +1535,455 @@ internal fun buildDateGridHeroItems(
             }
 
             if (buffer.size >= heroBlockSize) {
-                var bestOffset = -1
-                var bestScore = 0f
-                for (offset in 0 until heroBlockSize) {
-                    val candidate = buffer[offset].second
-                    val score = scoreMosaicHeroCandidate(
-                        item = candidate,
-                        isFavorite = favoriteIds.contains(candidate.id),
-                        faceQuality = faceQualityByMediaId[candidate.id]
-                    )
-                    if (score > bestScore) {
-                        bestScore = score
-                        bestOffset = offset
+                when (cols) {
+                    2 -> {
+                        val candidate = buffer[0]
+                        val score = scoreMosaicHeroCandidate(
+                            item = candidate.second,
+                            isFavorite = favoriteIds.contains(candidate.second.id),
+                            faceQuality = faceQualityByMediaId[candidate.second.id]
+                        )
+                        if (score < 0f) {
+                            emitSingleFromFront()
+                            continue
+                        }
+                        val (srcIdx, item) = buffer.removeAt(0)
+                        result.add(
+                            MosaicDisplayItem.BigTileItem(
+                                item = item,
+                                span = 2,
+                                aspectRatio = 1.0f,
+                                sourceIndex = srcIdx
+                            )
+                        )
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    3 -> {
+                        // 3 columns: 1:1 squares only.
+                        // Row 1: Col 0, Col 1, Col 2. Row 2: Col 0, Col 1, Col 2.
+                        val p0 = buffer[0]
+                        val p1 = buffer[1]
+                        val p2 = buffer[2]
+                        val s0 = scoreMosaicHeroCandidate(p0.second, favoriteIds.contains(p0.second.id), faceQualityByMediaId[p0.second.id])
+                        val s1 = scoreMosaicHeroCandidate(p1.second, favoriteIds.contains(p1.second.id), faceQualityByMediaId[p1.second.id])
+                        val s2 = scoreMosaicHeroCandidate(p2.second, favoriteIds.contains(p2.second.id), faceQualityByMediaId[p2.second.id])
+
+                        if (s0 < 0f && s1 < 0f && s2 < 0f) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+
+                        val valid0 = if (s0 >= 0f) s0 else -1f
+                        val valid1 = if (s1 >= 0f) s1 else -1f
+
+                        val chooseRight = when {
+                            valid1 > valid0 -> true
+                            valid0 > valid1 -> false
+                            else -> (heroBlockIndex % 2 != 0)
+                        }
+
+                        buffer.subList(0, 3).clear()
+                        if (chooseRight) {
+                            // Right Hero (Cols 1-2):
+                            // Row 1: Col 0 = p0, Cols 1-2 = p1 (Hero)
+                            // Row 2: Col 0 = p2, Cols 1-2 = p1 (Hero cont)
+                            // Reading & chronological order: p0, p1, p2
+                            result.add(
+                                MosaicDisplayItem.PairTileItem(
+                                    items = listOf(p0.second, p2.second),
+                                    sourceIndices = listOf(p0.first, p2.first)
+                                )
+                            )
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p1.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p1.first
+                                )
+                            )
+                        } else {
+                            // Left Hero (Cols 0-1):
+                            // Row 1: Cols 0-1 = p0 (Hero), Col 2 = p1
+                            // Row 2: Cols 0-1 = p0 (Hero cont), Col 2 = p2
+                            // Reading & chronological order: p0, p1, p2
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p0.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p0.first
+                                )
+                            )
+                            result.add(
+                                MosaicDisplayItem.PairTileItem(
+                                    items = listOf(p1.second, p2.second),
+                                    sourceIndices = listOf(p1.first, p2.first)
+                                )
+                            )
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    4 -> {
+                        // 4 columns: 1:1 squares only.
+                        val p0 = buffer[0]
+                        val p1 = buffer[1]
+                        val p2 = buffer[2]
+                        val p3 = buffer[3]
+                        val p4 = buffer[4]
+                        val s0 = scoreMosaicHeroCandidate(p0.second, favoriteIds.contains(p0.second.id), faceQualityByMediaId[p0.second.id])
+                        val s1 = scoreMosaicHeroCandidate(p1.second, favoriteIds.contains(p1.second.id), faceQualityByMediaId[p1.second.id])
+                        val s2 = scoreMosaicHeroCandidate(p2.second, favoriteIds.contains(p2.second.id), faceQualityByMediaId[p2.second.id])
+                        val s3 = scoreMosaicHeroCandidate(p3.second, favoriteIds.contains(p3.second.id), faceQualityByMediaId[p3.second.id])
+                        val s4 = scoreMosaicHeroCandidate(p4.second, favoriteIds.contains(p4.second.id), faceQualityByMediaId[p4.second.id])
+
+                        if (s0 < 0f && s1 < 0f && s2 < 0f && s3 < 0f && s4 < 0f) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+
+                        // Twin Heroes: both p0 and p1 are standout highlights
+                        val isTwin = (s0 >= 100f && s1 >= 100f) || (s0 >= 50f && s1 >= 50f)
+                        if (isTwin) {
+                            buffer.subList(0, 2).clear()
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p0.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p0.first
+                                )
+                            )
+                            result.add(
+                                MosaicDisplayItem.BigTileItem(
+                                    item = p1.second,
+                                    span = 2,
+                                    aspectRatio = 1.0f,
+                                    sourceIndex = p1.first
+                                )
+                            )
+                            rowCursor = 0
+                            heroBlockIndex++
+                            calmRemaining = calmQuota
+                            continue
+                        }
+
+                        val valid0 = if (s0 >= 0f) s0 else -1f
+                        val valid1 = if (s1 >= 0f) s1 else -1f
+                        val valid2 = if (s2 >= 0f) s2 else -1f
+
+                        val pattern = when {
+                            valid0 > valid1 && valid0 > valid2 -> 0 // Left Hero
+                            valid1 > valid0 && valid1 > valid2 -> 1 // Center Hero
+                            valid2 > valid0 && valid2 > valid1 -> 2 // Right Hero
+                            else -> when (heroBlockIndex % 3) {
+                                0 -> if (valid0 >= 0f) 0 else if (valid2 >= 0f) 2 else 1
+                                1 -> if (valid2 >= 0f) 2 else if (valid0 >= 0f) 0 else 1
+                                else -> if (valid1 >= 0f) 1 else if (valid0 >= 0f) 0 else 2
+                            }
+                        }
+
+                        buffer.subList(0, 5).clear()
+                        when (pattern) {
+                            0 -> {
+                                // Left Hero (Cols 0-1):
+                                // Row 1: Cols 0-1 = p0 (Hero), Col 2 = p1, Col 3 = p2
+                                // Row 2: Cols 0-1 = p0 (Hero cont), Col 2 = p3, Col 3 = p4
+                                // Reading & chronological order: p0, p1, p2, p3, p4
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p0.second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p0.first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p1.second, p2.second, p3.second, p4.second),
+                                        sourceIndices = listOf(p1.first, p2.first, p3.first, p4.first)
+                                    )
+                                )
+                            }
+                            1 -> {
+                                // Center Hero (Cols 1-2):
+                                // Row 1: Col 0 = p0, Cols 1-2 = p1 (Hero), Col 3 = p2
+                                // Row 2: Col 0 = p3, Cols 1-2 = p1 (Hero cont), Col 3 = p4
+                                // Reading & chronological order: p0, p1, p2, p3, p4
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p0.second, p3.second),
+                                        sourceIndices = listOf(p0.first, p3.first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p1.second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p1.first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p2.second, p4.second),
+                                        sourceIndices = listOf(p2.first, p4.first)
+                                    )
+                                )
+                            }
+                            else -> {
+                                // Right Hero (Cols 2-3):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Cols 2-3 = p2 (Hero)
+                                // Row 2: Col 0 = p3, Col 1 = p4, Cols 2-3 = p2 (Hero cont)
+                                // Reading & chronological order: p0, p1, p2, p3, p4
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p0.second, p1.second, p3.second, p4.second),
+                                        sourceIndices = listOf(p0.first, p1.first, p3.first, p4.first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p2.second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p2.first
+                                    )
+                                )
+                            }
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    5 -> {
+                        // 5 columns: 1:1 squares only.
+                        val p = (0..6).map { buffer[it] }
+                        val s = p.map { scoreMosaicHeroCandidate(it.second, favoriteIds.contains(it.second.id), faceQualityByMediaId[it.second.id]) }
+                        if (s.all { it < 0f }) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+                        val valid0 = if (s[0] >= 0f) s[0] else -1f
+                        val valid1 = if (s[1] >= 0f) s[1] else -1f
+                        val valid3 = if (s[3] >= 0f) s[3] else -1f
+
+                        val pattern = when {
+                            valid0 > valid1 && valid0 > valid3 -> 0 // Left Hero
+                            valid3 > valid0 && valid3 > valid1 -> 1 // Right Hero
+                            valid1 > valid0 && valid1 > valid3 -> 2 // Center Hero
+                            else -> when (heroBlockIndex % 3) {
+                                0 -> if (valid0 >= 0f) 0 else if (valid3 >= 0f) 1 else 2
+                                1 -> if (valid3 >= 0f) 1 else if (valid0 >= 0f) 0 else 2
+                                else -> if (valid1 >= 0f) 2 else if (valid0 >= 0f) 0 else 1
+                            }
+                        }
+
+                        buffer.subList(0, 7).clear()
+                        when (pattern) {
+                            0 -> {
+                                // Left Hero (Cols 0-1):
+                                // Row 1: Cols 0-1 = p0, Col 2 = p1, Col 3 = p2, Col 4 = p3
+                                // Row 2: Cols 0-1 = p0 cont, Col 2 = p4, Col 3 = p5, Col 4 = p6
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[0].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[0].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[1].second, p[2].second, p[4].second, p[5].second),
+                                        sourceIndices = listOf(p[1].first, p[2].first, p[4].first, p[5].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p[3].second, p[6].second),
+                                        sourceIndices = listOf(p[3].first, p[6].first)
+                                    )
+                                )
+                            }
+                            1 -> {
+                                // Right Hero (Cols 3-4):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Col 2 = p2, Cols 3-4 = p3 (Hero)
+                                // Row 2: Col 0 = p4, Col 1 = p5, Col 2 = p6, Cols 3-4 = p3 cont
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p[0].second, p[4].second),
+                                        sourceIndices = listOf(p[0].first, p[4].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[1].second, p[2].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[1].first, p[2].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[3].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[3].first
+                                    )
+                                )
+                            }
+                            else -> {
+                                // Center Hero (Cols 1-2):
+                                // Row 1: Col 0 = p0, Cols 1-2 = p1 (Hero), Col 3 = p2, Col 4 = p3
+                                // Row 2: Col 0 = p4, Cols 1-2 = p1 cont, Col 3 = p5, Col 4 = p6
+                                result.add(
+                                    MosaicDisplayItem.PairTileItem(
+                                        items = listOf(p[0].second, p[4].second),
+                                        sourceIndices = listOf(p[0].first, p[4].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[1].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[1].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[2].second, p[3].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[2].first, p[3].first, p[5].first, p[6].first)
+                                    )
+                                )
+                            }
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
+                    }
+
+                    else -> { // cols == 6
+                        // 6 columns: 1:1 squares only.
+                        val p = (0..8).map { buffer[it] }
+                        val s = p.map { scoreMosaicHeroCandidate(it.second, favoriteIds.contains(it.second.id), faceQualityByMediaId[it.second.id]) }
+                        if (s.all { it < 0f }) {
+                            val emitCount = minOf(cols, buffer.size)
+                            repeat(emitCount) { emitSingleFromFront() }
+                            continue
+                        }
+                        val valid0 = if (s[0] >= 0f) s[0] else -1f
+                        val valid2 = if (s[2] >= 0f) s[2] else -1f
+                        val valid4 = if (s[4] >= 0f) s[4] else -1f
+
+                        val pattern = when {
+                            valid0 > valid2 && valid0 > valid4 -> 0 // Left Hero
+                            valid4 > valid0 && valid4 > valid2 -> 1 // Right Hero
+                            valid2 > valid0 && valid2 > valid4 -> 2 // Center Hero
+                            else -> when (heroBlockIndex % 3) {
+                                0 -> if (valid0 >= 0f) 0 else if (valid4 >= 0f) 1 else 2
+                                1 -> if (valid4 >= 0f) 1 else if (valid0 >= 0f) 0 else 2
+                                else -> if (valid2 >= 0f) 2 else if (valid0 >= 0f) 0 else 1
+                            }
+                        }
+
+                        buffer.subList(0, 9).clear()
+                        when (pattern) {
+                            0 -> {
+                                // Left Hero (Cols 0-1):
+                                // Row 1: Cols 0-1 = p0, Col 2 = p1, Col 3 = p2, Col 4 = p3, Col 5 = p4
+                                // Row 2: Cols 0-1 = p0 cont, Col 2 = p5, Col 3 = p6, Col 4 = p7, Col 5 = p8
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[0].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[0].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[1].second, p[2].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[1].first, p[2].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[3].second, p[4].second, p[7].second, p[8].second),
+                                        sourceIndices = listOf(p[3].first, p[4].first, p[7].first, p[8].first)
+                                    )
+                                )
+                            }
+                            1 -> {
+                                // Right Hero (Cols 4-5):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Col 2 = p2, Col 3 = p3, Cols 4-5 = p4 (Hero)
+                                // Row 2: Col 0 = p5, Col 1 = p6, Col 2 = p7, Col 3 = p8, Cols 4-5 = p4 cont
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[0].second, p[1].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[0].first, p[1].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[2].second, p[3].second, p[7].second, p[8].second),
+                                        sourceIndices = listOf(p[2].first, p[3].first, p[7].first, p[8].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[4].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[4].first
+                                    )
+                                )
+                            }
+                            else -> {
+                                // Center Hero (Cols 2-3):
+                                // Row 1: Col 0 = p0, Col 1 = p1, Cols 2-3 = p2 (Hero), Col 4 = p3, Col 5 = p4
+                                // Row 2: Col 0 = p5, Col 1 = p6, Cols 2-3 = p2 cont, Col 4 = p7, Col 5 = p8
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[0].second, p[1].second, p[5].second, p[6].second),
+                                        sourceIndices = listOf(p[0].first, p[1].first, p[5].first, p[6].first)
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.BigTileItem(
+                                        item = p[2].second,
+                                        span = 2,
+                                        aspectRatio = 1.0f,
+                                        sourceIndex = p[2].first
+                                    )
+                                )
+                                result.add(
+                                    MosaicDisplayItem.QuadTileItem(
+                                        items = listOf(p[3].second, p[4].second, p[7].second, p[8].second),
+                                        sourceIndices = listOf(p[3].first, p[4].first, p[7].first, p[8].first)
+                                    )
+                                )
+                            }
+                        }
+                        rowCursor = 0
+                        heroBlockIndex++
+                        calmRemaining = calmQuota
+                        continue
                     }
                 }
-
-                if (bestOffset == -1) {
-                    val emitCount = minOf(cols, buffer.size)
-                    repeat(emitCount) { emitSingleFromFront() }
-                    continue
-                }
-
-                val heroEntry = buffer[bestOffset]
-                val heroTile = MosaicDisplayItem.BigTileItem(
-                    item = heroEntry.second,
-                    span = 2,
-                    aspectRatio = 1.0f,
-                    sourceIndex = heroEntry.first
-                )
-                val companions = ArrayList<Pair<Int, GalleryItem>>(heroBlockSize - 1)
-                for (offset in 0 until heroBlockSize) {
-                    if (offset != bestOffset) companions.add(buffer[offset])
-                }
-                buffer.subList(0, heroBlockSize).clear()
-
-                val companionTiles: List<MosaicDisplayItem> = when (cols) {
-                    2 -> emptyList()
-                    3 -> listOf(
-                        MosaicDisplayItem.PairTileItem(
-                            items = listOf(companions[0].second, companions[1].second),
-                            sourceIndices = listOf(companions[0].first, companions[1].first)
-                        )
-                    )
-                    4 -> listOf(
-                        MosaicDisplayItem.QuadTileItem(
-                            items = companions.map { it.second },
-                            sourceIndices = companions.map { it.first }
-                        )
-                    )
-                    5 -> listOf(
-                        MosaicDisplayItem.QuadTileItem(
-                            items = companions.subList(0, 4).map { it.second },
-                            sourceIndices = companions.subList(0, 4).map { it.first }
-                        ),
-                        MosaicDisplayItem.PairTileItem(
-                            items = listOf(companions[4].second, companions[5].second),
-                            sourceIndices = listOf(companions[4].first, companions[5].first)
-                        )
-                    )
-                    else -> listOf(
-                        MosaicDisplayItem.QuadTileItem(
-                            items = companions.subList(0, 4).map { it.second },
-                            sourceIndices = companions.subList(0, 4).map { it.first }
-                        ),
-                        MosaicDisplayItem.QuadTileItem(
-                            items = companions.subList(4, 8).map { it.second },
-                            sourceIndices = companions.subList(4, 8).map { it.first }
-                        )
-                    )
-                }
-
-                // Always anchor hero tile on the left so that left-to-right reading order
-                // strictly aligns with chronological timeline order and horizontal viewer paging.
-                result.add(heroTile)
-                result.addAll(companionTiles)
-
-                rowCursor = 0
-                heroBlockIndex++
-                calmRemaining = calmQuota
-                continue
             }
 
             if (flushAll) {
