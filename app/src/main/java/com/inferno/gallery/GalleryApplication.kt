@@ -97,8 +97,15 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
                 val prefs = getSharedPreferences("face_scan_meta", android.content.Context.MODE_PRIVATE)
                 val scanVersion = prefs.getInt("scan_version", 1)
                 if (scanVersion < 2) {
-                    db.faceDao().clearZeroFaceStatuses()
-                    prefs.edit().putInt("scan_version", 2).apply()
+                    db.faceDao().clearAllFaceStatuses()
+                    prefs.edit().putInt("scan_version", 3).apply()
+                } else if (scanVersion < 3) {
+                    // v3 fixes ML Kit left/right landmark swap in frontal face alignment + tightens
+                    // false-positive pareidolia & extreme-exposure filtering. Only refresh photos that
+                    // already contain faces (skipping 0-face scenery/screenshots) while preserving all
+                    // user-assigned names, favorites, and hidden people.
+                    db.faceDao().clearNonZeroFaceStatuses()
+                    prefs.edit().putInt("scan_version", 3).apply()
                 }
 
                 val unindexedFaces = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(
@@ -121,9 +128,15 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
             // Periodic sync every 6 hours
             val syncPeriodicRequest = androidx.work.PeriodicWorkRequestBuilder<MediaSyncWorker>(
                 6, java.util.concurrent.TimeUnit.HOURS
-            ).build()
+            ).setInputData(androidx.work.workDataOf(MediaSyncWorker.KEY_FULL to true))
+                // First run 6 h after install, not immediately on first open
+                .setInitialDelay(6, java.util.concurrent.TimeUnit.HOURS)
+                .build()
+            // Renamed so existing installs register it once with the full-reconcile flag and
+            // the initial delay (KEEP would keep the old request); the old entry is removed.
+            WorkManager.getInstance(this@GalleryApplication).cancelUniqueWork("MediaSyncWorkerPeriodic")
             WorkManager.getInstance(this@GalleryApplication).enqueueUniquePeriodicWork(
-                "MediaSyncWorkerPeriodic",
+                "MediaSyncWorkerPeriodicFull",
                 androidx.work.ExistingPeriodicWorkPolicy.KEEP,
                 syncPeriodicRequest
             )
@@ -141,6 +154,20 @@ class GalleryApplication : Application(), SingletonImageLoader.Factory, androidx
                 "ReverseGeocodeWorkerPeriodic",
                 androidx.work.ExistingPeriodicWorkPolicy.KEEP,
                 geocodePeriodicRequest
+            )
+
+            // Offline perceptual hash & sharpness indexing during idle charging (#51)
+            val cleanupConstraints = androidx.work.Constraints.Builder()
+                .setRequiresBatteryNotLow(true)
+                .setRequiresCharging(true)
+                .build()
+            val cleanupPeriodicRequest = androidx.work.PeriodicWorkRequestBuilder<com.inferno.gallery.workers.PhotoCleanupIndexWorker>(
+                24, java.util.concurrent.TimeUnit.HOURS
+            ).setConstraints(cleanupConstraints).build()
+            WorkManager.getInstance(this@GalleryApplication).enqueueUniquePeriodicWork(
+                "PhotoCleanupIndexWorkerPeriodic",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                cleanupPeriodicRequest
             )
 
             val autoCleanEnabled = settingsRepo.autoCleanTrashEnabledFlow.first()

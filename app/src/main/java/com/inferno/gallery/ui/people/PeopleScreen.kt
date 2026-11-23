@@ -19,9 +19,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,13 +37,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -110,7 +118,9 @@ import coil3.compose.AsyncImage
 import com.inferno.gallery.R
 import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.ui.theme.IconSizeTokens
+import com.inferno.gallery.ui.theme.MotionTokens
 import com.inferno.gallery.ui.theme.ShapeEdgeTop
+import com.inferno.gallery.ui.theme.ShapeExtraLarge
 import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeMedium
@@ -183,6 +193,7 @@ fun PeopleScreen(
 
     var minPhotosThreshold by rememberSaveable { mutableIntStateOf(1) }
     var showFilterSheet by remember { mutableStateOf(false) }
+    val isFindingMoreMatches by viewModel.isFindingMoreMatches.collectAsState()
 
     val displayPeople = remember(allPeople, minPhotosThreshold) {
         if (minPhotosThreshold <= 1) {
@@ -197,6 +208,7 @@ fun PeopleScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedIds by viewModel.selectedPersonIds.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
+    val ignoredFacesCount by viewModel.ignoredFacesCount.collectAsState()
     val allPersonsIncludingHidden by viewModel.allPersonsIncludingHidden.collectAsState()
     val haptic = LocalHapticFeedback.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -206,6 +218,8 @@ fun PeopleScreen(
     var namingPerson by remember { mutableStateOf<PersonEntity?>(null) }
     var collisionPair by remember { mutableStateOf<Pair<PersonEntity, PersonEntity>?>(null) }
     var showHideShowSheet by remember { mutableStateOf(false) }
+    var showNotFaceConfirmDialog by remember { mutableStateOf(false) }
+    var showResetIgnoredDialog by remember { mutableStateOf(false) }
     val isMergeCardDismissedByUser by viewModel.isMergeCardDismissed.collectAsState()
     val savedGridCols by viewModel.peopleGridCellsCount.collectAsState()
     var gridCols by rememberSaveable(savedGridCols) { mutableIntStateOf(savedGridCols) }
@@ -338,14 +352,126 @@ fun PeopleScreen(
         )
     }
 
+    if (showNotFaceConfirmDialog && selectedIds.isNotEmpty()) {
+        val idsSnapshot = selectedIds.toList()
+        val count = idsSnapshot.size
+        AlertDialog(
+            onDismissRequest = { showNotFaceConfirmDialog = false },
+            shape = ShapeExtraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = {
+                Text(
+                    text = if (count == 1) {
+                        stringResource(R.string.people_not_a_face_confirm_title_one)
+                    } else {
+                        stringResource(R.string.people_not_a_face_confirm_title_many, count)
+                    },
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.people_not_a_face_confirm_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotFaceConfirmDialog = false
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.dismissPersonsAsNotFaces(idsSnapshot) { removed ->
+                            if (removed > 0) {
+                                val msg = if (removed == 1) {
+                                    context.getString(R.string.people_removed_not_faces_toast_one)
+                                } else {
+                                    context.getString(R.string.people_removed_not_faces_toast_many, removed)
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    shape = ShapeFull,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.people_not_a_face_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showNotFaceConfirmDialog = false },
+                    shape = ShapeFull
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (showResetIgnoredDialog && ignoredFacesCount > 0) {
+        val currentIgnoredCount = ignoredFacesCount
+        AlertDialog(
+            onDismissRequest = { showResetIgnoredDialog = false },
+            shape = ShapeExtraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = {
+                Text(
+                    text = stringResource(R.string.people_reset_ignored_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.people_reset_ignored_body, currentIgnoredCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetIgnoredDialog = false
+                        viewModel.clearIgnoredFaces {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.people_reset_ignored_toast),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    shape = ShapeFull
+                ) {
+                    Text(stringResource(R.string.people_reset_ignored_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showResetIgnoredDialog = false },
+                    shape = ShapeFull
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = if (isSelectionMode) "${selectedIds.size} selected" else "People",
+                        text = when {
+                            isSelectionMode && selectedIds.isEmpty() -> stringResource(R.string.people_select_title)
+                            isSelectionMode -> "${selectedIds.size} selected"
+                            else -> "People"
+                        },
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -372,63 +498,43 @@ fun PeopleScreen(
                 },
                 actions = {
                     if (isSelectionMode) {
-                        if (selectedIds.size >= 2) {
-                            val selectedList = displayPeople.filter { selectedIds.contains(it.id) }
-                            if (selectedList.size >= 2) {
-                                IconButton(
-                                    onClick = {
-                                        if (selectedList.size == 2) {
-                                            mergeDialogPair = Pair(selectedList[0], selectedList[1])
-                                        } else {
-                                            batchMergeList = selectedList
-                                        }
+                        if (displayPeople.isNotEmpty()) {
+                            val allSelected = displayPeople.all { selectedIds.contains(it.id) }
+                            Surface(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (allSelected) {
+                                        viewModel.clearSelection()
+                                    } else {
+                                        viewModel.selectPeople(displayPeople.map { it.id })
                                     }
+                                },
+                                shape = ShapeFull,
+                                color = if (allSelected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = if (allSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
-                                        contentDescription = "Merge people",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(IconSizeTokens.L)
+                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            if (allSelected) R.string.action_deselect_all else R.string.action_select_all
+                                        ),
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        maxLines = 1
                                     )
                                 }
                             }
-                        }
-                        val selectedPeopleList = displayPeople.filter { selectedIds.contains(it.id) }
-                        if (selectedPeopleList.isNotEmpty()) {
-                            val anyNotFav = selectedPeopleList.any { !it.isFavorite }
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    selectedPeopleList.forEach { p ->
-                                        if (p.isFavorite != anyNotFav) {
-                                            viewModel.toggleFavorite(p)
-                                        }
-                                    }
-                                    viewModel.clearSelection()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = ImageVector.vectorResource(
-                                        if (anyNotFav) R.drawable.ic_ms_star else R.drawable.ic_ms_star_filled
-                                    ),
-                                    contentDescription = if (anyNotFav) "Favorite selected people" else "Unfavorite selected people",
-                                    tint = if (!anyNotFav) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(IconSizeTokens.L)
-                                )
-                            }
-                        }
-                        IconButton(
-                            onClick = {
-                                selectedIds.forEach { viewModel.hidePerson(it) }
-                                viewModel.clearSelection()
-                            }
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_visibility_off),
-                                contentDescription = "Hide selected people",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(IconSizeTokens.L)
-                            )
                         }
                     } else {
                         var showMenu by remember { mutableStateOf(false) }
@@ -478,6 +584,22 @@ fun PeopleScreen(
                                 expanded = showMenu,
                                 onDismissRequest = { showMenu = false }
                             ) {
+                                if (displayPeople.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.people_select_action)) },
+                                        onClick = {
+                                            showMenu = false
+                                            viewModel.enterSelectionMode()
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    )
+                                }
                                 if (pendingSuggestions.isNotEmpty()) {
                                     DropdownMenuItem(
                                         text = {
@@ -496,6 +618,30 @@ fun PeopleScreen(
                                         }
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(stringResource(R.string.people_find_more_matches))
+                                    },
+                                    enabled = !isFindingMoreMatches,
+                                    onClick = {
+                                        showMenu = false
+                                        viewModel.findMoreMergeSuggestions { addedCount ->
+                                            val message = if (addedCount > 0) {
+                                                context.getString(R.string.people_more_matches_found, addedCount)
+                                            } else {
+                                                context.getString(R.string.people_no_more_matches)
+                                            }
+                                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = {
                                         val baseLabel = stringResource(R.string.people_filter_count)
@@ -527,6 +673,24 @@ fun PeopleScreen(
                                         )
                                     }
                                 )
+                                if (ignoredFacesCount > 0) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(stringResource(R.string.people_reset_ignored_menu, ignoredFacesCount))
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            showResetIgnoredDialog = true
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_refresh),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -606,6 +770,37 @@ fun PeopleScreen(
                         viewModel.setMergeCardDismissed(true)
                     }
                 )
+            }
+
+            AnimatedVisibility(
+                visible = isFindingMoreMatches && !isSelectionMode,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = ShapeFull,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SpacingTokens.L, vertical = SpacingTokens.XS)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SpacingTokens.S)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(R.string.people_finding_more_matches),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
             if (allPeople.isEmpty() && isScanning) {
@@ -1056,8 +1251,10 @@ fun PeopleScreen(
                         state = gridState,
                         columns = GridCells.Fixed(gridCols),
                         contentPadding = PaddingValues(
-                            horizontal = gridHorizPadDp.dp,
-                            vertical = SpacingTokens.L
+                            start = gridHorizPadDp.dp,
+                            end = gridHorizPadDp.dp,
+                            top = SpacingTokens.L,
+                            bottom = if (isSelectionMode) 104.dp else SpacingTokens.L
                         ),
                         horizontalArrangement = Arrangement.spacedBy(gridHorizGapDp.dp),
                         verticalArrangement = Arrangement.spacedBy(SpacingTokens.L),
@@ -1109,6 +1306,135 @@ fun PeopleScreen(
                 }
             }
         }
+    }
+
+    // Floating Multi-Select Action Dock for People (Merge / Favorite / Hide / Not a face)
+    val selectedPeopleList = remember(displayPeople, selectedIds) {
+        displayPeople.filter { selectedIds.contains(it.id) }
+    }
+    AnimatedVisibility(
+        visible = isSelectionMode && selectedPeopleList.isNotEmpty(),
+        enter = slideInVertically(MotionTokens.gentleSpring()) { it } + fadeIn(MotionTokens.gentleSpring()),
+        exit = slideOutVertically(MotionTokens.gentleSpring()) { it } + fadeOut(MotionTokens.gentleSpring()),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp)
+    ) {
+        val canMerge = selectedPeopleList.size >= 2
+        val anyNotFav = selectedPeopleList.any { !it.isFavorite }
+
+        Surface(
+            shape = ShapeFull,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            tonalElevation = 6.dp,
+            shadowElevation = 4.dp,
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .widthIn(max = 400.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PeopleSelectionDockAction(
+                    iconRes = R.drawable.ic_ms_merge,
+                    label = stringResource(R.string.people_merge_action),
+                    enabled = canMerge,
+                    tint = if (canMerge) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (selectedPeopleList.size == 2) {
+                            mergeDialogPair = Pair(selectedPeopleList[0], selectedPeopleList[1])
+                        } else if (selectedPeopleList.size > 2) {
+                            batchMergeList = selectedPeopleList
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                PeopleSelectionDockAction(
+                    iconRes = if (anyNotFav) R.drawable.ic_ms_star else R.drawable.ic_ms_star_filled,
+                    label = stringResource(
+                        if (anyNotFav) R.string.people_favorite_action else R.string.people_unfavorite_action
+                    ),
+                    tint = if (!anyNotFav) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedPeopleList.forEach { p ->
+                            if (p.isFavorite != anyNotFav) {
+                                viewModel.toggleFavorite(p)
+                            }
+                        }
+                        viewModel.clearSelection()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                PeopleSelectionDockAction(
+                    iconRes = R.drawable.ic_ms_visibility_off,
+                    label = stringResource(R.string.people_hide_action),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectedIds.forEach { viewModel.hidePerson(it) }
+                        viewModel.clearSelection()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                PeopleSelectionDockAction(
+                    iconRes = R.drawable.ic_ms_delete,
+                    label = stringResource(R.string.people_not_a_face),
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        showNotFaceConfirmDialog = true
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+    }
+}
+
+@Composable
+private fun PeopleSelectionDockAction(
+    iconRes: Int,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Column(
+        modifier = modifier
+            .clip(ShapeFull)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Icon(
+            imageVector = ImageVector.vectorResource(iconRes),
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = tint,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

@@ -1,11 +1,16 @@
 package com.inferno.gallery.ui.components
 
 import androidx.compose.ui.geometry.Rect
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Lightweight window-coordinate registry bridging native RecyclerView grid thumbnails
- * ([NativePhotonGrid]) with Compose [DetailScreen] for pixel-accurate container-transform
- * open/close animations.
+ * Lightweight window-coordinate registry bridging grid thumbnails ([NativePhotonGrid],
+ * [PhotonGrid], Search, PersonDetailScreen) with Compose [DetailScreen] for pixel-accurate
+ * container-transform open/close animations.
+ *
+ * Uses a LIFO resolver stack so nested screens (such as opening a Person detail screen over the
+ * main timeline) register their own resolver on top and cleanly restore the parent screen's
+ * resolver when popped.
  */
 object MediaTransitionRegistry {
     data class LaunchBounds(
@@ -22,8 +27,7 @@ object MediaTransitionRegistry {
     var activeAlbumLaunchBounds: LaunchBounds? = null
         private set
 
-    @Volatile
-    private var activeResolver: ((String) -> Rect?)? = null
+    private val resolvers = CopyOnWriteArrayList<(String) -> Rect?>()
 
     fun setLaunchBounds(mediaKey: String, rect: Rect, cornerRadiusDp: Float) {
         activeLaunchBounds = LaunchBounds(mediaKey, rect, cornerRadiusDp)
@@ -34,18 +38,20 @@ object MediaTransitionRegistry {
     }
 
     fun registerResolver(resolver: (String) -> Rect?) {
-        activeResolver = resolver
+        resolvers.remove(resolver)
+        resolvers.add(resolver)
     }
 
     fun unregisterResolver(resolver: (String) -> Rect?) {
-        if (activeResolver === resolver) {
-            activeResolver = null
-        }
+        resolvers.remove(resolver)
     }
 
     fun resolveBounds(mediaKey: String): Rect? {
-        return activeResolver?.invoke(mediaKey)
-            ?: activeLaunchBounds?.takeIf { it.mediaKey == mediaKey }?.rect
+        for (i in resolvers.size - 1 downTo 0) {
+            val resolved = runCatching { resolvers[i].invoke(mediaKey) }.getOrNull()
+            if (resolved != null) return resolved
+        }
+        return activeLaunchBounds?.takeIf { it.mediaKey == mediaKey }?.rect
     }
 
     fun clear() {

@@ -16,7 +16,12 @@ import kotlin.math.sin
 data class FacePoint(val x: Float, val y: Float)
 
 /**
- * Named facial landmarks + 3D head pose angles from detector.
+ * Named facial landmarks + 3D head pose angles in **image-space (viewer perspective)**:
+ * - [leftEye] / [mouthLeft] are on the viewer's LEFT side of an upright face (`CANONICAL_POINTS[0]` & `[3]`),
+ *   which correspond to ML Kit's `FaceLandmark.RIGHT_EYE` and `FaceLandmark.MOUTH_RIGHT`.
+ * - [rightEye] / [mouthRight] are on the viewer's RIGHT side of an upright face (`CANONICAL_POINTS[1]` & `[4]`),
+ *   which correspond to ML Kit's `FaceLandmark.LEFT_EYE` and `FaceLandmark.MOUTH_LEFT`.
+ *
  * Keeping landmarks explicitly keyed avoids index-shift bugs when a profile occludes one organ.
  */
 data class DetectedFaceLandmarks(
@@ -167,10 +172,68 @@ object FaceNormalizer {
     }
 
     /**
+     * Rotation-invariant handedness guard: for any valid image-space landmark set at ANY roll angle,
+     * the 2D cross product `(imageRight - imageLeft) × (lowerAnchor - upperAnchor)` in screen
+     * coordinates (`+X` right, `+Y` down) is strictly positive. If negative, left/right pairs were
+     * passed in subject-perspective order (e.g., raw ML Kit LEFT/RIGHT) and are swapped into
+     * canonical image-space order so similarity alignment never collapses scale.
+     */
+    fun canonicalizeLandmarkHandedness(landmarks: DetectedFaceLandmarks): DetectedFaceLandmarks {
+        val eyeMid = when {
+            landmarks.leftEye != null && landmarks.rightEye != null -> FacePoint(
+                (landmarks.leftEye.x + landmarks.rightEye.x) * 0.5f,
+                (landmarks.leftEye.y + landmarks.rightEye.y) * 0.5f
+            )
+            landmarks.leftEye != null -> landmarks.leftEye
+            else -> landmarks.rightEye
+        }
+        val mouthMid = when {
+            landmarks.mouthLeft != null && landmarks.mouthRight != null -> FacePoint(
+                (landmarks.mouthLeft.x + landmarks.mouthRight.x) * 0.5f,
+                (landmarks.mouthLeft.y + landmarks.mouthRight.y) * 0.5f
+            )
+            landmarks.mouthLeft != null -> landmarks.mouthLeft
+            else -> landmarks.mouthRight
+        }
+        val downAnchor = mouthMid ?: landmarks.nose
+        val upAnchor = eyeMid ?: landmarks.nose
+
+        var swappedEyes = false
+        var swappedMouth = false
+        if (upAnchor != null && downAnchor != null && upAnchor !== downAnchor) {
+            val ux = downAnchor.x - upAnchor.x
+            val uy = downAnchor.y - upAnchor.y
+            val uLen = hypot(ux.toDouble(), uy.toDouble()).toFloat()
+            if (uLen >= 3f) {
+                if (landmarks.leftEye != null && landmarks.rightEye != null) {
+                    val ex = landmarks.rightEye.x - landmarks.leftEye.x
+                    val ey = landmarks.rightEye.y - landmarks.leftEye.y
+                    val cross = ex * uy - ey * ux
+                    if (cross < -1e-2f) swappedEyes = true
+                }
+                if (landmarks.mouthLeft != null && landmarks.mouthRight != null) {
+                    val mx = landmarks.mouthRight.x - landmarks.mouthLeft.x
+                    val my = landmarks.mouthRight.y - landmarks.mouthLeft.y
+                    val cross = mx * uy - my * ux
+                    if (cross < -1e-2f) swappedMouth = true
+                }
+            }
+        }
+        if (!swappedEyes && !swappedMouth) return landmarks
+        return landmarks.copy(
+            leftEye = if (swappedEyes) landmarks.rightEye else landmarks.leftEye,
+            rightEye = if (swappedEyes) landmarks.leftEye else landmarks.rightEye,
+            mouthLeft = if (swappedMouth) landmarks.mouthRight else landmarks.mouthLeft,
+            mouthRight = if (swappedMouth) landmarks.mouthLeft else landmarks.mouthRight
+        )
+    }
+
+    /**
      * Pose-aware alignment transform that preserves exact 5-point frontal accuracy while keeping
      * side-profile scale and upright orientation stable.
      */
-    fun computePoseAwareTransform(landmarks: DetectedFaceLandmarks): SimilarityTransform {
+    fun computePoseAwareTransform(rawLandmarks: DetectedFaceLandmarks): SimilarityTransform {
+        val landmarks = canonicalizeLandmarkHandedness(rawLandmarks)
         val pairs = ArrayList<Pair<FacePoint, FacePoint>>(5)
         landmarks.leftEye?.let { pairs += it to CANONICAL_POINTS[0] }
         landmarks.rightEye?.let { pairs += it to CANONICAL_POINTS[1] }

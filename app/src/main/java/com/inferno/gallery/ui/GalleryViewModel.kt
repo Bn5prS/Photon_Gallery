@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -91,7 +92,8 @@ data class GalleryItem(
     val fileHash: String? = null,
     val matchType: String? = null,
     val matchSnippet: String? = null,
-    val uriString: String = uri.toString()
+    val uriString: String = uri.toString(),
+    val stackCount: Int = 1
 )
 
 @Immutable
@@ -171,9 +173,32 @@ data class DuplicateGroup(
     val items: List<GalleryItem>
 )
 
+@Immutable
+data class SimilarPhotoItem(
+    val item: GalleryItem,
+    val sharpness: Float,
+    val pixelCount: Long,
+    val isBestShot: Boolean
+)
+
+@Immutable
+data class SimilarPhotoGroup(
+    val id: String,
+    val items: List<SimilarPhotoItem>,
+    val isBurst: Boolean,
+    val similarityPct: Int
+)
+
+@Immutable
+data class BlurryPhotoItem(
+    val item: GalleryItem,
+    val sharpness: Float,
+    val pixelCount: Long
+)
+
 sealed class DuplicateScanState {
     data object Idle : DuplicateScanState()
-    data class Scanning(val processed: Int, val total: Int) : DuplicateScanState()
+    data class Scanning(val processed: Int, val total: Int, val stage: String = "") : DuplicateScanState()
     data object Done : DuplicateScanState()
 }
 
@@ -210,9 +235,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         .map { locations -> locations.associate { it.mediaId to it.placeName } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    // ── Duplicate Scan State ──
+    // ── Duplicate & Similar Photo Scan State ──
     private val _duplicateScanState = MutableStateFlow<DuplicateScanState>(DuplicateScanState.Idle)
     val duplicateScanState: StateFlow<DuplicateScanState> = _duplicateScanState.asStateFlow()
+    private val _qualityCacheTick = MutableStateFlow(0)
 
     // ── Toast Event Channel ──
     private val _toastEvent = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.BUFFERED)
@@ -315,16 +341,32 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (_isRefreshing.value) return
         viewModelScope.launch {
             _isRefreshing.value = true
+            val startedAt = android.os.SystemClock.elapsedRealtime()
             try {
                 withContext(Dispatchers.IO) {
                     val engine = com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication())
                     engine.sync(forceFullSync = true)
+                    if (settingsRepository.photoStacksEnabledFlow.first()) {
+                        photoStackBurstHashStarted.set(false)
+                        recomputePhotoStacks(
+                            manualPicks = settingsRepository.photoStackBestOverridesFlow.first(),
+                            unstackedIds = settingsRepository.photoStackUnstackedIdsFlow.first(),
+                            manualGroups = settingsRepository.photoStackManualGroupsFlow.first(),
+                            allowLazyHash = true
+                        )
+                    }
                 }
                 refreshMemories()
+                refreshEmptyAlbums()
                 nativeTimelineRepository.refresh()
             } catch (e: Exception) {
                 Log.e("GalleryViewModel", "Refresh failed", e)
             } finally {
+                val elapsed = android.os.SystemClock.elapsedRealtime() - startedAt
+                val minIndicatorMs = 520L
+                if (elapsed < minIndicatorMs) {
+                    kotlinx.coroutines.delay(minIndicatorMs - elapsed)
+                }
                 _isRefreshing.value = false
                 onComplete?.invoke()
             }
@@ -422,6 +464,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // Only one start-up sync at a time. Several onResume calls on first open used to start
+    // up to five full MediaStore reads in parallel.
+    // Declared before init {} because init calls runFastInitialSync().
+    private val initialSyncInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private val mediaStoreChangeChannel = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val observerThread = android.os.HandlerThread("MediaStoreObserver").apply { start() }
     private val observerHandler = android.os.Handler(observerThread.looper)
@@ -479,29 +526,19 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // During large PC-to-phone imports, cancelling sync() prevents last_generation from saving
         // and starves Room/Paging3; instead, let each sync finish and throttle consecutive runs.
         viewModelScope.launch(Dispatchers.IO) {
-            var lastSyncFinishedAt = 0L
             for (signal in mediaStoreChangeChannel) {
-                // Coalesce rapid bursts before starting a sync
-                kotlinx.coroutines.delay(500)
-                while (mediaStoreChangeChannel.tryReceive().isSuccess) {
-                    kotlinx.coroutines.delay(250)
-                }
-                val sinceLast = android.os.SystemClock.elapsedRealtime() - lastSyncFinishedAt
-                if (sinceLast in 0 until 1500L) {
-                    kotlinx.coroutines.delay(1500L - sinceLast)
-                    while (mediaStoreChangeChannel.tryReceive().isSuccess) {
-                        // Drain any events accumulated during cooldown
-                    }
-                }
+                // Act on the change at once, like the system gallery. No delay: events that
+                // arrive while this sync runs are conflated by the channel into one more pass.
                 try {
                     Log.d("GalleryViewModel", "MediaStore change detected, executing coalesced incremental sync...")
-                    com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
+                    val syncResult = com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).syncDelta()
+                    if (syncResult.inserted > 0 || syncResult.deleted > 0) {
+                        nativeTimelineRepository.refresh()
+                    }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.e("GalleryViewModel", "Fast incremental sync failed: ${e.message}")
-                } finally {
-                    lastSyncFinishedAt = android.os.SystemClock.elapsedRealtime()
                 }
             }
         }
@@ -568,44 +605,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             android.util.Log.d("GalleryViewModel", "Fast sync deferred: storage permissions not yet granted")
             return
         }
+        if (!initialSyncInFlight.compareAndSet(false, true)) return
         _isInitialSyncRunning.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val count = database.mediaDao().getAllMediaCount()
                 if (count == 0 || force) {
                     android.util.Log.d("GalleryViewModel", "Room empty or forced — running fast initial sync on IO")
-                    val mediaList = repository.getImagesListForSync()
-                    if (mediaList.isNotEmpty()) {
-                        val vaultUris = database.vaultDao().getAllOriginalUris().toSet()
-                        val vaultPaths = database.vaultDao().getAllOriginalPaths().toSet()
-
-                        val entities = mediaList
-                            .filter { !vaultUris.contains(it.uri.toString()) && !vaultPaths.contains(it.path) }
-                            .map { media ->
-                                com.inferno.gallery.data.db.CoreMediaEntity(
-                                    id = media.id,
-                                    uriString = media.uri.toString(),
-                                    filePath = media.path,
-                                    bucketName = media.bucketName,
-                                    dateAdded = media.dateAdded,
-                                    dateModified = media.dateModified,
-                                    size = media.size,
-                                    name = media.name,
-                                    mimeType = null,
-                                    isVideo = media.isVideo,
-                                    durationMs = media.durationMs,
-                                    isIndexedOcr = false,
-                                    pHash = null,
-                                    latitude = null,
-                                    longitude = null,
-                                    fileHash = null
-                                )
-                            }
-                        if (entities.isNotEmpty()) {
-                            database.mediaDao().insertAll(entities)
-                        }
-                        android.util.Log.d("GalleryViewModel", "Fast sync complete: ${entities.size} items inserted")
-                    }
+                    // The engine does the one-time import (no per-file EXIF reads, saves the
+                    // generation, queues a background date pass); a second caller just waits for it.
+                    com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).syncDelta()
                     _isInitialSyncRunning.value = false
                     refreshMemories()
                     nativeTimelineRepository.refresh()
@@ -613,7 +622,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     _isInitialSyncRunning.value = false
                     try {
-                        com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).sync(forceFullSync = false)
+                        com.inferno.gallery.data.MediaSyncEngine.getInstance(getApplication()).syncDelta()
                         refreshMemories()
                         nativeTimelineRepository.refresh()
                         scanPhotoSpheres()
@@ -624,6 +633,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 android.util.Log.e("GalleryViewModel", "Fast sync failed: ${e.message}")
                 _isInitialSyncRunning.value = false
+            } finally {
+                initialSyncInFlight.set(false)
             }
         }
     }
@@ -941,6 +952,304 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun setTimelineLayoutMode(mode: com.inferno.gallery.data.TimelineLayoutMode) {
         viewModelScope.launch {
             settingsRepository.updateTimelineLayoutMode(mode)
+        }
+    }
+
+    // ── Timeline Photo Stacks (Burst & Rapid Similar Retake Grouping) ──
+
+    val photoStacksEnabled: StateFlow<Boolean> = settingsRepository.photoStacksEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setPhotoStacksEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updatePhotoStacksEnabled(enabled)
+        }
+    }
+
+    private val _photoStackIndex = MutableStateFlow(com.inferno.gallery.data.PhotoStackIndex.EMPTY)
+    val photoStackIndex: StateFlow<com.inferno.gallery.data.PhotoStackIndex> = _photoStackIndex.asStateFlow()
+
+    private val _restorableStacksByMemberId = MutableStateFlow<Map<Long, com.inferno.gallery.data.PhotoStack>>(emptyMap())
+    val restorableStacksByMemberId: StateFlow<Map<Long, com.inferno.gallery.data.PhotoStack>> = _restorableStacksByMemberId.asStateFlow()
+
+    private val _restorableStackCount = MutableStateFlow(0)
+    val restorableStackCount: StateFlow<Int> = _restorableStackCount.asStateFlow()
+
+    private data class PhotoStackInputs(
+        val enabled: Boolean,
+        val manualPicks: Map<Long, Long>,
+        val unstackedIds: Set<Long>,
+        val manualGroups: List<List<Long>>
+    )
+
+    private val photoStackBurstHashStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    init {
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        viewModelScope.launch(Dispatchers.IO) {
+            combine(
+                settingsRepository.photoStacksEnabledFlow,
+                settingsRepository.photoStackBestOverridesFlow,
+                settingsRepository.photoStackUnstackedIdsFlow,
+                settingsRepository.photoStackManualGroupsFlow,
+                database.mediaDao().observeTotalImageCount().distinctUntilChanged()
+            ) { enabled, manualPicks, unstackedIds, manualGroups, _ ->
+                PhotoStackInputs(enabled, manualPicks, unstackedIds, manualGroups)
+            }
+                .debounce(120L)
+                .collectLatest { inputs ->
+                    if (!inputs.enabled) {
+                        _photoStackIndex.value = com.inferno.gallery.data.PhotoStackIndex.EMPTY
+                        _restorableStacksByMemberId.value = emptyMap()
+                        _restorableStackCount.value = 0
+                        return@collectLatest
+                    }
+                    recomputePhotoStacks(
+                        manualPicks = inputs.manualPicks,
+                        unstackedIds = inputs.unstackedIds,
+                        manualGroups = inputs.manualGroups,
+                        allowLazyHash = true
+                    )
+                }
+        }
+    }
+
+    private suspend fun recomputePhotoStacks(
+        manualPicks: Map<Long, Long>,
+        unstackedIds: Set<Long>,
+        manualGroups: List<List<Long>>,
+        allowLazyHash: Boolean
+    ) {
+        try {
+            val rows = database.mediaDao().getPhotoStackCandidates()
+            val qualityCache = com.inferno.gallery.data.PhotoQualityCache.getInstance(getApplication())
+            qualityCache.ensureLoaded()
+            val candidates = rows.map { row ->
+                val metrics = qualityCache.get(row.id, row.dateModified)
+                com.inferno.gallery.data.PhotoStackCandidate(
+                    id = row.id,
+                    name = row.name,
+                    bucketName = row.bucketName,
+                    dateAddedSec = row.dateAdded,
+                    sizeBytes = row.size,
+                    pHash = row.pHash,
+                    sharpness = metrics?.sharpness ?: 0f,
+                    pixelCount = metrics?.pixelCount ?: 0L,
+                    isVideo = row.isVideo
+                )
+            }
+            val nextIndex = com.inferno.gallery.data.PhotoStackPlanner.buildStacks(
+                candidates = candidates,
+                manualBestShotPicks = manualPicks,
+                unstackedIds = unstackedIds,
+                manualGroups = manualGroups
+            )
+            if (_photoStackIndex.value != nextIndex) {
+                _photoStackIndex.value = nextIndex
+            }
+
+            if (unstackedIds.isEmpty()) {
+                if (_restorableStackCount.value != 0) _restorableStackCount.value = 0
+                if (_restorableStacksByMemberId.value.isNotEmpty()) _restorableStacksByMemberId.value = emptyMap()
+            } else {
+                val restorable = com.inferno.gallery.data.PhotoStackPlanner.findRestorableAutoStacks(
+                    candidates = candidates,
+                    unstackedIds = unstackedIds,
+                    manualGroups = manualGroups
+                )
+                _restorableStackCount.value = restorable.size
+                val byMember = HashMap<Long, com.inferno.gallery.data.PhotoStack>()
+                for (stack in restorable) {
+                    for (mid in stack.memberIds) {
+                        if (mid in unstackedIds) {
+                            byMember[mid] = stack
+                        }
+                    }
+                }
+                _restorableStacksByMemberId.value = byMember
+            }
+
+            // Lightweight one-shot background hashing ONLY for unhashed burst neighbors (within 120s)
+            if (allowLazyHash && photoStackBurstHashStarted.compareAndSet(false, true)) {
+                val idsToHash = com.inferno.gallery.data.PhotoStackPlanner.findBurstHashCandidates(candidates, maxCount = 240)
+                if (idsToHash.isNotEmpty()) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            val app = getApplication<Application>()
+                            val entities = database.mediaDao().getMediaByIdsList(idsToHash)
+                            val updatedHashes = ArrayList<Pair<Long, Long>>(entities.size)
+                            val cache = com.inferno.gallery.data.PhotoQualityCache.getInstance(app)
+                            cache.ensureLoaded()
+                            for (entity in entities) {
+                                val sig = com.inferno.gallery.data.SimilarPhotoAnalyzer.analyze(
+                                    app.contentResolver,
+                                    Uri.parse(entity.uriString),
+                                    entity.filePath
+                                ) ?: continue
+                                updatedHashes.add(entity.id to sig.pHash)
+                                cache.put(
+                                    entity.id,
+                                    com.inferno.gallery.data.PhotoQualityMetrics(
+                                        dateModified = entity.dateModified,
+                                        sharpness = sig.sharpness,
+                                        pixelCount = sig.pixelCount
+                                    )
+                                )
+                            }
+                            if (updatedHashes.isNotEmpty()) {
+                                database.mediaDao().updatePHashBatch(updatedHashes)
+                                cache.persist()
+                                val latestEnabled = settingsRepository.photoStacksEnabledFlow.first()
+                                if (latestEnabled) {
+                                    val latestPicks = settingsRepository.photoStackBestOverridesFlow.first()
+                                    val latestUnstacked = settingsRepository.photoStackUnstackedIdsFlow.first()
+                                    val latestManualGroups = settingsRepository.photoStackManualGroupsFlow.first()
+                                    recomputePhotoStacks(
+                                        manualPicks = latestPicks,
+                                        unstackedIds = latestUnstacked,
+                                        manualGroups = latestManualGroups,
+                                        allowLazyHash = false
+                                    )
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.w("GalleryViewModel", "Lazy burst pHash pass failed: ${e.message}")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("GalleryViewModel", "Failed to compute photo stacks: ${e.message}")
+        }
+    }
+
+    fun setPhotoStackBestShot(stack: com.inferno.gallery.data.PhotoStack, newBestShotId: Long) {
+        if (newBestShotId !in stack.memberIds) return
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.setPhotoStackBestShot(newBestShotId, stack.memberIds)
+        }
+    }
+
+    fun unstackPhotoStack(stack: com.inferno.gallery.data.PhotoStack) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.unstackPhotos(stack.memberIds)
+        }
+    }
+
+    fun undoUnstackPhotoStack(stack: com.inferno.gallery.data.PhotoStack) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (stack.isManual) {
+                settingsRepository.createManualStack(
+                    memberIds = stack.memberIds,
+                    preferredBestShotId = if (stack.isManualBestPick) stack.bestShotId else null
+                )
+            } else {
+                settingsRepository.restackPhotos(stack.memberIds)
+            }
+        }
+    }
+
+    fun restackPhotoWithSimilar(mediaId: Long, onResult: (Int) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val targetStack = _restorableStacksByMemberId.value[mediaId]
+            if (targetStack != null && targetStack.memberIds.size >= 2) {
+                settingsRepository.restackPhotos(targetStack.memberIds)
+                withContext(Dispatchers.Main) {
+                    onResult(targetStack.count)
+                }
+            } else {
+                settingsRepository.restackPhotos(listOf(mediaId))
+                withContext(Dispatchers.Main) {
+                    onResult(0)
+                }
+            }
+        }
+    }
+
+    fun restoreAllUnstackedPhotos(onResult: (Int) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val count = _restorableStackCount.value
+            settingsRepository.clearAllUnstackedPhotos()
+            withContext(Dispatchers.Main) {
+                onResult(count)
+            }
+        }
+    }
+
+    fun stackSelectedUris(uriStrings: List<String>, onResult: (Int) -> Unit = {}) {
+        if (uriStrings.size < 2) {
+            onResult(0)
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val matchedByUri = database.mediaDao().getMediaByUrisList(uriStrings)
+            val matchedIds = matchedByUri.map { it.id }.toMutableSet()
+            if (matchedIds.size < uriStrings.size) {
+                val fallbackIds = uriStrings.mapNotNull { uri ->
+                    uri.substringAfterLast('/').toLongOrNull()
+                }.filter { it !in matchedIds }
+                if (fallbackIds.isNotEmpty()) {
+                    database.mediaDao().getMediaByIdsList(fallbackIds).forEach { matchedIds.add(it.id) }
+                }
+            }
+            val entities = if (matchedIds.isEmpty()) emptyList() else database.mediaDao().getMediaByIdsList(matchedIds.toList())
+            val eligiblePhotoIds = entities
+                .filter { !it.isVideo && !it.bucketName.equals("Trash", ignoreCase = true) }
+                .map { it.id }
+
+            // Expand any selected stack cover so stacking a cover + extra photo merges cleanly into one stack
+            val currentIndex = _photoStackIndex.value
+            val expandedIds = LinkedHashSet<Long>()
+            for (id in eligiblePhotoIds) {
+                val existingStack = currentIndex.stacksByCoverId[id]
+                if (existingStack != null) {
+                    expandedIds.addAll(existingStack.memberIds)
+                } else {
+                    expandedIds.add(id)
+                }
+            }
+
+            if (expandedIds.size < 2) {
+                withContext(Dispatchers.Main) { onResult(0) }
+                return@launch
+            }
+
+            settingsRepository.updatePhotoStacksEnabled(true)
+            settingsRepository.createManualStack(expandedIds.toList())
+            withContext(Dispatchers.Main) {
+                clearSelection()
+                onResult(expandedIds.size)
+            }
+        }
+    }
+
+    suspend fun getStackMemberItems(memberIds: List<Long>): List<GalleryItem> = withContext(Dispatchers.IO) {
+        if (memberIds.isEmpty()) return@withContext emptyList()
+        val entities = database.mediaDao().getMediaByIdsList(memberIds).associateBy { it.id }
+        memberIds.mapNotNull { id ->
+            val entity = entities[id] ?: return@mapNotNull null
+            val uri = Uri.parse(entity.uriString)
+            GalleryItem(
+                id = entity.id.toString(),
+                uri = uri,
+                uriString = entity.uriString,
+                bucketName = entity.bucketName,
+                dateAdded = entity.dateAdded,
+                size = entity.size,
+                name = entity.name,
+                dateModified = entity.dateModified,
+                path = entity.filePath,
+                isVideo = entity.isVideo,
+                durationMs = entity.durationMs,
+                localExists = true,
+                resolvedUri = resolveFileUri(uri, entity.filePath, entity.bucketName),
+                pHash = entity.pHash,
+                latitude = entity.latitude,
+                longitude = entity.longitude
+            )
         }
     }
 
@@ -2278,23 +2587,154 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             .sortedByDescending { group -> group.items.sumOf { it.size } }
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun scanForDuplicates() {
+    private val cleanupAnalysis: StateFlow<Pair<List<SimilarPhotoGroup>, List<BlurryPhotoItem>>> = combine(
+        database.mediaDao().observeImagesWithPHash(),
+        excludedFolders,
+        _qualityCacheTick
+    ) { entities, excluded, _ ->
+        val app = getApplication<Application>()
+        val qualityCache = com.inferno.gallery.data.PhotoQualityCache.getInstance(app)
+        qualityCache.ensureLoaded()
+        val qualitySnapshot = qualityCache.snapshot()
+
+        val filtered = entities.filter {
+            !excluded.contains(it.bucketName) && it.bucketName != "Trash" && it.pHash != null
+        }
+        if (filtered.isEmpty()) return@combine Pair(emptyList(), emptyList())
+
+        val entityById = HashMap<Long, com.inferno.gallery.data.db.CoreMediaEntity>(filtered.size)
+        val candidates = ArrayList<com.inferno.gallery.data.SimilarCandidate>(filtered.size)
+        for (entity in filtered) {
+            entityById[entity.id] = entity
+            val metrics = qualitySnapshot[entity.id]?.takeIf { it.dateModified == entity.dateModified }
+            candidates.add(
+                com.inferno.gallery.data.SimilarCandidate(
+                    id = entity.id,
+                    pHash = entity.pHash!!,
+                    dateAddedSec = entity.dateAdded,
+                    sizeBytes = entity.size,
+                    fileHash = entity.fileHash,
+                    sharpness = metrics?.sharpness ?: 0f,
+                    pixelCount = metrics?.pixelCount ?: 0L,
+                    isScreenshotOrDownload = com.inferno.gallery.data.SimilarPhotoAnalyzer.isScreenshotOrDownload(
+                        entity.bucketName,
+                        entity.name,
+                        entity.filePath
+                    )
+                )
+            )
+        }
+
+        fun toGalleryItem(entity: com.inferno.gallery.data.db.CoreMediaEntity): GalleryItem {
+            val uri = Uri.parse(entity.uriString)
+            return GalleryItem(
+                id = entity.id.toString(),
+                uri = uri,
+                bucketName = entity.bucketName,
+                dateAdded = entity.dateAdded,
+                size = entity.size,
+                name = entity.name,
+                dateModified = entity.dateModified,
+                path = entity.filePath,
+                isVideo = entity.isVideo,
+                durationMs = entity.durationMs,
+                localExists = true,
+                resolvedUri = resolveFileUri(uri, entity.filePath, entity.bucketName),
+                pHash = entity.pHash,
+                latitude = entity.latitude,
+                longitude = entity.longitude,
+                fileHash = entity.fileHash
+            )
+        }
+
+        val clusters = com.inferno.gallery.data.SimilarPhotoClusterer.cluster(candidates)
+        val similarGroups = clusters.mapNotNull { cluster ->
+            val items = cluster.memberIds.mapNotNull { id ->
+                val entity = entityById[id] ?: return@mapNotNull null
+                val metrics = qualitySnapshot[id]?.takeIf { it.dateModified == entity.dateModified }
+                SimilarPhotoItem(
+                    item = toGalleryItem(entity),
+                    sharpness = metrics?.sharpness ?: 0f,
+                    pixelCount = metrics?.pixelCount ?: 0L,
+                    isBestShot = id == cluster.bestShotId
+                )
+            }
+            if (items.size < 2) null
+            else SimilarPhotoGroup(
+                id = cluster.id,
+                items = items,
+                isBurst = cluster.isBurst,
+                similarityPct = cluster.averageSimilarityPct
+            )
+        }
+
+        val blurryIds = com.inferno.gallery.data.SimilarPhotoClusterer.detectBlurry(candidates)
+        val blurryItems = blurryIds.mapNotNull { id ->
+            val entity = entityById[id] ?: return@mapNotNull null
+            val metrics = qualitySnapshot[id]?.takeIf { it.dateModified == entity.dateModified } ?: return@mapNotNull null
+            BlurryPhotoItem(
+                item = toGalleryItem(entity),
+                sharpness = metrics.sharpness,
+                pixelCount = metrics.pixelCount
+            )
+        }
+
+        Pair(similarGroups, blurryItems)
+    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Pair(emptyList(), emptyList()))
+
+    val similarPhotoGroups: StateFlow<List<SimilarPhotoGroup>> = cleanupAnalysis
+        .map { it.first }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val blurryPhotos: StateFlow<List<BlurryPhotoItem>> = cleanupAnalysis
+        .map { it.second }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val totalCleanupReclaimableBytes: StateFlow<Long> = combine(
+        duplicates,
+        similarPhotoGroups,
+        blurryPhotos
+    ) { exact, similar, blurry ->
+        val seenIds = HashSet<String>()
+        var bytes = 0L
+        exact.forEach { group ->
+            group.items.drop(1).forEach { item ->
+                if (seenIds.add(item.id)) bytes += item.size
+            }
+        }
+        similar.forEach { group ->
+            group.items.filterNot { it.isBestShot }.forEach { entry ->
+                if (seenIds.add(entry.item.id)) bytes += entry.item.size
+            }
+        }
+        blurry.forEach { entry ->
+            if (seenIds.add(entry.item.id)) bytes += entry.item.size
+        }
+        bytes
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    fun scanForDuplicates(scanLimit: Int = 500) {
         if (_duplicateScanState.value is DuplicateScanState.Scanning) return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Instantly find candidates that share the same byte size
+                val app = getApplication<Application>()
+
+                // Phase 1: Exact duplicates (same byte size -> SHA-256)
                 val candidates = database.mediaDao().getMediaSharingSameSize()
                 val needsHash = candidates.filter { it.fileHash == null }
-                val total = needsHash.size
 
-                if (total == 0) {
+                // Phase 2: Similar / Burst & Blurry photo perceptual hash + sharpness scan
+                val needsPHash = database.mediaDao().getImagesNeedingPHash(limit = scanLimit)
+                val totalWork = needsHash.size + needsPHash.size
+
+                if (totalWork == 0) {
+                    _qualityCacheTick.value++
                     _duplicateScanState.value = DuplicateScanState.Done
                     return@launch
                 }
 
-                _duplicateScanState.value = DuplicateScanState.Scanning(0, total)
+                _duplicateScanState.value = DuplicateScanState.Scanning(0, totalWork, "Checking exact copies…")
 
-                val app = getApplication<Application>()
                 val updates = mutableListOf<com.inferno.gallery.data.db.CoreMediaEntity>()
                 val saveBatchSize = 100
                 var processed = 0
@@ -2316,14 +2756,55 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     }
 
                     processed++
-                    if (processed % 5 == 0 || processed == total) {
-                        _duplicateScanState.value = DuplicateScanState.Scanning(processed, total)
+                    if (processed % 5 == 0 || processed == needsHash.size) {
+                        _duplicateScanState.value = DuplicateScanState.Scanning(processed, totalWork, "Checking exact copies…")
                     }
                 }
 
                 if (updates.isNotEmpty()) {
                     database.mediaDao().insertAll(updates)
                     updates.clear()
+                }
+
+                if (needsPHash.isNotEmpty()) {
+                    val qualityCache = com.inferno.gallery.data.PhotoQualityCache.getInstance(app)
+                    qualityCache.ensureLoaded()
+                    val pHashBatch = ArrayList<Pair<Long, Long>>(40)
+
+                    for (entity in needsPHash) {
+                        val sig = com.inferno.gallery.data.SimilarPhotoAnalyzer.analyze(
+                            contentResolver = app.contentResolver,
+                            uri = Uri.parse(entity.uriString),
+                            filePath = entity.filePath
+                        )
+                        if (sig != null) {
+                            pHashBatch.add(entity.id to sig.pHash)
+                            qualityCache.put(
+                                entity.id,
+                                com.inferno.gallery.data.PhotoQualityMetrics(
+                                    dateModified = entity.dateModified,
+                                    sharpness = sig.sharpness,
+                                    pixelCount = sig.pixelCount
+                                )
+                            )
+                        }
+                        if (pHashBatch.size >= 40) {
+                            database.mediaDao().updatePHashBatch(pHashBatch)
+                            pHashBatch.clear()
+                            _qualityCacheTick.value++
+                        }
+                        processed++
+                        if (processed % 8 == 0 || processed == totalWork) {
+                            _duplicateScanState.value = DuplicateScanState.Scanning(processed, totalWork, "Analyzing similar & blurry shots…")
+                        }
+                    }
+
+                    if (pHashBatch.isNotEmpty()) {
+                        database.mediaDao().updatePHashBatch(pHashBatch)
+                        pHashBatch.clear()
+                    }
+                    qualityCache.persist()
+                    _qualityCacheTick.value++
                 }
 
                 _duplicateScanState.value = DuplicateScanState.Done
@@ -2578,6 +3059,35 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _searchFilters = MutableStateFlow(com.inferno.gallery.data.SearchFilterState())
+    val searchFilters: StateFlow<com.inferno.gallery.data.SearchFilterState> = _searchFilters.asStateFlow()
+
+    /** All non-hidden recognized people available for composable search filtering (#53). */
+    val availableSearchPeople: StateFlow<List<PersonEntity>> = database.faceDao()
+        .observeAllVisiblePersons()
+        .map { list ->
+            list.filter { !it.isHidden }
+                .sortedWith(
+                    compareByDescending<PersonEntity> { !it.name.isNullOrBlank() }
+                        .thenByDescending { it.faceCount }
+                )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Distinct geocoded locations sorted by photo count for composable search filtering (#53). */
+    val availableSearchLocations: StateFlow<List<String>> = placeNameByMediaId
+        .map { map ->
+            map.values
+                .filter { it.isNotBlank() }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .map { it.key }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /** Albums whose name matches the current search query. */
     val matchingAlbums: StateFlow<List<AlbumBucket>> = combine(
         searchQuery,
@@ -2648,9 +3158,31 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private var searchJob: kotlinx.coroutines.Job? = null
 
+    fun updateSearchFilters(transform: (com.inferno.gallery.data.SearchFilterState) -> com.inferno.gallery.data.SearchFilterState) {
+        val next = transform(_searchFilters.value)
+        if (next == _searchFilters.value) return
+        _searchFilters.value = next
+        val currentQuery = _searchQuery.value
+        searchJob?.cancel()
+        if (currentQuery.isBlank() && !next.isActive) {
+            _ftsSearchResults.value = emptyList()
+            _smartSearchResults.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+        searchJob = viewModelScope.launch {
+            performUnifiedSearch(currentQuery, next)
+        }
+    }
+
+    fun clearSearchFilters() {
+        updateSearchFilters { it.clearAll() }
+    }
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
-        if (query.isBlank()) {
+        val filters = _searchFilters.value
+        if (query.isBlank() && !filters.isActive) {
             _ftsSearchResults.value = emptyList()
             _smartSearchResults.value = emptyList()
             _isSearching.value = false
@@ -2660,8 +3192,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // Debounce: wait 300ms after user stops typing, then fire searches without polluting history.
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(300)
-            performUnifiedSearch(query)
+            kotlinx.coroutines.delay(if (query.isBlank()) 0L else 300L)
+            performUnifiedSearch(query, filters)
         }
     }
 
@@ -2669,16 +3201,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun submitSearch(query: String) {
         val trimmed = query.trim()
         _searchQuery.value = trimmed
+        val filters = _searchFilters.value
         searchJob?.cancel()
-        if (trimmed.isBlank()) {
+        if (trimmed.isBlank() && !filters.isActive) {
             _ftsSearchResults.value = emptyList()
             _smartSearchResults.value = emptyList()
             _isSearching.value = false
             return
         }
-        addRecentSearch(trimmed)
+        if (trimmed.isNotBlank()) addRecentSearch(trimmed)
         searchJob = viewModelScope.launch {
-            performUnifiedSearch(trimmed)
+            performUnifiedSearch(trimmed, filters)
         }
     }
 
@@ -2737,9 +3270,82 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     val searchMatchMap = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String?>>()
 
-    private suspend fun performUnifiedSearch(query: String) {
+    private suspend fun executeLocalMetadataFilter(
+        filters: com.inferno.gallery.data.SearchFilterState,
+        excluded: Set<String>,
+        candidateIds: Collection<Long>? = null
+    ): List<GalleryItem> = withContext(Dispatchers.IO) {
+        val favLongIds = favoriteIds.value.mapNotNull { it.toLongOrNull() }.toSet()
+        val queryLimit = if (filters.mediaType == com.inferno.gallery.data.SearchMediaTypeFilter.MOTION_PHOTOS) 1500 else 600
+        val built = com.inferno.gallery.data.SearchFilterQueryBuilder.buildFilteredMediaQuery(
+            filters = filters,
+            excludedBuckets = excluded,
+            favoriteIds = favLongIds,
+            candidateIds = candidateIds,
+            limit = queryLimit
+        )
+        val entities = database.mediaDao().getMediaEntitiesRaw(
+            androidx.sqlite.db.SimpleSQLiteQuery(built.sql, built.args.toTypedArray())
+        )
+        val app = getApplication<Application>()
+        val results = entities.mapNotNull { entity ->
+            val uri = Uri.parse(entity.uriString)
+            val (exists, resolved) = resolveItemFields(uri, entity.filePath, entity.bucketName)
+            val item = GalleryItem(
+                id = entity.id.toString(),
+                uri = uri,
+                bucketName = entity.bucketName,
+                dateAdded = entity.dateAdded,
+                size = entity.size,
+                name = entity.name,
+                dateModified = entity.dateModified,
+                path = entity.filePath,
+                isVideo = entity.isVideo,
+                durationMs = entity.durationMs,
+                localExists = exists,
+                resolvedUri = resolved,
+                matchType = null
+            )
+            if (filters.mediaType == com.inferno.gallery.data.SearchMediaTypeFilter.MOTION_PHOTOS) {
+                if (com.inferno.gallery.data.MotionPhotoHelper.isMotionPhotoFast(app, item)) item else null
+            } else {
+                item
+            }
+        }
+        if (filters.mediaType == com.inferno.gallery.data.SearchMediaTypeFilter.MOTION_PHOTOS) {
+            results.sortedByDescending { it.dateAdded }
+        } else {
+            results
+        }
+    }
+
+    private suspend fun performUnifiedSearch(
+        query: String,
+        filters: com.inferno.gallery.data.SearchFilterState = _searchFilters.value
+    ) {
         _isSearching.value = true
         val currentExcluded = excludedFolders.value
+
+        // Pure metadata filter mode (no text query): execute single 100% local SQL query
+        if (query.isBlank() && filters.isActive) {
+            try {
+                val filteredItems = executeLocalMetadataFilter(filters, currentExcluded)
+                if (query == _searchQuery.value && filters == _searchFilters.value) {
+                    searchMatchMap.clear()
+                    _ftsSearchResults.value = filteredItems
+                    _smartSearchResults.value = emptyList()
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                android.util.Log.e("GalleryViewModel", "Metadata filter search failed: ${e.message}")
+            } finally {
+                if (query == _searchQuery.value && filters == _searchFilters.value) {
+                    _isSearching.value = false
+                }
+            }
+            return
+        }
+
         val aiConfig = settingsRepository.aiIndexingFolderConfigFlow.first()
         val ocrBucketFilter = com.inferno.gallery.data.ai.AiIndexingQueryBuilder.buildBucketInclusionCondition(
             alias = "cm",
@@ -2942,25 +3548,46 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         if (semanticScore > 0f) 10f + semanticScore else 1f
                     }
 
+                    // Intersect FTS + Smart matches with any active composable metadata filters (#53)
+                    val finalFts: List<GalleryItem>
+                    val finalSmart: List<GalleryItem>
+                    if (filters.isActive) {
+                        val allCandidateLongIds = (ftsResults.mapNotNull { it.id.toLongOrNull() } +
+                            filteredSmartResults.mapNotNull { it.id.toLongOrNull() }).distinct()
+                        val allowedIdSet = if (allCandidateLongIds.isEmpty()) {
+                            emptySet()
+                        } else {
+                            // Chunk in groups of 400 to stay comfortably under SQLite bind-arg limits
+                            allCandidateLongIds.chunked(400)
+                                .flatMap { chunk -> executeLocalMetadataFilter(filters, currentExcluded, chunk) }
+                                .mapTo(HashSet()) { it.id }
+                        }
+                        finalFts = ftsResults.filter { it.id in allowedIdSet }
+                        finalSmart = filteredSmartResults.filter { it.id in allowedIdSet }
+                    } else {
+                        finalFts = ftsResults
+                        finalSmart = filteredSmartResults
+                    }
+
                     searchMatchMap.clear()
-                    ftsResults.forEach { item ->
+                    finalFts.forEach { item ->
                         item.matchType?.let { type ->
                             searchMatchMap[item.id] = type to item.matchSnippet
                         }
                     }
-                    filteredSmartResults.forEach { item ->
+                    finalSmart.forEach { item ->
                         item.matchType?.let { type ->
                             searchMatchMap[item.id] = type to item.matchSnippet
                         }
                     }
 
-                    if (query == _searchQuery.value) {
-                        _ftsSearchResults.value = ftsResults
-                        _smartSearchResults.value = filteredSmartResults
+                    if (query == _searchQuery.value && filters == _searchFilters.value) {
+                        _ftsSearchResults.value = finalFts
+                        _smartSearchResults.value = finalSmart
                     }
                 }
             } finally {
-                if (query == _searchQuery.value) {
+                if (query == _searchQuery.value && filters == _searchFilters.value) {
                     _isSearching.value = false
                 }
             }
@@ -4062,17 +4689,42 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    val pagedMedia: Flow<PagingData<GalleryListItem>> = combine(viewMode, timelineGroupBy, sortOrder, _currentBucket) { mode, groupBy, order, bucket ->
-        listOf(mode, groupBy, order, bucket)
+    val pagedMedia: Flow<PagingData<GalleryListItem>> = combine(
+        viewMode,
+        timelineGroupBy,
+        sortOrder,
+        _currentBucket,
+        selectedFilterIndex,
+        photoStacksEnabled,
+        photoStackIndex
+    ) { values ->
+        values
     }.flatMapLatest { values ->
         val mode = values[0] as ViewMode
         val groupBy = values[1] as TimelineGroupBy
         val order = values[2] as SortOrder
         val bucket = values[3] as String?
+        val filterIdx = values[4] as Int
+        val stacksEnabled = values[5] as Boolean
+        val stackIndex = values[6] as com.inferno.gallery.data.PhotoStackIndex
+        val shouldStack = stacksEnabled && bucket == null && filterIdx == 0 && !stackIndex.isEmpty
         val isSmartSearch = bucket == BucketNames.SEARCH_SMART
         val isDateSort = (order == SortOrder.NewToOld || order == SortOrder.OldToNew ||
                          order == SortOrder.DateModifiedNewToOld || order == SortOrder.DateModifiedOldToNew) && !isSmartSearch
-        pagedMediaRaw.map { pagingData ->
+        pagedMediaRaw.map { rawData ->
+            val pagingData = if (shouldStack) {
+                rawData
+                    .filter { item ->
+                        val idLong = item.id.toLongOrNull()
+                        idLong == null || idLong !in stackIndex.hiddenMemberIds
+                    }
+                    .map { item ->
+                        val count = item.id.toLongOrNull()?.let { stackIndex.stackCountForCover(it) } ?: 1
+                        if (count > 1) item.copy(stackCount = count) else item
+                    }
+            } else {
+                rawData
+            }
             if (mode == ViewMode.Immersive || !isDateSort) {
                 // No date headers in Immersive mode, Smart Search (ordered by relevance), or non-date sorts
                 pagingData.map { GalleryListItem.Item(it) as GalleryListItem }
@@ -4088,7 +4740,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     val afterTitle = formatGroupHeader(afterDate, groupBy)
 
                     if (before == null) {
-                        GalleryListItem.Header(title = afterTitle, id = after.id)
+                        GalleryListItem.Header(title = afterTitle, id = afterTitle)
                     } else {
                         val beforeDate = if (order == SortOrder.DateModifiedNewToOld || order == SortOrder.DateModifiedOldToNew) {
                             before.dateModified
@@ -4097,7 +4749,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                         }
                         val beforeTitle = formatGroupHeader(beforeDate, groupBy)
                         if (beforeTitle != afterTitle) {
-                            GalleryListItem.Header(title = afterTitle, id = after.id)
+                            GalleryListItem.Header(title = afterTitle, id = afterTitle)
                         } else {
                             null
                         }
@@ -4113,15 +4765,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveGridScrollPosition(bucket: String?, index: Int, offset: Int) {
         val key = bucket ?: "main_gallery"
-        android.util.Log.d("NativePhotonGrid", "saveGridScrollPosition: key=$key index=$index offset=$offset")
         scrollPositions[key] = Pair(index, offset)
     }
 
     fun getSavedGridScrollPosition(bucket: String?): Pair<Int, Int> {
         val key = bucket ?: "main_gallery"
-        val pos = scrollPositions[key] ?: Pair(0, 0)
-        android.util.Log.d("NativePhotonGrid", "getSavedGridScrollPosition: key=$key -> index=${pos.first} offset=${pos.second}")
-        return pos
+        return scrollPositions[key] ?: Pair(0, 0)
     }
 
     fun resetGridScrollPosition(bucket: String?) {

@@ -206,6 +206,7 @@ fun DetailScreen(
     onBack: () -> Unit,
     onNavigateToEditor: (android.net.Uri) -> Unit = {},
     onNavigateToFrameExtractor: (android.net.Uri) -> Unit = {},
+    onNavigateToVideoTrimmer: (android.net.Uri) -> Unit = {},
     onNavigateToPerson: ((Long) -> Unit)? = null,
     onNavigateToCustomizeToolbars: (() -> Unit)? = null
 ) {
@@ -418,6 +419,39 @@ fun DetailScreen(
         pageCount = { galleryItems.size }
     )
 
+    val sharedVideoPlayerHolder = remember(context) {
+        SharedVideoPlayerHolder(context.applicationContext)
+    }
+    androidx.compose.runtime.DisposableEffect(sharedVideoPlayerHolder) {
+        onDispose {
+            sharedVideoPlayerHolder.release()
+        }
+    }
+
+    var settledVideoPage by remember(mediaId) {
+        androidx.compose.runtime.mutableIntStateOf(initialPage)
+    }
+    LaunchedEffect(pagerState) {
+        var wasScrolling = false
+        androidx.compose.runtime.snapshotFlow {
+            Triple(pagerState.isScrollInProgress, pagerState.currentPage, galleryItems.size)
+        }.collect { (scrolling, current, size) ->
+            if (scrolling) {
+                if (!wasScrolling) {
+                    wasScrolling = true
+                    sharedVideoPlayerHolder.onScrollStarted()
+                }
+            } else {
+                val target = current.coerceIn(0, (size - 1).coerceAtLeast(0))
+                if (wasScrolling && settledVideoPage == target) {
+                    sharedVideoPlayerHolder.onScrollSettledOnSameVideo()
+                }
+                wasScrolling = false
+                settledVideoPage = target
+            }
+        }
+    }
+
     LaunchedEffect(galleryItems) {
         if (externalItem != null && galleryItems.size > 1) {
             val targetIndex = galleryItems.indexOfFirst {
@@ -429,18 +463,30 @@ fun DetailScreen(
         }
     }
 
-    LaunchedEffect(pagerState.currentPage) {
+    LaunchedEffect(pagerState.currentPage, galleryItems.size) {
         val imageLoader = context.imageLoader
         for (offset in -2..2) {
             if (offset == 0) continue
             val prefetchItem = galleryItems.getOrNull(pagerState.currentPage + offset) ?: continue
             val prefetchUri = prefetchItem.uri
-            val req = coil3.request.ImageRequest.Builder(context)
-                .data(prefetchUri)
-                .size(coil3.size.Size.ORIGINAL)
-                .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
-                .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
-                .build()
+            val req = if (prefetchItem.isVideo) {
+                coil3.request.ImageRequest.Builder(context)
+                    .data(prefetchUri)
+                    .size(720, 720)
+                    .precision(coil3.size.Precision.INEXACT)
+                    .memoryCacheKey("video_poster_${prefetchUri}@720")
+                    .diskCacheKey("video_poster_${prefetchUri}@720")
+                    .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                    .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                    .build()
+            } else {
+                coil3.request.ImageRequest.Builder(context)
+                    .data(prefetchUri)
+                    .size(coil3.size.Size.ORIGINAL)
+                    .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                    .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                    .build()
+            }
             imageLoader.enqueue(req)
         }
     }
@@ -556,6 +602,80 @@ fun DetailScreen(
         }
     }
 
+
+    val photoStacksEnabled by viewModel.photoStacksEnabled.collectAsState()
+    val photoStackIndex by viewModel.photoStackIndex.collectAsState()
+    val restorableStacksByMemberId by viewModel.restorableStacksByMemberId.collectAsState()
+    val activePhotoStack = remember(photoStacksEnabled, photoStackIndex, currentItem?.id, bucketName) {
+        if (!photoStacksEnabled || bucketName == "Trash") null
+        else currentItem?.id?.toLongOrNull()?.let { photoStackIndex.stackForMedia(it) }
+    }
+    val restorablePhotoStack = remember(photoStacksEnabled, activePhotoStack, restorableStacksByMemberId, currentItem?.id, bucketName) {
+        if (!photoStacksEnabled || activePhotoStack != null || bucketName == "Trash") null
+        else currentItem?.id?.toLongOrNull()?.let { restorableStacksByMemberId[it] }
+    }
+    var lastUnstackedStack by remember { mutableStateOf<com.inferno.gallery.data.PhotoStack?>(null) }
+    LaunchedEffect(lastUnstackedStack) {
+        if (lastUnstackedStack != null) {
+            kotlinx.coroutines.delay(6500L)
+            lastUnstackedStack = null
+        }
+    }
+    LaunchedEffect(currentItem?.id, activePhotoStack) {
+        val snap = lastUnstackedStack
+        val curId = currentItem?.id?.toLongOrNull()
+        if (activePhotoStack != null || (snap != null && (curId == null || curId !in snap.memberIds))) {
+            lastUnstackedStack = null
+        }
+    }
+    val activeStackMembers by produceState<List<GalleryItem>>(
+        initialValue = emptyList(),
+        key1 = activePhotoStack?.memberIds,
+        key2 = galleryItems.size
+    ) {
+        val stack = activePhotoStack
+        if (stack == null || stack.memberIds.size < 2) {
+            value = emptyList()
+        } else {
+            val byId = galleryItems.associateBy { it.id.toLongOrNull() }
+            val resolvedFromPager = stack.memberIds.mapNotNull { byId[it] }
+            value = if (resolvedFromPager.size == stack.memberIds.size) {
+                resolvedFromPager
+            } else {
+                viewModel.getStackMemberItems(stack.memberIds)
+            }
+        }
+    }
+    var pendingKeepBestConfirm by remember { mutableStateOf<Pair<Long, List<GalleryItem>>?>(null) }
+    var pendingKeepBestBestId by remember { mutableStateOf<Long?>(null) }
+    var pendingKeepBestTrashUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    val keepBestTrashLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val urisToRemove = pendingKeepBestTrashUris
+        val keptBestId = pendingKeepBestBestId
+        pendingKeepBestTrashUris = emptyList()
+        pendingKeepBestBestId = null
+        if (result.resultCode == android.app.Activity.RESULT_OK && urisToRemove.isNotEmpty()) {
+            urisToRemove.forEach { viewModel.removeMediaOptimistically(it) }
+            if (keptBestId != null) {
+                val keptIdStr = keptBestId.toString()
+                val keptIdx = galleryItems
+                    .filterNot { it.uri.toString() in urisToRemove }
+                    .indexOfFirst { it.id == keptIdStr }
+                if (keptIdx >= 0) {
+                    coroutineScope.launch {
+                        runCatching { pagerState.scrollToPage(keptIdx) }
+                    }
+                }
+            }
+            Toast.makeText(
+                context,
+                context.getString(R.string.stack_kept_best_toast, urisToRemove.size),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     val resolvedCurrentUri by produceState<Uri?>(initialValue = currentItem?.uri, key1 = currentItem) {
         val uri = currentItem?.uri
@@ -1054,6 +1174,7 @@ fun DetailScreen(
             if (!hasNavigatedBack) {
                 hasNavigatedBack = true
                 showUi = false
+                sharedVideoPlayerHolder.pause()
                 flushPendingRotation()
                 if (launchBounds != null) {
                     coroutineScope.launch {
@@ -1428,10 +1549,12 @@ fun DetailScreen(
                         ) {
                             VideoPlayerItem(
                                 uri = resolvedUri,
-                                isCurrentPage = page == pagerState.currentPage,
-                                showControls = showUi && !isFilmstripOverview,
+                                isCurrentPage = page == settledVideoPage,
+                                showControls = showUi && !isFilmstripOverview && (launchBounds == null || transitionProgress > 0.65f),
                                 modifier = Modifier.fillMaxSize(),
                                 isFilmstripOverview = isFilmstripOverview,
+                                placeholderCacheKey = thumbnailMemoryKey(item.id, placeholderSizePx, item.dateModified),
+                                sharedPlayerHolder = sharedVideoPlayerHolder,
                                 onScrubbingChanged = { isVideoScrubbing = it },
                                 onScaleChanged = { newScale ->
                                     if (page == pagerState.currentPage) {
@@ -2118,15 +2241,7 @@ fun DetailScreen(
                 if (!currentItem.isVideo) {
                     onNavigateToEditor(uri)
                 } else {
-                    val editIntent = Intent(Intent.ACTION_EDIT).apply {
-                        setDataAndType(uri, "video/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                    }
-                    try {
-                        context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
-                    } catch (e: Exception) {
-                        android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
-                    }
+                    onNavigateToVideoTrimmer(uri)
                 }
             }
         }
@@ -2521,6 +2636,16 @@ fun DetailScreen(
                                 }
                                 if (currentItem != null && currentItem.isVideo) {
                                     androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_trim_video)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_movie), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            onNavigateToVideoTrimmer(uri)
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_extract_frame)) },
                                         leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_photo_camera), contentDescription = null) },
                                         enabled = currentItem.localExists,
@@ -2530,6 +2655,46 @@ fun DetailScreen(
                                             onNavigateToFrameExtractor(uri)
                                         }
                                     )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_open_external_editor)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_open_in_new), contentDescription = null) },
+                                        enabled = currentItem.localExists,
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val uri = resolvedCurrentUri ?: currentItem.uri
+                                            val editIntent = Intent(Intent.ACTION_EDIT).apply {
+                                                setDataAndType(uri, "video/*")
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                                            }
+                                            try {
+                                                context.startActivity(Intent.createChooser(editIntent, "Edit Media"))
+                                            } catch (_: Exception) {
+                                                android.widget.Toast.makeText(context, "No editor available on device", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                }
+                                if (currentItem != null && !currentItem.isVideo && restorablePhotoStack != null) {
+                                    val currentIdLong = currentItem.id.toLongOrNull()
+                                    if (currentIdLong != null) {
+                                        androidx.compose.material3.DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.stack_restack_similar, restorablePhotoStack.count)) },
+                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_burst_mode), contentDescription = null) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                lastUnstackedStack = null
+                                                viewModel.restackPhotoWithSimilar(currentIdLong) { count ->
+                                                    if (count >= 2) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            context.getString(R.string.stack_restacked_toast, count),
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                                 if (currentItem != null && "share" !in viewerToolbarActions) {
                                     androidx.compose.material3.DropdownMenuItem(
@@ -2661,12 +2826,68 @@ fun DetailScreen(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .graphicsLayer { alpha = bgAlpha }
-                .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
+                .padding(bottom = 16.dp)
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (activePhotoStack != null && activeStackMembers.size > 1 && currentItem != null && !currentItem.isVideo) {
+                    val currentIdLong = currentItem.id.toLongOrNull() ?: -1L
+                    com.inferno.gallery.ui.components.PhotoStackViewerStrip(
+                        stack = activePhotoStack,
+                        members = activeStackMembers,
+                        activeMediaId = currentIdLong,
+                        onSelectMember = { member ->
+                            val targetPage = galleryItems.indexOfFirst { it.id == member.id }
+                            if (targetPage >= 0 && targetPage != pagerState.currentPage) {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(targetPage)
+                                }
+                            }
+                        },
+                        onSetBestShot = { chosen ->
+                            chosen.id.toLongOrNull()?.let { chosenId ->
+                                viewModel.setPhotoStackBestShot(activePhotoStack, chosenId)
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.stack_best_shot_updated),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        onKeepBestOnly = { extras ->
+                            if (extras.isNotEmpty()) {
+                                pendingKeepBestConfirm = activePhotoStack.bestShotId to extras
+                            }
+                        },
+                        onUnstack = {
+                            lastUnstackedStack = activePhotoStack
+                            viewModel.unstackPhotoStack(activePhotoStack)
+                        },
+                        onScrollInProgress = { scrolling ->
+                            isFilmstripScrolling = scrolling
+                            if (scrolling) userInteractionTrigger++
+                        }
+                    )
+                }
+
+                val unstackedSnapshot = lastUnstackedStack
+                AnimatedVisibility(
+                    visible = activePhotoStack == null && unstackedSnapshot != null && currentItem != null && !currentItem.isVideo,
+                    enter = fadeIn() + slideInVertically { it / 3 },
+                    exit = fadeOut() + slideOutVertically { it / 3 }
+                ) {
+                    if (unstackedSnapshot != null) {
+                        com.inferno.gallery.ui.components.PhotoStackUnstackedUndoPill(
+                            onRestack = {
+                                viewModel.undoUnstackPhotoStack(unstackedSnapshot)
+                                lastUnstackedStack = null
+                            }
+                        )
+                    }
+                }
+
                 if (motionPhotoInfo?.isMotionPhoto == true) {
                     Surface(
                         onClick = {
@@ -2739,6 +2960,7 @@ fun DetailScreen(
                         )
                     },
                     modifier = Modifier
+                        .padding(horizontal = 20.dp)
                         .fillMaxWidth()
                         .widthIn(max = 380.dp)
                         .pointerInput(Unit) {
@@ -2750,6 +2972,101 @@ fun DetailScreen(
                 )
             }
         }
+    }
+
+    pendingKeepBestConfirm?.let { (bestShotId, extras) ->
+        val count = extras.size
+        val reclaimableBytes = remember(extras) { extras.sumOf { it.size.coerceAtLeast(0L) } }
+        val sizeSuffix = remember(reclaimableBytes) {
+            if (reclaimableBytes > 0L) {
+                " (${android.text.format.Formatter.formatShortFileSize(context, reclaimableBytes)})"
+            } else ""
+        }
+        val bodyText = if (count == 1) {
+            stringResource(R.string.stack_keep_best_confirm_body_one) + sizeSuffix
+        } else {
+            stringResource(R.string.stack_keep_best_confirm_body_many, count) + sizeSuffix
+        }
+
+        AlertDialog(
+            onDismissRequest = { pendingKeepBestConfirm = null },
+            shape = com.inferno.gallery.ui.theme.ShapeExtraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            icon = {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_delete),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.stack_keep_best_confirm_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = bodyText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        pendingKeepBestConfirm = null
+                        val contentUris = extras.mapNotNull { item ->
+                            if (item.uri.toString().startsWith("content://")) {
+                                com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(item.uri)
+                            } else null
+                        }
+                        if (contentUris.isNotEmpty()) {
+                            pendingKeepBestBestId = bestShotId
+                            pendingKeepBestTrashUris = extras.map { it.uri.toString() }
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val trashIntent = MediaStore.createTrashRequest(
+                                        context.contentResolver,
+                                        contentUris,
+                                        true
+                                    )
+                                    val request = IntentSenderRequest.Builder(trashIntent.intentSender).build()
+                                    withContext(Dispatchers.Main) {
+                                        keepBestTrashLauncher.launch(request)
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        pendingKeepBestTrashUris = emptyList()
+                                        pendingKeepBestBestId = null
+                                        Toast.makeText(
+                                            context,
+                                            "Unable to trash extra shots: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    shape = ShapeFull,
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.stack_keep_best_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingKeepBestConfirm = null },
+                    shape = ShapeFull
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
 

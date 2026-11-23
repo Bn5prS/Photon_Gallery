@@ -229,7 +229,10 @@ fun AlbumsScreen(
 
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refreshMedia() },
+                onRefresh = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.refreshMedia()
+                },
                 modifier = Modifier.fillMaxSize(),
                 state = pullToRefreshState,
                 indicator = {
@@ -353,7 +356,8 @@ fun AlbumsScreen(
                 if (albumLayoutMode == AlbumLayoutMode.LIST) {
                     items(
                         items = unpinnedAlbums,
-                        key = { "album_${it.bucketName}" }
+                        key = { "album_${it.bucketName}" },
+                        contentType = { "album_list_row" }
                     ) { bucket ->
                         val displayBucketName = when (bucket.bucketName) {
                             "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
@@ -368,7 +372,7 @@ fun AlbumsScreen(
 
                         Box(modifier = Modifier.fillMaxWidth()) {
                             AlbumListRow(
-                                bucket = bucket.copy(bucketName = displayBucketName),
+                                bucket = if (displayBucketName == bucket.bucketName) bucket else bucket.copy(bucketName = displayBucketName),
                                 showAlbumSize = showAlbumSize,
                                 customShape = albumShape,
                                 isPinned = isPinned,
@@ -379,34 +383,37 @@ fun AlbumsScreen(
                                 }
                             )
 
-                            // Context menu for albums
-                            AlbumDropdownMenu(
-                                expanded = showCardMenu,
-                                onDismissRequest = { showCardMenu = false },
-                                bucketName = bucket.bucketName,
-                                isUserPinned = isPinned,
-                                hasCustomCover = customCovers.containsKey(bucket.bucketName),
-                                hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                                onTogglePin = {
-                                    viewModel.togglePinAlbum(bucket.bucketName) { success ->
-                                        if (!success) {
-                                            Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                            // Context menu composed only when opened to avoid per-row overhead while scrolling
+                            if (showCardMenu) {
+                                AlbumDropdownMenu(
+                                    expanded = true,
+                                    onDismissRequest = { showCardMenu = false },
+                                    bucketName = bucket.bucketName,
+                                    isUserPinned = isPinned,
+                                    hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                    hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                    onTogglePin = {
+                                        viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                            if (!success) {
+                                                Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
-                                    }
-                                },
-                                onChangeCover = { onChangeCover(bucket.bucketName) },
-                                onDeleteCover = { onDeleteCover(bucket.bucketName) },
-                                onChangeShape = { shapePickerBucket = bucket },
-                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
-                                onRename = { albumToRename = bucket.bucketName },
-                                onDelete = { albumToDelete = bucket }
-                            )
+                                    },
+                                    onChangeCover = { onChangeCover(bucket.bucketName) },
+                                    onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                    onChangeShape = { shapePickerBucket = bucket },
+                                    onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
+                                    onRename = { albumToRename = bucket.bucketName },
+                                    onDelete = { albumToDelete = bucket }
+                                )
+                            }
                         }
                     }
                 } else {
                     items(
                         items = unpinnedAlbums,
-                        key = { "album_${it.bucketName}" }
+                        key = { "album_${it.bucketName}" },
+                        contentType = { "album_grid_card" }
                     ) { bucket ->
                         val displayBucketName = when (bucket.bucketName) {
                             "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
@@ -423,7 +430,7 @@ fun AlbumsScreen(
                             AlbumCard(
                                 sharedTransitionScope = sharedTransitionScope,
                                 animatedVisibilityScope = animatedVisibilityScope,
-                                bucket = bucket.copy(bucketName = displayBucketName),
+                                bucket = if (displayBucketName == bucket.bucketName) bucket else bucket.copy(bucketName = displayBucketName),
                                 sharedKey = "album_container_${bucket.bucketName}",
                                 showAlbumSize = showAlbumSize && albumsGridCellsCount < 4,
                                 customShape = albumShape,
@@ -436,27 +443,29 @@ fun AlbumsScreen(
                                 }
                             )
 
-                            AlbumDropdownMenu(
-                                expanded = showCardMenu,
-                                onDismissRequest = { showCardMenu = false },
-                                bucketName = bucket.bucketName,
-                                isUserPinned = isPinned,
-                                hasCustomCover = customCovers.containsKey(bucket.bucketName),
-                                hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                                onTogglePin = {
-                                    viewModel.togglePinAlbum(bucket.bucketName) { success ->
-                                        if (!success) {
-                                            Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                            if (showCardMenu) {
+                                AlbumDropdownMenu(
+                                    expanded = true,
+                                    onDismissRequest = { showCardMenu = false },
+                                    bucketName = bucket.bucketName,
+                                    isUserPinned = isPinned,
+                                    hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                                    hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                                    onTogglePin = {
+                                        viewModel.togglePinAlbum(bucket.bucketName) { success ->
+                                            if (!success) {
+                                                Toast.makeText(context, "Maximum 15 albums can be pinned", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
-                                    }
-                                },
-                                onChangeCover = { onChangeCover(bucket.bucketName) },
-                                onDeleteCover = { onDeleteCover(bucket.bucketName) },
-                                onChangeShape = { shapePickerBucket = bucket },
-                                onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
-                                onRename = { albumToRename = bucket.bucketName },
-                                onDelete = { albumToDelete = bucket }
-                            )
+                                    },
+                                    onChangeCover = { onChangeCover(bucket.bucketName) },
+                                    onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                                    onChangeShape = { shapePickerBucket = bucket },
+                                    onResetShape = { viewModel.removeAlbumCustomShape(bucket.bucketName) },
+                                    onRename = { albumToRename = bucket.bucketName },
+                                    onDelete = { albumToDelete = bucket }
+                                )
+                            }
                         }
                     }
                 }
@@ -826,10 +835,13 @@ fun AlbumCard(
     }
 
     val request = remember<ImageRequest>(effectiveUri) {
+        val cacheKey = "album_card_${effectiveUri}@360"
         ImageRequest.Builder(context)
             .data(effectiveUri)
-            .size(Size(480, 480))
-            .precision(Precision.EXACT)
+            .size(Size(360, 360))
+            .precision(Precision.INEXACT)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
             .crossfade(false)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
@@ -856,12 +868,11 @@ fun AlbumCard(
         Modifier
     }
 
-    // Outer Card Container (Enclosed card — clean tonal, no outlines)
+    // Outer Card Container (Enclosed card — clean tonal, single clip via Surface)
     Surface(
         modifier = modifier
             .then(albumSharedModifier)
             .fillMaxWidth()
-            .clip(cardShape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongPress
@@ -873,7 +884,6 @@ fun AlbumCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .pressScale(pressedScale = 0.96f)
                 .padding(
                     start = if (isCompact) 6.dp else 8.dp,
                     top = if (isCompact) 6.dp else 8.dp,
@@ -882,12 +892,11 @@ fun AlbumCard(
                 ),
             horizontalAlignment = Alignment.Start
         ) {
-            // Inner Media Thumbnail Container
+            // Inner Media Thumbnail Container (Surface already clips to tileShape — avoid redundant path clips)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(tileShape),
+                    .aspectRatio(1f),
                 shape = tileShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shadowElevation = 0.dp
@@ -929,9 +938,7 @@ fun AlbumCard(
                                     loadFailed = true
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(tileShape)
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -1033,10 +1040,13 @@ fun AlbumListRow(
     }
 
     val request = remember<ImageRequest>(effectiveUri) {
+        val cacheKey = "album_row_${effectiveUri}@200"
         ImageRequest.Builder(context)
             .data(effectiveUri)
             .size(Size(200, 200))
-            .precision(Precision.EXACT)
+            .precision(Precision.INEXACT)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
             .crossfade(false)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
@@ -1049,8 +1059,6 @@ fun AlbumListRow(
         shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
-            .pressScale(pressedScale = 0.98f)
-            .clip(ShapeLarge)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongPress
@@ -1064,9 +1072,7 @@ fun AlbumListRow(
         ) {
             // Leading square thumbnail (56x56dp)
             Surface(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(tileShape),
+                modifier = Modifier.size(56.dp),
                 shape = tileShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
@@ -1094,9 +1100,7 @@ fun AlbumListRow(
                                 loadFailed = true
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(tileShape)
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -1347,7 +1351,8 @@ fun PinnedAlbumsShelf(
         ) {
             items(
                 items = pinnedAlbums,
-                key = { "shelf_pinned_${it.bucketName}" }
+                key = { "shelf_pinned_${it.bucketName}" },
+                contentType = { "pinned_shelf_card" }
             ) { bucket ->
                 val displayBucketName = when (bucket.bucketName) {
                     "Screenrecordings", "Screenrecords", "ScreenRecord" -> "Screen recordings"
@@ -1360,7 +1365,7 @@ fun PinnedAlbumsShelf(
 
                 Box {
                     PinnedShelfCard(
-                        bucket = bucket.copy(bucketName = displayBucketName),
+                        bucket = if (displayBucketName == bucket.bucketName) bucket else bucket.copy(bucketName = displayBucketName),
                         customShape = albumShape,
                         showAlbumSize = showAlbumSize,
                         cardWidth = cardWidth,
@@ -1369,21 +1374,23 @@ fun PinnedAlbumsShelf(
                         onLongPress = { showCardMenu = true }
                     )
 
-                    AlbumDropdownMenu(
-                        expanded = showCardMenu,
-                        onDismissRequest = { showCardMenu = false },
-                        bucketName = bucket.bucketName,
-                        isUserPinned = true,
-                        hasCustomCover = customCovers.containsKey(bucket.bucketName),
-                        hasCustomShape = customShapes.containsKey(bucket.bucketName),
-                        onTogglePin = { onTogglePin(bucket.bucketName) },
-                        onChangeCover = { onChangeCover(bucket.bucketName) },
-                        onDeleteCover = { onDeleteCover(bucket.bucketName) },
-                        onChangeShape = { onChangeShape(bucket) },
-                        onResetShape = { onResetShape(bucket.bucketName) },
-                        onRename = onRename?.let { cb -> { cb(bucket.bucketName) } },
-                        onDelete = onDelete?.let { cb -> { cb(bucket) } }
-                    )
+                    if (showCardMenu) {
+                        AlbumDropdownMenu(
+                            expanded = true,
+                            onDismissRequest = { showCardMenu = false },
+                            bucketName = bucket.bucketName,
+                            isUserPinned = true,
+                            hasCustomCover = customCovers.containsKey(bucket.bucketName),
+                            hasCustomShape = customShapes.containsKey(bucket.bucketName),
+                            onTogglePin = { onTogglePin(bucket.bucketName) },
+                            onChangeCover = { onChangeCover(bucket.bucketName) },
+                            onDeleteCover = { onDeleteCover(bucket.bucketName) },
+                            onChangeShape = { onChangeShape(bucket) },
+                            onResetShape = { onResetShape(bucket.bucketName) },
+                            onRename = onRename?.let { cb -> { cb(bucket.bucketName) } },
+                            onDelete = onDelete?.let { cb -> { cb(bucket) } }
+                        )
+                    }
                 }
             }
         }
@@ -1548,10 +1555,13 @@ fun PinnedShelfCard(
     }
 
     val request = remember<ImageRequest>(effectiveUri) {
+        val cacheKey = "album_card_${effectiveUri}@360"
         ImageRequest.Builder(context)
             .data(effectiveUri)
             .size(Size(360, 360))
-            .precision(Precision.EXACT)
+            .precision(Precision.INEXACT)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
             .crossfade(false)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
@@ -1561,8 +1571,6 @@ fun PinnedShelfCard(
     Surface(
         modifier = modifier
             .width(cardWidth)
-            .pressScale(pressedScale = 0.96f)
-            .clip(cardShape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
@@ -1583,8 +1591,7 @@ fun PinnedShelfCard(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(tileShape),
+                    .aspectRatio(1f),
                 shape = tileShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shadowElevation = 0.dp
@@ -1617,9 +1624,7 @@ fun PinnedShelfCard(
                                     loadFailed = true
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(tileShape)
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 

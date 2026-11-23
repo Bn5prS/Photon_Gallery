@@ -207,6 +207,8 @@ fun SettingsScreen(
     val showPillLabels by viewModel.showPillLabels.collectAsState()
     val defaultStartupTab by viewModel.defaultStartupTab.collectAsState()
     val timelineLayoutMode by viewModel.timelineLayoutMode.collectAsState()
+    val photoStacksEnabled by viewModel.photoStacksEnabled.collectAsState()
+    val restorableStackCount by galleryViewModel.restorableStackCount.collectAsState()
     val gridCellsCount by galleryViewModel.gridCellsCount.collectAsState()
     val thumbnailCornerRadius by viewModel.thumbnailCornerRadius.collectAsState()
     val ocrProgressState by viewModel.ocrProgress.collectAsState()
@@ -1262,6 +1264,36 @@ fun SettingsScreen(
                                                     label = { Text(stringResource(R.string.align_center), style = MaterialTheme.typography.labelMedium) }
                                                 )
                                             }
+                                        }
+                                    }
+                                    add {
+                                        SwitchSettingItem(
+                                            title = stringResource(R.string.setting_photo_stacks),
+                                            subtitle = stringResource(R.string.setting_photo_stacks_sub),
+                                            icon = ImageVector.vectorResource(R.drawable.ic_ms_burst_mode),
+                                            checked = photoStacksEnabled,
+                                            onCheckedChange = { viewModel.setPhotoStacksEnabled(it) }
+                                        )
+                                    }
+                                    if (photoStacksEnabled && restorableStackCount > 0) {
+                                        add {
+                                            val localCtx = androidx.compose.ui.platform.LocalContext.current
+                                            ClickableSettingItem(
+                                                title = stringResource(R.string.stack_restore_unstacked_title),
+                                                subtitle = stringResource(R.string.stack_restore_unstacked_sub, restorableStackCount),
+                                                icon = ImageVector.vectorResource(R.drawable.ic_ms_burst_mode),
+                                                onClick = {
+                                                    galleryViewModel.restoreAllUnstackedPhotos { restoredCount ->
+                                                        if (restoredCount > 0) {
+                                                            android.widget.Toast.makeText(
+                                                                localCtx,
+                                                                localCtx.getString(R.string.stack_restored_all_toast, restoredCount),
+                                                                android.widget.Toast.LENGTH_SHORT
+                                                            ).show()
+                                                        }
+                                                    }
+                                                }
+                                            )
                                         }
                                     }
                                     add {

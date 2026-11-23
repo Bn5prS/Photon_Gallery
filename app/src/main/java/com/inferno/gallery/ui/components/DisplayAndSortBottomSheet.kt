@@ -31,6 +31,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -76,6 +78,11 @@ fun DisplayAndSortBottomSheet(
     onSortOrderChange: (SortOrder) -> Unit = {},
     albumSortOrder: SortOrder = SortOrder.NameAsc,
     onAlbumSortOrderChange: (SortOrder) -> Unit = {},
+    showPhotoStacksToggle: Boolean = false,
+    photoStacksEnabled: Boolean = true,
+    onPhotoStacksEnabledChange: (Boolean) -> Unit = {},
+    restorableStackCount: Int = 0,
+    onRestoreUnstackedStacks: () -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -261,6 +268,104 @@ fun DisplayAndSortBottomSheet(
                             onClick = { if (isDateSortActive) onSelectGroupBy(TimelineGroupBy.Year) },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                }
+            }
+
+            if (!isAlbumsScreen && showPhotoStacksToggle) {
+                Surface(
+                    shape = ShapeMedium,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPhotoStacksEnabledChange(!photoStacksEnabled) }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_burst_mode),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.setting_photo_stacks),
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = stringResource(R.string.setting_photo_stacks_short_sub),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = photoStacksEnabled,
+                                onCheckedChange = null,
+                                thumbContent = {
+                                    Icon(
+                                        imageVector = ImageVector.vectorResource(
+                                            if (photoStacksEnabled) R.drawable.ic_ms_check else R.drawable.ic_ms_close
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = photoStacksEnabled && restorableStackCount > 0,
+                            enter = expandVertically(animationSpec = spring()) + fadeIn(),
+                            exit = shrinkVertically(animationSpec = spring()) + fadeOut()
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                    modifier = Modifier.padding(horizontal = 14.dp)
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onRestoreUnstackedStacks() }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.stack_restore_unstacked_title),
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.stack_restore_unstacked_sub, restorableStackCount),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Surface(
+                                        shape = ShapeMedium,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.stack_restore_action),
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

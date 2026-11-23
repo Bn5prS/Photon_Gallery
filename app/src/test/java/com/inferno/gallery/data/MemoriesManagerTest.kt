@@ -126,6 +126,10 @@ class MemoriesManagerTest {
         override fun observeTopCoverUris(): Flow<List<String>> = emptyFlow()
         override suspend fun getMediaSharingSameSize(): List<CoreMediaEntity> = emptyList()
         override fun observeExactDuplicates(): Flow<List<CoreMediaEntity>> = emptyFlow()
+        override suspend fun getImagesNeedingPHash(limit: Int): List<CoreMediaEntity> = emptyList()
+        override suspend fun updatePHash(id: Long, pHash: Long) {}
+        override fun observeImagesWithPHash(): Flow<List<CoreMediaEntity>> = emptyFlow()
+        override suspend fun getPhotoStackCandidates(): List<com.inferno.gallery.data.db.PhotoStackCandidateRow> = emptyList()
         override suspend fun getGeotaggedMedia(): List<CoreMediaEntity> = emptyList()
         override suspend fun getMediaNeedingGps(): List<CoreMediaEntity> = emptyList()
         override suspend fun getRecentHighlightMedia(limit: Int): List<CoreMediaEntity> = mediaList.filter { it.bucketName != "Screenshots" }.take(limit)

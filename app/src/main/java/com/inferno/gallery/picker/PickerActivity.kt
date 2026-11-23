@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -119,10 +120,28 @@ class PickerActivity : FragmentActivity() {
                 useSystemFont = useSystemFont,
                 fontScale = fontScale,
             ) {
+                val backgroundColor = MaterialTheme.colorScheme.surface
+                LaunchedEffect(backgroundColor) {
+                    val opaqueSurfaceArgb = backgroundColor.toArgb() or 0xFF000000.toInt()
+                    window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(opaqueSurfaceArgb))
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        setTaskDescription(
+                            android.app.ActivityManager.TaskDescription.Builder()
+                                .setBackgroundColor(opaqueSurfaceArgb)
+                                .setPrimaryColor(opaqueSurfaceArgb)
+                                .build()
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        setTaskDescription(
+                            android.app.ActivityManager.TaskDescription(null, 0, opaqueSurfaceArgb)
+                        )
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(backgroundColor)
                 ) {
                     if (hasUnlockedOnce || !isAppLocked) {
                         PickerScreen(

@@ -231,6 +231,7 @@ fun NativePhotonGrid(
     val currentOnEndDragSelection by rememberUpdatedState(onEndDragSelection)
     val currentOnScrolledAwayFromTop by rememberUpdatedState(onScrolledAwayFromTop)
     val currentOnSaveScrollPosition by rememberUpdatedState(onSaveScrollPosition)
+    val currentOnScrollDateStateChanged by rememberUpdatedState(onScrollDateStateChanged)
 
     val dragSelectHelper = remember {
         NativeGridDragSelectHelper(
@@ -259,16 +260,19 @@ fun NativePhotonGrid(
 
     var targetRecyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var hasRestoredScroll by remember(scrollToTopKey) { mutableStateOf(initialFirstVisibleItemIndex <= 0) }
+    val isPinnedToTop = remember { booleanArrayOf(initialFirstVisibleItemIndex <= 0 && initialFirstVisibleItemScrollOffset >= -4) }
     var lastScrollToTopKey by remember { mutableStateOf(scrollToTopKey) }
     var lastSubmittedKey by remember { mutableStateOf(scrollToTopKey) }
-
-    android.util.Log.d("NativePhotonGrid", "NativePhotonGrid recomposed: initialIndex=$initialFirstVisibleItemIndex offset=$initialFirstVisibleItemScrollOffset hasRestoredScroll=$hasRestoredScroll")
+    var lastSubmittedItems by remember { mutableStateOf<List<NativeTimelineItem>?>(null) }
 
     if (scrollToTopTrigger != null) {
         LaunchedEffect(scrollToTopTrigger) {
             scrollToTopTrigger.collect {
                 hasRestoredScroll = true
-                targetRecyclerView?.scrollToPosition(0)
+                isPinnedToTop[0] = true
+                (targetRecyclerView?.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(0, 0)
+                    ?: targetRecyclerView?.scrollToPosition(0)
+                currentOnScrolledAwayFromTop?.invoke(false)
                 currentOnSaveScrollPosition?.invoke(0, 0)
             }
         }
@@ -279,7 +283,10 @@ fun NativePhotonGrid(
             android.util.Log.d("NativePhotonGrid", "scrollToTopKey changed: $lastScrollToTopKey -> $scrollToTopKey, resetting scroll to 0")
             lastScrollToTopKey = scrollToTopKey
             hasRestoredScroll = true
-            targetRecyclerView?.scrollToPosition(0)
+            isPinnedToTop[0] = true
+            (targetRecyclerView?.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(0, 0)
+                ?: targetRecyclerView?.scrollToPosition(0)
+            currentOnScrolledAwayFromTop?.invoke(false)
             currentOnSaveScrollPosition?.invoke(0, 0)
         }
     }
@@ -380,12 +387,21 @@ fun NativePhotonGrid(
                     // Scroll state and position tracking
                     var lastEmittedDate = ""
                     var lastEmittedVisible = false
+                    var lastPillFirstPos = -1
+                    var lastEmittedScrolledAway: Boolean? = null
                     var hideDatePillRunnable: Runnable? = null
+                    fun emitScrolledAway(scrolled: Boolean) {
+                        if (lastEmittedScrolledAway != scrolled) {
+                            lastEmittedScrolledAway = scrolled
+                            currentOnScrolledAwayFromTop?.invoke(scrolled)
+                        }
+                    }
                     fun updateDatePill(rv: RecyclerView, visible: Boolean) {
-                        val callback = onScrollDateStateChanged ?: return
+                        val callback = currentOnScrollDateStateChanged ?: return
                         if (!visible) {
                             if (lastEmittedVisible) {
                                 lastEmittedVisible = false
+                                lastPillFirstPos = -1
                                 callback(false, lastEmittedDate)
                             }
                             return
@@ -394,6 +410,8 @@ fun NativePhotonGrid(
                         val adapterRef = rv.adapter as? NativePhotonAdapter ?: return
                         val firstPos = lm.findFirstVisibleItemPosition()
                         if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
+                            if (lastEmittedVisible && firstPos == lastPillFirstPos) return
+                            lastPillFirstPos = firstPos
                             val date = when (val item = adapterRef.getItem(firstPos)) {
                                 is NativeTimelineItem.Header -> item.title
                                 is NativeTimelineItem.Media -> com.inferno.gallery.ui.GalleryViewModel.formatGroupHeader(item.dateAdded)
@@ -407,13 +425,24 @@ fun NativePhotonGrid(
                         }
                     }
 
+                    var userInitiatedScroll = false
                     addOnScrollListener(object : RecyclerView.OnScrollListener() {
                         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                             super.onScrollStateChanged(recyclerView, newState)
                             if (newState == RecyclerView.SCROLL_STATE_DRAGGING || newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                                userInitiatedScroll = true
                                 hideDatePillRunnable?.let { recyclerView.removeCallbacks(it) }
                                 updateDatePill(recyclerView, true)
                             } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                                if (userInitiatedScroll) {
+                                    val lm = recyclerView.layoutManager as? GridLayoutManager
+                                    val firstPos = lm?.findFirstVisibleItemPosition() ?: 0
+                                    val firstView = if (firstPos == 0) lm?.findViewByPosition(0) else null
+                                    isPinnedToTop[0] = firstPos <= 0 &&
+                                        !recyclerView.canScrollVertically(-1) &&
+                                        (firstView == null || firstView.top >= recyclerView.paddingTop - 4)
+                                    userInitiatedScroll = false
+                                }
                                 hideDatePillRunnable?.let { recyclerView.removeCallbacks(it) }
                                 val r = Runnable { updateDatePill(recyclerView, false) }
                                 hideDatePillRunnable = r
@@ -435,18 +464,21 @@ fun NativePhotonGrid(
                         override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                             super.onScrolled(recyclerView, dx, dy)
                             val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
+                            if (recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
+                                val firstPos = lm.findFirstVisibleItemPosition()
+                                val firstView = if (firstPos == 0) lm.findViewByPosition(0) else null
+                                isPinnedToTop[0] = firstPos <= 0 &&
+                                    !recyclerView.canScrollVertically(-1) &&
+                                    (firstView == null || firstView.top >= recyclerView.paddingTop - 4)
+                            } else if (isPinnedToTop[0]) {
+                                // Ignore synthetic layout-shift scroll callbacks while pinned at the top
+                                emitScrolledAway(false)
+                                return
+                            }
                             val isScrolled = lm.findFirstVisibleItemPosition() > 0 || recyclerView.computeVerticalScrollOffset() > 32
-                            currentOnScrolledAwayFromTop?.invoke(isScrolled)
+                            emitScrolledAway(isScrolled)
                             if (recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
                                 updateDatePill(recyclerView, true)
-                            }
-                            if (hasRestoredScroll && recyclerView.scrollState != RecyclerView.SCROLL_STATE_IDLE) {
-                                val firstPos = lm.findFirstVisibleItemPosition()
-                                if (firstPos != RecyclerView.NO_POSITION && firstPos >= 0) {
-                                    val firstView = lm.findViewByPosition(firstPos)
-                                    val topOffset = (firstView?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop
-                                    currentOnSaveScrollPosition?.invoke(firstPos, topOffset)
-                                }
                             }
                         }
                     })
@@ -653,28 +685,42 @@ fun NativePhotonGrid(
                     lastSubmittedKey = scrollToTopKey
                 }
 
-                // Update items
-                if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
-                    adapter.submitList(items, isFullReset = isKeyChanged) {
-                        layoutManager.spanSizeLookup.invalidateSpanIndexCache()
-                        recyclerView.invalidateItemDecorations()
-                        val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
-                        android.util.Log.d("NativePhotonGrid", "submitList commitCallback: restoring to targetPos=$targetPos offset=$initialFirstVisibleItemScrollOffset (itemCount=${adapter.itemCount})")
-                        layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
-                        hasRestoredScroll = true
-                    }
-                    recyclerView.post {
-                        if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && adapter.itemCount > 0) {
+                // Update items only when the list reference or dataset key actually changed
+                val listChanged = (items !== lastSubmittedItems) || isKeyChanged
+                if (listChanged) {
+                    lastSubmittedItems = items
+                    if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && items.isNotEmpty()) {
+                        isPinnedToTop[0] = false
+                        adapter.submitList(items, isFullReset = isKeyChanged) {
+                            layoutManager.spanSizeLookup.invalidateSpanIndexCache()
+                            recyclerView.invalidateItemDecorations()
                             val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
-                            android.util.Log.d("NativePhotonGrid", "recyclerView.post: restoring to targetPos=$targetPos offset=$initialFirstVisibleItemScrollOffset")
                             layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
                             hasRestoredScroll = true
                         }
-                    }
-                } else {
-                    adapter.submitList(items, isFullReset = isKeyChanged) {
-                        layoutManager.spanSizeLookup.invalidateSpanIndexCache()
-                        recyclerView.invalidateItemDecorations()
+                        recyclerView.post {
+                            if (!hasRestoredScroll && initialFirstVisibleItemIndex > 0 && adapter.itemCount > 0) {
+                                val targetPos = initialFirstVisibleItemIndex.coerceAtMost((adapter.itemCount - 1).coerceAtLeast(0))
+                                layoutManager.scrollToPositionWithOffset(targetPos, initialFirstVisibleItemScrollOffset)
+                                hasRestoredScroll = true
+                            }
+                        }
+                    } else {
+                        val shouldPinTop = isPinnedToTop[0] && recyclerView.scrollState == RecyclerView.SCROLL_STATE_IDLE
+                        adapter.submitList(items, isFullReset = isKeyChanged) {
+                            layoutManager.spanSizeLookup.invalidateSpanIndexCache()
+                            recyclerView.invalidateItemDecorations()
+                            if (shouldPinTop && isPinnedToTop[0] && recyclerView.scrollState == RecyclerView.SCROLL_STATE_IDLE && adapter.itemCount > 0) {
+                                layoutManager.scrollToPositionWithOffset(0, 0)
+                                currentOnScrolledAwayFromTop?.invoke(false)
+                                recyclerView.post {
+                                    if (isPinnedToTop[0] && recyclerView.scrollState == RecyclerView.SCROLL_STATE_IDLE && adapter.itemCount > 0) {
+                                        layoutManager.scrollToPositionWithOffset(0, 0)
+                                        currentOnScrolledAwayFromTop?.invoke(false)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -842,6 +888,7 @@ private class NativePhotonAdapter(
     val hasHeader: Boolean get() = headerContent != null
 
     fun setHeaderContent(content: (@Composable () -> Unit)?) {
+        if (headerContent === content) return
         val hadHeader = headerContent != null
         val nowHasHeader = content != null
         headerContent = content
@@ -860,10 +907,16 @@ private class NativePhotonAdapter(
 
     private val differ = AsyncListDiffer(this, object : DiffUtil.ItemCallback<NativeTimelineItem>() {
         override fun areItemsTheSame(oldItem: NativeTimelineItem, newItem: NativeTimelineItem): Boolean {
+            if (oldItem is NativeTimelineItem.Header && newItem is NativeTimelineItem.Header) {
+                return oldItem.title == newItem.title
+            }
             return oldItem.key == newItem.key
         }
 
         override fun areContentsTheSame(oldItem: NativeTimelineItem, newItem: NativeTimelineItem): Boolean {
+            if (oldItem is NativeTimelineItem.Header && newItem is NativeTimelineItem.Header) {
+                return oldItem.title == newItem.title
+            }
             return oldItem == newItem
         }
     })
@@ -1172,6 +1225,11 @@ private class MediaViewHolder(
         }
     }
 
+    private var boundStackCount: Int = 1
+    private var appliedColors: GridColorScheme? = null
+    private var appliedCornerRadiusDp: Float = Float.NaN
+    private var appliedSpanCount: Int = -1
+
     fun bind(
         item: NativeTimelineItem.Media,
         isSelected: Boolean,
@@ -1181,25 +1239,67 @@ private class MediaViewHolder(
     ) {
         boundMediaKey = item.uriString
         boundCornerRadiusDp = thumbnailCornerRadius
-        updateColors()
-        applyCornerRadius(thumbnailCornerRadius)
-        updateSpan(spanCount)
+        boundStackCount = item.stackCount
+        val currentColors = colorSchemeProvider()
+        if (appliedColors != currentColors) {
+            appliedColors = currentColors
+            updateColors()
+        }
+        if (appliedCornerRadiusDp != thumbnailCornerRadius) {
+            applyCornerRadius(thumbnailCornerRadius)
+        }
+        if (appliedSpanCount != spanCount) {
+            updateSpan(spanCount)
+        }
 
         updateSelection(isSelected)
         updateFavorite(isFavorite)
+        updateStackBadge(item.stackCount, isSelected)
 
         if (item.isVideo) {
             components.videoBadgeContainer.visibility = View.VISIBLE
             components.durationText.text = formatDuration(item.durationMs)
+            components.mediaTypeBadgeText.visibility = View.GONE
+            components.motionPhotoBadge.visibility = View.GONE
         } else {
             components.videoBadgeContainer.visibility = View.GONE
+            when (val badge = detectThumbnailMediaBadge(item.id, item.path, isVideo = false)) {
+                ThumbnailMediaBadge.MOTION -> {
+                    components.mediaTypeBadgeText.visibility = View.GONE
+                    components.motionPhotoBadge.visibility = View.VISIBLE
+                }
+                ThumbnailMediaBadge.RAW, ThumbnailMediaBadge.GIF, ThumbnailMediaBadge.PANO -> {
+                    components.motionPhotoBadge.visibility = View.GONE
+                    if (spanCount < 7) {
+                        components.mediaTypeBadgeText.text = badge.name
+                        components.mediaTypeBadgeText.visibility = View.VISIBLE
+                    } else {
+                        components.mediaTypeBadgeText.visibility = View.GONE
+                    }
+                }
+                null -> {
+                    components.mediaTypeBadgeText.visibility = View.GONE
+                    components.motionPhotoBadge.visibility = View.GONE
+                }
+            }
         }
 
         bindThumbnail(item, spanCount)
     }
 
+    fun updateStackBadge(stackCount: Int, isSelected: Boolean) {
+        boundStackCount = stackCount
+        if (stackCount > 1 && !isSelected) {
+            components.stackBadgeContainer.visibility = View.VISIBLE
+            components.stackCountText.text = stackCount.toString()
+        } else {
+            components.stackBadgeContainer.visibility = View.GONE
+        }
+    }
+
     fun updateColors() {
         val colors = colorSchemeProvider()
+        appliedColors = colors
         components.container.setBackgroundColor(colors.surfaceContainer)
         val circleDrawable = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -1213,13 +1313,15 @@ private class MediaViewHolder(
         components.selectionBadge.visibility = if (isSelected) View.VISIBLE else View.GONE
         components.container.scaleX = if (isSelected) 0.88f else 1.0f
         components.container.scaleY = if (isSelected) 0.88f else 1.0f
+        components.stackBadgeContainer.visibility = if (boundStackCount > 1 && !isSelected) View.VISIBLE else View.GONE
     }
 
     fun updateFavorite(isFavorite: Boolean) {
-        components.favoriteBadgeView.visibility = if (isFavorite) View.VISIBLE else View.GONE
+        components.favoriteBadgeContainer.visibility = if (isFavorite) View.VISIBLE else View.GONE
     }
 
     fun applyCornerRadius(radiusDp: Float) {
+        appliedCornerRadiusDp = radiusDp
         val density = components.container.resources.displayMetrics.density
         val radiusPx = radiusDp * density
         if (radiusPx > 0f) {
@@ -1236,6 +1338,7 @@ private class MediaViewHolder(
     }
 
     fun updateSpan(spanCount: Int) {
+        appliedSpanCount = spanCount
         val density = components.container.resources.displayMetrics.density
         val badgeSizePx = when {
             spanCount <= 3 -> (24 * density).toInt()
@@ -1273,8 +1376,10 @@ private class MediaViewHolder(
         if (spanCount >= 7) {
             components.durationText.visibility = View.GONE
             components.videoIcon.visibility = View.VISIBLE
+            components.stackCountText.visibility = View.GONE
         } else {
             components.durationText.visibility = View.VISIBLE
+            components.stackCountText.visibility = View.VISIBLE
             val fontSize = when {
                 spanCount <= 3 -> 10.5f
                 spanCount == 4 -> 9.5f
@@ -1282,6 +1387,88 @@ private class MediaViewHolder(
                 else -> 8f
             }
             components.durationText.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize)
+            components.stackCountText.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize)
+        }
+        val stackLp = components.stackBadgeContainer.layoutParams as? FrameLayout.LayoutParams
+        if (stackLp != null) {
+            val m = if (spanCount <= 4) (5 * density).toInt() else (3 * density).toInt()
+            stackLp.setMargins(0, m, m, 0)
+            components.stackBadgeContainer.layoutParams = stackLp
+        }
+        val stackIconSizePx = when {
+            spanCount <= 3 -> (13 * density).toInt()
+            spanCount <= 5 -> (11 * density).toInt()
+            else -> (9 * density).toInt()
+        }
+        val stackIconLp = components.stackIcon.layoutParams as? LinearLayout.LayoutParams
+        if (stackIconLp != null) {
+            stackIconLp.width = stackIconSizePx
+            stackIconLp.height = stackIconSizePx
+            components.stackIcon.layoutParams = stackIconLp
+        }
+
+        // Scale Favorite circle (Bottom-Start) & Motion Photo / Media-Type badges (Bottom-End) with column density
+        val favCircleSizePx = when {
+            spanCount <= 3 -> (22 * density).toInt()
+            spanCount <= 5 -> (18 * density).toInt()
+            spanCount == 6 -> (15 * density).toInt()
+            else -> (12 * density).toInt()
+        }
+        val favIconSizePx = when {
+            spanCount <= 3 -> (13 * density).toInt()
+            spanCount <= 5 -> (11 * density).toInt()
+            spanCount == 6 -> (9 * density).toInt()
+            else -> (7.5f * density).toInt()
+        }
+        val favMarginPx = when {
+            spanCount <= 3 -> (6 * density).toInt()
+            spanCount <= 5 -> (4 * density).toInt()
+            else -> (2 * density).toInt()
+        }
+        (components.favoriteBadgeContainer.layoutParams as? FrameLayout.LayoutParams)?.let { favLp ->
+            favLp.width = favCircleSizePx
+            favLp.height = favCircleSizePx
+            favLp.setMargins(favMarginPx, 0, 0, favMarginPx)
+            components.favoriteBadgeContainer.layoutParams = favLp
+        }
+        (components.favoriteBadgeView.layoutParams as? FrameLayout.LayoutParams)?.let { favIconLp ->
+            favIconLp.width = favIconSizePx
+            favIconLp.height = favIconSizePx
+            components.favoriteBadgeView.layoutParams = favIconLp
+        }
+
+        val motionCirclePx = when {
+            spanCount <= 3 -> (20 * density).toInt()
+            spanCount <= 5 -> (17 * density).toInt()
+            else -> (13 * density).toInt()
+        }
+        val motionIconPx = when {
+            spanCount <= 3 -> (13 * density).toInt()
+            spanCount <= 5 -> (11 * density).toInt()
+            else -> (8.5f * density).toInt()
+        }
+        (components.motionPhotoBadge.layoutParams as? FrameLayout.LayoutParams)?.let { mLp ->
+            mLp.width = motionCirclePx
+            mLp.height = motionCirclePx
+            mLp.setMargins(0, 0, favMarginPx, favMarginPx)
+            components.motionPhotoBadge.layoutParams = mLp
+        }
+        (components.motionPhotoIcon.layoutParams as? FrameLayout.LayoutParams)?.let { mIconLp ->
+            mIconLp.width = motionIconPx
+            mIconLp.height = motionIconPx
+            components.motionPhotoIcon.layoutParams = mIconLp
+        }
+
+        val typeFontSp = when {
+            spanCount <= 3 -> 9f
+            spanCount == 4 -> 8f
+            spanCount == 5 -> 7.5f
+            else -> 6.5f
+        }
+        components.mediaTypeBadgeText.setTextSize(TypedValue.COMPLEX_UNIT_SP, typeFontSp)
+        (components.mediaTypeBadgeText.layoutParams as? FrameLayout.LayoutParams)?.let { tLp ->
+            tLp.setMargins(0, 0, favMarginPx, favMarginPx)
+            components.mediaTypeBadgeText.layoutParams = tLp
         }
     }
 
@@ -1371,7 +1558,14 @@ private data class MediaViewComponents(
     val videoBadgeContainer: LinearLayout,
     val videoIcon: ImageView,
     val durationText: TextView,
-    val favoriteBadgeView: ImageView
+    val favoriteBadgeContainer: FrameLayout,
+    val favoriteBadgeView: ImageView,
+    val mediaTypeBadgeText: TextView,
+    val motionPhotoBadge: FrameLayout,
+    val motionPhotoIcon: ImageView,
+    val stackBadgeContainer: LinearLayout,
+    val stackIcon: ImageView,
+    val stackCountText: TextView
 )
 
 private fun createMediaViewComponents(context: Context): MediaViewComponents {
@@ -1454,19 +1648,127 @@ private fun createMediaViewComponents(context: Context): MediaViewComponents {
     videoBadgeContainer.addView(durationText)
     container.addView(videoBadgeContainer)
 
-    // Favorite Badge (Bottom-Start)
-    val favoriteBadgeView = ImageView(context).apply {
-        val size = (16 * density).toInt()
+    // Favorite Badge (Bottom-Start) inside subtle translucent contrast circle (unified with PhotonGrid)
+    val favoriteBadgeContainer = FrameLayout(context).apply {
+        val size = (20 * density).toInt()
         val margin = (4 * density).toInt()
         layoutParams = FrameLayout.LayoutParams(size, size).apply {
             gravity = Gravity.BOTTOM or Gravity.START
             setMargins(margin, 0, 0, margin)
         }
-        setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_ms_favorite_filled))
-        setColorFilter(0xFFE53935.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(0x61000000)
+        }
         visibility = View.GONE
     }
-    container.addView(favoriteBadgeView)
+    val favoriteBadgeView = ImageView(context).apply {
+        val size = (12 * density).toInt()
+        layoutParams = FrameLayout.LayoutParams(size, size).apply {
+            gravity = Gravity.CENTER
+        }
+        setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_ms_favorite_filled))
+        setColorFilter(0xFFE53935.toInt())
+    }
+    favoriteBadgeContainer.addView(favoriteBadgeView)
+    container.addView(favoriteBadgeContainer)
+
+    // Media Type Text Badge (Bottom-End): RAW / GIF / PANO
+    val mediaTypeBadgeText = TextView(context).apply {
+        val margin = (4 * density).toInt()
+        val padH = (4 * density).toInt()
+        val padV = (1.5f * density).toInt()
+        layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            setMargins(0, 0, margin, margin)
+        }
+        setPadding(padH, padV, padH, padV)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 8.5f)
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        setTextColor(Color.WHITE)
+        includeFontPadding = false
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 4f * density
+            setColor(0xB00F0F14.toInt())
+        }
+        visibility = View.GONE
+    }
+    container.addView(mediaTypeBadgeText)
+
+    // Motion Photo Icon Badge (Bottom-End)
+    val motionPhotoBadge = FrameLayout(context).apply {
+        val size = (18 * density).toInt()
+        val margin = (4 * density).toInt()
+        layoutParams = FrameLayout.LayoutParams(size, size).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            setMargins(0, 0, margin, margin)
+        }
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(0x7A0F0F14)
+        }
+        visibility = View.GONE
+    }
+    val motionPhotoIcon = ImageView(context).apply {
+        val iconSize = (11 * density).toInt()
+        layoutParams = FrameLayout.LayoutParams(iconSize, iconSize).apply {
+            gravity = Gravity.CENTER
+        }
+        setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_ms_motion_photos_on))
+        setColorFilter(Color.WHITE)
+    }
+    motionPhotoBadge.addView(motionPhotoIcon)
+    container.addView(motionPhotoBadge)
+
+    // Photo Stack Burst Badge (Top-End) using Material Symbols burst_mode
+    val stackBadgeContainer = LinearLayout(context).apply {
+        val margin = (5 * density).toInt()
+        val padH = (5 * density).toInt()
+        val padV = (2.5f * density).toInt()
+        layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            setMargins(0, margin, margin, 0)
+        }
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(padH, padV, padH, padV)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 999f * density
+            setColor(0xBC0F0F14.toInt())
+        }
+        visibility = View.GONE
+    }
+    val stackIcon = ImageView(context).apply {
+        val iconSize = (12 * density).toInt()
+        layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
+        setImageDrawable(ContextCompat.getDrawable(context, R.drawable.ic_ms_burst_mode))
+        setColorFilter(Color.WHITE)
+    }
+    stackBadgeContainer.addView(stackIcon)
+
+    val stackCountText = TextView(context).apply {
+        val marginStart = (3 * density).toInt()
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            setMargins(marginStart, 0, 0, 0)
+        }
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f)
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        setTextColor(Color.WHITE)
+        includeFontPadding = false
+    }
+    stackBadgeContainer.addView(stackCountText)
+    container.addView(stackBadgeContainer)
 
     return MediaViewComponents(
         container = container,
@@ -1476,7 +1778,14 @@ private fun createMediaViewComponents(context: Context): MediaViewComponents {
         videoBadgeContainer = videoBadgeContainer,
         videoIcon = videoIcon,
         durationText = durationText,
-        favoriteBadgeView = favoriteBadgeView
+        favoriteBadgeContainer = favoriteBadgeContainer,
+        favoriteBadgeView = favoriteBadgeView,
+        mediaTypeBadgeText = mediaTypeBadgeText,
+        motionPhotoBadge = motionPhotoBadge,
+        motionPhotoIcon = motionPhotoIcon,
+        stackBadgeContainer = stackBadgeContainer,
+        stackIcon = stackIcon,
+        stackCountText = stackCountText
     )
 }
 

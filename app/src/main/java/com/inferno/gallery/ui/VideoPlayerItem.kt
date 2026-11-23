@@ -81,6 +81,146 @@ import androidx.media3.ui.PlayerView
 import androidx.compose.ui.res.vectorResource
 import com.inferno.gallery.R
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+
+/**
+ * Pooled single-instance ExoPlayer holder for full-screen pager swiping in [DetailScreen].
+ *
+ * Creating and releasing an [ExoPlayer] + hardware MediaCodec pipeline synchronously on every
+ * pager swipe blocks the main thread for 100–300 ms per swipe and risks exhausting SoC codec
+ * instances. Reusing one player across all swipes makes transitions instant and eliminates
+ * mid-swipe frame drops.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+class SharedVideoPlayerHolder(private val appContext: android.content.Context) {
+    private var player: ExoPlayer? = null
+    private var currentUri: Uri? = null
+    private var wasPlayingBeforeScroll: Boolean = false
+
+    fun getOrCreate(): ExoPlayer {
+        val existing = player
+        if (existing != null) return existing
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(appContext)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+        return ExoPlayer.Builder(appContext)
+            .setRenderersFactory(renderersFactory)
+            .build()
+            .also {
+                ActiveVideoPlayerCoordinator.registerExternal(it)
+                player = it
+            }
+    }
+
+    fun prepareUri(uri: Uri, autoPlay: Boolean = true): ExoPlayer {
+        val exo = getOrCreate()
+        val uriKey = uri.toString()
+        if (currentUri != uri || exo.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+            currentUri = uri
+            wasPlayingBeforeScroll = false
+            exo.playWhenReady = false
+            exo.stop()
+            exo.clearMediaItems()
+            exo.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(uri)
+                    .setMediaId(uriKey)
+                    .build()
+            )
+            exo.prepare()
+            exo.playWhenReady = autoPlay
+        } else if (autoPlay) {
+            if (exo.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                exo.seekTo(0)
+            }
+            if (!exo.isPlaying && wasPlayingBeforeScroll) {
+                exo.play()
+            }
+            wasPlayingBeforeScroll = false
+        }
+        return exo
+    }
+
+    fun onScrollStarted() {
+        val exo = player ?: return
+        if (exo.isPlaying || exo.playWhenReady) {
+            wasPlayingBeforeScroll = true
+            exo.pause()
+        }
+    }
+
+    fun onScrollSettledOnSameVideo() {
+        val exo = player ?: return
+        if (wasPlayingBeforeScroll) {
+            wasPlayingBeforeScroll = false
+            exo.play()
+        }
+    }
+
+    fun pause() {
+        wasPlayingBeforeScroll = false
+        player?.playWhenReady = false
+        player?.pause()
+    }
+
+    fun pauseIfUri(uri: Uri) {
+        if (currentUri == uri) {
+            wasPlayingBeforeScroll = false
+            player?.playWhenReady = false
+            player?.pause()
+        }
+    }
+
+    fun release() {
+        val exo = player ?: return
+        player = null
+        currentUri = null
+        wasPlayingBeforeScroll = false
+        ActiveVideoPlayerCoordinator.releaseIfActive(exo)
+    }
+}
+
+/**
+ * Ensures at most one ExoPlayer / hardware MediaCodec video decoder is active across callers.
+ */
+private object ActiveVideoPlayerCoordinator {
+    private var activePlayer: ExoPlayer? = null
+
+    fun isActive(player: ExoPlayer): Boolean = activePlayer === player
+
+    fun registerExternal(newPlayer: ExoPlayer) {
+        val previous = activePlayer
+        if (previous != null && previous !== newPlayer) {
+            try {
+                previous.playWhenReady = false
+                previous.stop()
+                previous.clearVideoSurface()
+                previous.release()
+            } catch (_: Throwable) {
+            }
+        }
+        activePlayer = newPlayer
+    }
+
+    fun registerAndClaim(newPlayer: ExoPlayer) = registerExternal(newPlayer)
+
+    fun releaseIfActive(player: ExoPlayer) {
+        if (activePlayer === player) {
+            activePlayer = null
+        }
+        try {
+            player.playWhenReady = false
+            player.stop()
+            player.clearVideoSurface()
+            player.release()
+        } catch (_: Throwable) {
+        }
+    }
+}
 
 
 @Composable
@@ -90,6 +230,8 @@ fun VideoPlayerItem(
     showControls: Boolean,
     modifier: Modifier = Modifier,
     isFilmstripOverview: Boolean = false,
+    placeholderCacheKey: String? = null,
+    sharedPlayerHolder: SharedVideoPlayerHolder? = null,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
     onPinchExpand: (() -> Unit)? = null,
@@ -102,12 +244,70 @@ fun VideoPlayerItem(
         showControls = showControls,
         modifier = modifier,
         isFilmstripOverview = isFilmstripOverview,
+        placeholderCacheKey = placeholderCacheKey,
+        sharedPlayerHolder = sharedPlayerHolder,
         onTap = onTap,
         onPinchOverview = onPinchOverview,
         onPinchExpand = onPinchExpand,
         onScrubbingChanged = onScrubbingChanged,
         onScaleChanged = onScaleChanged
     )
+}
+
+@Composable
+private fun VideoPosterFallback(
+    uri: Uri,
+    placeholderCacheKey: String?,
+    showPlayBadge: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val posterRequest = remember<ImageRequest>(uri, placeholderCacheKey) {
+        ImageRequest.Builder(context)
+            .data(uri)
+            .size(720, 720)
+            .precision(coil3.size.Precision.INEXACT)
+            .memoryCacheKey("video_poster_${uri}@720")
+            .diskCacheKey("video_poster_${uri}@720")
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .apply {
+                if (!placeholderCacheKey.isNullOrEmpty()) {
+                    placeholderMemoryCacheKey(placeholderCacheKey)
+                }
+            }
+            .crossfade(false)
+            .build()
+    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center
+    ) {
+        AsyncImage(
+            model = posterRequest,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+        )
+        if (showPlayBadge) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.48f),
+                contentColor = Color.White,
+                modifier = Modifier.size(52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_play_arrow),
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -118,37 +318,65 @@ fun VideoPlayerItemWithResolvedUri(
     showControls: Boolean,
     modifier: Modifier = Modifier,
     isFilmstripOverview: Boolean = false,
+    placeholderCacheKey: String? = null,
+    sharedPlayerHolder: SharedVideoPlayerHolder? = null,
     onTap: (() -> Unit)? = null,
     onPinchOverview: (() -> Unit)? = null,
     onPinchExpand: (() -> Unit)? = null,
     onScrubbingChanged: ((Boolean) -> Unit)? = null,
     onScaleChanged: ((Float) -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val exoPlayer = remember(uri) {
-        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
-            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+    // Offscreen / in-fling pager video pages must NOT instantiate ExoPlayer or allocate hardware
+    // MediaCodec decoders. Render only the cached video poster frame until scrolling settles.
+    if (!isCurrentPage) {
+        VideoPosterFallback(
+            uri = uri,
+            placeholderCacheKey = placeholderCacheKey,
+            showPlayBadge = true,
+            modifier = modifier
+        )
+        return
+    }
 
-        val builder = ExoPlayer.Builder(context)
-            .setRenderersFactory(renderersFactory)
-            
-        builder.build().apply {
-            setMediaItem(MediaItem.fromUri(uri))
-            prepare()
-            playWhenReady = false
+    val context = LocalContext.current
+    val isPooledPlayer = sharedPlayerHolder != null
+    val uriKey = remember(uri) { uri.toString() }
+    val exoPlayer = remember(uri, sharedPlayerHolder) {
+        if (sharedPlayerHolder != null) {
+            sharedPlayerHolder.prepareUri(uri, autoPlay = true)
+        } else {
+            val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
+                .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                .setEnableDecoderFallback(true)
+
+            ExoPlayer.Builder(context)
+                .setRenderersFactory(renderersFactory)
+                .build()
+                .apply {
+                    ActiveVideoPlayerCoordinator.registerAndClaim(this)
+                    setMediaItem(
+                        MediaItem.Builder()
+                            .setUri(uri)
+                            .setMediaId(uriKey)
+                            .build()
+                    )
+                    prepare()
+                    playWhenReady = true
+                }
         }
     }
 
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableStateOf(0L) }
-    var videoDuration by remember { mutableStateOf(0L) }
-    var dragPosition by remember { mutableStateOf<Long?>(null) }
+    var isPlaying by remember(uri) { mutableStateOf(false) }
+    var hasRenderedFirstFrame by remember(uri) { mutableStateOf(false) }
+    var currentPosition by remember(uri) { mutableStateOf(0L) }
+    var videoDuration by remember(uri) { mutableStateOf(0L) }
+    var dragPosition by remember(uri) { mutableStateOf<Long?>(null) }
 
     // Zoom & Pan state
-    val scale = remember { mutableFloatStateOf(1f) }
-    val offsetX = remember { mutableFloatStateOf(0f) }
-    val offsetY = remember { mutableFloatStateOf(0f) }
-    val animJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val scale = remember(uri) { mutableFloatStateOf(1f) }
+    val offsetX = remember(uri) { mutableFloatStateOf(0f) }
+    val offsetY = remember(uri) { mutableFloatStateOf(0f) }
+    val animJob = remember(uri) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val currentIsOverview by rememberUpdatedState(isFilmstripOverview)
     val currentOnPinchOverview by rememberUpdatedState(onPinchOverview)
@@ -170,19 +398,15 @@ fun VideoPlayerItemWithResolvedUri(
             offsetY.floatValue = 0f
         }
     }
-    var videoAspectRatio by remember(uri) {
-        val vs = exoPlayer.videoSize
-        val initialRatio = if (vs.width > 0 && vs.height > 0) {
-            val par = if (vs.pixelWidthHeightRatio > 0f) vs.pixelWidthHeightRatio else 1f
-            val isRotated = vs.unappliedRotationDegrees == 90 || vs.unappliedRotationDegrees == 270
-            val rawW = if (isRotated) vs.height else vs.width
-            val rawH = if (isRotated) vs.width else vs.height
-            (rawW.toFloat() * par) / rawH.toFloat()
-        } else null
-        mutableStateOf(initialRatio)
-    }
+    // IMPORTANT: Never initialize videoAspectRatio from a pooled ExoPlayer's previous exoPlayer.videoSize!
+    // When swiping between videos of different orientations/ratios (e.g. 16:9 <-> 9:16), reading the
+    // previous video's VideoSize shrinks or stretches the new video until onVideoSizeChanged arrives.
+    var videoAspectRatio by remember(uri) { mutableStateOf<Float?>(null) }
 
-    LaunchedEffect(uri) {
+    LaunchedEffect(uri, videoAspectRatio) {
+        if (videoAspectRatio != null) return@LaunchedEffect
+        delay(280L)
+        if (videoAspectRatio != null) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             try {
                 val retriever = android.media.MediaMetadataRetriever()
@@ -230,21 +454,34 @@ fun VideoPlayerItemWithResolvedUri(
 
     val animatedRotation by androidx.compose.animation.core.animateFloatAsState(
         targetValue = rotationDegrees.toFloat(),
-        animationSpec = MotionTokens.snappySpring(),
+        animationSpec = MotionTokens.sharedElementSpring(),
         label = "videoRotation"
     )
 
-    DisposableEffect(exoPlayer) {
+    DisposableEffect(exoPlayer, uriKey, isPooledPlayer) {
+        var retryAttempt = 0
+        var retryJob: kotlinx.coroutines.Job? = null
+        fun matchesCurrentUri(): Boolean = exoPlayer.currentMediaItem?.mediaId == uriKey
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onIsPlayingChanged(isPlayingState: Boolean) {
-                isPlaying = isPlayingState
+                if (matchesCurrentUri()) {
+                    isPlaying = isPlayingState
+                }
             }
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == androidx.media3.common.Player.STATE_READY) {
+                if (state == androidx.media3.common.Player.STATE_READY && matchesCurrentUri()) {
+                    retryAttempt = 0
                     videoDuration = exoPlayer.duration.coerceAtLeast(0L)
                 }
             }
+            override fun onRenderedFirstFrame() {
+                if (matchesCurrentUri() && exoPlayer.playbackState != androidx.media3.common.Player.STATE_IDLE) {
+                    retryAttempt = 0
+                    hasRenderedFirstFrame = true
+                }
+            }
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (!matchesCurrentUri()) return
                 if (videoSize.width > 0 && videoSize.height > 0) {
                     val par = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1f
                     val isRotated = videoSize.unappliedRotationDegrees == 90 || videoSize.unappliedRotationDegrees == 270
@@ -256,11 +493,61 @@ fun VideoPlayerItemWithResolvedUri(
                     }
                 }
             }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                // Recover from transient MediaCodec hardware-decoder release latency during rapid swipes.
+                if (retryAttempt < 3 && matchesCurrentUri() && ActiveVideoPlayerCoordinator.isActive(exoPlayer)) {
+                    retryAttempt++
+                    val backoffMs = when (retryAttempt) {
+                        1 -> 160L
+                        2 -> 380L
+                        else -> 750L
+                    }
+                    retryJob?.cancel()
+                    retryJob = coroutineScope.launch {
+                        delay(backoffMs)
+                        if (!matchesCurrentUri() || !ActiveVideoPlayerCoordinator.isActive(exoPlayer)) return@launch
+                        try {
+                            val resumePos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                            exoPlayer.stop()
+                            exoPlayer.setMediaItem(
+                                MediaItem.Builder()
+                                    .setUri(uri)
+                                    .setMediaId(uriKey)
+                                    .build()
+                            )
+                            if (resumePos > 0L) exoPlayer.seekTo(resumePos)
+                            exoPlayer.prepare()
+                            exoPlayer.playWhenReady = true
+                        } catch (_: Throwable) {
+                        }
+                    }
+                }
+            }
         }
         exoPlayer.addListener(listener)
+        // Re-sync in case ExoPlayer already reached READY/first-frame synchronously
+        if (matchesCurrentUri()) {
+            val curVs = exoPlayer.videoSize
+            if (curVs.width > 0 && curVs.height > 0) {
+                val par = if (curVs.pixelWidthHeightRatio > 0f) curVs.pixelWidthHeightRatio else 1f
+                val isRotated = curVs.unappliedRotationDegrees == 90 || curVs.unappliedRotationDegrees == 270
+                val rawW = if (isRotated) curVs.height else curVs.width
+                val rawH = if (isRotated) curVs.width else curVs.height
+                val ratio = (rawW.toFloat() * par) / rawH.toFloat()
+                if (ratio > 0f && videoAspectRatio == null) videoAspectRatio = ratio
+            }
+            if (exoPlayer.playbackState == androidx.media3.common.Player.STATE_READY) {
+                videoDuration = exoPlayer.duration.coerceAtLeast(0L)
+            }
+        }
         onDispose {
+            retryJob?.cancel()
             exoPlayer.removeListener(listener)
-            exoPlayer.release()
+            if (isPooledPlayer) {
+                sharedPlayerHolder?.pauseIfUri(uri)
+            } else {
+                ActiveVideoPlayerCoordinator.releaseIfActive(exoPlayer)
+            }
         }
     }
 
@@ -299,70 +586,116 @@ fun VideoPlayerItemWithResolvedUri(
         exoPlayer.volume = if (isMuted) 0f else 1f
     }
 
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentVideoDuration by rememberUpdatedState(videoDuration)
+    val currentIsPlaying by rememberUpdatedState(isPlaying)
+
+    // Double-tap seek feedback state (left = -1, right = +1, 0 = hidden)
+    var seekOverlayDirection by remember(uri) { androidx.compose.runtime.mutableIntStateOf(0) }
+    var seekOverlayTotalSec by remember(uri) { androidx.compose.runtime.mutableIntStateOf(0) }
+    var seekOverlayHideJob by remember(uri) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    // Center double-tap play/pause feedback state (null = hidden, true = playing, false = paused)
+    var centerToggleFeedback by remember(uri) { mutableStateOf<Boolean?>(null) }
+    var centerFeedbackHideJob by remember(uri) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .pointerInput(Unit) {
+            .pointerInput(uri, exoPlayer) {
                 detectTapGestures(
                     onTap = {
-                        onTap?.invoke()
+                        currentOnTap?.invoke()
                     },
                     onDoubleTap = { centroid ->
-                        animJob.value?.cancel()
-                        animJob.value = coroutineScope.launch {
-                            val composableW = size.width.toFloat()
-                            val composableH = size.height.toFloat()
-                            if (scale.floatValue > 1.05f) {
-                                // Zoom out back to 1x fit (critically damped — no bounce or negative-scale flip)
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = scale.floatValue,
-                                        targetValue = 1f,
-                                        animationSpec = MotionTokens.sharedElementSpring()
-                                    ) { v, _ -> scale.floatValue = v.coerceAtLeast(1f) }
+                        val composableW = size.width.toFloat().coerceAtLeast(1f)
+                        val relX = centroid.x / composableW
+                        val totalDur = currentVideoDuration.takeIf { it > 0L }
+                            ?: exoPlayer.duration.coerceAtLeast(0L)
+                        // Adaptive seek step: 5s for short clips (< 30s), 10s for longer videos
+                        val stepSec = if (totalDur in 1L..29_999L) 5 else 10
+                        val stepMs = stepSec * 1000L
+
+                        when {
+                            relX < 0.35f -> {
+                                // Left zone: rewind (accumulates on consecutive rapid double-taps)
+                                val basePos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                                val nextPos = (basePos - stepMs).coerceAtLeast(0L)
+                                exoPlayer.seekTo(nextPos)
+                                currentPosition = nextPos
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                seekOverlayTotalSec = if (seekOverlayDirection == -1) seekOverlayTotalSec + stepSec else stepSec
+                                seekOverlayDirection = -1
+                                seekOverlayHideJob?.cancel()
+                                seekOverlayHideJob = coroutineScope.launch {
+                                    delay(750L)
+                                    seekOverlayDirection = 0
+                                    seekOverlayTotalSec = 0
                                 }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetX.floatValue,
-                                        targetValue = 0f,
-                                        animationSpec = MotionTokens.sharedElementSpring()
-                                    ) { v, _ -> offsetX.floatValue = v }
+                            }
+                            relX > 0.65f -> {
+                                // Right zone: fast-forward (accumulates on consecutive rapid double-taps)
+                                val basePos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                                val maxPos = if (totalDur > 0L) totalDur else Long.MAX_VALUE
+                                val nextPos = (basePos + stepMs).coerceAtMost(maxPos)
+                                exoPlayer.seekTo(nextPos)
+                                currentPosition = nextPos
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                seekOverlayTotalSec = if (seekOverlayDirection == 1) seekOverlayTotalSec + stepSec else stepSec
+                                seekOverlayDirection = 1
+                                seekOverlayHideJob?.cancel()
+                                seekOverlayHideJob = coroutineScope.launch {
+                                    delay(750L)
+                                    seekOverlayDirection = 0
+                                    seekOverlayTotalSec = 0
                                 }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetY.floatValue,
-                                        targetValue = 0f,
-                                        animationSpec = MotionTokens.sharedElementSpring()
-                                    ) { v, _ -> offsetY.floatValue = v }
-                                }
-                            } else {
-                                // Zoom in to tapped point (3.0x)
-                                val targetScale = 3.0f
-                                val targetX = -(centroid.x - composableW / 2f) * (targetScale - 1)
-                                val targetY = -(centroid.y - composableH / 2f) * (targetScale - 1)
-                                val maxX = (composableW * (targetScale - 1)) / 2f
-                                val maxY = (composableH * (targetScale - 1)) / 2f
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = scale.floatValue,
-                                        targetValue = targetScale,
-                                        animationSpec = MotionTokens.sharedElementSpring()
-                                    ) { v, _ -> scale.floatValue = v.coerceAtLeast(0.05f) }
-                                }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetX.floatValue,
-                                        targetValue = targetX.coerceIn(-maxX, maxX),
-                                        animationSpec = MotionTokens.sharedElementSpring()
-                                    ) { v, _ -> offsetX.floatValue = v }
-                                }
-                                launch {
-                                    androidx.compose.animation.core.animate(
-                                        initialValue = offsetY.floatValue,
-                                        targetValue = targetY.coerceIn(-maxY, maxY),
-                                        animationSpec = MotionTokens.sharedElementSpring()
-                                    ) { v, _ -> offsetY.floatValue = v }
+                            }
+                            else -> {
+                                // Center zone: if currently pinch-zoomed, snap back to 1x; otherwise toggle Play/Pause
+                                if (scale.floatValue > 1.05f) {
+                                    animJob.value?.cancel()
+                                    animJob.value = coroutineScope.launch {
+                                        launch {
+                                            androidx.compose.animation.core.animate(
+                                                initialValue = scale.floatValue,
+                                                targetValue = 1f,
+                                                animationSpec = MotionTokens.sharedElementSpring()
+                                            ) { v, _ -> scale.floatValue = v.coerceAtLeast(1f) }
+                                        }
+                                        launch {
+                                            androidx.compose.animation.core.animate(
+                                                initialValue = offsetX.floatValue,
+                                                targetValue = 0f,
+                                                animationSpec = MotionTokens.sharedElementSpring()
+                                            ) { v, _ -> offsetX.floatValue = v }
+                                        }
+                                        launch {
+                                            androidx.compose.animation.core.animate(
+                                                initialValue = offsetY.floatValue,
+                                                targetValue = 0f,
+                                                animationSpec = MotionTokens.sharedElementSpring()
+                                            ) { v, _ -> offsetY.floatValue = v }
+                                        }
+                                    }
+                                } else {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                    val willPlay = !currentIsPlaying
+                                    if (willPlay) {
+                                        if (exoPlayer.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                                            exoPlayer.seekTo(0L)
+                                        }
+                                        exoPlayer.play()
+                                    } else {
+                                        exoPlayer.pause()
+                                    }
+                                    centerToggleFeedback = willPlay
+                                    centerFeedbackHideJob?.cancel()
+                                    centerFeedbackHideJob = coroutineScope.launch {
+                                        delay(550L)
+                                        centerToggleFeedback = null
+                                    }
                                 }
                             }
                         }
@@ -583,16 +916,44 @@ fun VideoPlayerItemWithResolvedUri(
                 }
             }
 
-            val animatedWidth by androidx.compose.animation.core.animateDpAsState(
-                targetValue = targetWidth,
-                animationSpec = MotionTokens.snappySpring(),
-                label = "videoWidth"
-            )
-            val animatedHeight by androidx.compose.animation.core.animateDpAsState(
-                targetValue = targetHeight,
-                animationSpec = MotionTokens.snappySpring(),
-                label = "videoHeight"
-            )
+            // Only animate box dimensions when the user explicitly toggles Fit <-> Fill.
+            // Initial load, async videoAspectRatio resolution, and container layout changes
+            // must snap immediately so the video never rubber-bands or stretches when opened.
+            val widthAnim = remember(uri) { Animatable(targetWidth.value) }
+            val heightAnim = remember(uri) { Animatable(targetHeight.value) }
+            var lastResizeMode by remember(uri) { mutableStateOf(resizeMode) }
+            var isAnimatingResize by remember(uri) { mutableStateOf(false) }
+
+            LaunchedEffect(targetWidth, targetHeight, resizeMode) {
+                val resizeModeToggled = resizeMode != lastResizeMode
+                lastResizeMode = resizeMode
+                if (resizeModeToggled) {
+                    isAnimatingResize = true
+                    try {
+                        kotlinx.coroutines.coroutineScope {
+                            launch { widthAnim.animateTo(targetWidth.value, MotionTokens.sharedElementSpring()) }
+                            launch { heightAnim.animateTo(targetHeight.value, MotionTokens.sharedElementSpring()) }
+                        }
+                    } finally {
+                        isAnimatingResize = false
+                    }
+                } else {
+                    isAnimatingResize = false
+                    widthAnim.snapTo(targetWidth.value)
+                    heightAnim.snapTo(targetHeight.value)
+                }
+            }
+
+            val displayWidth = if (resizeMode == lastResizeMode && !isAnimatingResize) {
+                targetWidth
+            } else {
+                widthAnim.value.dp
+            }
+            val displayHeight = if (resizeMode == lastResizeMode && !isAnimatingResize) {
+                targetHeight
+            } else {
+                heightAnim.value.dp
+            }
 
             // Calculate rotation scaling when rotated 90° or 270°
             val isQuarterRotated = (rotationDegrees % 180) != 0
@@ -614,13 +975,34 @@ fun VideoPlayerItemWithResolvedUri(
 
             val animatedRotationScale by androidx.compose.animation.core.animateFloatAsState(
                 targetValue = targetRotationScale,
-                animationSpec = MotionTokens.snappySpring(),
+                animationSpec = MotionTokens.sharedElementSpring(),
                 label = "videoRotationScale"
             )
 
+            // Keep PlayerView aspect-locked (FIT/ZOOM, never FILL) so even frames rendered before
+            // videoAspectRatio resolves can never stretch or distort.
+            val playerResizeMode = if (isFillMode) {
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            } else {
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            }
+            val isVideoSurfaceReady = hasRenderedFirstFrame && videoAspectRatio != null
+
+            // Always show the aspect-fitted poster full-container until BOTH videoAspectRatio
+            // AND the first decoded frame for this exact URI are ready. Keeping the PlayerView
+            // at alpha = 0f until then prevents any full-screen flash or intermediate aspect jump.
+            if (!isVideoSurfaceReady) {
+                VideoPosterFallback(
+                    uri = uri,
+                    placeholderCacheKey = placeholderCacheKey,
+                    showPlayBadge = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
             Box(
                 modifier = Modifier
-                    .size(animatedWidth, animatedHeight)
+                    .size(displayWidth, displayHeight)
                     .graphicsLayer {
                         val safeScale = scale.floatValue.coerceAtLeast(0.05f)
                         scaleX = safeScale * animatedRotationScale
@@ -628,6 +1010,7 @@ fun VideoPlayerItemWithResolvedUri(
                         translationX = offsetX.floatValue
                         translationY = offsetY.floatValue
                         rotationZ = animatedRotation
+                        alpha = if (isVideoSurfaceReady) 1f else 0f
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -636,6 +1019,7 @@ fun VideoPlayerItemWithResolvedUri(
                         val view = android.view.LayoutInflater.from(ctx)
                             .inflate(R.layout.view_video_player, null, false) as PlayerView
                         view.apply {
+                            setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                             useController = false
                             controllerAutoShow = false
                             hideController()
@@ -646,7 +1030,7 @@ fun VideoPlayerItemWithResolvedUri(
                                 (ctrl.parent as? android.view.ViewGroup)?.removeView(ctrl)
                             }
                             player = exoPlayer
-                            this.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            this.resizeMode = playerResizeMode
                             layoutParams = android.widget.FrameLayout.LayoutParams(
                                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -664,10 +1048,71 @@ fun VideoPlayerItemWithResolvedUri(
                         if (playerView.player != exoPlayer) {
                             playerView.player = exoPlayer
                         }
-                        playerView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        if (playerView.resizeMode != playerResizeMode) {
+                            playerView.resizeMode = playerResizeMode
+                        }
+                    },
+                    onRelease = { playerView ->
+                        playerView.player = null
                     },
                     modifier = Modifier.fillMaxSize()
                 )
+            }
+        }
+
+        // Double-tap seek feedback pills (Left = Rewind, Right = Fast-Forward)
+        AnimatedVisibility(
+            visible = seekOverlayDirection == -1 && seekOverlayTotalSec > 0,
+            enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.snappySpring(), initialScale = 0.85f),
+            exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec(), targetScale = 0.9f),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 28.dp)
+        ) {
+            DoubleTapSeekFeedbackPill(
+                isForward = false,
+                seconds = seekOverlayTotalSec
+            )
+        }
+
+        AnimatedVisibility(
+            visible = seekOverlayDirection == 1 && seekOverlayTotalSec > 0,
+            enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.snappySpring(), initialScale = 0.85f),
+            exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec(), targetScale = 0.9f),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 28.dp)
+        ) {
+            DoubleTapSeekFeedbackPill(
+                isForward = true,
+                seconds = seekOverlayTotalSec
+            )
+        }
+
+        // Subtle center Play/Pause badge on center double-tap
+        AnimatedVisibility(
+            visible = centerToggleFeedback != null,
+            enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.snappySpring(), initialScale = 0.8f),
+            exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec(), targetScale = 0.9f),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            val isNowPlaying = centerToggleFeedback == true
+            Surface(
+                shape = CircleShape,
+                color = Color(0xB8121216),
+                contentColor = Color.White,
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.22f)),
+                modifier = Modifier.size(58.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(
+                            if (isNowPlaying) R.drawable.ic_ms_play_arrow else R.drawable.ic_ms_pause
+                        ),
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
 
@@ -830,6 +1275,69 @@ fun VideoPlayerItemWithResolvedUri(
                 onResizeModeChange = { resizeMode = it },
                 onDismissRequest = { showControlsSheet = false }
             )
+        }
+    }
+}
+
+@Composable
+private fun DoubleTapSeekFeedbackPill(
+    isForward: Boolean,
+    seconds: Int
+) {
+    Surface(
+        shape = ShapeFull,
+        color = Color(0xBD121216),
+        contentColor = Color.White,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.22f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            if (!isForward) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = 180f }
+                )
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = 180f }
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "-${seconds}s",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFeatureSettings = "tnum"
+                    )
+                )
+            } else {
+                Text(
+                    text = "+${seconds}s",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFeatureSettings = "tnum"
+                    )
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_chevron_right),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }

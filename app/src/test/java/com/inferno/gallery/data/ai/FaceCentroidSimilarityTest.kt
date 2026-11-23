@@ -164,4 +164,153 @@ class FaceCentroidSimilarityTest {
             )
         )
     }
+
+    @Test
+    fun testBroadSuggestionPassSurfacesSinglePhotoPairsWhileRespectingGuards() {
+        val broadMin = FaceClusteringManager.BROAD_SUGGESTION_MIN_THRESHOLD
+
+        // Two unnamed 1-photo clusters at 42% similarity are surfaced during "Find more matches"
+        assertTrue(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 1, nameA = null, isHiddenA = false,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.42f,
+                minThreshold = broadMin
+            )
+        )
+
+        // High-similarity non-consolidated pairs (>= 54%) are also surfaced during "Find more matches"
+        assertTrue(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 2, nameA = null, isHiddenA = false,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.58f,
+                minThreshold = broadMin
+            )
+        )
+
+        // Below broad 40% floor is still rejected
+        assertFalse(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 1, nameA = null, isHiddenA = false,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.39f,
+                minThreshold = broadMin
+            )
+        )
+
+        // Hidden or conflicting user-named clusters stay blocked even during broader discovery
+        assertFalse(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 1, nameA = "Alice", isHiddenA = false,
+                faceCountB = 1, nameB = "Bob", isHiddenB = false,
+                similarity = 0.45f,
+                minThreshold = broadMin
+            )
+        )
+        assertFalse(
+            FaceClusteringManager.shouldSuggestMerge(
+                faceCountA = 1, nameA = null, isHiddenA = true,
+                faceCountB = 1, nameB = null, isHiddenB = false,
+                similarity = 0.45f,
+                minThreshold = broadMin
+            )
+        )
+    }
+
+    @Test
+    fun testPartitionCandidatesBySimilarityRanksClosestMatchesFirst() {
+        val candidates = listOf(1L, 2L, 3L, 4L, 5L)
+        val scores = mapOf(
+            1L to 0.22f,
+            2L to 0.41f,
+            3L to 0.51f,
+            4L to 0.37f,
+            5L to 0.15f
+        )
+
+        val (closest, others) = FaceClusteringManager.partitionCandidatesBySimilarity(
+            candidates = candidates,
+            idSelector = { it },
+            similarityScores = scores
+        )
+
+        assertEquals(listOf(3L, 2L, 4L), closest)
+        assertEquals(listOf(1L, 5L), others)
+    }
+
+    @Test
+    fun testIgnoredExemplarMatchingSuppressesRecurringNonFacesWithoutSwallowingRealFaces() {
+        // Two completely unrelated non-face detections (e.g., dark glare blob & wall poster)
+        val junkA = FaceRecognitionEngine.normalizeL2(floatArrayOf(1.0f, 0.0f, 0.0f, 0.0f))
+        val junkB = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.0f, 1.0f, 0.0f, 0.0f))
+        val ignored = listOf(junkA, junkB)
+
+        // Recurring near-identical false detection matches junkA (>= 0.68f)
+        val recurringJunkA = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.86f, 0.12f, 0.49f, 0.0f))
+        assertTrue(
+            "Recurring non-face artifact should be dropped",
+            FaceClusteringManager.matchesIgnoredExemplar(recurringJunkA, ignored)
+        )
+
+        // Real face sitting midway between unrelated junkA and junkB (~0.50 sim to each)
+        // Would have been swallowed if junkA + junkB were averaged into one centroid (~0.71 sim!),
+        // but per-exemplar matching keeps real faces safe!
+        val realFaceMidpoint = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.55f, 0.55f, 0.63f, 0.0f))
+        assertFalse(
+            "Real face between unrelated ignored objects must NOT be swallowed",
+            FaceClusteringManager.matchesIgnoredExemplar(realFaceMidpoint, ignored)
+        )
+    }
+
+    @Test
+    fun testSelectDiverseExemplarsToIgnoreDeduplicatesAndCaps() {
+        val existing = listOf(
+            FaceRecognitionEngine.normalizeL2(floatArrayOf(1.0f, 0.0f, 0.0f, 0.0f))
+        )
+        val nearDuplicateOfExisting = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.98f, 0.20f, 0.0f, 0.0f))
+        val novelA = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.0f, 1.0f, 0.0f, 0.0f))
+        val nearDuplicateOfNovelA = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.0f, 0.99f, 0.14f, 0.0f))
+        val novelB = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.0f, 0.0f, 1.0f, 0.0f))
+        val novelC = FaceRecognitionEngine.normalizeL2(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+
+        val picked = FaceClusteringManager.selectDiverseExemplarsToIgnore(
+            candidates = listOf(nearDuplicateOfExisting, novelA, nearDuplicateOfNovelA, novelB, novelC),
+            existingIgnored = existing,
+            maxToAdd = 2
+        )
+
+        assertEquals(2, picked.size)
+        assertTrue(FaceRecognitionEngine.cosineSimilarity(picked[0], novelA) > 0.99f)
+        assertTrue(FaceRecognitionEngine.cosineSimilarity(picked[1], novelB) > 0.99f)
+    }
+
+    @Test
+    fun testShouldConsolidateClustersBlocksHiddenVisibleMerges() {
+        val emb = FaceRecognitionEngine.normalizeL2(floatArrayOf(1.0f, 0.0f, 0.0f))
+
+        // Identical embeddings where one is hidden and one is visible must NEVER auto-consolidate
+        assertFalse(
+            FaceClusteringManager.shouldConsolidateClusters(
+                centroidA = emb, exemplarsA = listOf(emb), nameA = null,
+                centroidB = emb, exemplarsB = listOf(emb), nameB = null,
+                isHiddenA = true, isHiddenB = false
+            )
+        )
+        assertFalse(
+            FaceClusteringManager.shouldConsolidateClusters(
+                centroidA = emb, exemplarsA = listOf(emb), nameA = null,
+                centroidB = emb, exemplarsB = listOf(emb), nameB = null,
+                isHiddenA = false, isHiddenB = true
+            )
+        )
+        // Both visible still consolidates normally
+        assertTrue(
+            FaceClusteringManager.shouldConsolidateClusters(
+                centroidA = emb, exemplarsA = listOf(emb), nameA = null,
+                centroidB = emb, exemplarsB = listOf(emb), nameB = null,
+                isHiddenA = false, isHiddenB = false
+            )
+        )
+    }
 }

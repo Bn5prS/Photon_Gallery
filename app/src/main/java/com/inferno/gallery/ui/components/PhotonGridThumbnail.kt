@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,12 +100,12 @@ fun BoxScope.PhotonGridThumbnail(
         modifier = Modifier.matchParentSize()
     )
 
-    // Outlined video icon + duration text without black overlay box
+    // Outlined video icon + duration text without black overlay box (always Bottom-End; Favorite is on Bottom-Start)
     if (item.isVideo && videoIconVector != null) {
         val durationText = remember(item.durationMs) {
             item.durationMs?.let { formatDuration(it) } ?: "0:00"
         }
-        val videoAlignment = if (isFavorite) Alignment.BottomStart else Alignment.BottomEnd
+        val videoAlignment = Alignment.BottomEnd
 
         if (gridCellsCount >= 7) {
             // Ultra-dense grid (7-8 columns: ~45-50dp cell): micro video icon glyph
@@ -185,68 +186,118 @@ fun BoxScope.PhotonGridThumbnail(
             }
         }
     } else if (!item.isVideo) {
-        // RAW / GIF / PANO badge — scaled with grid scale
-        val badgeText = remember(item.name) {
-            when {
-                item.name.endsWith(".dng", true) || item.name.endsWith(".raw", true) ||
-                item.name.endsWith(".cr2", true) || item.name.endsWith(".nef", true) ||
-                item.name.endsWith(".arw", true) -> "RAW"
-                item.name.endsWith(".gif", true) -> "GIF"
-                item.name.contains("PANO", true) || item.name.contains("PANORAMA", true) -> "PANO"
-                else -> null
+        // RAW / GIF / PANO / Motion Photo badge on Bottom-End (strictly media type, zero collision with Favorite on Bottom-Start)
+        val mediaBadge = remember(item.id, item.name, item.path) {
+            detectThumbnailMediaBadge(
+                id = item.id,
+                nameOrPath = item.name.ifBlank { item.path },
+                isVideo = false
+            )
+        }
+
+        if (mediaBadge == ThumbnailMediaBadge.MOTION) {
+            val outerPad = when {
+                gridCellsCount <= 3 -> 5.dp
+                gridCellsCount <= 5 -> 4.dp
+                else -> 2.dp
             }
-        }
-
-        val isMotionPhoto = remember(item.id) {
-            com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(item.id) ?: false
-        }
-
-        val effectiveBadgeText = badgeText ?: if (isMotionPhoto) "MOTION" else null
-
-        if (effectiveBadgeText != null) {
+            val circleSize = when {
+                gridCellsCount <= 3 -> 20.dp
+                gridCellsCount <= 5 -> 17.dp
+                else -> 13.dp
+            }
+            val iconSize = when {
+                gridCellsCount <= 3 -> 13.dp
+                gridCellsCount <= 5 -> 11.dp
+                else -> 8.5.dp
+            }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(outerPad)
+                    .size(circleSize)
+                    .background(
+                        color = androidx.compose.ui.graphics.Color(0x7A0F0F14),
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(
+                        com.inferno.gallery.R.drawable.ic_ms_motion_photos_on
+                    ),
+                    contentDescription = "Motion photo",
+                    tint = androidx.compose.ui.graphics.Color.White,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+        } else if (mediaBadge != null && gridCellsCount < 7) {
             val badgeFontSize = when {
-                gridCellsCount <= 3 -> 9.5.sp
-                gridCellsCount == 4 -> 8.5.sp
+                gridCellsCount <= 3 -> 9.sp
+                gridCellsCount == 4 -> 8.sp
                 gridCellsCount == 5 -> 7.5.sp
                 else -> 6.5.sp
             }
             val badgeOuterPad = when {
-                gridCellsCount <= 3 -> 4.dp
-                gridCellsCount == 4 -> 3.dp
-                gridCellsCount == 5 -> 2.5.dp
+                gridCellsCount <= 3 -> 5.dp
+                gridCellsCount <= 5 -> 4.dp
                 else -> 2.dp
             }
             val badgeHPad = when {
-                gridCellsCount <= 3 -> 3.5.dp
-                gridCellsCount == 4 -> 3.dp
-                gridCellsCount == 5 -> 2.dp
-                else -> 1.5.dp
+                gridCellsCount <= 3 -> 4.5.dp
+                gridCellsCount <= 5 -> 3.5.dp
+                else -> 2.5.dp
             }
             val badgeVPad = when {
-                gridCellsCount <= 4 -> 1.dp
-                else -> 0.5.dp
+                gridCellsCount <= 4 -> 1.5.dp
+                else -> 1.dp
             }
 
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.BottomEnd)
                     .padding(badgeOuterPad)
                     .background(
-                        MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.82f),
+                        androidx.compose.ui.graphics.Color(0xB00F0F14),
                         ShapeExtraSmall
                     )
                     .padding(horizontal = badgeHPad, vertical = badgeVPad)
             ) {
                 Text(
-                    text = effectiveBadgeText,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = mediaBadge.name,
+                    color = androidx.compose.ui.graphics.Color.White,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = badgeFontSize,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.3.sp
+                        letterSpacing = 0.3.sp,
+                        lineHeight = badgeFontSize
                     )
                 )
             }
         }
+    }
+}
+
+internal enum class ThumbnailMediaBadge { RAW, GIF, PANO, MOTION }
+
+internal fun detectThumbnailMediaBadge(
+    id: String,
+    nameOrPath: String,
+    isVideo: Boolean
+): ThumbnailMediaBadge? {
+    if (isVideo) return null
+    val fileName = nameOrPath.substringAfterLast('/').substringAfterLast('\\')
+    return when {
+        fileName.endsWith(".dng", true) || fileName.endsWith(".raw", true) ||
+        fileName.endsWith(".cr2", true) || fileName.endsWith(".nef", true) ||
+        fileName.endsWith(".arw", true) || fileName.endsWith(".orf", true) ||
+        fileName.endsWith(".rw2", true) -> ThumbnailMediaBadge.RAW
+        fileName.endsWith(".gif", true) -> ThumbnailMediaBadge.GIF
+        fileName.contains("PANO", true) || fileName.contains("PANORAMA", true) -> ThumbnailMediaBadge.PANO
+        com.inferno.gallery.data.MotionPhotoHelper.getCachedFastCheck(id) == true ||
+        fileName.startsWith("MVIMG_", true) ||
+        fileName.contains(".MP.", true) ||
+        fileName.contains("_MP.", true) -> ThumbnailMediaBadge.MOTION
+        else -> null
     }
 }

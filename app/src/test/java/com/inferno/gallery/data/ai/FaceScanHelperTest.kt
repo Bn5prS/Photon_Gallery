@@ -61,4 +61,41 @@ class FaceScanHelperTest {
         val kept = FaceScanHelper.deduplicateRankedBoxes(candidates)
         assertEquals(listOf(1, 2), kept.map { it.index })
     }
+
+    @Test
+    fun isCropLightingUsable_rejectsDarkBlownOutAndFlatCropsWhileKeepingRealFaces() {
+        // Pitch-black shadow blob
+        val pitchBlack = FloatArray(200) { i -> if (i % 10 == 0) 18f else 4f }
+        assertFalse(FaceScanHelper.isCropLightingUsable(pitchBlack))
+
+        // Blown-out white glare
+        val blownOutWhite = FloatArray(200) { i -> if (i % 10 == 0) 238f else 253f }
+        assertFalse(FaceScanHelper.isCropLightingUsable(blownOutWhite))
+
+        // Featureless flat gray wall
+        val flatWall = FloatArray(200) { i -> 120f + (i % 5).toFloat() }
+        assertFalse(FaceScanHelper.isCropLightingUsable(flatWall))
+
+        // Dim indoor real face (still has eyes/skin contrast)
+        val dimRealFace = FloatArray(200) { i ->
+            when (i % 4) {
+                0 -> 28f
+                1 -> 48f
+                2 -> 64f
+                else -> 76f
+            }
+        }
+        assertTrue(FaceScanHelper.isCropLightingUsable(dimRealFace))
+
+        // Bright sunlit real face (bright highlights + shaded eyes/mouth)
+        val brightRealFace = FloatArray(200) { i ->
+            when (i % 4) {
+                0 -> 150f
+                1 -> 205f
+                2 -> 230f
+                else -> 244f
+            }
+        }
+        assertTrue(FaceScanHelper.isCropLightingUsable(brightRealFace))
+    }
 }

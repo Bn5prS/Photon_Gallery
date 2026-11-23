@@ -27,7 +27,8 @@ sealed class NativeTimelineItem {
         val isVideo: Boolean,
         val durationMs: Long?,
         val bucketName: String,
-        val size: Long = 0L
+        val size: Long = 0L,
+        val stackCount: Int = 1
     ) : NativeTimelineItem() {
         override val key: String get() = id
     }

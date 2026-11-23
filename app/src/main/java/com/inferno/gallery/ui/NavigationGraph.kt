@@ -344,6 +344,10 @@ fun NavigationGraph(
                         val encoded = android.net.Uri.encode(videoUri.toString())
                         navController.navigate("frame_extractor?uri=$encoded")
                     },
+                    onNavigateToVideoTrimmer = { videoUri ->
+                        val encoded = android.net.Uri.encode(videoUri.toString())
+                        navController.navigate("video_trimmer?uri=$encoded")
+                    },
                     onNavigateToPerson = { personId ->
                         navController.navigate("person/$personId")
                     },
@@ -460,6 +464,42 @@ fun NavigationGraph(
                 )
             }
 
+            composable(
+                route = "video_trimmer?uri={uri}",
+                arguments = listOf(
+                    navArgument("uri") { type = NavType.StringType }
+                ),
+                enterTransition = {
+                    slideInVertically(
+                        animationSpec = tween(MotionTokens.Durations.Long, easing = MotionTokens.EmphasizedEasing),
+                        initialOffsetY = { (it * 0.3f).toInt() }
+                    ) + fadeIn(MotionTokens.fastEffectsSpec())
+                },
+                exitTransition = {
+                    slideOutVertically(
+                        animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
+                        targetOffsetY = { (it * 0.3f).toInt() }
+                    ) + fadeOut(MotionTokens.fastEffectsSpec())
+                },
+                popEnterTransition = { fadeIn(MotionTokens.fastEffectsSpec()) },
+                popExitTransition = {
+                    slideOutVertically(
+                        animationSpec = tween(MotionTokens.Durations.Medium, easing = MotionTokens.EmphasizedEasing),
+                        targetOffsetY = { (it * 0.3f).toInt() }
+                    ) + fadeOut(MotionTokens.fastEffectsSpec())
+                }
+            ) { backStackEntry ->
+                val uriString = backStackEntry.arguments?.getString("uri") ?: ""
+                val uri = android.net.Uri.parse(android.net.Uri.decode(uriString))
+                VideoTrimmerScreen(
+                    videoUri = uri,
+                    onBack = { navController.popBackStackSafely(backStackEntry) },
+                    onSaved = { savedUri, isOverwrite ->
+                        galleryViewModel.notifyMediaItemEdited(savedUri, isOverwrite = isOverwrite)
+                    }
+                )
+            }
+
             composable("vault") {
                 com.inferno.gallery.ui.vault.PrivateSpaceScreen(
                     viewModel = galleryViewModel,
@@ -489,9 +529,32 @@ fun NavigationGraph(
                     personId = personId,
                     onBack = { navController.popBackStackSafely(backStackEntry) },
                     onMediaClick = { media ->
-                        val encoded = android.net.Uri.encode(media.id.toString())
-                        val bucket = android.net.Uri.encode("person:$personId")
-                        navController.navigate("detail/$encoded?bucket=$bucket")
+                        val uri = android.net.Uri.parse(media.uriString)
+                        val bucket = "person:$personId"
+                        galleryViewModel.setInitialDetailItem(
+                            GalleryItem(
+                                id = media.id.toString(),
+                                uri = uri,
+                                bucketName = media.bucketName,
+                                dateAdded = media.dateAdded,
+                                size = media.size,
+                                name = media.name,
+                                dateModified = media.dateModified,
+                                path = media.filePath,
+                                isVideo = media.isVideo,
+                                durationMs = media.durationMs,
+                                localExists = true,
+                                resolvedUri = uri,
+                                latitude = media.latitude,
+                                longitude = media.longitude
+                            ),
+                            bucket
+                        )
+                        detailOverlay = DetailOverlayArgs(
+                            mediaId = media.id.toString(),
+                            bucketName = bucket,
+                            highlightText = null
+                        )
                     },
                     onCreateCollage = { uris ->
                         val encoded = android.net.Uri.encode(uris.joinToString(","))
@@ -583,6 +646,11 @@ fun NavigationGraph(
                             detailOverlay = null
                             val encoded = android.net.Uri.encode(videoUri.toString())
                             navController.navigate("frame_extractor?uri=$encoded")
+                        },
+                        onNavigateToVideoTrimmer = { videoUri ->
+                            detailOverlay = null
+                            val encoded = android.net.Uri.encode(videoUri.toString())
+                            navController.navigate("video_trimmer?uri=$encoded")
                         },
                         onNavigateToPerson = { personId ->
                             detailOverlay = null

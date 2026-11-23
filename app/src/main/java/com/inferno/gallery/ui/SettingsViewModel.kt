@@ -160,6 +160,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    val photoStacksEnabled: StateFlow<Boolean> = repository.photoStacksEnabledFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setPhotoStacksEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.updatePhotoStacksEnabled(enabled)
+        }
+    }
+
     val typographyStyle: StateFlow<String> = repository.typographyStyleFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -992,6 +1004,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             db.faceDao().clearAllFaceStatuses()
             db.faceDao().clearAllFaces()
             db.faceDao().clearAllPersons()
+            db.faceDao().clearIgnoredFaceExemplars()
+            getApplication<Application>()
+                .getSharedPreferences("face_scan_meta", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putInt("scan_version", 3)
+                .apply()
+            com.inferno.gallery.data.ai.FaceClusteringManager.getInstance(getApplication()).invalidateCache()
             val cropDir = java.io.File(getApplication<Application>().filesDir, "face_crops")
             if (cropDir.exists()) {
                 cropDir.deleteRecursively()
@@ -1003,6 +1022,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch(Dispatchers.IO) {
             stopFaceIndexing()
             val engine = com.inferno.gallery.data.ai.FaceRecognitionEngine.getInstance(getApplication())
+            engine.close()
             val modelFile = engine.getModelFile()
             if (modelFile.exists()) {
                 modelFile.delete()

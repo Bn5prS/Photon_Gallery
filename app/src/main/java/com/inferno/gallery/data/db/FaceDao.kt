@@ -347,6 +347,9 @@ interface FaceDao {
     @Query("DELETE FROM media_face_status WHERE faceCount = 0")
     suspend fun clearZeroFaceStatuses(): Int
 
+    @Query("DELETE FROM media_face_status WHERE faceCount > 0 OR mediaId IN (SELECT DISTINCT mediaId FROM faces)")
+    suspend fun clearNonZeroFaceStatuses(): Int
+
     @Query("UPDATE faces SET personId = :targetPersonId WHERE personId = :sourcePersonId")
     suspend fun reassignFaces(sourcePersonId: Long, targetPersonId: Long)
 
@@ -392,6 +395,54 @@ interface FaceDao {
     @Query("DELETE FROM persons")
     suspend fun clearAllPersons()
 
+    @Query("SELECT * FROM faces WHERE personId IN (:personIds)")
+    suspend fun getFacesByPersonIds(personIds: List<Long>): List<FaceEntity>
+
+    @Query("SELECT * FROM faces WHERE mediaId IN (:mediaIds) AND personId = :personId")
+    suspend fun getFacesForMediaAndPerson(mediaIds: List<Long>, personId: Long): List<FaceEntity>
+
+    @Query("DELETE FROM faces WHERE personId IN (:personIds)")
+    suspend fun deleteFacesByPersonIds(personIds: List<Long>)
+
+    @Transaction
+    suspend fun deleteFacesByPersonIdsChunked(personIds: List<Long>) {
+        personIds.chunked(500).forEach { chunk ->
+            deleteFacesByPersonIds(chunk)
+        }
+    }
+
+    @Query("DELETE FROM faces WHERE mediaId IN (:mediaIds) AND personId = :personId")
+    suspend fun deleteFacesForMediaAndPerson(mediaIds: List<Long>, personId: Long)
+
+    @Transaction
+    suspend fun deleteFacesForMediaAndPersonChunked(mediaIds: List<Long>, personId: Long) {
+        mediaIds.chunked(500).forEach { chunk ->
+            deleteFacesForMediaAndPerson(chunk, personId)
+        }
+    }
+
+    // ── Ignored Non-Face Exemplars ──
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertIgnoredFaceExemplars(exemplars: List<IgnoredFaceExemplarEntity>)
+
+    @Query("SELECT * FROM ignored_face_exemplars ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun getIgnoredFaceExemplars(limit: Int = 500): List<IgnoredFaceExemplarEntity>
+
+    @Query("SELECT COUNT(*) FROM ignored_face_exemplars")
+    fun observeIgnoredFaceCount(): Flow<Int>
+
+    @Query("DELETE FROM ignored_face_exemplars")
+    suspend fun clearIgnoredFaceExemplars()
+
+    @Query("""
+        DELETE FROM ignored_face_exemplars
+        WHERE id NOT IN (
+            SELECT id FROM ignored_face_exemplars ORDER BY createdAt DESC LIMIT :maxKeep
+        )
+    """)
+    suspend fun pruneIgnoredFaceExemplars(maxKeep: Int = 500)
+
     // ── Merge Suggestions ──
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -411,9 +462,9 @@ interface FaceDao {
         SELECT s.* FROM person_merge_suggestions s
         INNER JOIN persons pa ON s.personIdA = pa.id
         INNER JOIN persons pb ON s.personIdB = pb.id
-        WHERE s.status = 'PENDING' AND pa.isHidden = 0 AND pb.isHidden = 0
-          AND ((pa.faceCount >= 2 OR (pa.name IS NOT NULL AND pa.name != '')) 
-               OR (pb.faceCount >= 2 OR (pb.name IS NOT NULL AND pb.name != '')))
+        WHERE s.status = 'PENDING'
+          AND pa.isHidden = 0 AND pb.isHidden = 0
+          AND pa.faceCount > 0 AND pb.faceCount > 0
         ORDER BY s.similarity DESC
     """)
     fun observePendingMergeSuggestions(): Flow<List<MergeSuggestionWithPersons>>

@@ -158,6 +158,10 @@ class SettingsRepository private constructor(private val context: Context) {
         val SHOW_MEMORIES = booleanPreferencesKey("show_memories")
         val MEMORIES_DISMISSED = booleanPreferencesKey("memories_dismissed")
         val MEMORIES_CAROUSEL_STYLE = stringPreferencesKey("memories_carousel_style")
+        val PHOTO_STACKS_ENABLED = booleanPreferencesKey("photo_stacks_enabled")
+        val PHOTO_STACK_BEST_OVERRIDES = stringPreferencesKey("photo_stack_best_overrides")
+        val PHOTO_STACK_UNSTACKED_IDS = stringSetPreferencesKey("photo_stack_unstacked_ids")
+        val PHOTO_STACK_MANUAL_GROUPS = stringPreferencesKey("photo_stack_manual_groups")
         val PEOPLE_MERGE_CARD_DISMISSED = booleanPreferencesKey("people_merge_card_dismissed")
         val PEOPLE_GRID_CELLS_COUNT = intPreferencesKey("people_grid_cells_count")
         val PERSON_DETAIL_GRID_CELLS_COUNT = intPreferencesKey("person_detail_grid_cells_count")
@@ -569,6 +573,156 @@ class SettingsRepository private constructor(private val context: Context) {
     suspend fun updateMemoriesCarouselStyle(style: MemoriesCarouselStyle) {
         context.dataStore.edit { preferences ->
             preferences[MEMORIES_CAROUSEL_STYLE] = style.id
+        }
+    }
+
+    val photoStacksEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PHOTO_STACKS_ENABLED] ?: true
+        }
+
+    suspend fun updatePhotoStacksEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PHOTO_STACKS_ENABLED] = enabled
+        }
+    }
+
+    val photoStackBestOverridesFlow: Flow<Map<Long, Long>> = context.dataStore.data
+        .map { preferences ->
+            val raw = preferences[PHOTO_STACK_BEST_OVERRIDES] ?: return@map emptyMap()
+            runCatching {
+                val obj = JSONObject(raw)
+                val out = HashMap<Long, Long>(obj.length())
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val id = key.toLongOrNull() ?: continue
+                    out[id] = obj.optLong(key, 0L)
+                }
+                out
+            }.getOrDefault(emptyMap())
+        }
+
+    suspend fun setPhotoStackBestShot(mediaId: Long, stackMemberIds: List<Long>) {
+        context.dataStore.edit { preferences ->
+            val current = runCatching {
+                JSONObject(preferences[PHOTO_STACK_BEST_OVERRIDES] ?: "{}")
+            }.getOrElse { JSONObject() }
+            // Clear previous overrides within the same stack so only the chosen cover remains recorded
+            for (memberId in stackMemberIds) {
+                current.remove(memberId.toString())
+            }
+            current.put(mediaId.toString(), System.currentTimeMillis())
+            preferences[PHOTO_STACK_BEST_OVERRIDES] = current.toString()
+        }
+    }
+
+    val photoStackUnstackedIdsFlow: Flow<Set<Long>> = context.dataStore.data
+        .map { preferences ->
+            preferences[PHOTO_STACK_UNSTACKED_IDS]
+                ?.mapNotNull { it.toLongOrNull() }
+                ?.toSet()
+                ?: emptySet()
+        }
+
+    val photoStackManualGroupsFlow: Flow<List<List<Long>>> = context.dataStore.data
+        .map { preferences ->
+            parseManualStackGroups(preferences[PHOTO_STACK_MANUAL_GROUPS])
+        }
+
+    private fun parseManualStackGroups(raw: String?): List<List<Long>> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val outer = JSONArray(raw)
+            val result = ArrayList<List<Long>>(outer.length())
+            for (i in 0 until outer.length()) {
+                val arr = outer.optJSONArray(i) ?: continue
+                val group = ArrayList<Long>(arr.length())
+                for (j in 0 until arr.length()) {
+                    val id = arr.optLong(j, -1L)
+                    if (id >= 0L) group.add(id)
+                }
+                val distinct = group.distinct()
+                if (distinct.size >= 2) result.add(distinct)
+            }
+            result
+        }.getOrDefault(emptyList())
+    }
+
+    private fun serializeManualStackGroups(groups: List<List<Long>>): String {
+        val outer = JSONArray()
+        for (group in groups) {
+            if (group.size < 2) continue
+            val inner = JSONArray()
+            for (id in group) inner.put(id)
+            outer.put(inner)
+        }
+        return outer.toString()
+    }
+
+    suspend fun unstackPhotos(memberIds: List<Long>) {
+        if (memberIds.isEmpty()) return
+        val idSet = memberIds.toSet()
+        context.dataStore.edit { preferences ->
+            val existingManual = parseManualStackGroups(preferences[PHOTO_STACK_MANUAL_GROUPS])
+            if (existingManual.isNotEmpty()) {
+                val prunedManual = existingManual
+                    .map { group -> group.filter { it !in idSet } }
+                    .filter { it.size >= 2 }
+                preferences[PHOTO_STACK_MANUAL_GROUPS] = serializeManualStackGroups(prunedManual)
+            }
+            val updated = (preferences[PHOTO_STACK_UNSTACKED_IDS] ?: emptySet()).toMutableSet()
+            for (id in idSet) {
+                updated.add(id.toString())
+            }
+            preferences[PHOTO_STACK_UNSTACKED_IDS] = updated
+        }
+    }
+
+    suspend fun createManualStack(memberIds: List<Long>, preferredBestShotId: Long? = null) {
+        val cleanIds = memberIds.distinct()
+        if (cleanIds.size < 2) return
+        val idSet = cleanIds.toSet()
+        context.dataStore.edit { preferences ->
+            val unstacked = (preferences[PHOTO_STACK_UNSTACKED_IDS] ?: emptySet()).toMutableSet()
+            for (id in idSet) {
+                unstacked.remove(id.toString())
+            }
+            preferences[PHOTO_STACK_UNSTACKED_IDS] = unstacked
+
+            val existingManual = parseManualStackGroups(preferences[PHOTO_STACK_MANUAL_GROUPS])
+            val prunedManual = existingManual
+                .map { group -> group.filter { it !in idSet } }
+                .filter { it.size >= 2 }
+                .toMutableList()
+            prunedManual.add(cleanIds)
+            preferences[PHOTO_STACK_MANUAL_GROUPS] = serializeManualStackGroups(prunedManual)
+
+            if (preferredBestShotId != null && preferredBestShotId in idSet) {
+                val overrides = runCatching {
+                    JSONObject(preferences[PHOTO_STACK_BEST_OVERRIDES] ?: "{}")
+                }.getOrElse { JSONObject() }
+                for (id in idSet) overrides.remove(id.toString())
+                overrides.put(preferredBestShotId.toString(), System.currentTimeMillis())
+                preferences[PHOTO_STACK_BEST_OVERRIDES] = overrides.toString()
+            }
+        }
+    }
+
+    suspend fun restackPhotos(memberIds: List<Long>) {
+        if (memberIds.isEmpty()) return
+        context.dataStore.edit { preferences ->
+            val updated = (preferences[PHOTO_STACK_UNSTACKED_IDS] ?: emptySet()).toMutableSet()
+            for (id in memberIds) {
+                updated.remove(id.toString())
+            }
+            preferences[PHOTO_STACK_UNSTACKED_IDS] = updated
+        }
+    }
+
+    suspend fun clearAllUnstackedPhotos() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(PHOTO_STACK_UNSTACKED_IDS)
         }
     }
 

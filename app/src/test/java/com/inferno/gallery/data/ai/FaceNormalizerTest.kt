@@ -118,4 +118,53 @@ class FaceNormalizerTest {
         assertTrue("Nose must stay well inside 112x112 crop, got ${mappedNose.x}", mappedNose.x in 20f..98f)
         assertTrue("Eye must stay well inside 112x112 crop, got ${mappedLeftEye.x}", mappedLeftEye.x in 15f..95f)
     }
+
+    @Test
+    fun computePoseAwareTransform_swappedMlKitLandmarks_preservesFullScaleWithoutCollapse() {
+        // Simulates raw ML Kit subject-perspective landmarks (LEFT_EYE on image-right x=73.5,
+        // RIGHT_EYE on image-left x=38.3). Previously this collapsed frontal scale to ~0.21x.
+        val swappedUpright = DetectedFaceLandmarks(
+            leftEye = FacePoint(73.53f, 51.70f),
+            rightEye = FacePoint(38.29f, 51.70f),
+            nose = FacePoint(56.03f, 71.74f),
+            mouthLeft = FacePoint(70.73f, 92.37f),
+            mouthRight = FacePoint(41.55f, 92.37f),
+            yawDeg = 0f
+        )
+
+        val transform = FaceNormalizer.computePoseAwareTransform(swappedUpright)
+        val scale = hypot(transform.a.toDouble(), transform.b.toDouble()).toFloat()
+        assertEquals("Scale must stay 1.0 instead of collapsing to 0.21", 1.0f, scale, 0.02f)
+
+        // Verify the image-left eye lands at CANONICAL_POINTS[0] (38.29) and image-right eye at [1] (73.53)
+        val mappedImageLeftEye = transform.map(38.29f, 51.70f)
+        val mappedImageRightEye = transform.map(73.53f, 51.70f)
+        assertEquals(FaceNormalizer.CANONICAL_POINTS[0].x, mappedImageLeftEye.x, 0.5f)
+        assertEquals(FaceNormalizer.CANONICAL_POINTS[1].x, mappedImageRightEye.x, 0.5f)
+    }
+
+    @Test
+    fun canonicalizeLandmarkHandedness_worksAtArbitraryRollAngles() {
+        // Rotate canonical points by 90 degrees CW around origin: (x, y) -> (-y, x)
+        fun rot90(p: FacePoint) = FacePoint(-p.y, p.x)
+        val correctRotated = DetectedFaceLandmarks(
+            leftEye = rot90(FaceNormalizer.CANONICAL_POINTS[0]),
+            rightEye = rot90(FaceNormalizer.CANONICAL_POINTS[1]),
+            nose = rot90(FaceNormalizer.CANONICAL_POINTS[2]),
+            mouthLeft = rot90(FaceNormalizer.CANONICAL_POINTS[3]),
+            mouthRight = rot90(FaceNormalizer.CANONICAL_POINTS[4]),
+            rollDeg = 90f
+        )
+        // Correctly ordered rotated landmarks must remain untouched
+        assertEquals(correctRotated, FaceNormalizer.canonicalizeLandmarkHandedness(correctRotated))
+
+        // Swapped rotated landmarks must be restored back to correctRotated
+        val swappedRotated = correctRotated.copy(
+            leftEye = correctRotated.rightEye,
+            rightEye = correctRotated.leftEye,
+            mouthLeft = correctRotated.mouthRight,
+            mouthRight = correctRotated.mouthLeft
+        )
+        assertEquals(correctRotated, FaceNormalizer.canonicalizeLandmarkHandedness(swappedRotated))
+    }
 }

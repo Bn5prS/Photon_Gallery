@@ -41,6 +41,31 @@ class LocalMediaRepository(
     private val contentResolver: ContentResolver
 ) {
     companion object {
+        /**
+         * Picks the display date: DATE_TAKEN, then a date in the filename, then the EXIF date,
+         * then DATE_MODIFIED, then DATE_ADDED (same order as before).
+         * Before opening the file for EXIF, [cached] may supply the date already stored
+         * for this unchanged file; the file is opened only when there is none.
+         */
+        internal fun resolveDateAdded(
+            dateTakenSec: Long,
+            parsedFilenameDate: Long?,
+            hasPath: Boolean,
+            rawDateModified: Long,
+            rawDateAdded: Long,
+            cached: () -> Long?,
+            exif: () -> Long?
+        ): Long {
+            if (dateTakenSec > 0) return dateTakenSec
+            if (parsedFilenameDate != null && parsedFilenameDate > 0) return parsedFilenameDate
+            if (parsedFilenameDate == null && hasPath) {
+                cached()?.let { return it }
+                val exifDate = exif()
+                if (exifDate != null && exifDate > 0) return exifDate
+            }
+            return if (rawDateModified > 0) rawDateModified else rawDateAdded
+        }
+
         private val IMAGE_EXTENSIONS = setOf(
             "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "avif",
             "dng", "raw", "cr2", "nef", "arw", "orf", "raf"
@@ -89,7 +114,16 @@ class LocalMediaRepository(
         awaitClose { contentResolver.unregisterContentObserver(observer) }
     }
 
-    suspend fun getImagesListForSync(folderName: String? = null, lastGeneration: Long? = null): List<MediaData> = withContext(Dispatchers.IO) {
+    suspend fun getImagesListForSync(
+        folderName: String? = null,
+        lastGeneration: Long? = null,
+        // Date already known for an unchanged file (id, path, dateModified, size) -> dateAdded.
+        // Lets a full re-read skip opening thousands of files just to read their EXIF date again.
+        knownDateAdded: ((Long, String, Long, Long) -> Long?)? = null,
+        // False for the first-run import, so the grid fills in seconds; dates from inside
+        // the files are read afterwards by a background full sync (KEY_EXIF_PENDING).
+        readExif: Boolean = true
+    ): List<MediaData> = withContext(Dispatchers.IO) {
         val images = mutableListOf<MediaData>()
 
         val projection = arrayOf(
@@ -186,17 +220,15 @@ class LocalMediaRepository(
 
                     val dateModified = if (rawDateModified > 0) rawDateModified else rawDateAdded
                     val parsedFilenameDate = if (dateTakenSec <= 0) FilenameDateParser.parseDateFromFilename(name) else null
-                    val exifDate = if (dateTakenSec <= 0 && parsedFilenameDate == null && path.isNotBlank()) {
-                        FilenameDateParser.extractExifDate(path)
-                    } else null
-
-                    val dateAdded = when {
-                        dateTakenSec > 0 -> dateTakenSec
-                        parsedFilenameDate != null && parsedFilenameDate > 0 -> parsedFilenameDate
-                        exifDate != null && exifDate > 0 -> exifDate
-                        rawDateModified > 0 -> rawDateModified
-                        else -> rawDateAdded
-                    }
+                    val dateAdded = resolveDateAdded(
+                        dateTakenSec = dateTakenSec,
+                        parsedFilenameDate = parsedFilenameDate,
+                        hasPath = path.isNotBlank(),
+                        rawDateModified = rawDateModified,
+                        rawDateAdded = rawDateAdded,
+                        cached = { knownDateAdded?.invoke(id, path, dateModified, size) },
+                        exif = { if (readExif) FilenameDateParser.extractExifDate(path) else null }
+                    )
                     val mediaType = if (mediaTypeColumn >= 0) cursor.getInt(mediaTypeColumn) else 0
                     val mimeType = if (mimeTypeColumn >= 0) cursor.getString(mimeTypeColumn) else null
                     val isVideo = if (isTrashRequest || isTrashed) {

@@ -208,6 +208,7 @@ class SmartSearchIndexWorker(
             currentImageName = "Initializing..."
         )
         val searchEngine = SmartSearchEngine.getInstance(applicationContext)
+        var visionModelAcquired = false
         try {
             if (!searchEngine.isModelDownloaded()) {
                 Log.e(TAG, "Models not downloaded. Cannot index.")
@@ -215,7 +216,8 @@ class SmartSearchIndexWorker(
             }
 
             safeSetForeground("Loading AI model…")
-            searchEngine.loadVisionModel()
+            searchEngine.acquireVisionModel()
+            visionModelAcquired = true
 
             val db = DatabaseProvider.getDatabase(applicationContext)
 
@@ -440,7 +442,9 @@ class SmartSearchIndexWorker(
             Log.e(TAG, "SmartSearchIndexWorker failed fatally: ${e.message}", e)
             return Result.retry()
         } finally {
-            searchEngine.unloadVisionModel()
+            if (visionModelAcquired) {
+                searchEngine.releaseVisionModel()
+            }
             val db = DatabaseProvider.getDatabase(applicationContext)
             val scope = runCatching {
                 com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(applicationContext)

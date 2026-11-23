@@ -45,10 +45,16 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
     private val database: GalleryDatabase = DatabaseProvider.getDatabase(appContext)
     private val mediaRepository: LocalMediaRepository = LocalMediaRepository(appContext.contentResolver)
     private val settingsRepo: SettingsRepository = SettingsRepository.getInstance(appContext)
-    private val syncMutex = Mutex()
+    // Two lanes: the fast sync never waits behind a full reconcile (which can take
+    // 30 s or more on a large library); a catch-up pass after each full sync covers overlap.
+    private val fullMutex = Mutex()
+    private val deltaMutex = Mutex()
+    @Volatile private var lastFullGenBefore = 0L
 
     companion object {
         private const val TAG = "MediaSyncEngine"
+        /** Set by the fast first-run import, which skips reading EXIF dates; cleared by the next full sync. */
+        const val KEY_EXIF_PENDING = "exif_dates_pending"
 
         @Volatile
         private var INSTANCE: MediaSyncEngine? = null
@@ -73,7 +79,129 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
         }
     }
 
-    suspend fun sync(forceFullSync: Boolean = false): SyncResult = syncMutex.withLock {
+    /**
+     * Full reconcile (filesystem checks over every item). It runs in its own lane, and
+     * afterwards a catch-up fast sync re-reads everything that changed since the full sync
+     * started, so a photo changed while it was busy is never missed or left stale.
+     */
+    suspend fun sync(forceFullSync: Boolean = false): SyncResult {
+        val result = fullSync(forceFullSync)
+        try {
+            syncDelta(fallbackToFull = false, sinceOverride = lastFullGenBefore.takeIf { it > 0 })
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Follow-up fast sync failed: ${e.message}")
+        }
+        return result
+    }
+
+    private val deltaSyncer = DeltaSyncer(
+        source = object : DeltaSource {
+            override fun currentGeneration(): Long =
+                try { MediaStore.getGeneration(appContext, MediaStore.VOLUME_EXTERNAL) } catch (_: Exception) { 0L }
+
+            override suspend fun changedSince(generation: Long): List<DeltaRow> {
+                // Only changed rows come back here, so there are no unchanged dates to reuse.
+                return mediaRepository.getImagesListForSync(null, generation).map {
+                    DeltaRow(it.id, it.uri.toString(), it.path, it.bucketName, it.dateAdded,
+                        it.dateModified, it.size, it.name, it.isVideo, it.durationMs)
+                }
+            }
+
+            override suspend fun allIds(): Set<Long> = mediaRepository.getAllMediaIds()
+            override suspend fun trashedIds(): Set<Long> = mediaRepository.getTrashedMediaIds()
+        },
+        store = object : DeltaStore {
+            override suspend fun roomIds(): Set<Long> = database.mediaDao().getAllMediaIds().toHashSet()
+            override suspend fun existing(ids: Collection<Long>): Map<Long, CoreMediaEntity> =
+                ids.chunked(500).flatMap { database.mediaDao().getMediaByIdsList(it) }.associateBy { it.id }
+            override suspend fun vaultUris(): Set<String> = database.vaultDao().getAllOriginalUris().toHashSet()
+            override suspend fun vaultPaths(): Set<String> = database.vaultDao().getAllOriginalPaths().toHashSet()
+            override suspend fun apply(upserts: List<CoreMediaEntity>, deletes: List<Long>) {
+                if (deletes.isNotEmpty()) database.mediaDao().deleteByIdsChunked(deletes)
+                if (upserts.isNotEmpty()) database.mediaDao().insertAllChunked(upserts)
+            }
+        },
+        files = object : DeltaFiles {
+            private val noMediaCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+            override fun exists(path: String): Boolean = File(path).exists()
+            override fun hiddenByNoMedia(path: String): Boolean {
+                noMediaCache.clear() // a .nomedia file may have been added since the last run
+                return NoMediaUtils.isPathHiddenByNoMedia(path, noMediaCache)
+            }
+        },
+        generations = object : GenerationStore {
+            private val prefs get() = appContext.getSharedPreferences("photon_sync", Context.MODE_PRIVATE)
+            override fun load(): Long =
+                if (!prefs.getBoolean("date_fallback_migrated_v2", false)) 0L else prefs.getLong("last_generation", 0L)
+            override fun save(generation: Long) { prefs.edit().putLong("last_generation", generation).apply() }
+        },
+        showHiddenAlbums = { settingsRepo.showHiddenAlbumsFlow.first() }
+    )
+
+    /**
+     * Fast incremental sync for MediaStore change events, app resume and app start.
+     * Reads only rows changed since the saved generation plus one id-only list for deletions;
+     * no per-file checks over the whole library. Falls back to [sync] when no generation is
+     * saved yet (first run).
+     */
+    suspend fun syncDelta(fallbackToFull: Boolean = true, sinceOverride: Long? = null): SyncResult {
+        val plan = deltaMutex.withLock {
+            withContext(Dispatchers.IO) {
+                if (sinceOverride == null && needsFirstImport()) firstImport() else deltaSyncer.run(sinceOverride)
+            }
+        }
+        if (plan == null) {
+            return if (fallbackToFull) sync(forceFullSync = false) else SyncResult(0, 0)
+        }
+        if (plan.newCount > 0) scheduleIndexing(plan.newCount)
+        return SyncResult(inserted = plan.upserts.size, deleted = plan.deletes.size)
+    }
+
+    private fun syncPrefs() = appContext.getSharedPreferences("photon_sync", Context.MODE_PRIVATE)
+
+    private suspend fun needsFirstImport(): Boolean =
+        !syncPrefs().getBoolean("date_fallback_migrated_v2", false) && database.mediaDao().getAllMediaCount() == 0
+
+    /**
+     * First-run import that fills the grid in seconds, like the system gallery: it uses
+     * MediaStore's own dates and skips opening every file for EXIF. A background full sync
+     * (own lane) then reads the EXIF dates. Saves the generation, so fast syncs work at once.
+     */
+    private suspend fun firstImport(): DeltaPlan {
+        val genBefore = try { MediaStore.getGeneration(appContext, MediaStore.VOLUME_EXTERNAL) } catch (_: Exception) { 0L }
+        val vaultUris = database.vaultDao().getAllOriginalUris().toHashSet()
+        val vaultPaths = database.vaultDao().getAllOriginalPaths().toHashSet()
+        val entities = mediaRepository.getImagesListForSync(readExif = false)
+            .filter { !vaultUris.contains(it.uri.toString()) && !vaultPaths.contains(it.path) }
+            .map {
+                CoreMediaEntity(
+                    id = it.id, uriString = it.uri.toString(), filePath = it.path, bucketName = it.bucketName,
+                    dateAdded = it.dateAdded, dateModified = it.dateModified, size = it.size, name = it.name,
+                    mimeType = null, isVideo = it.isVideo, durationMs = it.durationMs
+                )
+            }
+        // Nothing came back (e.g. photo access not granted yet, or an empty library): record
+        // nothing, so the import runs again next time instead of skipping existing photos.
+        if (entities.isEmpty()) return DeltaPlan(emptyList(), emptyList(), 0)
+        database.mediaDao().insertAllChunked(entities)
+        syncPrefs().edit()
+            .putLong("last_generation", genBefore)
+            .putBoolean("date_fallback_migrated_v2", true)
+            .putBoolean(KEY_EXIF_PENDING, true)
+            .apply()
+        WorkManager.getInstance(appContext).enqueueUniqueWork(
+            "MediaSyncFullAfterImport",
+            ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>()
+                .setInputData(androidx.work.workDataOf(com.inferno.gallery.workers.MediaSyncWorker.KEY_FULL to true))
+                .build()
+        )
+        return DeltaPlan(entities, emptyList(), entities.size)
+    }
+
+    private suspend fun fullSync(forceFullSync: Boolean): SyncResult = fullMutex.withLock {
         withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Starting sync (forceFullSync=$forceFullSync)...")
@@ -143,16 +271,26 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                 }
 
                 // ── 5. Query MediaStore ──
-                val effectiveGen = if (forceFullSync || deadPaths.isNotEmpty() || newOrModifiedPaths.isNotEmpty()) null else (if (lastGeneration > 0) lastGeneration else null)
-                var deltaList = mediaRepository.getImagesListForSync(null, effectiveGen)
+                val effectiveGen = if (forceFullSync || prefs.getBoolean(KEY_EXIF_PENDING, false) || deadPaths.isNotEmpty() || newOrModifiedPaths.isNotEmpty()) null else (if (lastGeneration > 0) lastGeneration else null)
+                // Read the generation BEFORE the queries (see where it is saved at the end).
+                val genBeforeQuery = try { MediaStore.getGeneration(appContext, MediaStore.VOLUME_EXTERNAL) } catch (_: Exception) { 0L }
+                // Reuse the stored date of unchanged files instead of re-reading their EXIF;
+                // while the first-run import's dates are still pending, read EXIF again.
+                val exifPending = prefs.getBoolean(KEY_EXIF_PENDING, false)
+                val knownDate: ((Long, String, Long, Long) -> Long?)? = if (exifPending) null else { id, path, modified, size ->
+                    dbMap[id]?.takeIf { it.filePath == path && it.dateModified == modified && it.size == size }?.dateAdded
+                }
+                var deltaList = mediaRepository.getImagesListForSync(null, effectiveGen, knownDate)
 
                 val allMediaStoreIds = mediaRepository.getAllMediaIds()
                 val trashedMediaIds = mediaRepository.getTrashedMediaIds()
                 val deltaIds = deltaList.map { it.id }.toSet()
 
-                if (allMediaStoreIds.any { !dbMap.containsKey(it) && !deltaIds.contains(it) && !deadIds.contains(it) }) {
+                // Only a generation-limited query can miss rows; re-running a full query
+                // right after a full query (effectiveGen == null) just doubled the time.
+                if (effectiveGen != null && allMediaStoreIds.any { !dbMap.containsKey(it) && !deltaIds.contains(it) && !deadIds.contains(it) }) {
                     Log.w(TAG, "Detected database drift. Falling back to full MediaStore query.")
-                    deltaList = mediaRepository.getImagesListForSync(null, null)
+                    deltaList = mediaRepository.getImagesListForSync(null, null, knownDate)
                 }
 
                 val toInsert = mutableListOf<CoreMediaEntity>()
@@ -310,103 +448,18 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
                     database.mediaDao().insertAllChunked(toInsert)
                 }
 
-                // AI Indexing & background workers (respect per-feature AI folder policy)
-                val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(appContext)
+                scheduleIndexing(newPhotosCount)
 
-                val autoIndexSmartEnabled = settingsRepo.smartSearchAutoIndexFlow.first()
-                val smartSearchEngine = SmartSearchEngine.getInstance(appContext)
-                val unindexedSmartCount = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedSmartCount(
-                    database,
-                    aiConfig,
-                    galleryExcluded
-                )
-                if (autoIndexSmartEnabled && smartSearchEngine.isModelDownloaded() && unindexedSmartCount > 0 && newPhotosCount > 0) {
-                    val indexRequest = OneTimeWorkRequestBuilder<SmartSearchIndexWorker>().build()
-                    WorkManager.getInstance(appContext).enqueueUniqueWork(
-                        "SmartSearchIndexWorker",
-                        ExistingWorkPolicy.KEEP,
-                        indexRequest
-                    )
-                }
+                // Save the generation read BEFORE the MediaStore queries. Saving the value read
+                // here at the end skipped every photo saved while this sync was running.
+                val currentGen = genBeforeQuery
+                lastFullGenBefore = genBeforeQuery
 
-                val faceRecognitionEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
-                val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
-                val faceEngine = FaceRecognitionEngine.getInstance(appContext)
-                val unindexedFaceCount = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(
-                    database,
-                    aiConfig,
-                    galleryExcluded
-                )
-                if (faceRecognitionEnabled && autoIndexFacesEnabled && unindexedFaceCount > 0 && faceEngine.isModelDownloaded()) {
-                    val constraints = androidx.work.Constraints.Builder()
-                        .setRequiresBatteryNotLow(true)
-                        .build()
-                    val faceIndexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
-                        .setConstraints(constraints)
-                        .build()
-                    WorkManager.getInstance(appContext).enqueueUniqueWork(
-                        "FaceIndexWorker",
-                        ExistingWorkPolicy.KEEP,
-                        faceIndexRequest
-                    )
-                }
-
-                val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
-                val unindexedOcrCount = com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrCount(
-                    database,
-                    aiConfig,
-                    galleryExcluded
-                )
-                if (ocrEnabled && unindexedOcrCount > 0 && newPhotosCount > 0) {
-                    val constraints = androidx.work.Constraints.Builder()
-                        .setRequiresBatteryNotLow(true)
-                        .build()
-                    val ocrIndexRequest = OneTimeWorkRequestBuilder<OcrIndexWorker>()
-                        .setConstraints(constraints)
-                        .build()
-                    WorkManager.getInstance(appContext).enqueueUniqueWork(
-                        "OcrIndexWorker",
-                        ExistingWorkPolicy.KEEP,
-                        ocrIndexRequest
-                    )
-                }
-
-                if (newPhotosCount > 0) {
-                    val geocodeRequest = OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
-                    WorkManager.getInstance(appContext).enqueueUniqueWork(
-                        "ReverseGeocodeWorker",
-                        ExistingWorkPolicy.KEEP,
-                        geocodeRequest
-                    )
-
-                    // Background photo sphere classification so refresh is instantaneous
-                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                        try {
-                            val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
-                            if (sphereCandidates.isNotEmpty()) {
-                                val sphereEntities = sphereCandidates.map { candidate ->
-                                    val isSphere = PhotoSphereHelper.isPhotoSphere(
-                                        context = appContext,
-                                        filePath = candidate.filePath,
-                                        uriString = candidate.uriString
-                                    )
-                                    PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
-                                }
-                                database.mediaDao().insertPhotoSpheres(sphereEntities)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Photo sphere check failed", e)
-                        }
-                    }
-                }
-
-                val currentGen = try {
-                    MediaStore.getGeneration(appContext, MediaStore.VOLUME_EXTERNAL)
-                } catch (_: Exception) { 0L }
-
-                if (currentGen > 0) {
+                // Never move the saved generation backwards past what a fast sync already applied.
+                if (currentGen > 0 && (!isDateFallbackMigrated || currentGen > prefs.getLong("last_generation", 0L))) {
                     prefs.edit().putLong("last_generation", currentGen).apply()
                 }
+                if (exifPending) prefs.edit().putBoolean(KEY_EXIF_PENDING, false).apply()
                 if (!isDateFallbackMigrated) {
                     prefs.edit().putBoolean("date_fallback_migrated_v2", true).apply()
                 }
@@ -420,6 +473,90 @@ class MediaSyncEngine private constructor(private val appContext: Context) {
         }
     }
 
+    /** AI indexing, geocoding and photo-sphere jobs after new photos (shared by full and fast sync). */
+    private suspend fun scheduleIndexing(newPhotosCount: Int) {
+        // AI Indexing & background workers (respect per-feature AI folder policy)
+        val (aiConfig, galleryExcluded) = com.inferno.gallery.data.ai.AiIndexingSupport.loadScope(appContext)
+
+        val autoIndexSmartEnabled = settingsRepo.smartSearchAutoIndexFlow.first()
+        val smartSearchEngine = SmartSearchEngine.getInstance(appContext)
+        // Count unindexed items only when this feature would actually use the count
+        if (autoIndexSmartEnabled && newPhotosCount > 0 && smartSearchEngine.isModelDownloaded() &&
+            com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedSmartCount(database, aiConfig, galleryExcluded) > 0
+        ) {
+            val indexRequest = OneTimeWorkRequestBuilder<SmartSearchIndexWorker>().build()
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
+                "SmartSearchIndexWorker",
+                ExistingWorkPolicy.KEEP,
+                indexRequest
+            )
+        }
+
+        val faceRecognitionEnabled = settingsRepo.faceRecognitionEnabledFlow.first()
+        val autoIndexFacesEnabled = settingsRepo.faceAutoIndexFlow.first()
+        val faceEngine = FaceRecognitionEngine.getInstance(appContext)
+        if (faceRecognitionEnabled && autoIndexFacesEnabled && faceEngine.isModelDownloaded() &&
+            com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedFaceCount(database, aiConfig, galleryExcluded) > 0
+        ) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiresBatteryNotLow(true)
+                .build()
+            val faceIndexRequest = OneTimeWorkRequestBuilder<FaceIndexWorker>()
+                .setConstraints(constraints)
+                .build()
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
+                "FaceIndexWorker",
+                ExistingWorkPolicy.KEEP,
+                faceIndexRequest
+            )
+        }
+
+        val ocrEnabled = settingsRepo.ocrIndexingEnabledFlow.first()
+        if (ocrEnabled && newPhotosCount > 0 &&
+            com.inferno.gallery.data.ai.AiIndexingSupport.getEligibleUnindexedOcrCount(database, aiConfig, galleryExcluded) > 0
+        ) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiresBatteryNotLow(true)
+                .build()
+            val ocrIndexRequest = OneTimeWorkRequestBuilder<OcrIndexWorker>()
+                .setConstraints(constraints)
+                .build()
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
+                "OcrIndexWorker",
+                ExistingWorkPolicy.KEEP,
+                ocrIndexRequest
+            )
+        }
+
+        if (newPhotosCount > 0) {
+            val geocodeRequest = OneTimeWorkRequestBuilder<ReverseGeocodeWorker>().build()
+            WorkManager.getInstance(appContext).enqueueUniqueWork(
+                "ReverseGeocodeWorker",
+                ExistingWorkPolicy.KEEP,
+                geocodeRequest
+            )
+
+            // Background photo sphere classification so refresh is instantaneous
+            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val sphereCandidates = database.mediaDao().getUncheckedSphereCandidates()
+                    if (sphereCandidates.isNotEmpty()) {
+                        val sphereEntities = sphereCandidates.map { candidate ->
+                            val isSphere = PhotoSphereHelper.isPhotoSphere(
+                                context = appContext,
+                                filePath = candidate.filePath,
+                                uriString = candidate.uriString
+                            )
+                            PhotoSphereEntity(mediaId = candidate.id, isSphere = isSphere)
+                        }
+                        database.mediaDao().insertPhotoSpheres(sphereEntities)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Photo sphere check failed", e)
+                }
+            }
+        }
+    }
     private fun scanFilesAsync(paths: List<String>) {
         if (paths.isEmpty()) return
         try {

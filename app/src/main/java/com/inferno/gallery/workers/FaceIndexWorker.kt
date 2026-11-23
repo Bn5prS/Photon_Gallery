@@ -239,8 +239,9 @@ class FaceIndexWorker(
                 val currentBatchProgress = alreadyIndexed + processedCount
                 setProgress(workDataOf("processed" to currentBatchProgress, "total" to totalPhotos))
 
-                // Periodically consolidate clusters every 100 photos to keep identities grouped
+                // Periodically refresh centroids and consolidate clusters every 100 photos
                 if (processedCount > 0 && processedCount % 100 == 0) {
+                    runCatching { clusteringManager.refreshAllClusterCentroids() }
                     runCatching { clusteringManager.consolidateClusters() }
                 }
 
@@ -289,6 +290,15 @@ class FaceIndexWorker(
                 runCatching { clusteringManager.consolidateClusters() }
             }
             runCatching { faceDao.recalculateAllPersonFaceCounts() }
+            runCatching {
+                val emptyUnnamed = faceDao.getUnnamedEmptyPersons()
+                if (emptyUnnamed.isNotEmpty()) {
+                    val emptyIds = emptyUnnamed.map { it.id }
+                    faceDao.deleteMergeSuggestionsForPersonsChunked(emptyIds)
+                    faceDao.deletePersonsByIdsChunked(emptyIds)
+                    clusteringManager.invalidateCache()
+                }
+            }
             runCatching { detector?.close() }
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(NOTIFICATION_ID)
         }

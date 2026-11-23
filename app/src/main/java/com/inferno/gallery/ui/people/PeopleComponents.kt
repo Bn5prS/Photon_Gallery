@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,8 +41,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -89,6 +94,7 @@ fun MergePersonPickerSheet(
     currentPersonId: Long,
     title: String = "Merge into...",
     subtitle: String = "Select who this person is to combine all photos together.",
+    similarityScores: Map<Long, Float> = emptyMap(),
     onDismissRequest: () -> Unit,
     onSelectTargetPerson: (PersonEntity) -> Unit,
     onCreateNewPerson: ((String) -> Unit)? = null
@@ -97,13 +103,30 @@ fun MergePersonPickerSheet(
     var searchQuery by remember { mutableStateOf("") }
     var showCreateNewDialog by remember { mutableStateOf(false) }
 
-    val candidatePeople = remember(people, currentPersonId, searchQuery) {
-        people.filter { it.id != currentPersonId }
+    val candidatePeople = remember(people, currentPersonId, searchQuery, similarityScores) {
+        val base = people.filter { it.id != currentPersonId }
             .filter { person ->
                 if (searchQuery.isBlank()) true
                 else person.name?.contains(searchQuery, ignoreCase = true) == true ||
                         "Person #${person.id}".contains(searchQuery, ignoreCase = true)
             }
+        if (searchQuery.isNotBlank() && similarityScores.isNotEmpty()) {
+            base.sortedByDescending { similarityScores[it.id] ?: -1f }
+        } else {
+            base
+        }
+    }
+
+    val (closestMatches, otherPeople) = remember(candidatePeople, searchQuery, similarityScores) {
+        if (searchQuery.isNotBlank() || similarityScores.isEmpty()) {
+            emptyList<PersonEntity>() to candidatePeople
+        } else {
+            com.inferno.gallery.data.ai.FaceClusteringManager.partitionCandidatesBySimilarity(
+                candidates = candidatePeople,
+                idSelector = { it.id },
+                similarityScores = similarityScores
+            )
+        }
     }
 
     if (showCreateNewDialog) {
@@ -244,77 +267,135 @@ fun MergePersonPickerSheet(
                     }
                 }
 
-                items(
-                    items = candidatePeople,
-                    key = { "target_picker_${it.id}" }
-                ) { person ->
-                    Surface(
-                        shape = ShapeMedium,
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pressScale(pressedScale = 0.98f)
-                            .clickable { onSelectTargetPerson(person) }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
-                        ) {
-                            Surface(
-                                shape = ShapeFull,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                val coverFile = person.coverCropPath?.let { File(it) }
-                                if (coverFile != null && coverFile.exists()) {
-                                    AsyncImage(
-                                        model = coverFile,
-                                        contentDescription = person.name,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(CircleShape)
-                                    )
-                                } else {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                        Icon(
-                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(IconSizeTokens.M)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = person.name ?: "Person #${person.id}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(IconSizeTokens.M)
+                if (closestMatches.isNotEmpty()) {
+                    item(key = "header_closest_matches") {
+                        Text(
+                            text = stringResource(R.string.people_closest_matches),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = SpacingTokens.XS, bottom = SpacingTokens.XS)
+                        )
+                    }
+                    items(
+                        items = closestMatches,
+                        key = { "closest_picker_${it.id}" }
+                    ) { person ->
+                        MergePickerPersonRow(
+                            person = person,
+                            similarity = similarityScores[person.id],
+                            onClick = { onSelectTargetPerson(person) }
+                        )
+                    }
+                    if (otherPeople.isNotEmpty()) {
+                        item(key = "header_other_people") {
+                            Text(
+                                text = stringResource(R.string.people_other_people),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = SpacingTokens.M, bottom = SpacingTokens.XS)
                             )
                         }
                     }
                 }
+
+                items(
+                    items = otherPeople,
+                    key = { "target_picker_${it.id}" }
+                ) { person ->
+                    MergePickerPersonRow(
+                        person = person,
+                        similarity = null,
+                        onClick = { onSelectTargetPerson(person) }
+                    )
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun MergePickerPersonRow(
+    person: PersonEntity,
+    similarity: Float?,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = ShapeMedium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressScale(pressedScale = 0.98f)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = SpacingTokens.M, vertical = SpacingTokens.S),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SpacingTokens.M)
+        ) {
+            Surface(
+                shape = ShapeFull,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(48.dp)
+            ) {
+                val coverFile = person.coverCropPath?.let { File(it) }
+                if (coverFile != null && coverFile.exists()) {
+                    AsyncImage(
+                        model = coverFile,
+                        contentDescription = person.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                    )
+                } else {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_person),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(IconSizeTokens.M)
+                        )
+                    }
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = person.name ?: "Person #${person.id}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${person.faceCount} ${if (person.faceCount == 1) "photo" else "photos"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (similarity != null) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Text(
+                        text = "${(similarity * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_merge),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(IconSizeTokens.M)
+            )
         }
     }
 }
@@ -525,7 +606,7 @@ fun MergeSuggestionHeroCard(
                 .fillMaxWidth()
                 .padding(SpacingTokens.L)
         ) {
-            // Header: Sparkle + Title + Carousel Navigation
+            // Header: Merge icon + Title + Carousel Navigation
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically

@@ -11,6 +11,17 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import androidx.paging.PagingSource
 
+data class PhotoStackCandidateRow(
+    val id: Long,
+    val name: String,
+    val bucketName: String,
+    val dateAdded: Long,
+    val dateModified: Long,
+    val size: Long,
+    val pHash: Long?,
+    val isVideo: Boolean
+)
+
 @Dao
 interface MediaDao {
     @Query("SELECT * FROM core_media ORDER BY dateAdded DESC")
@@ -461,6 +472,25 @@ interface MediaDao {
     @Query("SELECT * FROM core_media WHERE fileHash IN (SELECT fileHash FROM core_media WHERE fileHash IS NOT NULL AND bucketName != 'Trash' GROUP BY fileHash HAVING COUNT(id) > 1) AND bucketName != 'Trash' ORDER BY fileHash, dateAdded DESC")
     fun observeExactDuplicates(): Flow<List<CoreMediaEntity>>
 
+    @Query("SELECT * FROM core_media WHERE isVideo = 0 AND pHash IS NULL AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC LIMIT :limit")
+    suspend fun getImagesNeedingPHash(limit: Int = 500): List<CoreMediaEntity>
+
+    @Query("UPDATE core_media SET pHash = :pHash WHERE id = :id")
+    suspend fun updatePHash(id: Long, pHash: Long)
+
+    @androidx.room.Transaction
+    suspend fun updatePHashBatch(entries: List<Pair<Long, Long>>) {
+        for ((id, hash) in entries) {
+            updatePHash(id, hash)
+        }
+    }
+
+    @Query("SELECT * FROM core_media WHERE isVideo = 0 AND pHash IS NOT NULL AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC")
+    fun observeImagesWithPHash(): Flow<List<CoreMediaEntity>>
+
+    @Query("SELECT id, name, bucketName, dateAdded, dateModified, size, pHash, isVideo FROM core_media WHERE isVideo = 0 AND bucketName != 'Trash' AND uriString NOT IN (SELECT originalUri FROM vault_media) ORDER BY dateAdded DESC, id DESC")
+    suspend fun getPhotoStackCandidates(): List<PhotoStackCandidateRow>
+
     @Query("SELECT * FROM core_media WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND bucketName != 'Trash' ORDER BY dateAdded DESC")
     suspend fun getGeotaggedMedia(): List<CoreMediaEntity>
 
@@ -514,12 +544,13 @@ interface MediaDao {
         FaceEntity::class,
         MediaFaceStatusEntity::class,
         PersonMergeSuggestionEntity::class,
+        IgnoredFaceExemplarEntity::class,
         DocumentClassificationEntity::class
         // ImageFtsEntity is intentionally excluded: @Fts5 has a KSP 2.2.x incompatibility.
         // The FTS5 virtual table is instead created manually in DatabaseProvider's
         // RoomDatabase.Callback onCreate hook using raw CREATE VIRTUAL TABLE SQL.
     ],
-    version = 29,
+    version = 30,
     exportSchema = true
 )
 @androidx.room.TypeConverters(EmbeddingConverter::class)

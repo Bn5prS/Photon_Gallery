@@ -269,6 +269,33 @@ fun PhotonGrid(
                         )
                     }
 
+                    // Keep timeline anchored at (0, 0) when new items prepend while sitting at the top
+                    var wasMosaicAtTop by remember { mutableStateOf(true) }
+                    LaunchedEffect(lazyGridState) {
+                        snapshotFlow {
+                            Triple(
+                                lazyGridState.isScrollInProgress,
+                                lazyGridState.firstVisibleItemIndex,
+                                lazyGridState.firstVisibleItemScrollOffset
+                            )
+                        }.collect { (scrolling, idx, offset) ->
+                            if (scrolling || (idx == 0 && offset <= 4)) {
+                                wasMosaicAtTop = (idx == 0 && offset <= 4)
+                            }
+                        }
+                    }
+                    val topMosaicSignature = remember(mosaicDisplayItems) {
+                        mosaicDisplayItems.take(2).joinToString("|") { it.key }
+                    }
+                    LaunchedEffect(topMosaicSignature) {
+                        if (wasMosaicAtTop && !lazyGridState.isScrollInProgress && mosaicDisplayItems.isNotEmpty()) {
+                            if (lazyGridState.firstVisibleItemIndex != 0 || lazyGridState.firstVisibleItemScrollOffset != 0) {
+                                lazyGridState.scrollToItem(0, 0)
+                                viewModel.setTopBarCollapsed(false)
+                            }
+                        }
+                    }
+
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(mosaicCols),
                         state = lazyGridState,
@@ -831,6 +858,57 @@ fun OptimizedThumbnailCell(
             }
         }
 
+        // Photo Stack burst badge (Top-End) using Material Symbols burst_mode
+        if (item.stackCount > 1 && !isSelected) {
+            val badgePadding = when {
+                gridCellsCount <= 4 -> 5.dp
+                else -> 3.dp
+            }
+            val iconSize = when {
+                gridCellsCount <= 3 -> 13.dp
+                gridCellsCount <= 5 -> 11.dp
+                else -> 9.dp
+            }
+            val fontSizeSp = when {
+                gridCellsCount <= 3 -> 10.sp
+                gridCellsCount <= 5 -> 9.sp
+                else -> 8.sp
+            }
+            Surface(
+                shape = ShapeFull,
+                color = Color(0xBC0F0F14),
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(badgePadding)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_burst_mode),
+                        contentDescription = "Photo stack",
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
+                    )
+                    if (gridCellsCount < 7) {
+                        Text(
+                            text = "${item.stackCount}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = fontSizeSp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = fontSizeSp
+                            ),
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
         // Selection overlay checkmark badge with solid white contrast border
         if (isSelected) {
             val checkPadding = when {
@@ -868,7 +946,7 @@ fun OptimizedThumbnailCell(
             }
         }
 
-        // Favorite red heart badge in subtle translucent contrast circle
+        // Favorite heart badge on Bottom-Start in subtle translucent contrast circle (unified with NativePhotonGrid)
         if (isFavorite) {
             val badgePadding = when {
                 gridCellsCount <= 3 -> 6.dp
@@ -890,7 +968,7 @@ fun OptimizedThumbnailCell(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(Alignment.BottomStart)
                     .padding(badgePadding)
                     .size(badgeSize)
                     .background(

@@ -1,23 +1,32 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
+)
 
 package com.inferno.gallery.ui
 
-import android.content.ContentValues
-import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,30 +34,27 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ContainedLoadingIndicator
-import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,31 +72,55 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import com.inferno.gallery.R
+import com.inferno.gallery.ui.theme.MotionTokens
+import com.inferno.gallery.ui.theme.ShapeFull
 import com.inferno.gallery.ui.theme.ShapeLarge
 import com.inferno.gallery.ui.theme.ShapeLargeIncreased
 import com.inferno.gallery.ui.theme.ShapeMedium
-import com.inferno.gallery.ui.theme.ShapeSmall
-import com.inferno.gallery.workers.MediaSyncWorker
+import com.inferno.gallery.ui.video.FrameExportFormat
+import com.inferno.gallery.ui.video.VideoFrameExportHelper
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun VideoFrameExtractorScreen(
     videoUri: Uri,
@@ -99,368 +130,742 @@ fun VideoFrameExtractorScreen(
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val hapticFeedback = LocalHapticFeedback.current
+    val haptic = LocalHapticFeedback.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var durationMs by remember { mutableLongStateOf(0L) }
-    var currentPositionMs by remember { mutableLongStateOf(0L) }
-    var currentFrameBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var isLoadingFrame by remember { mutableStateOf(true) }
+    var durationMs by remember(videoUri) { mutableLongStateOf(0L) }
+    var currentPositionMs by remember(videoUri) { mutableLongStateOf(0L) }
+    var videoWidth by remember(videoUri) { mutableIntStateOf(0) }
+    var videoHeight by remember(videoUri) { mutableIntStateOf(0) }
+    var detectedFps by remember(videoUri) { mutableFloatStateOf(30f) }
+
+    var isPlaying by remember(videoUri) { mutableStateOf(false) }
+    var isScrubbing by remember(videoUri) { mutableStateOf(false) }
+    var hasFirstFrame by remember(videoUri) { mutableStateOf(false) }
+
+    var exportFormat by remember { mutableStateOf(FrameExportFormat.JPEG) }
     var isSaving by remember { mutableStateOf(false) }
+    var isSharing by remember { mutableStateOf(false) }
+    var savedCount by remember(videoUri) { mutableIntStateOf(0) }
+    var showSavedBanner by remember { mutableStateOf(false) }
 
-    val filmstripBitmaps = remember { mutableStateListOf<Bitmap>() }
+    // Preview zoom & pan state so users can inspect focus/sharpness before saving
+    var previewScale by remember(videoUri) { mutableFloatStateOf(1f) }
+    var previewOffsetX by remember(videoUri) { mutableFloatStateOf(0f) }
+    var previewOffsetY by remember(videoUri) { mutableFloatStateOf(0f) }
 
-    // Initialize retriever and read video metadata
-    val retriever = remember { MediaMetadataRetriever() }
+    // Tactile camera-shutter flash animation on capture
+    val shutterFlashAlpha = remember { Animatable(0f) }
 
-    DisposableEffect(videoUri) {
-        try {
-            retriever.setDataSource(context, videoUri)
-            val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            durationMs = durStr?.toLongOrNull() ?: 1000L
-        } catch (e: Throwable) {
-            Toast.makeText(context, "Failed to load video", Toast.LENGTH_SHORT).show()
+    val filmstripBitmaps = remember(videoUri) { mutableStateListOf<Bitmap>() }
+
+    val frameStepMs = remember(detectedFps) {
+        (1000.0 / detectedFps.coerceIn(10f, 120f)).roundToLong().coerceIn(8L, 100L)
+    }
+
+    // Live hardware-accelerated ExoPlayer for smooth real-time scrubbing & exact frame stepping
+    val exoPlayer = remember(videoUri) {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
+            .build()
+            .apply {
+                setSeekParameters(SeekParameters.EXACT)
+                volume = 0f // Keep frame extraction silent and focused
+                repeatMode = Player.REPEAT_MODE_OFF
+                setMediaItem(MediaItem.fromUri(videoUri))
+                prepare()
+                playWhenReady = false
+            }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    if (exoPlayer.duration > 0L) {
+                        durationMs = exoPlayer.duration
+                    }
+                    exoPlayer.videoFormat?.frameRate?.let { fr ->
+                        if (fr in 10f..240f) detectedFps = fr
+                    }
+                } else if (playbackState == Player.STATE_ENDED) {
+                    isPlaying = false
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                hasFirstFrame = true
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val rotated = videoSize.unappliedRotationDegrees == 90 || videoSize.unappliedRotationDegrees == 270
+                    videoWidth = if (rotated) videoSize.height else videoSize.width
+                    videoHeight = if (rotated) videoSize.width else videoSize.height
+                }
+            }
         }
-
+        exoPlayer.addListener(listener)
         onDispose {
-            try {
-                retriever.release()
-            } catch (_: Throwable) { }
-            filmstripBitmaps.forEach {
-                if (!it.isRecycled) it.recycle()
-            }
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+            filmstripBitmaps.forEach { if (!it.isRecycled) it.recycle() }
             filmstripBitmaps.clear()
-            currentFrameBitmap?.let {
-                if (!it.isRecycled) it.recycle()
-            }
         }
     }
 
-    // Generate timeline filmstrip thumbnails (8 frames across duration)
-    LaunchedEffect(durationMs) {
-        if (durationMs <= 0L) return@LaunchedEffect
-        withContext(Dispatchers.IO) {
-            val count = 8
-            val step = durationMs / count.coerceAtLeast(1)
-            for (i in 0 until count) {
-                val timeUs = (i * step) * 1000L
-                val thumb = try {
-                    retriever.getScaledFrameAtTime(
-                        timeUs,
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        160,
-                        160
-                    )
-                } catch (_: Throwable) { null }
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
-                if (thumb != null) {
-                    withContext(Dispatchers.Main) {
-                        filmstripBitmaps.add(thumb)
+    // Dedicated background MediaMetadataRetriever (thread-safe, never blocks main thread)
+    // to inspect exact metadata (duration/FPS/dimensions) and build a 10-frame filmstrip track.
+    LaunchedEffect(videoUri) {
+        withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, videoUri)
+                val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                val rot = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                val captureFps = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()
+                val frameCount = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toLongOrNull()
+                val computedFps = when {
+                    captureFps != null && captureFps in 10f..240f -> captureFps
+                    frameCount != null && frameCount > 1 && dur > 0L -> {
+                        ((frameCount * 1000.0) / dur.toDouble()).toFloat().takeIf { it in 10f..240f }
+                    }
+                    else -> null
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (dur > 0L && durationMs <= 0L) durationMs = dur
+                    if (w > 0 && h > 0 && videoWidth == 0) {
+                        val isRotated = rot == 90 || rot == 270
+                        videoWidth = if (isRotated) h else w
+                        videoHeight = if (isRotated) w else h
+                    }
+                    if (computedFps != null) detectedFps = computedFps
+                }
+
+                val effectiveDur = dur.takeIf { it > 0L } ?: durationMs
+                if (effectiveDur > 0L) {
+                    val count = 10
+                    val step = effectiveDur / count.coerceAtLeast(1)
+                    for (i in 0 until count) {
+                        if (!isActive) break
+                        val timeUs = (i * step + step / 2).coerceIn(0L, effectiveDur) * 1000L
+                        val thumb = try {
+                            retriever.getScaledFrameAtTime(
+                                timeUs,
+                                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                                180,
+                                180
+                            )
+                        } catch (_: Throwable) {
+                            null
+                        }
+                        if (thumb != null) {
+                            withContext(Dispatchers.Main) {
+                                filmstripBitmaps.add(thumb)
+                            }
+                        }
                     }
                 }
-            }
-        }
-    }
-
-    // Debounced high-precision frame extraction when currentPositionMs changes
-    var extractJob by remember { mutableStateOf<Job?>(null) }
-    fun requestFrame(positionMs: Long) {
-        extractJob?.cancel()
-        extractJob = coroutineScope.launch {
-            isLoadingFrame = true
-            val bitmap = withContext(Dispatchers.IO) {
+            } catch (_: Throwable) {
+            } finally {
                 try {
-                    retriever.getFrameAtTime(
-                        positionMs * 1000L,
-                        MediaMetadataRetriever.OPTION_CLOSEST
-                    )
-                } catch (_: Throwable) {
-                    null
-                }
+                    retriever.release()
+                } catch (_: Throwable) {}
             }
-            if (bitmap != null) {
-                currentFrameBitmap?.let { if (!it.isRecycled) it.recycle() }
-                currentFrameBitmap = bitmap
-            }
-            isLoadingFrame = false
         }
     }
 
-    // Load initial frame at 0ms
-    LaunchedEffect(durationMs) {
-        if (durationMs > 0L) {
-            requestFrame(0L)
+    // Smooth playhead polling while playing
+    LaunchedEffect(isPlaying, isScrubbing) {
+        while (isPlaying && !isScrubbing) {
+            val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+            currentPositionMs = if (durationMs > 0L) pos.coerceAtMost(durationMs) else pos
+            delay(33L)
         }
     }
 
-    // Save frame to MediaStore
+    // Auto-dismiss saved confirmation pill
+    LaunchedEffect(showSavedBanner, savedCount) {
+        if (showSavedBanner) {
+            delay(2400L)
+            showSavedBanner = false
+        }
+    }
+
+    var lastScrubSeekRealtime by remember { mutableLongStateOf(0L) }
+
+    fun seekExact(targetMs: Long) {
+        val clamped = if (durationMs > 0L) targetMs.coerceIn(0L, durationMs) else targetMs.coerceAtLeast(0L)
+        exoPlayer.pause()
+        exoPlayer.setSeekParameters(SeekParameters.EXACT)
+        exoPlayer.seekTo(clamped)
+        currentPositionMs = clamped
+    }
+
+    fun scrubLive(targetMs: Long) {
+        val clamped = if (durationMs > 0L) targetMs.coerceIn(0L, durationMs) else targetMs.coerceAtLeast(0L)
+        currentPositionMs = clamped
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastScrubSeekRealtime >= 36L) {
+            lastScrubSeekRealtime = now
+            exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+            exoPlayer.seekTo(clamped)
+        }
+    }
+
+    fun togglePlayback() {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (isPlaying) {
+            exoPlayer.pause()
+            currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+        } else {
+            exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+            if (exoPlayer.playbackState == Player.STATE_ENDED ||
+                (durationMs > 0L && currentPositionMs >= durationMs - 60L)
+            ) {
+                exoPlayer.seekTo(0L)
+                currentPositionMs = 0L
+            }
+            exoPlayer.play()
+        }
+    }
+
     fun saveFrame() {
-        if (isSaving) return
+        if (isSaving || isSharing) return
+        val capturePosMs = if (isPlaying) {
+            exoPlayer.pause()
+            exoPlayer.currentPosition.coerceAtLeast(0L).also { currentPositionMs = it }
+        } else {
+            currentPositionMs
+        }
         isSaving = true
-        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
         coroutineScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                try {
-                    // Extract full uncompressed frame at exact microsecond
-                    val fullBitmap = retriever.getFrameAtTime(
-                        currentPositionMs * 1000L,
-                        MediaMetadataRetriever.OPTION_CLOSEST
-                    ) ?: currentFrameBitmap ?: return@withContext false
-
-                    val fileName = "FRAME_${System.currentTimeMillis()}.jpg"
-                    val contentValues = ContentValues().apply {
-                        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
-                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Photon Gallery")
-                        put(MediaStore.Images.Media.IS_PENDING, 1)
-                        put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis() / 1000L)
-                        put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis())
-                    }
-
-                    val insertUri = context.contentResolver.insert(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        contentValues
-                    ) ?: return@withContext false
-
-                    context.contentResolver.openOutputStream(insertUri)?.use { out ->
-                        fullBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
-                    }
-
-                    contentValues.clear()
-                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                    context.contentResolver.update(insertUri, contentValues, null, null)
-
-                    // Dispatch MediaSyncWorker to index newly saved frame into Room database
-                    val syncWork = OneTimeWorkRequestBuilder<MediaSyncWorker>().build()
-                    WorkManager.getInstance(context).enqueue(syncWork)
-                    true
-                } catch (e: Throwable) {
-                    false
-                }
+            launch {
+                shutterFlashAlpha.snapTo(0.32f)
+                shutterFlashAlpha.animateTo(0f, animationSpec = tween(220))
             }
-
+            val result = VideoFrameExportHelper.exportFrameAtPosition(
+                context = context,
+                videoUri = videoUri,
+                positionMs = capturePosMs,
+                format = exportFormat
+            )
             isSaving = false
-            if (success) {
-                Toast.makeText(context, "Frame saved to Pictures/Photon Gallery", Toast.LENGTH_SHORT).show()
+            if (result.isSuccess) {
+                savedCount += 1
+                showSavedBanner = true
             } else {
-                Toast.makeText(context, "Failed to save frame", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.video_frame_failed),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
 
-    // ── Screen Layout ──────────────────────────────────────────────────────────
-    Box(
+    fun shareFrame() {
+        if (isSaving || isSharing) return
+        val capturePosMs = if (isPlaying) {
+            exoPlayer.pause()
+            exoPlayer.currentPosition.coerceAtLeast(0L).also { currentPositionMs = it }
+        } else {
+            currentPositionMs
+        }
+        isSharing = true
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+        coroutineScope.launch {
+            val result = VideoFrameExportHelper.exportFrameToCacheFile(
+                context = context,
+                videoUri = videoUri,
+                positionMs = capturePosMs,
+                format = exportFormat
+            )
+            isSharing = false
+            result.onSuccess { file ->
+                try {
+                    val shareUri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = exportFormat.mimeType
+                        putExtra(Intent.EXTRA_STREAM, shareUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        Intent.createChooser(sendIntent, context.getString(R.string.action_extract_frame))
+                    )
+                } catch (_: Throwable) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.video_frame_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }.onFailure {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.video_frame_failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    val metadataSubtitle = remember(videoWidth, videoHeight, detectedFps) {
+        val resLabel = when {
+            videoWidth <= 0 || videoHeight <= 0 -> null
+            maxOf(videoWidth, videoHeight) >= 3840 -> "4K (${videoWidth}×${videoHeight})"
+            else -> "${videoWidth}×${videoHeight}"
+        }
+        val fpsLabel = "${detectedFps.roundToInt()} fps"
+        if (resLabel != null) "$resLabel • $fpsLabel" else fpsLabel
+    }
+
+    val currentFrameNumber = remember(currentPositionMs, detectedFps) {
+        ((currentPositionMs / 1000.0) * detectedFps).roundToLong().coerceAtLeast(0L)
+    }
+
+    // ── Studio Screen Layout ──────────────────────────────────────────────────
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
+        // ── Top Bar ──
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Top App Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            FilledTonalIconButton(
+                onClick = onBack,
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.size(40.dp)
             ) {
-                FilledTonalIconButton(
-                    onClick = onBack,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    )
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
-                        contentDescription = "Back"
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_ms_arrow_back),
+                    contentDescription = stringResource(R.string.cd_back),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.action_extract_frame),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = metadataSubtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Segmented JPG / PNG format pill
+            FormatSegmentedPill(
+                selectedFormat = exportFormat,
+                onSelect = { next ->
+                    if (exportFormat != next) {
+                        exportFormat = next
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                }
+            )
+        }
+
+        // ── Live Hardware Video Viewport (Tap to Play/Pause, Pinch/Double-Tap to Inspect Sharpness) ──
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clip(ShapeLargeIncreased)
+                .background(Color(0xFF0E0E11))
+                .clipToBounds()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { togglePlayback() },
+                        onDoubleTap = {
+                            if (previewScale > 1.05f) {
+                                previewScale = 1f
+                                previewOffsetX = 0f
+                                previewOffsetY = 0f
+                            } else {
+                                previewScale = 2.5f
+                            }
+                        }
                     )
                 }
-
-                Text(
-                    text = "Frame Extractor",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                ElevatedButton(
-                    onClick = { saveFrame() },
-                    enabled = !isSaving && currentFrameBitmap != null,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.elevatedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    if (isSaving) {
-                        ContainedLoadingIndicator(modifier = Modifier.size(18.dp))
-                    } else {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_save),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = "Save",
-                                style = MaterialTheme.typography.labelLarge
-                            )
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        val nextScale = (previewScale * zoom).coerceIn(1f, 4f)
+                        previewScale = nextScale
+                        if (nextScale <= 1.01f) {
+                            previewOffsetX = 0f
+                            previewOffsetY = 0f
+                        } else {
+                            val maxX = (size.width * (nextScale - 1f)) / 2f
+                            val maxY = (size.height * (nextScale - 1f)) / 2f
+                            previewOffsetX = (previewOffsetX + pan.x).coerceIn(-maxX, maxX)
+                            previewOffsetY = (previewOffsetY + pan.y).coerceIn(-maxY, maxY)
                         }
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    val view = android.view.LayoutInflater.from(ctx)
+                        .inflate(R.layout.view_video_player, null, false) as PlayerView
+                    view.apply {
+                        useController = false
+                        controllerAutoShow = false
+                        hideController()
+                        isClickable = false
+                        isFocusable = false
+                        setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        player = exoPlayer
+                    }
+                },
+                update = { view ->
+                    if (view.player != exoPlayer) view.player = exoPlayer
+                },
+                onRelease = { view ->
+                    view.player = null
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = previewScale
+                        scaleY = previewScale
+                        translationX = previewOffsetX
+                        translationY = previewOffsetY
+                    }
+            )
+
+            // Loading indicator before first video frame renders
+            if (!hasFirstFrame) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+
+            // Camera shutter flash feedback on Save
+            if (shutterFlashAlpha.value > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = shutterFlashAlpha.value))
+                )
+            }
+
+            // Floating "Reset Zoom" chip when magnified to inspect sharpness
+            androidx.compose.animation.AnimatedVisibility(
+                visible = previewScale > 1.05f,
+                enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.snappySpring()),
+                exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec()),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp)
+            ) {
+                Surface(
+                    onClick = {
+                        previewScale = 1f
+                        previewOffsetX = 0f
+                        previewOffsetY = 0f
+                    },
+                    shape = ShapeFull,
+                    color = Color(0xCC121216),
+                    contentColor = Color.White,
+                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        text = String.format(Locale.US, "%.1f×  Reset", previewScale),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            // Floating Saved Confirmation Pill (allows multi-frame capture without leaving screen)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showSavedBanner && savedCount > 0,
+                enter = fadeIn(MotionTokens.fastEffectsSpec()) + scaleIn(MotionTokens.snappySpring()),
+                exit = fadeOut(MotionTokens.fastEffectsSpec()) + scaleOut(MotionTokens.fastEffectsSpec()),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 12.dp)
+            ) {
+                Surface(
+                    shape = ShapeFull,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shadowElevation = 3.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_check_circle),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (savedCount == 1) {
+                                "Saved ${exportFormat.label} to Gallery"
+                            } else {
+                                "Saved $savedCount frames to Gallery"
+                            },
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
                     }
                 }
             }
+        }
 
-            // Main Frame Viewport
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(ShapeLargeIncreased)
-                    .background(MaterialTheme.colorScheme.surfaceContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                val bmp = currentFrameBitmap
-                if (bmp != null && !bmp.isRecycled) {
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Extracted video frame",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                if (isLoadingFrame) {
-                    ContainedLoadingIndicator(modifier = Modifier.size(48.dp))
-                }
-            }
-
-            // Timeline & Controls Dock
-            Surface(
-                shape = ShapeLarge,
-                color = MaterialTheme.colorScheme.surfaceContainer,
+        // ── Bottom Studio Dock (Timecode + Interactive Filmstrip + Precision Transport + Save/Share) ──
+        Surface(
+            shape = ShapeLargeIncreased,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // Timecode & Frame Number Readout
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Timecode Readout
-                    val formattedCurrent = formatTimeCode(currentPositionMs)
-                    val formattedTotal = formatTimeCode(durationMs)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = formattedCurrent,
-                            style = MaterialTheme.typography.headlineMedium,
+                            text = formatTimeCode(currentPositionMs),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFeatureSettings = "tnum"
+                            ),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "/ $formattedTotal",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "/ ${formatTimeCode(durationMs)}",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontFeatureSettings = "tnum"
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 3.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Filmstrip Track Preview
-                    if (filmstripBitmaps.isNotEmpty()) {
-                        LazyRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp)
-                                .clip(ShapeMedium)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, ShapeMedium),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            itemsIndexed(filmstripBitmaps) { _, thumb ->
-                                if (!thumb.isRecycled) {
-                                    Image(
-                                        bitmap = thumb.asImageBitmap(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .aspectRatio(1f)
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    // Scrubber Slider
-                    var sliderValue by remember(currentPositionMs) {
-                        mutableFloatStateOf(currentPositionMs.toFloat())
-                    }
-
-                    Slider(
-                        value = sliderValue,
-                        onValueChange = { newValue ->
-                            sliderValue = newValue
-                            currentPositionMs = newValue.toLong().coerceIn(0L, durationMs)
-                        },
-                        onValueChangeFinished = {
-                            requestFrame(currentPositionMs)
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Precision Nudge Controls (-1s, -33ms, +33ms, +1s)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = ShapeFull,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ) {
-                        NudgeButton(label = "-1s", tooltip = "Rewind 1 second") {
-                            val target = (currentPositionMs - 1000L).coerceAtLeast(0L)
-                            currentPositionMs = target
-                            requestFrame(target)
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
+                        Text(
+                            text = "Frame $currentFrameNumber",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontFeatureSettings = "tnum"
+                            ),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
 
-                        NudgeButton(label = "-33ms", tooltip = "Previous frame (~33ms)") {
-                            val target = (currentPositionMs - 33L).coerceAtLeast(0L)
-                            currentPositionMs = target
-                            requestFrame(target)
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
+                // Interactive Full-Width Filmstrip Scrubber with Playhead Needle
+                InteractiveFilmstripScrubber(
+                    bitmaps = filmstripBitmaps,
+                    currentPositionMs = currentPositionMs,
+                    durationMs = durationMs,
+                    onScrubStart = {
+                        isScrubbing = true
+                        exoPlayer.pause()
+                    },
+                    onScrubPosition = { posMs ->
+                        scrubLive(posMs)
+                    },
+                    onScrubEnd = { posMs ->
+                        isScrubbing = false
+                        seekExact(posMs)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                )
 
-                        NudgeButton(label = "+33ms", tooltip = "Next frame (~33ms)") {
-                            val target = (currentPositionMs + 33L).coerceAtMost(durationMs)
-                            currentPositionMs = target
-                            requestFrame(target)
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
+                // Precision Transport & Exact Frame-Step Controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    NudgePillButton(label = "-1s") {
+                        seekExact(currentPositionMs - 1000L)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
 
-                        NudgeButton(label = "+1s", tooltip = "Forward 1 second") {
-                            val target = (currentPositionMs + 1000L).coerceAtMost(durationMs)
-                            currentPositionMs = target
-                            requestFrame(target)
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    NudgePillButton(label = "-1f") {
+                        seekExact(currentPositionMs - frameStepMs)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+
+                    FilledIconButton(
+                        onClick = { togglePlayback() },
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Icon(
+                            imageVector = ImageVector.vectorResource(
+                                if (isPlaying) R.drawable.ic_ms_pause else R.drawable.ic_ms_play_arrow
+                            ),
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    NudgePillButton(label = "+1f") {
+                        seekExact(currentPositionMs + frameStepMs)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+
+                    NudgePillButton(label = "+1s") {
+                        seekExact(currentPositionMs + 1000L)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                }
+
+                // Primary Save & Share Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = { shareFrame() },
+                        enabled = !isSaving && !isSharing && hasFirstFrame,
+                        shape = ShapeFull,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        if (isSharing) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_share),
+                                contentDescription = stringResource(R.string.detail_share),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.detail_share),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { saveFrame() },
+                        enabled = !isSaving && !isSharing && hasFirstFrame,
+                        shape = ShapeFull,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(R.drawable.ic_ms_photo_camera),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (savedCount == 0) {
+                                    "Save Frame (${exportFormat.label})"
+                                } else {
+                                    "Save Another ($savedCount)"
+                                },
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -470,32 +875,191 @@ fun VideoFrameExtractorScreen(
 }
 
 @Composable
-private fun NudgeButton(
+private fun FormatSegmentedPill(
+    selectedFormat: FrameExportFormat,
+    onSelect: (FrameExportFormat) -> Unit
+) {
+    Surface(
+        shape = ShapeFull,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier.padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FrameExportFormat.entries.forEach { format ->
+                val isSelected = format == selectedFormat
+                val bg by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    animationSpec = MotionTokens.fastEffectsSpec(),
+                    label = "formatPillBg"
+                )
+                val fg by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    animationSpec = MotionTokens.fastEffectsSpec(),
+                    label = "formatPillFg"
+                )
+                Surface(
+                    onClick = { onSelect(format) },
+                    shape = ShapeFull,
+                    color = bg,
+                    contentColor = fg
+                ) {
+                    Text(
+                        text = if (format == FrameExportFormat.JPEG) "JPG" else "PNG",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 11.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InteractiveFilmstripScrubber(
+    bitmaps: List<Bitmap>,
+    currentPositionMs: Long,
+    durationMs: Long,
+    onScrubStart: () -> Unit,
+    onScrubPosition: (Long) -> Unit,
+    onScrubEnd: (Long) -> Unit
+) {
+    val density = LocalDensity.current
+    val safeDuration = durationMs.coerceAtLeast(1L)
+    val fraction = (currentPositionMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+    ) {
+        val trackWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+        val playheadWidthDp = 4.dp
+        val playheadWidthPx = with(density) { playheadWidthDp.toPx() }
+        val playheadOffsetPx = ((trackWidthPx - playheadWidthPx) * fraction).roundToInt()
+
+        var dragFraction by remember { mutableFloatStateOf(fraction) }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 3.dp)
+                .clip(ShapeMedium)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    shape = ShapeMedium
+                )
+                .pointerInput(safeDuration, trackWidthPx) {
+                    detectTapGestures { offset ->
+                        val f = (offset.x / trackWidthPx).coerceIn(0f, 1f)
+                        val target = (f * safeDuration).roundToLong()
+                        onScrubEnd(target)
+                    }
+                }
+                .pointerInput(safeDuration, trackWidthPx) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            dragFraction = (offset.x / trackWidthPx).coerceIn(0f, 1f)
+                            onScrubStart()
+                            onScrubPosition((dragFraction * safeDuration).roundToLong())
+                        },
+                        onDragEnd = {
+                            onScrubEnd((dragFraction * safeDuration).roundToLong())
+                        },
+                        onDragCancel = {
+                            onScrubEnd((dragFraction * safeDuration).roundToLong())
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dragFraction = (dragFraction + dragAmount / trackWidthPx).coerceIn(0f, 1f)
+                            onScrubPosition((dragFraction * safeDuration).roundToLong())
+                        }
+                    )
+                }
+        ) {
+            if (bitmaps.isNotEmpty()) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    bitmaps.forEach { thumb ->
+                        if (!thumb.isRecycled) {
+                            Image(
+                                bitmap = thumb.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Subtle progress overlay before playhead for quick spatial orientation
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(fraction)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+            )
+        }
+
+        // Crisp vertical playhead needle extending slightly above/below filmstrip
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(x = playheadOffsetPx, y = 0) }
+                .width(playheadWidthDp)
+                .fillMaxHeight()
+                .background(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(3.dp)
+                )
+                .border(
+                    width = 0.75.dp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(3.dp)
+                )
+        )
+    }
+}
+
+@Composable
+private fun NudgePillButton(
     label: String,
-    tooltip: String,
     onClick: () -> Unit
 ) {
     FilledTonalButton(
         onClick = onClick,
-        shape = CircleShape,
+        shape = ShapeLarge,
         colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.height(38.dp)
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontFeatureSettings = "tnum"
+            )
         )
     }
 }
 
 private fun formatTimeCode(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    val millis = ms % 1000
+    val safeMs = ms.coerceAtLeast(0L)
+    val totalSeconds = safeMs / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    val millis = safeMs % 1000L
     return String.format(Locale.US, "%02d:%02d.%03d", minutes, seconds, millis)
 }

@@ -222,6 +222,29 @@ class MainActivity : FragmentActivity() {
                     androidx.compose.foundation.LocalOverscrollFactory provides null
                 ) {
                     val backgroundColor = MaterialTheme.colorScheme.surface
+                    var hasSyncedTaskDescription by rememberSaveable { mutableStateOf(false) }
+
+                    LaunchedEffect(backgroundColor) {
+                        val opaqueSurfaceArgb = backgroundColor.toArgb() or 0xFF000000.toInt()
+                        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(opaqueSurfaceArgb))
+                        if (hasSyncedTaskDescription) {
+                            kotlinx.coroutines.delay(120L)
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            setTaskDescription(
+                                android.app.ActivityManager.TaskDescription.Builder()
+                                    .setBackgroundColor(opaqueSurfaceArgb)
+                                    .setPrimaryColor(opaqueSurfaceArgb)
+                                    .build()
+                            )
+                        } else {
+                            @Suppress("DEPRECATION")
+                            setTaskDescription(
+                                android.app.ActivityManager.TaskDescription(null, 0, opaqueSurfaceArgb)
+                            )
+                        }
+                        hasSyncedTaskDescription = true
+                    }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -262,13 +285,10 @@ class MainActivity : FragmentActivity() {
 
     private fun triggerSyncOnResume() {
         try {
+            // One fast incremental sync on resume. The extra worker enqueued here with
+            // REPLACE used to cancel whatever sync was running (losing minutes of work) and
+            // start another full reconcile on every return to the app.
             galleryViewModel.runFastInitialSync()
-            val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.inferno.gallery.workers.MediaSyncWorker>().build()
-            androidx.work.WorkManager.getInstance(applicationContext).enqueueUniqueWork(
-                "MediaSyncWorker_Foreground",
-                androidx.work.ExistingWorkPolicy.REPLACE,
-                syncRequest
-            )
         } catch (_: Exception) {}
     }
 

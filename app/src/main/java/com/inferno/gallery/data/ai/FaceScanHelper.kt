@@ -95,8 +95,67 @@ object FaceScanHelper {
     fun createDetectorOptions(): FaceDetectorOptions = FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
         .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-        .setMinFaceSize(0.015f)
+        .setMinFaceSize(0.025f)
         .build()
+
+    /**
+     * Rejects severely underexposed, blown-out, or featureless flat crops (e.g., dark shadows,
+     * glare patches, blank walls) whose MobileFaceNet embeddings collapse into generic noise
+     * and falsely cluster unrelated non-faces together.
+     */
+    fun isCropLightingUsable(lumaSamples: FloatArray): Boolean {
+        if (lumaSamples.isEmpty()) return false
+        var sum = 0.0
+        var darkCount = 0
+        var brightCount = 0
+        for (luma in lumaSamples) {
+            sum += luma
+            if (luma < 14f) darkCount++
+            if (luma > 246f) brightCount++
+        }
+        val n = lumaSamples.size.toDouble()
+        val mean = sum / n
+        var varianceSum = 0.0
+        for (luma in lumaSamples) {
+            val d = luma - mean
+            varianceSum += d * d
+        }
+        val stdDev = kotlin.math.sqrt(varianceSum / n).toFloat()
+        val darkRatio = darkCount / n
+        val brightRatio = brightCount / n
+
+        if (stdDev < 10.5f) return false
+        if (mean < 16.0 && darkRatio > 0.85) return false
+        if (mean > 242.0 && brightRatio > 0.85) return false
+        return true
+    }
+
+    /**
+     * Evaluates central facial region lighting/contrast on an aligned 112×112 RGB bitmap.
+     */
+    fun isAlignedFaceCropUsable(aligned112: Bitmap): Boolean {
+        if (aligned112.isRecycled || aligned112.width < 32 || aligned112.height < 32) return false
+        val x0 = (aligned112.width * 0.18f).roundToInt().coerceIn(0, aligned112.width - 1)
+        val y0 = (aligned112.height * 0.18f).roundToInt().coerceIn(0, aligned112.height - 1)
+        val rw = (aligned112.width * 0.64f).roundToInt().coerceIn(1, aligned112.width - x0)
+        val rh = (aligned112.height * 0.72f).roundToInt().coerceIn(1, aligned112.height - y0)
+        val pixels = IntArray(rw * rh)
+        aligned112.getPixels(pixels, 0, rw, x0, y0, rw, rh)
+        // Subsample every 2nd pixel for negligible CPU overhead
+        val sampleCount = (pixels.size + 1) / 2
+        val lumas = FloatArray(sampleCount)
+        var idx = 0
+        var pIdx = 0
+        while (pIdx < pixels.size && idx < sampleCount) {
+            val p = pixels[pIdx]
+            val r = (p shr 16) and 0xFF
+            val g = (p shr 8) and 0xFF
+            val b = p and 0xFF
+            lumas[idx++] = 0.299f * r + 0.587f * g + 0.114f * b
+            pIdx += 2
+        }
+        return isCropLightingUsable(lumas)
+    }
 
     fun getFaceCropDir(context: Context): File = File(context.filesDir, "face_crops").apply {
         if (!exists()) mkdirs()
@@ -190,7 +249,9 @@ object FaceScanHelper {
         val bottom = (rawBox.bottom + offsetY).coerceIn(0, imageHeight)
         val w = right - left
         val h = bottom - top
-        if (w < 20 || h < 20) return null
+        if (w < 28 || h < 28) return null
+        val aspect = w.toFloat() / h.toFloat()
+        if (aspect < 0.55f || aspect > 1.85f) return null
 
         val yaw = face.headEulerAngleY
         val pitch = face.headEulerAngleX
@@ -201,31 +262,40 @@ object FaceScanHelper {
             FacePoint(it.x + offsetX, it.y + offsetY)
         }
 
-        val leftEye = pointOf(FaceLandmark.LEFT_EYE)
-        val rightEye = pointOf(FaceLandmark.RIGHT_EYE)
+        // ML Kit reports landmarks in the subject's anatomical frame:
+        // subject's RIGHT eye / mouth corner sit on the viewer's LEFT side of the image,
+        // and subject's LEFT eye / mouth corner sit on the viewer's RIGHT side of the image.
+        val imageLeftEye = pointOf(FaceLandmark.RIGHT_EYE)
+        val imageRightEye = pointOf(FaceLandmark.LEFT_EYE)
         val nose = pointOf(FaceLandmark.NOSE_BASE)
-        val mouthLeft = pointOf(FaceLandmark.MOUTH_LEFT)
-        val mouthRight = pointOf(FaceLandmark.MOUTH_RIGHT)
+        val imageLeftMouth = pointOf(FaceLandmark.MOUTH_RIGHT)
+        val imageRightMouth = pointOf(FaceLandmark.MOUTH_LEFT)
 
         val landmarks = DetectedFaceLandmarks(
-            leftEye = leftEye,
-            rightEye = rightEye,
+            leftEye = imageLeftEye,
+            rightEye = imageRightEye,
             nose = nose,
-            mouthLeft = mouthLeft,
-            mouthRight = mouthRight,
+            mouthLeft = imageLeftMouth,
+            mouthRight = imageRightMouth,
             yawDeg = yaw,
             pitchDeg = pitch,
             rollDeg = roll
         )
 
-        // Precision guard: reject tiny landmarkless pareidolia patches
-        if (max(w, h) < 30 && landmarks.count < 2) return null
+        // Precision guard: reject landmarkless pareidolia detections (objects, shadows, walls).
+        // Real faces need >= 2 landmarks for similarity alignment; small faces need >= 3 + an eye.
+        if (landmarks.count < 2) return null
+        if (min(w, h) < 48 && (landmarks.count < 3 || (imageLeftEye == null && imageRightEye == null))) {
+            return null
+        }
 
-        // Anatomical guard on upright faces: eyes must sit above mouth
+        // Anatomical guard on upright faces: eyes must sit above mouth (and nose between them)
         if (abs(roll) < 35f) {
-            val eyeY = leftEye?.y ?: rightEye?.y
-            val mouthY = mouthLeft?.y ?: mouthRight?.y
+            val eyeY = imageLeftEye?.y ?: imageRightEye?.y
+            val mouthY = imageLeftMouth?.y ?: imageRightMouth?.y
             if (eyeY != null && mouthY != null && eyeY >= mouthY) return null
+            if (eyeY != null && nose != null && eyeY >= nose.y + 4f) return null
+            if (nose != null && mouthY != null && nose.y >= mouthY + 4f) return null
         }
 
         val poseScore = 1f - (abs(yaw) / MAX_YAW_DEG * 0.55f + abs(pitch) / MAX_PITCH_DEG * 0.45f)
@@ -345,11 +415,12 @@ object FaceScanHelper {
                 if (sampledBitmap.isRecycled) break
                 val box = det.rect
 
-                val aligned112: Bitmap? = FaceNormalizer.alignFacePoseAware(sampledBitmap, det.landmarks)
-                    ?: cropFaceBoundingBox(sampledBitmap, box)
-                if (aligned112 == null || aligned112.isRecycled) continue
+                val aligned112: Bitmap = FaceNormalizer.alignFacePoseAware(sampledBitmap, det.landmarks)
+                    ?: continue
+                if (aligned112.isRecycled) continue
 
                 try {
+                    if (!isAlignedFaceCropUsable(aligned112)) continue
                     val embedding = engine.extractEmbedding(aligned112) ?: continue
 
                     val normBboxLeft = (box.left.toFloat() / imgW).coerceIn(0f, 1f)
@@ -370,6 +441,15 @@ object FaceScanHelper {
 
                     if (matchedExisting != null) {
                         remainingExisting.remove(matchedExisting)
+                    }
+
+                    // Drop recurring false detections previously marked "Not a face"
+                    // (never touches detections already assigned to a person).
+                    if (matchedExisting?.personId == null && clusteringManager.isIgnoredFace(embedding)) {
+                        if (matchedExisting != null) {
+                            faceDao.deleteFaceById(matchedExisting.id)
+                        }
+                        continue
                     }
 
                     val existingCropValid = matchedExisting?.cropCachePath?.let { File(it).exists() } == true
@@ -428,7 +508,43 @@ object FaceScanHelper {
                 }
             }
 
-            val totalFacesForMedia = savedFaceCount + remainingExisting.count { it.personId != null }
+            // Auto-prune unmatched stale detections that failed the stricter landmark/lighting guards
+            // ONLY when unassigned or belonging to an unnamed, non-favorited, non-hidden cluster.
+            // Named, favorited, and hidden people are never modified.
+            var retainedExistingCount = 0
+            var prunedAnyStale = false
+            for (stale in remainingExisting) {
+                val ownerId = stale.personId
+                val owner = if (ownerId != null) faceDao.getPersonById(ownerId) else null
+                val canPrune = ownerId == null || owner == null ||
+                    (owner.name.isNullOrBlank() && !owner.isFavorite && !owner.isHidden)
+                if (canPrune) {
+                    faceDao.deleteFaceById(stale.id)
+                    stale.cropCachePath?.takeIf { it.isNotBlank() && it != owner?.coverCropPath }?.let { path ->
+                        runCatching { File(path).takeIf { f -> f.exists() }?.delete() }
+                    }
+                    if (owner != null) {
+                        val remainingForOwner = faceDao.countDistinctMediaForPerson(owner.id)
+                        if (remainingForOwner == 0) {
+                            faceDao.deleteMergeSuggestionsForPerson(owner.id)
+                            faceDao.deletePerson(owner.id)
+                            owner.coverCropPath?.takeIf { it.isNotBlank() }?.let { path ->
+                                runCatching { File(path).takeIf { f -> f.exists() }?.delete() }
+                            }
+                        } else {
+                            faceDao.updatePersonFaceCount(owner.id, remainingForOwner)
+                        }
+                    }
+                    prunedAnyStale = true
+                } else {
+                    retainedExistingCount++
+                }
+            }
+            if (prunedAnyStale) {
+                clusteringManager.invalidateCache()
+            }
+
+            val totalFacesForMedia = savedFaceCount + retainedExistingCount
             faceDao.insertFaceStatus(
                 MediaFaceStatusEntity(
                     mediaId = mediaId,

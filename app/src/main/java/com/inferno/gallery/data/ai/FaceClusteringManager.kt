@@ -5,8 +5,10 @@ import android.util.Log
 import com.inferno.gallery.data.db.DatabaseProvider
 import com.inferno.gallery.data.db.FaceDao
 import com.inferno.gallery.data.db.FaceEntity
+import com.inferno.gallery.data.db.IgnoredFaceExemplarEntity
 import com.inferno.gallery.data.db.PersonEntity
 import com.inferno.gallery.data.db.PersonMergeSuggestionEntity
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
@@ -38,9 +40,66 @@ class FaceClusteringManager(private val context: Context) {
         // Ambiguous candidate similarity window for proactive merge suggestions
         const val SUGGESTION_MIN_THRESHOLD = 0.48f
         const val SUGGESTION_MAX_THRESHOLD = 0.54f
+        // Broader one-shot pass triggered explicitly via "Find more matches"
+        const val BROAD_SUGGESTION_MIN_THRESHOLD = 0.40f
+        // Minimum similarity to highlight a person under "Closest matches" in the Merge picker
+        const val CLOSEST_MATCH_HIGHLIGHT_THRESHOLD = 0.36f
 
-        fun isCandidateSimilarity(similarity: Float): Boolean {
-            return similarity >= SUGGESTION_MIN_THRESHOLD && similarity < SUGGESTION_MAX_THRESHOLD
+        // Strict per-exemplar threshold for dropping recurring false detections ("Not a face").
+        // Kept intentionally high and never averaged across unrelated objects so real faces are never swallowed.
+        const val IGNORED_EXEMPLAR_MATCH_THRESHOLD = 0.68f
+        const val IGNORED_EXEMPLAR_DEDUP_THRESHOLD = 0.88f
+        const val MAX_IGNORED_EXEMPLARS_PER_CLUSTER = 4
+        const val MAX_IGNORED_EXEMPLARS_TOTAL = 500
+
+        /**
+         * Returns true if [embedding] closely matches any individual dismissed non-face exemplar.
+         */
+        fun matchesIgnoredExemplar(
+            embedding: FloatArray,
+            ignoredExemplars: List<FloatArray>,
+            threshold: Float = IGNORED_EXEMPLAR_MATCH_THRESHOLD
+        ): Boolean {
+            if (ignoredExemplars.isEmpty()) return false
+            for (ex in ignoredExemplars) {
+                if (FaceRecognitionEngine.cosineSimilarity(embedding, ex) >= threshold) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        /**
+         * Picks up to [maxToAdd] diverse embeddings from [candidates] that are not already
+         * covered by [existingIgnored] (cosine similarity < [dedupThreshold]).
+         */
+        fun selectDiverseExemplarsToIgnore(
+            candidates: List<FloatArray>,
+            existingIgnored: List<FloatArray>,
+            maxToAdd: Int = MAX_IGNORED_EXEMPLARS_PER_CLUSTER,
+            dedupThreshold: Float = IGNORED_EXEMPLAR_DEDUP_THRESHOLD
+        ): List<FloatArray> {
+            if (candidates.isEmpty() || maxToAdd <= 0) return emptyList()
+            val selected = ArrayList<FloatArray>(minOf(maxToAdd, candidates.size))
+            for (cand in candidates) {
+                if (selected.size >= maxToAdd) break
+                val alreadyCovered = existingIgnored.any {
+                    FaceRecognitionEngine.cosineSimilarity(cand, it) >= dedupThreshold
+                } || selected.any {
+                    FaceRecognitionEngine.cosineSimilarity(cand, it) >= dedupThreshold
+                }
+                if (!alreadyCovered) {
+                    selected.add(cand)
+                }
+            }
+            return selected
+        }
+
+        fun isCandidateSimilarity(
+            similarity: Float,
+            minThreshold: Float = SUGGESTION_MIN_THRESHOLD
+        ): Boolean {
+            return similarity >= minThreshold && similarity < SUGGESTION_MAX_THRESHOLD
         }
 
         fun shouldSuggestMerge(
@@ -50,12 +109,42 @@ class FaceClusteringManager(private val context: Context) {
             faceCountB: Int,
             nameB: String?,
             isHiddenB: Boolean,
-            similarity: Float
+            similarity: Float,
+            minThreshold: Float = SUGGESTION_MIN_THRESHOLD,
+            includeSinglePhotoPairs: Boolean = minThreshold < SUGGESTION_MIN_THRESHOLD,
+            allowAboveMaxThreshold: Boolean = minThreshold < SUGGESTION_MIN_THRESHOLD
         ): Boolean {
             if (isHiddenA || isHiddenB) return false
             if (hasConflictingNames(nameA, nameB)) return false
-            if (!isCandidateSimilarity(similarity)) return false
+            val matchesSimilarity = if (allowAboveMaxThreshold) {
+                similarity >= minThreshold
+            } else {
+                isCandidateSimilarity(similarity, minThreshold)
+            }
+            if (!matchesSimilarity) return false
+            if (includeSinglePhotoPairs) return faceCountA >= 1 && faceCountB >= 1
             return (faceCountA >= 2 || !nameA.isNullOrBlank()) || (faceCountB >= 2 || !nameB.isNullOrBlank())
+        }
+
+        /**
+         * Splits merge-picker candidates into similarity-ranked "closest matches" (>= [minHighlightSimilarity])
+         * and the remaining people in their existing order.
+         */
+        fun <T> partitionCandidatesBySimilarity(
+            candidates: List<T>,
+            idSelector: (T) -> Long,
+            similarityScores: Map<Long, Float>,
+            minHighlightSimilarity: Float = CLOSEST_MATCH_HIGHLIGHT_THRESHOLD,
+            maxClosestCount: Int = 8
+        ): Pair<List<T>, List<T>> {
+            if (similarityScores.isEmpty()) return emptyList<T>() to candidates
+            val closest = candidates
+                .filter { (similarityScores[idSelector(it)] ?: 0f) >= minHighlightSimilarity }
+                .sortedByDescending { similarityScores[idSelector(it)] ?: 0f }
+                .take(maxClosestCount)
+            val closestIds = closest.mapTo(HashSet(closest.size), idSelector)
+            val others = candidates.filterNot { idSelector(it) in closestIds }
+            return closest to others
         }
 
         fun hasConflictingNames(nameA: String?, nameB: String?): Boolean {
@@ -141,7 +230,8 @@ class FaceClusteringManager(private val context: Context) {
 
         /**
          * Returns consolidated similarity between two clusters if they belong to the same identity,
-         * or `-1f` if they should remain separate. Never merges distinct user-named identities.
+         * or `-1f` if they should remain separate. Never merges distinct user-named identities or
+         * mixes hidden clusters with visible clusters.
          */
         fun evaluateClusterConsolidation(
             centroidA: FloatArray,
@@ -150,8 +240,11 @@ class FaceClusteringManager(private val context: Context) {
             centroidB: FloatArray,
             exemplarsB: List<FloatArray>,
             nameB: String?,
-            threshold: Float = CONSOLIDATION_THRESHOLD
+            threshold: Float = CONSOLIDATION_THRESHOLD,
+            isHiddenA: Boolean = false,
+            isHiddenB: Boolean = false
         ): Float {
+            if (isHiddenA != isHiddenB) return -1f
             if (hasConflictingNames(nameA, nameB)) return -1f
 
             val centroidSim = FaceRecognitionEngine.cosineSimilarity(centroidA, centroidB)
@@ -189,11 +282,15 @@ class FaceClusteringManager(private val context: Context) {
             centroidB: FloatArray,
             exemplarsB: List<FloatArray>,
             nameB: String?,
-            threshold: Float = CONSOLIDATION_THRESHOLD
+            threshold: Float = CONSOLIDATION_THRESHOLD,
+            isHiddenA: Boolean = false,
+            isHiddenB: Boolean = false
         ): Boolean = evaluateClusterConsolidation(
             centroidA, exemplarsA, nameA,
             centroidB, exemplarsB, nameB,
-            threshold
+            threshold,
+            isHiddenA = isHiddenA,
+            isHiddenB = isHiddenB
         ) > 0f
 
         fun toCanonicalPair(idA: Long, idB: Long): Pair<Long, Long> {
@@ -227,12 +324,17 @@ class FaceClusteringManager(private val context: Context) {
     )
 
     private val clusterCache = mutableListOf<ClusterCacheItem>()
+    private val ignoredExemplarsCache = mutableListOf<FloatArray>()
     private var isCacheInitialized = false
 
     private suspend fun ensureCacheLoaded() {
         if (isCacheInitialized) return
         val persons = faceDao.getAllPersonsWithCentroids()
         clusterCache.clear()
+        ignoredExemplarsCache.clear()
+        ignoredExemplarsCache.addAll(
+            faceDao.getIgnoredFaceExemplars(MAX_IGNORED_EXEMPLARS_TOTAL).map { it.embedding }
+        )
 
         for (person in persons) {
             val centroid = person.centroid ?: continue
@@ -653,6 +755,179 @@ class FaceClusteringManager(private val context: Context) {
     }
 
     /**
+     * Checks whether a newly detected face embedding closely matches a previously dismissed
+     * false detection ("Not a face") so future scans drop recurring non-person artifacts.
+     */
+    suspend fun isIgnoredFace(embedding: FloatArray): Boolean = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            ensureCacheLoaded()
+            matchesIgnoredExemplar(embedding, ignoredExemplarsCache)
+        }
+    }
+
+    /**
+     * Permanently removes false-positive person clusters ("Not a face") from People and
+     * optionally records up to [MAX_IGNORED_EXEMPLARS_PER_CLUSTER] diverse representative
+     * embeddings per cluster to suppress recurring artifacts on future scans.
+     * Actual photos and `media_face_status` rows remain untouched.
+     */
+    suspend fun dismissPersonsAsNotFaces(
+        personIds: List<Long>,
+        suppressSimilar: Boolean = true
+    ): Int = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            val validIds = personIds.distinct()
+            if (validIds.isEmpty()) return@withContext 0
+            ensureCacheLoaded()
+
+            val cropPathsToDelete = HashSet<String>()
+            val existingIgnored = ArrayList(ignoredExemplarsCache)
+            val newIgnoredEntities = ArrayList<IgnoredFaceExemplarEntity>()
+            val now = System.currentTimeMillis()
+
+            for (personId in validIds) {
+                val person = faceDao.getPersonById(personId)
+                person?.coverCropPath?.takeIf { it.isNotBlank() }?.let { cropPathsToDelete.add(it) }
+
+                val faces = faceDao.getFacesByPersonId(personId)
+                faces.forEach { face ->
+                    face.cropCachePath?.takeIf { it.isNotBlank() }?.let { cropPathsToDelete.add(it) }
+                }
+
+                if (suppressSimilar) {
+                    val candidates = ArrayList<FloatArray>()
+                    person?.centroid?.takeIf { !isZeroVector(it) }?.let { candidates.add(it) }
+                    faces.sortedByDescending { (if (it.isExemplar) 1f else 0f) + it.qualityScore }
+                        .forEach { face ->
+                            if (!isZeroVector(face.embedding)) {
+                                candidates.add(face.embedding)
+                            }
+                        }
+                    val chosen = selectDiverseExemplarsToIgnore(
+                        candidates = candidates,
+                        existingIgnored = existingIgnored,
+                        maxToAdd = MAX_IGNORED_EXEMPLARS_PER_CLUSTER
+                    )
+                    for (emb in chosen) {
+                        existingIgnored.add(emb)
+                        newIgnoredEntities.add(IgnoredFaceExemplarEntity(embedding = emb, createdAt = now))
+                    }
+                }
+            }
+
+            if (newIgnoredEntities.isNotEmpty()) {
+                faceDao.insertIgnoredFaceExemplars(newIgnoredEntities)
+                faceDao.pruneIgnoredFaceExemplars(MAX_IGNORED_EXEMPLARS_TOTAL)
+            }
+
+            faceDao.deleteMergeSuggestionsForPersonsChunked(validIds)
+            faceDao.deleteFacesByPersonIdsChunked(validIds)
+            faceDao.deletePersonsByIdsChunked(validIds)
+
+            for (path in cropPathsToDelete) {
+                runCatching {
+                    val f = File(path)
+                    if (f.exists()) f.delete()
+                }
+            }
+
+            isCacheInitialized = false
+            ensureCacheLoaded()
+            Log.d(TAG, "Dismissed ${validIds.size} person cluster(s) as not faces (saved ${newIgnoredEntities.size} ignored exemplars)")
+            validIds.size
+        }
+    }
+
+    /**
+     * Removes specific photos' face detections from [personId] as false detections ("Not a face"),
+     * records diverse embeddings for future suppression if requested, and refreshes or removes the
+     * person cluster if empty. Actual photos remain untouched.
+     */
+    suspend fun dismissMediaFacesAsNotFaces(
+        personId: Long,
+        mediaIds: List<Long>,
+        suppressSimilar: Boolean = true
+    ): Int = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            val validMediaIds = mediaIds.distinct()
+            if (validMediaIds.isEmpty()) return@withContext 0
+            ensureCacheLoaded()
+
+            val targetFaces = ArrayList<FaceEntity>()
+            validMediaIds.chunked(500).forEach { chunk ->
+                targetFaces.addAll(faceDao.getFacesForMediaAndPerson(chunk, personId))
+            }
+            if (targetFaces.isEmpty()) return@withContext 0
+
+            val cropPathsToDelete = targetFaces.mapNotNull { it.cropCachePath?.takeIf { p -> p.isNotBlank() } }.toSet()
+
+            if (suppressSimilar) {
+                val candidates = targetFaces
+                    .sortedByDescending { it.qualityScore }
+                    .map { it.embedding }
+                    .filter { !isZeroVector(it) }
+                val chosen = selectDiverseExemplarsToIgnore(
+                    candidates = candidates,
+                    existingIgnored = ignoredExemplarsCache,
+                    maxToAdd = MAX_IGNORED_EXEMPLARS_PER_CLUSTER
+                )
+                if (chosen.isNotEmpty()) {
+                    val now = System.currentTimeMillis()
+                    faceDao.insertIgnoredFaceExemplars(
+                        chosen.map { IgnoredFaceExemplarEntity(embedding = it, createdAt = now) }
+                    )
+                    faceDao.pruneIgnoredFaceExemplars(MAX_IGNORED_EXEMPLARS_TOTAL)
+                }
+            }
+
+            faceDao.deleteFacesForMediaAndPersonChunked(validMediaIds, personId)
+
+            for (path in cropPathsToDelete) {
+                runCatching {
+                    val f = File(path)
+                    if (f.exists()) f.delete()
+                }
+            }
+
+            val remainingFaces = faceDao.getFacesByPersonId(personId)
+            val remainingCount = faceDao.countDistinctMediaForPerson(personId)
+            if (remainingCount == 0 || remainingFaces.isEmpty()) {
+                faceDao.deleteMergeSuggestionsForPerson(personId)
+                faceDao.deletePerson(personId)
+            } else {
+                val person = faceDao.getPersonById(personId)
+                if (person != null) {
+                    val updatedCentroid = computeCentroidFromFaces(remainingFaces) ?: person.centroid
+                    val updatedCover = if (person.coverCropPath != null && person.coverCropPath !in cropPathsToDelete) {
+                        person.coverCropPath
+                    } else {
+                        remainingFaces.maxByOrNull { it.qualityScore }?.cropCachePath
+                    }
+                    faceDao.updatePerson(
+                        person.copy(
+                            centroid = updatedCentroid,
+                            faceCount = remainingCount,
+                            coverCropPath = updatedCover
+                        )
+                    )
+                }
+            }
+
+            isCacheInitialized = false
+            ensureCacheLoaded()
+            Log.d(TAG, "Dismissed ${targetFaces.size} face detection(s) on ${validMediaIds.size} photo(s) from person $personId as not faces")
+            validMediaIds.size
+        }
+    }
+
+    suspend fun clearIgnoredFaces() = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            faceDao.clearIgnoredFaceExemplars()
+            ignoredExemplarsCache.clear()
+        }
+    }
+
+    /**
      * Iteratively merges clusters of the same identity whose centroids or exemplars pass
      * consolidation (either high direct similarity with centroid sanity, or corroborated pose bridge).
      * Never merges two clusters that have different user-assigned names.
@@ -681,7 +956,9 @@ class FaceClusteringManager(private val context: Context) {
                             centroidB = c2.centroid,
                             exemplarsB = c2.exemplars,
                             nameB = c2.name,
-                            threshold = threshold
+                            threshold = threshold,
+                            isHiddenA = c1.isHidden,
+                            isHiddenB = c2.isHidden
                         )
                         if (sim > bestSim) {
                             bestSim = sim
@@ -761,17 +1038,78 @@ class FaceClusteringManager(private val context: Context) {
             faceDao.recalculateAllPersonFaceCounts()
             Log.d(TAG, "Cluster consolidation complete: performed $mergeCount merges.")
 
-            computeAndSaveMergeSuggestions()
+            computeAndSaveMergeSuggestionsLocked(
+                minThreshold = SUGGESTION_MIN_THRESHOLD,
+                includeSinglePhotoPairs = false
+            )
 
             mergeCount
         }
     }
 
     /**
-     * Finds pairs of clusters with ambiguous similarity and saves them as PENDING merge suggestions.
+     * Finds pairs of clusters with high-confidence ambiguous similarity (>= 0.48) and saves them
+     * as PENDING merge suggestions.
      */
-    suspend fun computeAndSaveMergeSuggestions(): Int = withContext(Dispatchers.IO) {
+    suspend fun computeAndSaveMergeSuggestions(): Int = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            isCacheInitialized = false
+            computeAndSaveMergeSuggestionsLocked(
+                minThreshold = SUGGESTION_MIN_THRESHOLD,
+                includeSinglePhotoPairs = false
+            )
+        }
+    }
+
+    /**
+     * One-shot broader merge discovery pass triggered on demand via "Find more matches".
+     * Surfaces harder matches (e.g., sunglasses, side profiles, or 1-photo clusters) down to
+     * [BROAD_SUGGESTION_MIN_THRESHOLD] without cluttering normal day-to-day suggestions.
+     */
+    suspend fun findMoreMergeSuggestions(): Int = mutex.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            isCacheInitialized = false
+            computeAndSaveMergeSuggestionsLocked(
+                minThreshold = BROAD_SUGGESTION_MIN_THRESHOLD,
+                includeSinglePhotoPairs = true
+            )
+        }
+    }
+
+    /**
+     * Computes pairwise face similarity between [personId] and every other visible cluster using
+     * both centroids and exemplars, used to rank look-alikes at the top of the Merge picker.
+     */
+    suspend fun computeSimilarityScoresForPerson(personId: Long): Map<Long, Float> = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            ensureCacheLoaded()
+            val target = clusterCache.firstOrNull { it.personId == personId } ?: return@withContext emptyMap()
+            val scores = HashMap<Long, Float>(clusterCache.size)
+            for (other in clusterCache) {
+                if (other.personId == personId || other.isHidden) continue
+                scores[other.personId] = computeClusterPairSimilarity(target, other)
+            }
+            scores
+        }
+    }
+
+    private fun computeClusterPairSimilarity(c1: ClusterCacheItem, c2: ClusterCacheItem): Float {
+        var maxSim = FaceRecognitionEngine.cosineSimilarity(c1.centroid, c2.centroid)
+        for (e1 in c1.exemplars) {
+            for (e2 in c2.exemplars) {
+                val s = FaceRecognitionEngine.cosineSimilarity(e1, e2)
+                if (s > maxSim) maxSim = s
+            }
+        }
+        return maxSim
+    }
+
+    private suspend fun computeAndSaveMergeSuggestionsLocked(
+        minThreshold: Float,
+        includeSinglePhotoPairs: Boolean
+    ): Int {
         ensureCacheLoaded()
+
         val suggestions = mutableListOf<PersonMergeSuggestionEntity>()
 
         for (i in 0 until clusterCache.size) {
@@ -779,13 +1117,7 @@ class FaceClusteringManager(private val context: Context) {
             for (j in i + 1 until clusterCache.size) {
                 val c2 = clusterCache[j]
 
-                var maxSim = FaceRecognitionEngine.cosineSimilarity(c1.centroid, c2.centroid)
-                for (e1 in c1.exemplars) {
-                    for (e2 in c2.exemplars) {
-                        val s = FaceRecognitionEngine.cosineSimilarity(e1, e2)
-                        if (s > maxSim) maxSim = s
-                    }
-                }
+                val maxSim = computeClusterPairSimilarity(c1, c2)
 
                 if (shouldSuggestMerge(
                     faceCountA = c1.faceCount,
@@ -794,7 +1126,9 @@ class FaceClusteringManager(private val context: Context) {
                     faceCountB = c2.faceCount,
                     nameB = c2.name,
                     isHiddenB = c2.isHidden,
-                    similarity = maxSim
+                    similarity = maxSim,
+                    minThreshold = minThreshold,
+                    includeSinglePhotoPairs = includeSinglePhotoPairs
                 )) {
                     val (pA, pB) = toCanonicalPair(c1.personId, c2.personId)
                     val existing = faceDao.getExistingSuggestionStatus(pA, pB)
@@ -814,8 +1148,8 @@ class FaceClusteringManager(private val context: Context) {
 
         if (suggestions.isNotEmpty()) {
             faceDao.insertMergeSuggestions(suggestions)
-            Log.d(TAG, "Generated ${suggestions.size} new merge suggestions")
+            Log.d(TAG, "Generated ${suggestions.size} new merge suggestions at >=${(minThreshold * 100).toInt()}%")
         }
-        suggestions.size
+        return suggestions.size
     }
 }

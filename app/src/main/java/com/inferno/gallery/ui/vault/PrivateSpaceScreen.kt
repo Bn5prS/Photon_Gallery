@@ -307,7 +307,7 @@ fun PrivateSpaceScreen(
 
                             if (isUnlocked && isSelectionMode && vaultItems.isNotEmpty()) {
                                 val allSelected = selectedIds.size == vaultItems.size
-                                FilledTonalIconButton(
+                                Surface(
                                     onClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         selectedIds = if (allSelected) {
@@ -316,24 +316,37 @@ fun PrivateSpaceScreen(
                                             vaultItems.map { it.id }.toSet()
                                         }
                                     },
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = if (allSelected) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        },
-                                        contentColor = if (allSelected) {
-                                            MaterialTheme.colorScheme.onPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.onPrimaryContainer
-                                        }
-                                    )
+                                    shape = ShapeFull,
+                                    color = if (allSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    },
+                                    contentColor = if (allSelected) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
+                                    modifier = Modifier.padding(end = 4.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
-                                        contentDescription = if (allSelected) "Deselect all" else "Select all",
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(17.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(
+                                                if (allSelected) R.string.action_deselect_all else R.string.action_select_all
+                                            ),
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             } else if (isUnlocked && !isSelectionMode) {
                                 Box {

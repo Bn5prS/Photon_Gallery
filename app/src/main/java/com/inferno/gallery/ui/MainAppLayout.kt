@@ -655,14 +655,29 @@ fun MainAppLayout(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
-                                PhotonHeaderIconButton(
-                                    onClick = { viewModel.toggleSelectAll() }
+                                Surface(
+                                    onClick = { viewModel.toggleSelectAll() },
+                                    shape = ShapeFull,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(end = 6.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
-                                        contentDescription = "Select or Deselect All",
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(R.drawable.ic_ms_select_all),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.action_select_all),
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2572,6 +2587,23 @@ fun MainAppLayout(
                                             }
                                         }
                                     )
+                                    if (selectedUris.size >= 2 && currentRoute != "trash") {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.action_stack_photos)) },
+                                            leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_burst_mode), contentDescription = null) },
+                                            onClick = {
+                                                createMenuExpanded = false
+                                                viewModel.stackSelectedUris(selectedUris.toList()) { count ->
+                                                    val msg = if (count >= 2) {
+                                                        context.getString(R.string.stack_stacked_toast, count)
+                                                    } else {
+                                                        context.getString(R.string.stack_need_two_photos_toast)
+                                                    }
+                                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
                             "delete" -> com.inferno.gallery.ui.components.LayeredToolTile(
@@ -2642,6 +2674,23 @@ fun MainAppLayout(
                                 expanded = moreMenuExpanded,
                                 onDismissRequest = { moreMenuExpanded = false }
                             ) {
+                                if (selectedUris.size >= 2 && currentRoute != "trash") {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_stack_photos)) },
+                                        leadingIcon = { Icon(ImageVector.vectorResource(R.drawable.ic_ms_burst_mode), contentDescription = null) },
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            viewModel.stackSelectedUris(selectedUris.toList()) { count ->
+                                                val msg = if (count >= 2) {
+                                                    context.getString(R.string.stack_stacked_toast, count)
+                                                } else {
+                                                    context.getString(R.string.stack_need_two_photos_toast)
+                                                }
+                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                }
                                 if ("share" !in selectionDockActions) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.detail_share)) },
@@ -2796,6 +2845,8 @@ fun MainAppLayout(
     }
 
     if (showDisplaySortSheet) {
+        val photoStacksEnabled by viewModel.photoStacksEnabled.collectAsState()
+        val restorableStackCount by viewModel.restorableStackCount.collectAsState()
         DisplayAndSortBottomSheet(
             isAlbumsScreen = (currentRoute == "albums" || currentRoute == "all_albums" || currentRoute == "pinned_albums"),
             viewMode = viewMode,
@@ -2808,6 +2859,21 @@ fun MainAppLayout(
             onSortOrderChange = { viewModel.setSortOrder(it) },
             albumSortOrder = albumSortOrder,
             onAlbumSortOrderChange = { viewModel.setAlbumSortOrder(it) },
+            showPhotoStacksToggle = (currentRoute == "photos"),
+            photoStacksEnabled = photoStacksEnabled,
+            onPhotoStacksEnabledChange = { viewModel.setPhotoStacksEnabled(it) },
+            restorableStackCount = restorableStackCount,
+            onRestoreUnstackedStacks = {
+                viewModel.restoreAllUnstackedPhotos { restored ->
+                    if (restored > 0) {
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.stack_restored_all_toast, restored),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            },
             onDismissRequest = { showDisplaySortSheet = false }
         )
     }

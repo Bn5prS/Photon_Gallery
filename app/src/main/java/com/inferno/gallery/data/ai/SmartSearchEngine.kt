@@ -17,6 +17,73 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import android.os.Build
 
+/**
+ * Thread-safe lifecycle gate for native resources (such as ONNX Runtime [OrtSession]s) that must
+ * never be closed concurrently with an in-flight native call or while another worker holds a lease.
+ */
+internal class RefCountedResourceGate<T : Any> {
+    private val lock = Any()
+    private var resource: T? = null
+    private var activeLeases: Int = 0
+
+    fun isLoaded(): Boolean = synchronized(lock) { resource != null }
+
+    fun activeLeaseCount(): Int = synchronized(lock) { activeLeases }
+
+    fun ensureLoaded(loader: () -> T): T = synchronized(lock) {
+        resource ?: loader().also { resource = it }
+    }
+
+    fun acquire(loader: () -> T): T = synchronized(lock) {
+        val loaded = resource ?: loader().also { resource = it }
+        activeLeases++
+        loaded
+    }
+
+    fun release(closer: (T) -> Unit, onClosed: () -> Unit = {}) = synchronized(lock) {
+        if (activeLeases > 0) {
+            activeLeases--
+        }
+        if (activeLeases == 0) {
+            val current = resource
+            resource = null
+            try {
+                if (current != null) closer(current)
+            } finally {
+                onClosed()
+            }
+        }
+    }
+
+    fun <R> withResource(loader: () -> T, block: (T) -> R): R = synchronized(lock) {
+        val active = resource ?: loader().also { resource = it }
+        block(active)
+    }
+
+    fun unloadIfUnused(closer: (T) -> Unit, onClosed: () -> Unit = {}): Boolean = synchronized(lock) {
+        if (activeLeases > 0) return false
+        val current = resource
+        resource = null
+        try {
+            if (current != null) closer(current)
+        } finally {
+            onClosed()
+        }
+        true
+    }
+
+    fun forceClose(closer: (T) -> Unit, onClosed: () -> Unit = {}) = synchronized(lock) {
+        activeLeases = 0
+        val current = resource
+        resource = null
+        try {
+            if (current != null) closer(current)
+        } finally {
+            onClosed()
+        }
+    }
+}
+
 class SmartSearchEngine(private val context: Context) {
 
     companion object {
@@ -154,12 +221,14 @@ class SmartSearchEngine(private val context: Context) {
     }
 
     private val modelDirFile = File(context.filesDir, MODEL_DIR)
+    @Volatile
     private var env: OrtEnvironment? = null
-    private var textSession: OrtSession? = null
-    private var visionSession: OrtSession? = null
+    private val textSessionGate = RefCountedResourceGate<OrtSession>()
+    private val visionSessionGate = RefCountedResourceGate<OrtSession>()
+    private val tokenizerLock = Any()
+    @Volatile
     private var tokenizer: BPETokenizer? = null
     private val queryVectorCache = android.util.LruCache<String, FloatArray>(64)
-    private val visionLock = Any()
     private var reusablePixels: IntArray? = null
     private var reusableFloatBuffer: FloatArray? = null
 
@@ -232,93 +301,133 @@ class SmartSearchEngine(private val context: Context) {
         }
     }
 
-    private fun ensurePrerequisites() {
+    private fun ensurePrerequisites(): OrtEnvironment {
         if (!isSupported()) {
             throw IllegalStateException("Smart Search requires 64-bit arm64-v8a or x86_64 architecture.")
         }
         if (!isModelDownloaded()) {
             throw IllegalStateException("Model files are not fully downloaded yet")
         }
-        if (env == null) {
-            env = OrtEnvironment.getEnvironment()
+        return env ?: synchronized(this) {
+            env ?: OrtEnvironment.getEnvironment().also { env = it }
         }
     }
 
-    @Synchronized
+    private fun ensureTokenizerLoaded(): BPETokenizer {
+        tokenizer?.let { return it }
+        return synchronized(tokenizerLock) {
+            tokenizer ?: run {
+                val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
+                BPETokenizer(tokenizerFile.readText(Charsets.UTF_8)).also { tokenizer = it }
+            }
+        }
+    }
+
     fun prewarmTokenizer() {
         if (tokenizer != null || !isModelDownloaded()) return
-        val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
-        if (tokenizerFile.exists()) {
-            tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
-            Log.d(TAG, "MobileCLIP2-S2 tokenizer pre-warmed.")
+        synchronized(tokenizerLock) {
+            if (tokenizer != null) return
+            val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
+            if (tokenizerFile.exists()) {
+                tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
+                Log.d(TAG, "MobileCLIP2-S2 tokenizer pre-warmed.")
+            }
         }
     }
 
-    @Synchronized
-    fun loadTextModel() {
-        if (textSession != null && tokenizer != null) return
-        ensurePrerequisites()
-        val environment = env ?: throw IllegalStateException("Environment not loaded")
-        try {
-            if (tokenizer == null) {
-                val tokenizerFile = File(modelDirFile, TOKENIZER_NAME)
-                tokenizer = BPETokenizer(tokenizerFile.readText(Charsets.UTF_8))
-            }
-            if (textSession == null) {
-                val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
-                val threads = cores.coerceIn(2, 4)
-                val textFile = File(modelDirFile, TEXT_MODEL_NAME)
-                createCpuSessionOptions(threads).use { textOptions ->
-                    textSession = environment.createSession(textFile.absolutePath, textOptions)
-                }
-            }
+    private fun createTextSession(): OrtSession {
+        val environment = ensurePrerequisites()
+        ensureTokenizerLoaded()
+        val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
+        val threads = cores.coerceIn(2, 4)
+        val textFile = File(modelDirFile, TEXT_MODEL_NAME)
+        return createCpuSessionOptions(threads).use { textOptions ->
+            environment.createSession(textFile.absolutePath, textOptions)
+        }.also {
             Log.d(TAG, "MobileCLIP2-S2 text model loaded successfully.")
+        }
+    }
+
+    private fun createVisionSession(): OrtSession {
+        val environment = ensurePrerequisites()
+        val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
+        // Use half the logical cores (2..4) during background indexing to avoid UI starvation & thermal throttling
+        val threads = (cores / 2).coerceIn(2, 4)
+        val visionFile = File(modelDirFile, VISION_MODEL_NAME)
+        return createCpuSessionOptions(threads).use { visionOptions ->
+            environment.createSession(visionFile.absolutePath, visionOptions)
+        }.also {
+            Log.d(TAG, "SigLIP 2 vision model loaded successfully ($threads CPU threads).")
+        }
+    }
+
+    fun loadTextModel() {
+        try {
+            ensureTokenizerLoaded()
+            textSessionGate.ensureLoaded(::createTextSession)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load MobileCLIP2-S2 text model: ${e.message}", e)
-            textSession?.close()
-            textSession = null
             throw e
         }
     }
 
-    @Synchronized
     fun loadVisionModel() {
-        if (visionSession != null) return
-        ensurePrerequisites()
-        val environment = env ?: throw IllegalStateException("Environment not loaded")
         try {
-            val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
-            // Use half the logical cores (2..4) during background indexing to avoid UI starvation & thermal throttling
-            val threads = (cores / 2).coerceIn(2, 4)
-            val visionFile = File(modelDirFile, VISION_MODEL_NAME)
-            createCpuSessionOptions(threads).use { visionOptions ->
-                visionSession = environment.createSession(visionFile.absolutePath, visionOptions)
-            }
-            Log.d(TAG, "SigLIP 2 vision model loaded successfully ($threads CPU threads).")
+            visionSessionGate.ensureLoaded(::createVisionSession)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load SigLIP 2 vision model: ${e.message}", e)
-            visionSession?.close()
-            visionSession = null
             throw e
         }
     }
 
-    @Synchronized
+    /**
+     * Acquires a counted lease on the shared vision [OrtSession], loading it if needed.
+     * Pair with [releaseVisionModel] in a `finally` block so overlapping WorkManager retries or
+     * replacements cannot destroy the native session while another worker is inside `OrtSession.run`.
+     */
+    fun acquireVisionModel() {
+        try {
+            visionSessionGate.acquire(::createVisionSession)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire SigLIP 2 vision model: ${e.message}", e)
+            throw e
+        }
+    }
+
+    fun releaseVisionModel() {
+        try {
+            visionSessionGate.release(
+                closer = { session ->
+                    session.close()
+                    Log.d(TAG, "SigLIP 2 vision model unloaded to free RAM.")
+                },
+                onClosed = {
+                    reusablePixels = null
+                    reusableFloatBuffer = null
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing vision model: ${e.message}", e)
+        }
+    }
+
     fun unloadVisionModel() {
         try {
-            visionSession?.close()
-            visionSession = null
-            synchronized(visionLock) {
-                reusablePixels = null
-                reusableFloatBuffer = null
-            }
-            Log.d(TAG, "SigLIP 2 vision model unloaded to free RAM.")
+            visionSessionGate.unloadIfUnused(
+                closer = { session ->
+                    session.close()
+                    Log.d(TAG, "SigLIP 2 vision model unloaded to free RAM.")
+                },
+                onClosed = {
+                    reusablePixels = null
+                    reusableFloatBuffer = null
+                }
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Error unloading vision model: ${e.message}", e)
         }
     }
 
-    @Synchronized
     fun loadModel() {
         if (!isSupported()) {
             Log.w(TAG, "Smart Search is not supported on this device architecture (${Build.SUPPORTED_ABIS.firstOrNull()}). Requires arm64-v8a.")
@@ -328,30 +437,36 @@ class SmartSearchEngine(private val context: Context) {
         loadVisionModel()
     }
 
-    @Synchronized
     fun close() {
         try {
             synchronized(queryVectorCache) {
                 queryVectorCache.evictAll()
             }
-            textSession?.close()
-            textSession = null
-            visionSession?.close()
-            visionSession = null
-            synchronized(visionLock) {
-                reusablePixels = null
-                reusableFloatBuffer = null
-            }
-            env?.close()
-            env = null
-            tokenizer = null
+            textSessionGate.forceClose(
+                closer = { it.close() },
+                onClosed = {
+                    synchronized(tokenizerLock) {
+                        tokenizer = null
+                    }
+                }
+            )
+            visionSessionGate.forceClose(
+                closer = { it.close() },
+                onClosed = {
+                    reusablePixels = null
+                    reusableFloatBuffer = null
+                }
+            )
+            // Never call OrtEnvironment.close(): OrtEnvironment.getEnvironment() is a process-wide
+            // native singleton shared with FaceRecognitionEngine; destroying it causes native
+            // FORTIFY destroyed-mutex aborts in concurrent or subsequent ONNX Runtime sessions.
             Log.d(TAG, "SmartSearchEngine closed successfully.")
         } catch (e: Exception) {
             Log.e(TAG, "Error closing SmartSearchEngine: ${e.message}", e)
         }
     }
 
-    fun isLoaded(): Boolean = textSession != null && visionSession != null
+    fun isLoaded(): Boolean = textSessionGate.isLoaded() && visionSessionGate.isLoaded()
 
     fun encodeText(query: String): FloatArray {
         val cleanQuery = query.trim().replace(WHITESPACE_REGEX, " ")
@@ -403,30 +518,26 @@ class SmartSearchEngine(private val context: Context) {
     }
 
     private fun encodeSingleText(text: String): FloatArray {
-        if (textSession == null || tokenizer == null) loadTextModel()
-        val currentTokenizer = tokenizer ?: throw IllegalStateException("Tokenizer not loaded")
-        val currentEnv = env ?: throw IllegalStateException("Environment not loaded")
-        val currentTextSession = textSession ?: throw IllegalStateException("Text session not loaded")
-
-        val tokenIds = currentTokenizer.encode(text)
+        val currentEnv = ensurePrerequisites()
+        val tokenIds = ensureTokenizerLoaded().encode(text)
         val shape = longArrayOf(1, 77)
-        val inputName = currentTextSession.inputNames.firstOrNull() ?: "input_ids"
-        val inputIdsTensor = OnnxTensor.createTensor(currentEnv, LongBuffer.wrap(tokenIds), shape)
 
-        try {
-            currentTextSession.run(mapOf(inputName to inputIdsTensor)).use { result ->
-                return l2Normalize(extractEmbeddingOutput(result))
+        return textSessionGate.withResource(::createTextSession) { currentTextSession ->
+            val inputName = currentTextSession.inputNames.firstOrNull() ?: "input_ids"
+            val inputIdsTensor = OnnxTensor.createTensor(currentEnv, LongBuffer.wrap(tokenIds), shape)
+            try {
+                currentTextSession.run(mapOf(inputName to inputIdsTensor)).use { result ->
+                    l2Normalize(extractEmbeddingOutput(result))
+                }
+            } finally {
+                inputIdsTensor.close()
             }
-        } finally {
-            inputIdsTensor.close()
         }
     }
 
     fun encodeImage(bitmap: Bitmap): FloatArray {
         if (bitmap.isRecycled) return FloatArray(EMBEDDING_DIM)
-        if (visionSession == null) loadVisionModel()
-        val currentEnv = env ?: throw IllegalStateException("Environment not loaded")
-        val currentVisionSession = visionSession ?: throw IllegalStateException("Vision session not loaded")
+        val currentEnv = ensurePrerequisites()
 
         val softwareBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.config == Bitmap.Config.HARDWARE) {
             bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return FloatArray(EMBEDDING_DIM)
@@ -437,7 +548,7 @@ class SmartSearchEngine(private val context: Context) {
         val resizedBitmap = prepareCenterCropInputBitmap(softwareBitmap, IMAGE_SIZE)
 
         return try {
-            runVisionInference(resizedBitmap, currentEnv, currentVisionSession)
+            runVisionInference(resizedBitmap, currentEnv)
         } finally {
             if (resizedBitmap != softwareBitmap && resizedBitmap != bitmap) {
                 resizedBitmap.recycle()
@@ -450,14 +561,13 @@ class SmartSearchEngine(private val context: Context) {
 
     private fun runVisionInference(
         inputBitmap: Bitmap,
-        environment: OrtEnvironment,
-        session: OrtSession
+        environment: OrtEnvironment
     ): FloatArray {
         val planeSize = IMAGE_SIZE * IMAGE_SIZE
         val shape = longArrayOf(1, 3, IMAGE_SIZE.toLong(), IMAGE_SIZE.toLong())
-        val inputName = session.inputNames.firstOrNull() ?: "pixel_values"
 
-        synchronized(visionLock) {
+        return visionSessionGate.withResource(::createVisionSession) { session ->
+            val inputName = session.inputNames.firstOrNull() ?: "pixel_values"
             val pixels = reusablePixels ?: IntArray(planeSize).also { reusablePixels = it }
             val floatBuffer = reusableFloatBuffer ?: FloatArray(3 * planeSize).also { reusableFloatBuffer = it }
 
@@ -474,7 +584,7 @@ class SmartSearchEngine(private val context: Context) {
             val imageTensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(floatBuffer), shape)
             try {
                 session.run(mapOf(inputName to imageTensor)).use { result ->
-                    return l2Normalize(extractEmbeddingOutput(result))
+                    l2Normalize(extractEmbeddingOutput(result))
                 }
             } finally {
                 imageTensor.close()

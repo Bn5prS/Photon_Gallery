@@ -100,8 +100,11 @@ class FaceRecognitionEngine(private val context: Context) {
     }
 
     private val modelDirFile = File(context.filesDir, FaceModelRegistry.MODEL_DIR)
+    private val sessionLock = Any()
+    @Volatile
     private var env: OrtEnvironment? = null
     private var faceSession: OrtSession? = null
+    @Volatile
     private var isLoaded = false
     private var reusablePixels: IntArray? = null
     private var reusableMirroredPixels: IntArray? = null
@@ -115,38 +118,35 @@ class FaceRecognitionEngine(private val context: Context) {
         return modelFile.exists() && modelFile.length() > 5 * 1024 * 1024L
     }
 
-    @Synchronized
     fun loadModel() {
-        if (isLoaded) return
-        if (!isSupported()) return
-        val modelFile = getModelFile()
-        if (!modelFile.exists()) return
+        synchronized(sessionLock) {
+            if (isLoaded && faceSession != null) return
+            if (!isSupported()) return
+            val modelFile = getModelFile()
+            if (!modelFile.exists()) return
 
-        try {
-            val environment = OrtEnvironment.getEnvironment()
-            this.env = environment
-            val options = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(2)
+            try {
+                val environment = env ?: OrtEnvironment.getEnvironment().also { env = it }
+                OrtSession.SessionOptions().use { options ->
+                    options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+                    options.setIntraOpNumThreads(2)
+                    // Disable busy-wait spinning on mobile big.LITTLE CPUs to prevent thread contention
+                    // with active video decoders (MediaCodec / ExoPlayer) and reduce thermal throttling.
+                    options.addConfigEntry("session.intra_op.allow_spinning", "0")
+                    this.faceSession = environment.createSession(modelFile.absolutePath, options)
+                }
+                isLoaded = true
+                Log.d(TAG, "MobileFaceNet loaded successfully (${modelFile.length() / 1024} KB).")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load MobileFaceNet: ${e.message}", e)
+                closeLocked()
             }
-            this.faceSession = environment.createSession(modelFile.absolutePath, options)
-            isLoaded = true
-            Log.d(TAG, "MobileFaceNet loaded successfully (${modelFile.length() / 1024} KB).")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load MobileFaceNet: ${e.message}", e)
-            close()
         }
     }
 
-    @Synchronized
     fun extractEmbedding(aligned112: Bitmap): FloatArray? {
         if (aligned112.isRecycled) return null
-        if (!isLoaded) {
-            loadModel()
-            if (!isLoaded) return null
-        }
-        val currentEnv = env ?: return null
-        val currentSession = faceSession ?: return null
-
         val width = aligned112.width
         val height = aligned112.height
         if (width != FaceNormalizer.CROP_SIZE || height != FaceNormalizer.CROP_SIZE) {
@@ -154,23 +154,32 @@ class FaceRecognitionEngine(private val context: Context) {
             return null
         }
 
-        val planeSize = width * height
-        val pixels = reusablePixels?.takeIf { it.size == planeSize }
-            ?: IntArray(planeSize).also { reusablePixels = it }
-        val mirrored = reusableMirroredPixels?.takeIf { it.size == planeSize }
-            ?: IntArray(planeSize).also { reusableMirroredPixels = it }
+        return synchronized(sessionLock) {
+            if (!isLoaded || faceSession == null) {
+                loadModel()
+                if (!isLoaded || faceSession == null) return@synchronized null
+            }
+            val currentEnv = env ?: return@synchronized null
+            val currentSession = faceSession ?: return@synchronized null
 
-        aligned112.getPixels(pixels, 0, width, 0, 0, width, height)
+            val planeSize = width * height
+            val pixels = reusablePixels?.takeIf { it.size == planeSize }
+                ?: IntArray(planeSize).also { reusablePixels = it }
+            val mirrored = reusableMirroredPixels?.takeIf { it.size == planeSize }
+                ?: IntArray(planeSize).also { reusableMirroredPixels = it }
 
-        val primaryEmbedding = runSingleInference(pixels, width, height, currentEnv, currentSession)
-            ?: return null
-        mirrorPixelsHorizontally(pixels, width, height, mirrored)
-        val mirroredEmbedding = runSingleInference(mirrored, width, height, currentEnv, currentSession)
+            aligned112.getPixels(pixels, 0, width, 0, 0, width, height)
 
-        return if (mirroredEmbedding != null) {
-            fuseMirrorEmbeddings(primaryEmbedding, mirroredEmbedding)
-        } else {
-            primaryEmbedding
+            val primaryEmbedding = runSingleInference(pixels, width, height, currentEnv, currentSession)
+                ?: return@synchronized null
+            mirrorPixelsHorizontally(pixels, width, height, mirrored)
+            val mirroredEmbedding = runSingleInference(mirrored, width, height, currentEnv, currentSession)
+
+            if (mirroredEmbedding != null) {
+                fuseMirrorEmbeddings(primaryEmbedding, mirroredEmbedding)
+            } else {
+                primaryEmbedding
+            }
         }
     }
 
@@ -239,12 +248,17 @@ class FaceRecognitionEngine(private val context: Context) {
         }
     }
 
-    @Synchronized
     fun close() {
+        synchronized(sessionLock) {
+            closeLocked()
+        }
+    }
+
+    private fun closeLocked() {
         try {
             faceSession?.close()
             faceSession = null
-            env = null
+            // Never close OrtEnvironment.getEnvironment() — it is a process-wide native singleton.
             isLoaded = false
             reusablePixels = null
             reusableMirroredPixels = null

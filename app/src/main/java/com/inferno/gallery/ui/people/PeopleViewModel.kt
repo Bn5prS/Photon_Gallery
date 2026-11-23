@@ -131,9 +131,17 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedPersonIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedPersonIds: StateFlow<Set<Long>> = _selectedPersonIds.asStateFlow()
 
-    val isSelectionMode: StateFlow<Boolean> = _selectedPersonIds
-        .combine(MutableStateFlow(Unit)) { selected, _ -> selected.isNotEmpty() }
+    private val _isExplicitSelectionMode = MutableStateFlow(false)
+
+    val isSelectionMode: StateFlow<Boolean> = combine(
+        _selectedPersonIds,
+        _isExplicitSelectionMode
+    ) { selected, explicit -> selected.isNotEmpty() || explicit }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val ignoredFacesCount: StateFlow<Int> = faceDao.observeIgnoredFaceCount()
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val promotedPersons: StateFlow<List<PersonEntity>> = combine(
         faceDao.observePromotedPersons(),
@@ -190,6 +198,9 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    private val _isFindingMoreMatches = MutableStateFlow(false)
+    val isFindingMoreMatches: StateFlow<Boolean> = _isFindingMoreMatches.asStateFlow()
+
     val pendingMergeSuggestions: StateFlow<List<MergeSuggestionWithPersons>> = faceDao.observePendingMergeSuggestions()
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -201,6 +212,36 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
     fun setMergeCardDismissed(dismissed: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             settingsRepository.updatePeopleMergeCardDismissed(dismissed)
+        }
+    }
+
+    fun findMoreMergeSuggestions(onComplete: ((Int) -> Unit)? = null) {
+        if (_isFindingMoreMatches.value) return
+        viewModelScope.launch {
+            _isFindingMoreMatches.value = true
+            val newCount = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    val added = clusteringManager.findMoreMergeSuggestions()
+                    if (added > 0 || pendingMergeSuggestions.value.isNotEmpty()) {
+                        settingsRepository.updatePeopleMergeCardDismissed(false)
+                    }
+                    added
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to find more merge matches: ${e.message}", e)
+                    0
+                }
+            }
+            _isFindingMoreMatches.value = false
+            onComplete?.invoke(newCount)
+        }
+    }
+
+    suspend fun getSimilarityScoresForPerson(personId: Long): Map<Long, Float> {
+        return try {
+            clusteringManager.computeSimilarityScoresForPerson(personId)
+        } catch (e: Exception) {
+            Log.e("PeopleViewModel", "Failed to compute similarity scores for person $personId: ${e.message}", e)
+            emptyMap()
         }
     }
 
@@ -228,17 +269,32 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
         _searchQuery.value = query
     }
 
+    fun enterSelectionMode() {
+        _isExplicitSelectionMode.value = true
+    }
+
     fun toggleSelectPerson(personId: Long) {
         val current = _selectedPersonIds.value
-        _selectedPersonIds.value = if (current.contains(personId)) {
+        val next = if (current.contains(personId)) {
             current - personId
         } else {
             current + personId
         }
+        _selectedPersonIds.value = next
+        if (next.isEmpty()) {
+            _isExplicitSelectionMode.value = false
+        }
+    }
+
+    fun selectPeople(personIds: Collection<Long>) {
+        val next = personIds.toSet()
+        _selectedPersonIds.value = next
+        _isExplicitSelectionMode.value = next.isNotEmpty()
     }
 
     fun clearSelection() {
         _selectedPersonIds.value = emptySet()
+        _isExplicitSelectionMode.value = false
     }
 
     suspend fun checkNameCollision(personId: Long, name: String): PersonEntity? {
@@ -366,6 +422,61 @@ class PeopleViewModel(application: Application) : AndroidViewModel(application) 
                 faceDao.updatePersonFaceCount(personId, remaining)
             }
             clusteringManager.invalidateCache()
+        }
+    }
+
+    fun dismissPersonsAsNotFaces(
+        personIds: List<Long>,
+        suppressSimilar: Boolean = true,
+        onComplete: ((Int) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val removed = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    clusteringManager.dismissPersonsAsNotFaces(personIds, suppressSimilar)
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to dismiss non-face persons: ${e.message}", e)
+                    0
+                }
+            }
+            if (removed > 0) {
+                clearSelection()
+            }
+            onComplete?.invoke(removed)
+        }
+    }
+
+    fun dismissMediaAsNotFaces(
+        personId: Long,
+        mediaIds: List<Long>,
+        suppressSimilar: Boolean = true,
+        onComplete: ((Int, Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    val removed = clusteringManager.dismissMediaFacesAsNotFaces(personId, mediaIds, suppressSimilar)
+                    val stillExists = faceDao.getPersonById(personId) != null
+                    Pair(removed, stillExists)
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to dismiss media faces as non-faces: ${e.message}", e)
+                    Pair(0, true)
+                }
+            }
+            onComplete?.invoke(result.first, result.second)
+        }
+    }
+
+    fun clearIgnoredFaces(onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    clusteringManager.clearIgnoredFaces()
+                } catch (e: Exception) {
+                    Log.e("PeopleViewModel", "Failed to clear ignored faces: ${e.message}", e)
+                }
+            }
+            onComplete?.invoke()
         }
     }
 

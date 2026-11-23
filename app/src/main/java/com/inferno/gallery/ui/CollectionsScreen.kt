@@ -192,10 +192,14 @@ fun CollectionsScreen(
 
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val pullToRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
         isRefreshing = isRefreshing,
-        onRefresh = { viewModel.refreshMedia() },
+        onRefresh = {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            viewModel.refreshMedia()
+        },
         modifier = modifier.fillMaxSize(),
         state = pullToRefreshState,
         indicator = {
@@ -700,10 +704,18 @@ fun CollectionsScreen(
                 val mergeSub = stringResource(R.string.tool_sub_merge)
                 val adjustSub = stringResource(R.string.tool_sub_adjust)
                 val duplicatesSub = stringResource(R.string.tool_sub_duplicates)
+                val reclaimableCleanupBytes by viewModel.totalCleanupReclaimableBytes.collectAsState()
+                val cleanUpSubtitle = remember(reclaimableCleanupBytes, duplicatesSub) {
+                    if (reclaimableCleanupBytes > 0L) {
+                        "${android.text.format.Formatter.formatShortFileSize(context, reclaimableCleanupBytes)} can be freed"
+                    } else {
+                        duplicatesSub
+                    }
+                }
 
                 val tools = remember(
                     collageTitle, stitchTitle, editorTitle, cleanUpTitle,
-                    layoutsSub, mergeSub, adjustSub, duplicatesSub
+                    layoutsSub, mergeSub, adjustSub, cleanUpSubtitle
                 ) {
                     listOf(
                         UtilityItem(
@@ -739,7 +751,7 @@ fun CollectionsScreen(
                         UtilityItem(
                             title = cleanUpTitle,
                             iconRes = R.drawable.ic_ms_cleaning_services,
-                            subtitle = duplicatesSub,
+                            subtitle = cleanUpSubtitle,
                             onClick = onNavigateToDuplicateCleaner
                         )
                     )
