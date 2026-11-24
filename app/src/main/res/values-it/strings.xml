@@ -733,8 +733,8 @@
     <string name="video_trim_tab_speed">Velocità</string>
     <string name="video_trim_tab_transform">Trasforma</string>
     <string name="video_trim_tab_quality">Qualità</string>
-    <string name="video_trim_set_start">Imposta inizio</string>
-    <string name="video_trim_set_end">Imposta fine</string>
+    <string name="video_trim_set_start">Inizio</string>
+    <string name="video_trim_set_end">Fine</string>
     <string name="video_trim_rotate">Ruota di 90°</string>
     <string name="video_trim_flip_h">Specchia orizz.</string>
     <string name="video_trim_flip_v">Specchia vert.</string>
