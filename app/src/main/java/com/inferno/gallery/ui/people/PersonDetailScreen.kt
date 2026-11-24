@@ -132,6 +132,7 @@ fun PersonDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val coroutineScope = rememberCoroutineScope()
     val person by viewModel.observePerson(personId).collectAsState(initial = null)
     val mediaList by viewModel.observeMediaForPerson(personId).collectAsState(initial = emptyList())
@@ -434,7 +435,7 @@ fun PersonDetailScreen(
                                 if (removed > 0) {
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.person_removed_not_a_face_toast, removed),
+                                        resources.getString(R.string.person_removed_not_a_face_toast, removed),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -568,7 +569,7 @@ fun PersonDetailScreen(
                             if (removed > 0) {
                                 Toast.makeText(
                                     context,
-                                    context.getString(R.string.people_removed_not_faces_toast_one),
+                                    resources.getString(R.string.people_removed_not_faces_toast_one),
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 onBack()

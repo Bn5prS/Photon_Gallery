@@ -41,6 +41,26 @@ data class PhotoStackIndex(
 }
 
 /**
+ * Summary of a timeline multi-selection after expanding any collapsed multi-photo stacks
+ * into all of their member IDs.
+ */
+@Immutable
+data class PhotoStackSelectionSummary(
+    val expandedIds: List<Long> = emptyList(),
+    val selectedStackCount: Int = 0,
+    val stackedPhotoCount: Int = 0,
+    val standalonePhotoCount: Int = 0,
+    val unparsedUriCount: Int = 0
+) {
+    val totalPhotoCount: Int get() = expandedIds.size + unparsedUriCount
+    val hasStacks: Boolean get() = selectedStackCount > 0
+
+    companion object {
+        val EMPTY = PhotoStackSelectionSummary()
+    }
+}
+
+/**
  * Lightweight projection of a photo used to build Timeline photo stacks completely offline.
  */
 data class PhotoStackCandidate(
@@ -347,5 +367,93 @@ object PhotoStackPlanner {
             }
         }
         return result
+    }
+
+    /**
+     * Extracts the trailing numeric MediaStore ID from a content URI string such as
+     * `content://media/external/images/media/12345`. Returns null for non-numeric URIs.
+     */
+    fun extractMediaIdFromUri(uriString: String): Long? {
+        if (uriString.isBlank()) return null
+        return uriString.substringBefore('?').substringBefore('#').substringAfterLast('/').toLongOrNull()
+    }
+
+    /**
+     * Expands selected media IDs when Photo Stacks are actively collapsed on the main timeline.
+     * Any selected cover ID representing a multi-photo stack in [stackIndex] expands to every
+     * member ID in that stack, while standalone items stay single IDs. Deduplicates cleanly if
+     * both a cover and a member were ever passed together.
+     */
+    fun summarizeSelection(
+        selectedIds: Collection<Long>,
+        stackIndex: PhotoStackIndex,
+        expandStacks: Boolean
+    ): PhotoStackSelectionSummary {
+        if (selectedIds.isEmpty()) return PhotoStackSelectionSummary.EMPTY
+
+        val distinctIds = selectedIds.distinct()
+        if (!expandStacks || stackIndex.isEmpty) {
+            return PhotoStackSelectionSummary(
+                expandedIds = distinctIds,
+                selectedStackCount = 0,
+                stackedPhotoCount = 0,
+                standalonePhotoCount = distinctIds.size
+            )
+        }
+
+        val expanded = LinkedHashSet<Long>(distinctIds.size)
+        val countedStacks = HashSet<String>()
+        var stackCount = 0
+        var stackedPhotos = 0
+
+        // First pass: expand every selected stack cover into all of its members
+        for (id in distinctIds) {
+            val stack = stackIndex.stacksByCoverId[id]
+            if (stack != null && stack.count > 1) {
+                if (countedStacks.add(stack.stackId)) {
+                    stackCount++
+                    stackedPhotos += stack.count
+                    expanded.addAll(stack.memberIds)
+                }
+            }
+        }
+
+        // Second pass: append standalone items that weren't already covered by an expanded stack
+        var standaloneCount = 0
+        for (id in distinctIds) {
+            if (expanded.add(id)) {
+                standaloneCount++
+            }
+        }
+
+        return PhotoStackSelectionSummary(
+            expandedIds = expanded.toList(),
+            selectedStackCount = stackCount,
+            stackedPhotoCount = stackedPhotos,
+            standalonePhotoCount = standaloneCount
+        )
+    }
+
+    /**
+     * Synchronous URI-based selection summary for UI confirmation dialogs.
+     */
+    fun summarizeSelectedUris(
+        selectedUris: Collection<String>,
+        stackIndex: PhotoStackIndex,
+        expandStacks: Boolean
+    ): PhotoStackSelectionSummary {
+        if (selectedUris.isEmpty()) return PhotoStackSelectionSummary.EMPTY
+        val parsedIds = ArrayList<Long>(selectedUris.size)
+        var unparsed = 0
+        for (uri in selectedUris.distinct()) {
+            val id = extractMediaIdFromUri(uri)
+            if (id != null) {
+                parsedIds.add(id)
+            } else {
+                unparsed++
+            }
+        }
+        val base = summarizeSelection(parsedIds, stackIndex, expandStacks)
+        return if (unparsed == 0) base else base.copy(unparsedUriCount = unparsed)
     }
 }

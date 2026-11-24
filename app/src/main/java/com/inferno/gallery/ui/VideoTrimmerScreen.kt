@@ -141,6 +141,7 @@ fun VideoTrimmerScreen(
     onSaved: (savedUri: Uri, isOverwrite: Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -406,7 +407,7 @@ fun VideoTrimmerScreen(
             isTrimming = false
             result.onSuccess { savedUri ->
                 onSaved(savedUri, overwrite)
-                val msg = context.getString(
+                val msg = resources.getString(
                     if (overwrite) R.string.video_trim_replaced else R.string.video_trim_saved_copy
                 )
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -414,7 +415,7 @@ fun VideoTrimmerScreen(
             }.onFailure { err ->
                 Toast.makeText(
                     context,
-                    "${context.getString(R.string.video_trim_failed)}: ${err.localizedMessage ?: "error"}",
+                    "${resources.getString(R.string.video_trim_failed)}: ${err.localizedMessage ?: "error"}",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -847,13 +848,14 @@ fun VideoTrimmerScreen(
                             VideoEditorTab.TRIM -> {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     // [ In (Set Start at Playhead)
                                     CompactActionChip(
                                         label = stringResource(R.string.video_trim_set_start),
                                         enabled = durationMs > 0L && currentPosMs < endMs - VideoTrimMath.MIN_TRIM_DURATION_MS,
+                                        modifier = Modifier.weight(1f, fill = false),
                                         onClick = {
                                             val next = VideoTrimMath.dragStartHandle(currentPosMs, endMs, durationMs)
                                             startMs = next
@@ -909,6 +911,7 @@ fun VideoTrimmerScreen(
                                     CompactActionChip(
                                         label = stringResource(R.string.video_trim_set_end),
                                         enabled = durationMs > 0L && currentPosMs > startMs + VideoTrimMath.MIN_TRIM_DURATION_MS,
+                                        modifier = Modifier.weight(1f, fill = false),
                                         onClick = {
                                             val next = VideoTrimMath.dragEndHandle(startMs, currentPosMs, durationMs)
                                             endMs = next
@@ -1281,13 +1284,14 @@ fun VideoTrimmerScreen(
 private fun CompactActionChip(
     label: String,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
         shape = ShapeFull,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier
+        modifier = modifier
             .alpha(if (enabled) 1f else 0.42f)
             .clip(ShapeFull)
             .clickable(enabled = enabled, onClick = onClick)
@@ -1296,7 +1300,9 @@ private fun CompactActionChip(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 9.dp)
         )
     }
 }

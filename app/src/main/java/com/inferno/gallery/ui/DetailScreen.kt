@@ -217,6 +217,7 @@ fun DetailScreen(
     val viewerToolbarActions by viewModel.viewerToolbarActions.collectAsState()
 
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val settingsRepo = viewModel.settingsRepository
     // Matches the size bucket the grid used for this item, so the placeholder key resolves.
     val placeholderSizePx = remember(viewModel) {
@@ -671,7 +672,7 @@ fun DetailScreen(
             }
             Toast.makeText(
                 context,
-                context.getString(R.string.stack_kept_best_toast, urisToRemove.size),
+                resources.getString(R.string.stack_kept_best_toast, urisToRemove.size),
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -729,6 +730,7 @@ fun DetailScreen(
     var isMotionLooping by remember { mutableStateOf(false) }
     var isVideoScrubbing by remember { mutableStateOf(false) }
     var isFilmstripScrolling by remember { mutableStateOf(false) }
+    var isStackMenuOpen by remember { mutableStateOf(false) }
     var userInteractionTrigger by remember { mutableLongStateOf(0L) }
 
     val isAnyToolOrMenuOpen = showMoreMenu ||
@@ -741,7 +743,9 @@ fun DetailScreen(
                               isMotionPlaying ||
                               isMotionLooping ||
                               isVideoScrubbing ||
-                              isFilmstripScrolling
+                              isFilmstripScrolling ||
+                              isStackMenuOpen ||
+                              pendingKeepBestConfirm != null
 
     val hdrDisplayEnabled by settingsRepo.hdrDisplayEnabledFlow.collectAsState(initial = true)
     val ultraHdrMap = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
@@ -2687,7 +2691,7 @@ fun DetailScreen(
                                                     if (count >= 2) {
                                                         Toast.makeText(
                                                             context,
-                                                            context.getString(R.string.stack_restacked_toast, count),
+                                                            resources.getString(R.string.stack_restacked_toast, count),
                                                             Toast.LENGTH_SHORT
                                                         ).show()
                                                     }
@@ -2851,14 +2855,41 @@ fun DetailScreen(
                                 viewModel.setPhotoStackBestShot(activePhotoStack, chosenId)
                                 Toast.makeText(
                                     context,
-                                    context.getString(R.string.stack_best_shot_updated),
+                                    resources.getString(R.string.stack_best_shot_updated),
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
                         },
-                        onKeepBestOnly = { extras ->
+                        onRemoveFromStack = { removedItem ->
+                            val removedId = removedItem.id.toLongOrNull()
+                            if (removedId != null) {
+                                if (activePhotoStack.count <= 2) {
+                                    lastUnstackedStack = activePhotoStack
+                                } else {
+                                    val idx = activeStackMembers.indexOfFirst { it.id == removedItem.id }
+                                    val nextMember = activeStackMembers.getOrNull(idx + 1)
+                                        ?: activeStackMembers.getOrNull(idx - 1)
+                                    val nextPage = nextMember?.let { nm ->
+                                        galleryItems.indexOfFirst { it.id == nm.id }
+                                    } ?: -1
+                                    if (nextPage >= 0 && nextPage != pagerState.currentPage) {
+                                        coroutineScope.launch {
+                                            pagerState.animateScrollToPage(nextPage)
+                                        }
+                                    }
+                                }
+                                viewModel.removePhotoFromStack(activePhotoStack, removedId)
+                                Toast.makeText(
+                                    context,
+                                    resources.getString(R.string.stack_removed_from_stack_toast),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        onKeepThisDeleteRest = { keptItem, extras ->
                             if (extras.isNotEmpty()) {
-                                pendingKeepBestConfirm = activePhotoStack.bestShotId to extras
+                                val keptId = keptItem.id.toLongOrNull() ?: activePhotoStack.bestShotId
+                                pendingKeepBestConfirm = keptId to extras
                             }
                         },
                         onUnstack = {
@@ -2868,6 +2899,10 @@ fun DetailScreen(
                         onScrollInProgress = { scrolling ->
                             isFilmstripScrolling = scrolling
                             if (scrolling) userInteractionTrigger++
+                        },
+                        onMenuOpenChange = { open ->
+                            isStackMenuOpen = open
+                            if (open) userInteractionTrigger++
                         }
                     )
                 }
@@ -2983,9 +3018,9 @@ fun DetailScreen(
             } else ""
         }
         val bodyText = if (count == 1) {
-            stringResource(R.string.stack_keep_best_confirm_body_one) + sizeSuffix
+            stringResource(R.string.stack_keep_this_confirm_body_one) + sizeSuffix
         } else {
-            stringResource(R.string.stack_keep_best_confirm_body_many, count) + sizeSuffix
+            stringResource(R.string.stack_keep_this_confirm_body_many, count) + sizeSuffix
         }
 
         AlertDialog(
@@ -3001,7 +3036,7 @@ fun DetailScreen(
             },
             title = {
                 Text(
-                    text = stringResource(R.string.stack_keep_best_confirm_title),
+                    text = stringResource(R.string.stack_keep_this_confirm_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
             },
@@ -3016,6 +3051,10 @@ fun DetailScreen(
                 androidx.compose.material3.Button(
                     onClick = {
                         pendingKeepBestConfirm = null
+                        val currentStack = activePhotoStack
+                        if (currentStack != null && bestShotId != currentStack.bestShotId) {
+                            viewModel.setPhotoStackBestShot(currentStack, bestShotId)
+                        }
                         val contentUris = extras.mapNotNull { item ->
                             if (item.uri.toString().startsWith("content://")) {
                                 com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(item.uri)

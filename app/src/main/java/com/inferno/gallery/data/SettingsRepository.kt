@@ -676,6 +676,55 @@ class SettingsRepository private constructor(private val context: Context) {
                 updated.add(id.toString())
             }
             preferences[PHOTO_STACK_UNSTACKED_IDS] = updated
+
+            val existingOverrides = preferences[PHOTO_STACK_BEST_OVERRIDES]
+            if (!existingOverrides.isNullOrBlank()) {
+                val overrides = runCatching { JSONObject(existingOverrides) }.getOrNull()
+                if (overrides != null) {
+                    var changed = false
+                    for (id in idSet) {
+                        if (overrides.has(id.toString())) {
+                            overrides.remove(id.toString())
+                            changed = true
+                        }
+                    }
+                    if (changed) {
+                        preferences[PHOTO_STACK_BEST_OVERRIDES] = overrides.toString()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Detaches a single photo [mediaId] from its stack so it returns to the normal timeline
+     * while preserving the remaining members as a stack (or dissolving if only 2 remained).
+     */
+    suspend fun removePhotoFromStack(mediaId: Long, stackMemberIds: List<Long>) {
+        if (stackMemberIds.size <= 2) {
+            unstackPhotos(stackMemberIds)
+            return
+        }
+        context.dataStore.edit { preferences ->
+            val existingManual = parseManualStackGroups(preferences[PHOTO_STACK_MANUAL_GROUPS])
+            if (existingManual.isNotEmpty()) {
+                val prunedManual = existingManual
+                    .map { group -> group.filter { it != mediaId } }
+                    .filter { it.size >= 2 }
+                preferences[PHOTO_STACK_MANUAL_GROUPS] = serializeManualStackGroups(prunedManual)
+            }
+            val updated = (preferences[PHOTO_STACK_UNSTACKED_IDS] ?: emptySet()).toMutableSet()
+            updated.add(mediaId.toString())
+            preferences[PHOTO_STACK_UNSTACKED_IDS] = updated
+
+            val existingOverrides = preferences[PHOTO_STACK_BEST_OVERRIDES]
+            if (!existingOverrides.isNullOrBlank()) {
+                val overrides = runCatching { JSONObject(existingOverrides) }.getOrNull()
+                if (overrides != null && overrides.has(mediaId.toString())) {
+                    overrides.remove(mediaId.toString())
+                    preferences[PHOTO_STACK_BEST_OVERRIDES] = overrides.toString()
+                }
+            }
         }
     }
 

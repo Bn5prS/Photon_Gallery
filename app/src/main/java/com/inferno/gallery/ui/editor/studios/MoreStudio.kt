@@ -341,14 +341,24 @@ private fun launchExternalApp(context: Context, imageUri: Uri, app: ExternalEdit
 
 private fun launchSystemChooser(context: Context, imageUri: Uri) {
     try {
+        val normalizedUri = com.inferno.gallery.data.MediaUriUtils.normalizeMediaUri(imageUri)
+        val mimeType = com.inferno.gallery.ui.utils.ShareUtils.resolveMimeType(context, normalizedUri)
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/*"
-            putExtra(Intent.EXTRA_STREAM, imageUri)
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, normalizedUri)
+            clipData = android.content.ClipData(
+                android.content.ClipDescription(null, arrayOf(mimeType)),
+                android.content.ClipData.Item(normalizedUri)
+            )
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(sendIntent, "Edit or share photo with...")
-        chooser.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(chooser)
+        val hostActivity = com.inferno.gallery.ui.utils.ShareUtils.findActivity(context)
+        val chooser = Intent.createChooser(sendIntent, "Edit or share photo with...").apply {
+            if (hostActivity == null) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        (hostActivity ?: context).startActivity(chooser)
     } catch (e: Exception) {
         Toast.makeText(context, "Could not launch chooser: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
     }

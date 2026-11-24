@@ -109,7 +109,7 @@ fun FloatingGalleryBackground(
         }
     }
     val shaderBrush = remember(runtimeShader) {
-        if (runtimeShader != null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && runtimeShader != null) {
             ShaderBrush(runtimeShader)
         } else {
             null

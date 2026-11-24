@@ -104,6 +104,11 @@ class MediaStoreThumbnailFetcher(
                     isFromSystem = true
                 }
                 tempBitmap
+            } else if (com.inferno.gallery.data.decoder.RawImageHelper.isRawUriSuspend(context, effectiveUri)) {
+                mediaProviderSemaphore.withPermit {
+                    coroutineContext.ensureActive()
+                    com.inferno.gallery.data.decoder.RawImageHelper.decodeRawBitmap(context, effectiveUri, targetDim)
+                }
             } else {
                 var tempBitmap: Bitmap? = mediaProviderSemaphore.withPermit {
                     coroutineContext.ensureActive()

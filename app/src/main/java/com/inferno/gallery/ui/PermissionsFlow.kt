@@ -1027,7 +1027,7 @@ private fun ExpressiveOnboardingHero(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = stringResource(R.string.onboarding_welcome_to).uppercase(Locale.getDefault()),
+            text = stringResource(R.string.onboarding_welcome_to).uppercase(androidx.compose.ui.platform.LocalLocale.current.platformLocale),
             style = MaterialTheme.typography.titleSmall.copy(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.5.sp

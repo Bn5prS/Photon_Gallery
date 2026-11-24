@@ -1278,6 +1278,7 @@ fun SettingsScreen(
                                     if (photoStacksEnabled && restorableStackCount > 0) {
                                         add {
                                             val localCtx = androidx.compose.ui.platform.LocalContext.current
+                                            val localRes = androidx.compose.ui.platform.LocalResources.current
                                             ClickableSettingItem(
                                                 title = stringResource(R.string.stack_restore_unstacked_title),
                                                 subtitle = stringResource(R.string.stack_restore_unstacked_sub, restorableStackCount),
@@ -1287,7 +1288,7 @@ fun SettingsScreen(
                                                         if (restoredCount > 0) {
                                                             android.widget.Toast.makeText(
                                                                 localCtx,
-                                                                localCtx.getString(R.string.stack_restored_all_toast, restoredCount),
+                                                                localRes.getString(R.string.stack_restored_all_toast, restoredCount),
                                                                 android.widget.Toast.LENGTH_SHORT
                                                             ).show()
                                                         }

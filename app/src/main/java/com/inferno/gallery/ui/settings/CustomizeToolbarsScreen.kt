@@ -85,6 +85,7 @@ fun CustomizeToolbarsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val haptics = LocalHapticFeedback.current
 
     var selectedTarget by remember { mutableStateOf(initialTarget) }
@@ -320,7 +321,7 @@ fun CustomizeToolbarsScreen(
                                                             if (result.actionTaken != DragActionType.REJECTED) {
                                                                 settingsViewModel.updateViewerToolbarActions(result.updatedActive)
                                                             } else if (currentActiveIds.size <= 2 && dragDropState.hoverTargetZone == DragDropTargetZone.SHELF) {
-                                                                Toast.makeText(context, context.getString(R.string.toolbar_min_limit_toast), Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, resources.getString(R.string.toolbar_min_limit_toast), Toast.LENGTH_SHORT).show()
                                                             }
                                                         },
                                                         onDragCancel = { dragDropState.reset() }
@@ -444,7 +445,7 @@ fun CustomizeToolbarsScreen(
                                                             if (result.actionTaken != DragActionType.REJECTED) {
                                                                 settingsViewModel.updateSelectionDockActions(result.updatedActive)
                                                             } else if (currentActiveIds.size <= 2 && dragDropState.hoverTargetZone == DragDropTargetZone.SHELF) {
-                                                                Toast.makeText(context, context.getString(R.string.toolbar_min_limit_toast), Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, resources.getString(R.string.toolbar_min_limit_toast), Toast.LENGTH_SHORT).show()
                                                             }
                                                         },
                                                         onDragCancel = { dragDropState.reset() }
@@ -642,7 +643,7 @@ fun CustomizeToolbarsScreen(
                         } else {
                             settingsViewModel.resetSelectionDockActions()
                         }
-                        Toast.makeText(context, context.getString(R.string.toolbar_reset_toast), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, resources.getString(R.string.toolbar_reset_toast), Toast.LENGTH_SHORT).show()
                     },
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onSurface

@@ -206,6 +206,9 @@ fun MainAppLayout(
     }
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedUris by viewModel.selectedUris.collectAsState()
+    val photoStacksEnabled by viewModel.photoStacksEnabled.collectAsState()
+    val photoStackIndex by viewModel.photoStackIndex.collectAsState()
+    val selectedFilterIndex by viewModel.selectedFilterIndex.collectAsState()
     val selectionDockActions by viewModel.selectionDockActions.collectAsState()
     val isDragSelecting by viewModel.isDragSelecting.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
@@ -243,6 +246,7 @@ fun MainAppLayout(
     val coroutineScope = rememberCoroutineScope()
 
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     var selectedUrisToDelete by remember { mutableStateOf<List<Uri>>(emptyList()) }
@@ -2181,12 +2185,120 @@ fun MainAppLayout(
                 }
             }
 
+            val arePhotoStacksCollapsed = isHomeScreen &&
+                photoStacksEnabled &&
+                selectedFilterIndex == 0 &&
+                !photoStackIndex.isEmpty
+            val selectionStackSummary = remember(selectedUris, photoStackIndex, arePhotoStacksCollapsed) {
+                viewModel.summarizeSelectionForStacks(selectedUris, arePhotoStacksCollapsed)
+            }
+
+            val launchMultiDelete: (Boolean) -> Unit = { isPermanent ->
+                val rawSelected = selectedUris.toList()
+                if (rawSelected.isNotEmpty()) {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        var resolvedTargetStrings = rawSelected
+                        try {
+                            resolvedTargetStrings = viewModel.resolveDeletionUris(rawSelected, arePhotoStacksCollapsed)
+                            val parsedUris = resolvedTargetStrings.map { Uri.parse(it) }
+                            val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
+                            if (ghostUris.isNotEmpty()) {
+                                val ghostStrings = ghostUris.flatMap {
+                                    listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
+                                }.distinct()
+                                viewModel.deleteSelectedMediaFromDb(ghostStrings)
+                            }
+
+                            if (validUris.isEmpty()) {
+                                withContext(Dispatchers.Main) {
+                                    viewModel.clearSelection()
+                                    android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                                return@launch
+                            }
+
+                            pendingTrashUris = validUris.map { it.toString() }
+                            val intentSender = if (isPermanent) {
+                                android.provider.MediaStore.createDeleteRequest(
+                                    context.contentResolver,
+                                    validUris
+                                ).intentSender
+                            } else {
+                                android.provider.MediaStore.createTrashRequest(
+                                    context.contentResolver,
+                                    validUris,
+                                    true
+                                ).intentSender
+                            }
+                            val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
+                            withContext(Dispatchers.Main) {
+                                if (isPermanent) {
+                                    permanentDeleteLauncher.launch(request)
+                                } else {
+                                    trashLauncher.launch(request)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
+                                    viewModel.deleteSelectedMediaFromDb(resolvedTargetStrings)
+                                    viewModel.clearSelection()
+                                    android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (showMultiDeleteConfirmDialog) {
                 var dialogSkipConfirm by remember { mutableStateOf(viewModel.sessionSkipDeleteConfirmation) }
                 var dialogSkipRecycleBin by remember { mutableStateOf(viewModel.sessionSkipRecycleBin) }
                 val isPermanent = dialogSkipRecycleBin
 
-                val count = selectedUris.size
+                val count = if (selectionStackSummary.totalPhotoCount > 0) {
+                    selectionStackSummary.totalPhotoCount
+                } else {
+                    selectedUris.size
+                }
+                val hasStandaloneWithStacks = selectionStackSummary.standalonePhotoCount + selectionStackSummary.unparsedUriCount > 0
+                val stackWarningText = if (selectionStackSummary.hasStacks) {
+                    when {
+                        selectionStackSummary.selectedStackCount == 1 && !hasStandaloneWithStacks -> {
+                            stringResource(
+                                if (isPermanent) R.string.stack_delete_warning_single_permanent else R.string.stack_delete_warning_single_trash,
+                                selectionStackSummary.stackedPhotoCount
+                            )
+                        }
+                        selectionStackSummary.selectedStackCount == 1 -> {
+                            stringResource(
+                                if (isPermanent) R.string.stack_delete_warning_single_mixed_permanent else R.string.stack_delete_warning_single_mixed_trash,
+                                selectionStackSummary.stackedPhotoCount,
+                                count
+                            )
+                        }
+                        !hasStandaloneWithStacks -> {
+                            stringResource(
+                                if (isPermanent) R.string.stack_delete_warning_multi_permanent else R.string.stack_delete_warning_multi_trash,
+                                selectionStackSummary.selectedStackCount,
+                                selectionStackSummary.stackedPhotoCount
+                            )
+                        }
+                        else -> {
+                            stringResource(
+                                if (isPermanent) R.string.stack_delete_warning_multi_mixed_permanent else R.string.stack_delete_warning_multi_mixed_trash,
+                                selectionStackSummary.selectedStackCount,
+                                selectionStackSummary.stackedPhotoCount,
+                                count
+                            )
+                        }
+                    }
+                } else {
+                    null
+                }
+
                 com.inferno.gallery.ui.components.PhotonDialog(
                     onDismissRequest = { showMultiDeleteConfirmDialog = false },
                     title = if (isPermanent) {
@@ -2216,70 +2328,61 @@ fun MainAppLayout(
                                 android.widget.Toast.LENGTH_SHORT
                             ).show()
                         }
-                        val rawSelected = selectedUris.toList()
-                        val parsedUris = rawSelected.map { Uri.parse(it) }
-                        if (parsedUris.isNotEmpty()) {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
-                                    val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
-                                    if (ghostUris.isNotEmpty()) {
-                                        val ghostStrings = ghostUris.flatMap {
-                                            listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
-                                        }.distinct()
-                                        viewModel.deleteSelectedMediaFromDb(ghostStrings)
-                                    }
-
-                                    if (validUris.isEmpty()) {
-                                        withContext(Dispatchers.Main) {
-                                            viewModel.clearSelection()
-                                            android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                        return@launch
-                                    }
-
-                                    pendingTrashUris = validUris.map { it.toString() }
-                                    val intentSender = if (isPermanent) {
-                                        android.provider.MediaStore.createDeleteRequest(
-                                            context.contentResolver,
-                                            validUris
-                                        ).intentSender
-                                    } else {
-                                        android.provider.MediaStore.createTrashRequest(
-                                            context.contentResolver,
-                                            validUris,
-                                            true
-                                        ).intentSender
-                                    }
-                                    val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
-                                    withContext(Dispatchers.Main) {
-                                        if (isPermanent) {
-                                            permanentDeleteLauncher.launch(request)
-                                        } else {
-                                            trashLauncher.launch(request)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
-                                            viewModel.deleteSelectedMediaFromDb(rawSelected)
-                                            viewModel.clearSelection()
-                                            android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        launchMultiDelete(isPermanent)
                     },
                     dismissText = stringResource(R.string.action_cancel),
                     content = {
-                        com.inferno.gallery.ui.components.TrashSessionOptions(
-                            skipConfirm = dialogSkipConfirm,
-                            onSkipConfirmChange = { dialogSkipConfirm = it },
-                            skipRecycleBin = dialogSkipRecycleBin,
-                            onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (stackWarningText != null) {
+                                val warningContainer = if (isPermanent) {
+                                    MaterialTheme.colorScheme.errorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.tertiaryContainer
+                                }
+                                val warningContent = if (isPermanent) {
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onTertiaryContainer
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = warningContainer,
+                                    contentColor = warningContent,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.ic_ms_burst_mode),
+                                            contentDescription = null,
+                                            tint = warningContent,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = stackWarningText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = warningContent,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                            com.inferno.gallery.ui.components.TrashSessionOptions(
+                                skipConfirm = dialogSkipConfirm,
+                                onSkipConfirmChange = { dialogSkipConfirm = it },
+                                skipRecycleBin = dialogSkipRecycleBin,
+                                onSkipRecycleBinChange = { dialogSkipRecycleBin = it }
+                            )
+                        }
                     }
                 )
             }
@@ -2461,55 +2564,10 @@ fun MainAppLayout(
                     val isSessionSkipConfirm = viewModel.sessionSkipDeleteConfirmation
                     val isSessionPermanent = viewModel.sessionSkipRecycleBin
 
-                    if (isSessionSkipConfirm || !confirmDeleteEnabled) {
-                        val rawSelected = selectedUris.toList()
-                        val parsedUris = rawSelected.map { Uri.parse(it) }
-                        if (parsedUris.isNotEmpty()) {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
-                                    val (validUris, ghostUris) = MediaUriUtils.validateAndSanitizeUris(context, parsedUris)
-                                    if (ghostUris.isNotEmpty()) {
-                                        val ghostStrings = ghostUris.flatMap {
-                                            listOf(it.toString(), MediaUriUtils.normalizeUriString(it.toString()))
-                                        }.distinct()
-                                        viewModel.deleteSelectedMediaFromDb(ghostStrings)
-                                    }
-
-                                    if (validUris.isEmpty()) {
-                                        withContext(Dispatchers.Main) {
-                                            viewModel.clearSelection()
-                                            android.widget.Toast.makeText(context, "Selected items no longer exist", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                        return@launch
-                                    }
-
-                                    pendingTrashUris = validUris.map { it.toString() }
-                                    val intentSender = if (isSessionPermanent) {
-                                        android.provider.MediaStore.createDeleteRequest(context.contentResolver, validUris).intentSender
-                                    } else {
-                                        android.provider.MediaStore.createTrashRequest(context.contentResolver, validUris, true).intentSender
-                                    }
-                                    val request = androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
-                                    withContext(Dispatchers.Main) {
-                                        if (isSessionPermanent) {
-                                            permanentDeleteLauncher.launch(request)
-                                        } else {
-                                            trashLauncher.launch(request)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        if (e is IllegalArgumentException && e.message?.contains("Invalid Uri") == true) {
-                                            viewModel.deleteSelectedMediaFromDb(rawSelected)
-                                            viewModel.clearSelection()
-                                            android.widget.Toast.makeText(context, "Removed invalid items", android.widget.Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    // Always show the confirmation dialog with a clear multi-photo warning
+                    // whenever the selection includes a collapsed Photo Stack.
+                    if ((isSessionSkipConfirm || !confirmDeleteEnabled) && !selectionStackSummary.hasStacks) {
+                        launchMultiDelete(isSessionPermanent)
                     } else {
                         showMultiDeleteConfirmDialog = true
                     }
@@ -2595,9 +2653,9 @@ fun MainAppLayout(
                                                 createMenuExpanded = false
                                                 viewModel.stackSelectedUris(selectedUris.toList()) { count ->
                                                     val msg = if (count >= 2) {
-                                                        context.getString(R.string.stack_stacked_toast, count)
+                                                        resources.getString(R.string.stack_stacked_toast, count)
                                                     } else {
-                                                        context.getString(R.string.stack_need_two_photos_toast)
+                                                        resources.getString(R.string.stack_need_two_photos_toast)
                                                     }
                                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                                 }
@@ -2682,9 +2740,9 @@ fun MainAppLayout(
                                             moreMenuExpanded = false
                                             viewModel.stackSelectedUris(selectedUris.toList()) { count ->
                                                 val msg = if (count >= 2) {
-                                                    context.getString(R.string.stack_stacked_toast, count)
+                                                    resources.getString(R.string.stack_stacked_toast, count)
                                                 } else {
-                                                    context.getString(R.string.stack_need_two_photos_toast)
+                                                    resources.getString(R.string.stack_need_two_photos_toast)
                                                 }
                                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                             }
@@ -2845,7 +2903,6 @@ fun MainAppLayout(
     }
 
     if (showDisplaySortSheet) {
-        val photoStacksEnabled by viewModel.photoStacksEnabled.collectAsState()
         val restorableStackCount by viewModel.restorableStackCount.collectAsState()
         DisplayAndSortBottomSheet(
             isAlbumsScreen = (currentRoute == "albums" || currentRoute == "all_albums" || currentRoute == "pinned_albums"),
@@ -2868,7 +2925,7 @@ fun MainAppLayout(
                     if (restored > 0) {
                         android.widget.Toast.makeText(
                             context,
-                            context.getString(R.string.stack_restored_all_toast, restored),
+                            resources.getString(R.string.stack_restored_all_toast, restored),
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
                     }

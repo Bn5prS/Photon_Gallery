@@ -513,6 +513,7 @@ fun ExifDetailsSheet(
 ) {
     if (!isOpen || galleryItem == null) return
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -581,7 +582,7 @@ fun ExifDetailsSheet(
                     isStripping = false
                     when (result) {
                         is ExifStripperHelper.StripResult.Success -> {
-                            Toast.makeText(context, context.getString(R.string.exif_strip_success_copy), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, resources.getString(R.string.exif_strip_success_copy), Toast.LENGTH_SHORT).show()
                             onStripComplete?.invoke(result.newUri, true)
                         }
                         is ExifStripperHelper.StripResult.Error -> {
@@ -599,7 +600,7 @@ fun ExifDetailsSheet(
                     isStripping = false
                     when (result) {
                         is ExifStripperHelper.StripResult.Success -> {
-                            Toast.makeText(context, context.getString(R.string.exif_strip_success_overwrite), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, resources.getString(R.string.exif_strip_success_overwrite), Toast.LENGTH_SHORT).show()
                             val refreshed = withContext(Dispatchers.IO) {
                                 extractDetailedExif(context, galleryItem)
                             }
@@ -635,8 +636,8 @@ fun ExifDetailsSheet(
                     isStripping = false
                     when (result) {
                         is ExifStripperHelper.StripResult.Success -> {
-                            val msg = if (result.isCopy) context.getString(R.string.exif_strip_success_copy)
-                                      else context.getString(R.string.exif_strip_success_overwrite)
+                            val msg = if (result.isCopy) resources.getString(R.string.exif_strip_success_copy)
+                                      else resources.getString(R.string.exif_strip_success_overwrite)
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             if (!result.isCopy) {
                                 val refreshed = withContext(Dispatchers.IO) {
@@ -1143,7 +1144,7 @@ fun ExifDetailsSheet(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("File Path", galleryItem.path))
-                                Toast.makeText(context, context.getString(R.string.exif_path_copied), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, resources.getString(R.string.exif_path_copied), Toast.LENGTH_SHORT).show()
                             },
                             shape = ShapeFull,
                             colors = ButtonDefaults.filledTonalButtonColors(
@@ -1439,6 +1440,7 @@ private fun DeepMetadataInspectorSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val haptic = LocalHapticFeedback.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -1506,7 +1508,7 @@ private fun DeepMetadataInspectorSheet(
                         val formattedDump = filteredTags.joinToString("\n") { "[${it.category}] ${it.tag} = ${it.value}" }
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("EXIF Dump", formattedDump))
-                        Toast.makeText(context, context.getString(R.string.exif_all_copied), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, resources.getString(R.string.exif_all_copied), Toast.LENGTH_SHORT).show()
                     }
                 ) {
                     Row(

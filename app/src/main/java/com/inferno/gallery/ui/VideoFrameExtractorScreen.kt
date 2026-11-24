@@ -129,6 +129,7 @@ fun VideoFrameExtractorScreen(
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val coroutineScope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -379,7 +380,7 @@ fun VideoFrameExtractorScreen(
             } else {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.video_frame_failed),
+                    resources.getString(R.string.video_frame_failed),
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -418,19 +419,19 @@ fun VideoFrameExtractorScreen(
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(
-                        Intent.createChooser(sendIntent, context.getString(R.string.action_extract_frame))
+                        Intent.createChooser(sendIntent, resources.getString(R.string.action_extract_frame))
                     )
                 } catch (_: Throwable) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.video_frame_failed),
+                        resources.getString(R.string.video_frame_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
             }.onFailure {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.video_frame_failed),
+                    resources.getString(R.string.video_frame_failed),
                     Toast.LENGTH_SHORT
                 ).show()
             }

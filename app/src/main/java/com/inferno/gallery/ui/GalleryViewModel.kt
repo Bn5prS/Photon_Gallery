@@ -1139,6 +1139,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun removePhotoFromStack(stack: com.inferno.gallery.data.PhotoStack, mediaId: Long) {
+        if (mediaId !in stack.memberIds) return
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.removePhotoFromStack(mediaId, stack.memberIds)
+        }
+    }
+
     fun undoUnstackPhotoStack(stack: com.inferno.gallery.data.PhotoStack) {
         viewModelScope.launch(Dispatchers.IO) {
             if (stack.isManual) {
@@ -1251,6 +1258,99 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 longitude = entity.longitude
             )
         }
+    }
+
+    /**
+     * Fast synchronous summary of how many collapsed Photo Stacks and total photos are represented
+     * by [selectedUris] on the active screen. Used by the deletion confirmation dialog to display
+     * an accurate photo count and multi-photo stack warning with zero UI latency.
+     */
+    fun summarizeSelectionForStacks(
+        selectedUris: Collection<String>,
+        expandActiveStacks: Boolean
+    ): com.inferno.gallery.data.PhotoStackSelectionSummary {
+        return com.inferno.gallery.data.PhotoStackPlanner.summarizeSelectedUris(
+            selectedUris = selectedUris,
+            stackIndex = _photoStackIndex.value,
+            expandStacks = expandActiveStacks
+        )
+    }
+
+    /**
+     * Expands [selectedUris] so that when Photo Stacks are actively collapsed on the main timeline,
+     * selecting any stack cover resolves to the URIs of ALL member photos in that stack instead of
+     * only the single cover photo. Standalone items and non-collapsed screens pass through unchanged.
+     */
+    suspend fun resolveDeletionUris(
+        selectedUris: Collection<String>,
+        expandActiveStacks: Boolean
+    ): List<String> = withContext(Dispatchers.IO) {
+        val distinctRaw = selectedUris.distinct()
+        if (distinctRaw.isEmpty() || !expandActiveStacks) return@withContext distinctRaw
+
+        val currentIndex = _photoStackIndex.value
+        if (currentIndex.isEmpty) return@withContext distinctRaw
+
+        val uriVariants = distinctRaw.flatMap { raw ->
+            val normalized = com.inferno.gallery.data.MediaUriUtils.normalizeUriString(raw)
+            if (raw.startsWith("content://media/external/")) {
+                listOf(raw, normalized, raw.replaceFirst("content://media/external/", "content://media/external_primary/"))
+            } else {
+                listOf(raw, normalized)
+            }
+        }.distinct()
+
+        val entitiesByUri = uriVariants
+            .chunked(500)
+            .flatMap { chunk -> database.mediaDao().getMediaByUrisList(chunk) }
+            .associateBy { com.inferno.gallery.data.MediaUriUtils.normalizeUriString(it.uriString) }
+
+        val expandedStacksByRawUri = HashMap<String, com.inferno.gallery.data.PhotoStack>()
+        val memberIdsToFetch = LinkedHashSet<Long>()
+
+        for (raw in distinctRaw) {
+            val normalized = com.inferno.gallery.data.MediaUriUtils.normalizeUriString(raw)
+            val entity = entitiesByUri[normalized]
+            if (entity?.isVideo == true) continue
+            val mediaId = entity?.id ?: com.inferno.gallery.data.PhotoStackPlanner.extractMediaIdFromUri(raw)
+            if (mediaId != null) {
+                val stack = currentIndex.stacksByCoverId[mediaId]
+                if (stack != null && stack.count > 1) {
+                    expandedStacksByRawUri[raw] = stack
+                    memberIdsToFetch.addAll(stack.memberIds)
+                }
+            }
+        }
+
+        if (memberIdsToFetch.isEmpty()) return@withContext distinctRaw
+
+        val memberEntitiesById = memberIdsToFetch
+            .toList()
+            .chunked(500)
+            .flatMap { chunk -> database.mediaDao().getMediaByIdsList(chunk) }
+            .associateBy { it.id }
+
+        val resolved = LinkedHashSet<String>(distinctRaw.size + memberIdsToFetch.size)
+        for (raw in distinctRaw) {
+            val stack = expandedStacksByRawUri[raw]
+            if (stack != null) {
+                var addedAny = false
+                for (memberId in stack.memberIds) {
+                    val memberUri = memberEntitiesById[memberId]?.uriString
+                    if (memberUri != null) {
+                        resolved.add(memberUri)
+                        addedAny = true
+                    }
+                }
+                if (!addedAny) {
+                    resolved.add(raw)
+                }
+            } else {
+                resolved.add(raw)
+            }
+        }
+
+        resolved.toList()
     }
 
     val dateHeaderAlignment: StateFlow<String> = settingsRepository.dateHeaderAlignmentFlow.stateIn(

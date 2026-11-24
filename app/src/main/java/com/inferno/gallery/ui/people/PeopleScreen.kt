@@ -150,6 +150,7 @@ fun PeopleScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val promotedPeople by viewModel.promotedPersons.collectAsState()
     val allPeople by viewModel.allPersons.collectAsState()
     val isInitialLoading by viewModel.isInitialLoading.collectAsState()
@@ -384,9 +385,9 @@ fun PeopleScreen(
                         viewModel.dismissPersonsAsNotFaces(idsSnapshot) { removed ->
                             if (removed > 0) {
                                 val msg = if (removed == 1) {
-                                    context.getString(R.string.people_removed_not_faces_toast_one)
+                                    resources.getString(R.string.people_removed_not_faces_toast_one)
                                 } else {
-                                    context.getString(R.string.people_removed_not_faces_toast_many, removed)
+                                    resources.getString(R.string.people_removed_not_faces_toast_many, removed)
                                 }
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
@@ -438,7 +439,7 @@ fun PeopleScreen(
                         viewModel.clearIgnoredFaces {
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.people_reset_ignored_toast),
+                                resources.getString(R.string.people_reset_ignored_toast),
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -627,9 +628,9 @@ fun PeopleScreen(
                                         showMenu = false
                                         viewModel.findMoreMergeSuggestions { addedCount ->
                                             val message = if (addedCount > 0) {
-                                                context.getString(R.string.people_more_matches_found, addedCount)
+                                                resources.getString(R.string.people_more_matches_found, addedCount)
                                             } else {
-                                                context.getString(R.string.people_no_more_matches)
+                                                resources.getString(R.string.people_no_more_matches)
                                             }
                                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                         }
